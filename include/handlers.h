@@ -21,24 +21,30 @@
 #include "impistore.h"
 #include "fifcservice.h"
 
-/// Common factory for all handlers that deal with chronos timer pops. This is
+/// Common factory for all handlers that deal with timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
 /// logged at detail level.
 template<class H, class C>
-class ChronosHandler : public HttpStackUtils::SpawningHandler<H, C>
+class TimerHandler : public HttpStackUtils::SpawningHandler<H, C>
 {
 public:
-  ChronosHandler(C* cfg) : HttpStackUtils::SpawningHandler<H, C>(cfg)
+  TimerHandler(C* cfg) : HttpStackUtils::SpawningHandler<H, C>(cfg)
   {}
 
-  virtual ~ChronosHandler() {}
+  virtual ~TimerHandler() {}
 
   HttpStack::SasLogger* sas_logger(HttpStack::Request& req)
   {
+    // Note that we use a Chronos SAS Logger here even though this TimerHandler
+    // isn't specific to Chronos.  In reality there isn't anything Chronos
+    // specific about the logger, but we should fix up the naming in future
+    // when we actually support multiple timer services.
     return &HttpStackUtils::CHRONOS_SAS_LOGGER;
   }
 };
 
+/// Base AoRTimeoutTask class for tasks that implement AoR timeout callbacks
+/// from specific timer services.
 class AoRTimeoutTask : public HttpStackUtils::Task
 {
 public:
@@ -62,22 +68,42 @@ public:
     HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
-  void run();
+  virtual void run() = 0;
 
 protected:
-  void handle_response();
-  HTTPCode parse_response(std::string body);
-  SubscriberDataManager::AoRPair* set_aor_data(
-                        SubscriberDataManager* current_sdm,
-                        std::string aor_id,
-                        AssociatedURIs* associated_uris,
-                        SubscriberDataManager::AoRPair* previous_aor_data,
-                        std::vector<SubscriberDataManager*> remote_sdms,
-                        bool& all_bindings_expired);
+  void process_aor_timeout(std::string aor_id);
 
 protected:
   const Config* _cfg;
-  std::string _aor_id;
+};
+
+/// Base AuthTimeoutTask class for tasks that implement authentication timeout
+/// callbacks from specific timer services.
+class AuthTimeoutTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(ImpiStore* local_impi_store, HSSConnection* hss) :
+      _local_impi_store(local_impi_store),
+      _hss(hss)
+    {}
+    ImpiStore* _local_impi_store;
+    HSSConnection* _hss;
+  };
+  AuthTimeoutTask(HttpStack::Request& req,
+                  const Config* cfg,
+                  SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  virtual void run() = 0;
+
+protected:
+  HTTPCode timeout_auth_challenge(std::string impu,
+                                  std::string impi,
+                                  std::string nonce);
+  const Config* _cfg;
 };
 
 class DeregistrationTask : public HttpStackUtils::Task
@@ -122,16 +148,15 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  SubscriberDataManager::AoRPair* deregister_bindings(
-                    SubscriberDataManager* current_sdm,
-                    HSSConnection* hss,
-                    FIFCService* fifc_service,
-                    IFCConfiguration ifc_configuration,
-                    std::string aor_id,
-                    std::string private_id,
-                    SubscriberDataManager::AoRPair* previous_aor_data,
-                    std::vector<SubscriberDataManager*> remote_sdms,
-                    std::set<std::string>& impis_to_delete);
+  AoRPair* deregister_bindings(SubscriberDataManager* current_sdm,
+                               HSSConnection* hss,
+                               FIFCService* fifc_service,
+                               IFCConfiguration ifc_configuration,
+                               std::string aor_id,
+                               std::string private_id,
+                               AoRPair* previous_aor_data,
+                               std::vector<SubscriberDataManager*> remote_sdms,
+                               std::set<std::string>& impis_to_delete);
 
 protected:
   void delete_impi_from_store(ImpiStore* store, const std::string& impi);
@@ -139,33 +164,6 @@ protected:
   const Config* _cfg;
   std::map<std::string, std::string> _bindings;
   std::string _notify;
-};
-
-class AuthTimeoutTask : public HttpStackUtils::Task
-{
-public:
-  struct Config
-  {
-    Config(ImpiStore* local_impi_store, HSSConnection* hss) :
-      _local_impi_store(local_impi_store),
-      _hss(hss)
-    {}
-    ImpiStore* _local_impi_store;
-    HSSConnection* _hss;
-  };
-  AuthTimeoutTask(HttpStack::Request& req,
-                  const Config* cfg,
-                  SAS::TrailId trail) :
-    HttpStackUtils::Task(req, trail), _cfg(cfg)
-  {};
-
-  void run();
-protected:
-  HTTPCode handle_response(std::string body);
-  const Config* _cfg;
-  std::string _impi;
-  std::string _impu;
-  std::string _nonce;
 };
 
 
@@ -197,7 +195,7 @@ public:
   void run();
 
 protected:
-  virtual std::string serialize_data(SubscriberDataManager::AoR* aor) = 0;
+  virtual std::string serialize_data(AoR* aor) = 0;
   const Config* _cfg;
 };
 
@@ -207,7 +205,7 @@ class GetBindingsTask : public GetCachedDataTask
 public:
   using GetCachedDataTask::GetCachedDataTask;
 protected:
-  std::string serialize_data(SubscriberDataManager::AoR* aor);
+  std::string serialize_data(AoR* aor);
 };
 
 /// Concrete subclass for retrieving subscriptions.
@@ -216,7 +214,7 @@ class GetSubscriptionsTask : public GetCachedDataTask
 public:
   using GetCachedDataTask::GetCachedDataTask;
 protected:
-  std::string serialize_data(SubscriberDataManager::AoR* aor);
+  std::string serialize_data(AoR* aor);
 };
 
 /// Task for performing an administrative deregistration at the S-CSCF. This
@@ -261,4 +259,40 @@ private:
   const Config* _cfg;
 };
 
+/// Task for receiving user data sent by Homestead when it receives a PPR.
+/// It will send NOTIFYs if the associated URIs have changed (by calling
+/// into the SDM).
+class PushProfileTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(SubscriberDataManager* sdm,
+           std::vector<SubscriberDataManager*> remote_sdms,
+	   HSSConnection* hss):
+      _sdm(sdm),
+      _remote_sdms(remote_sdms),
+      _hss(hss)
+    {}
+
+    SubscriberDataManager* _sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
+    HSSConnection* _hss;
+  };
+
+  PushProfileTask(HttpStack::Request& req,
+                  const Config* cfg,
+		  SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  void run();
+  HTTPCode get_associated_uris(std::string body, SAS::TrailId trail);
+  HTTPCode update_associated_uris(SAS::TrailId trail);
+
+protected:
+  const Config* _cfg;
+  std::string _default_public_id;
+  AssociatedURIs _associated_uris;
+};
 #endif

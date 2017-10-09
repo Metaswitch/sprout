@@ -13,6 +13,7 @@
 #include "siptest.hpp"
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
+#include "compositesproutlet.h"
 #include "pjutils.h"
 #include "pjsip.h"
 #include "pjsip_simple.h"
@@ -41,14 +42,12 @@ public:
                 const std::string& service_host,
                 std::string alias = "",
                 SNMP::FakeSuccessFailCountByRequestTypeTable* fake_inc_tbl = NULL,
-                SNMP::FakeSuccessFailCountByRequestTypeTable* fake_out_tbl = NULL) :
-    Sproutlet(service_name, port, uri, service_host, fake_inc_tbl, fake_out_tbl)
+                SNMP::FakeSuccessFailCountByRequestTypeTable* fake_out_tbl = NULL,
+                const std::string& network_function="",
+                const std::string& next_hop="") :
+    Sproutlet(service_name, port, uri, service_host, { alias }, fake_inc_tbl, fake_out_tbl, network_function),
+    _next_hop(next_hop)
   {
-    // Only one sproutlet loaded can own each alias.
-    if (alias != "")
-    {
-      _aliases.push_back(alias);
-    }
   }
 
   SproutletTsx* get_tsx(SproutletHelper* helper, const std::string& alias, pjsip_msg* req, pjsip_sip_uri*& next_hop, pj_pool_t* pool, SAS::TrailId trail)
@@ -56,14 +55,7 @@ public:
     return (SproutletTsx*)new T(this);
   }
 
-  const std::list<std::string> aliases() const
-  {
-    return _aliases;
-  }
-
-private:
-
-  std::list<std::string> _aliases;
+  const std::string _next_hop;
 };
 
 template <int S>
@@ -590,6 +582,15 @@ public:
   }
 };
 
+class FakeSproutletTsxNextHop : public CompositeSproutletTsx
+{
+public:
+  FakeSproutletTsxNextHop(Sproutlet* sproutlet) :
+   CompositeSproutletTsx(sproutlet, static_cast<FakeSproutlet<FakeSproutletTsxNextHop>*>(sproutlet)->_next_hop)
+  {
+  }
+};
+
 class SproutletProxyTest : public SipTest
 {
 public:
@@ -624,6 +625,10 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDummySCSCF>("scscf", 44444, "sip:scscf.homedomain:44444;transport=tcp", "scscf"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletReusesTransport>("transport", 0, "sip:transport.homedomain;transport=tcp", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwdwithstats", 0, "sip:fwdwithstats.homedomain;transport=tcp", "", "", &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE, &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("loop1", 0, "sip:loop1.homedomain;transport=tcp", "", "", NULL, NULL, "loop-nf", "loop2"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("loop2", 0, "sip:loop2.homedomain;transport=tcp", "", "", NULL, NULL, "loop-nf", "loop1"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("composite1", 0, "sip:cmp1.homedomain;transport=tcp", "", "", NULL, NULL, "cmp-nf", "composite2"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("composite2", 0, "sip:cmp2.homedomain;transport=tcp", "", "", NULL, NULL, "cmp-nf", "fwd"));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -694,10 +699,12 @@ public:
   std::string match_sproutlet_from_uri(pjsip_uri* uri)
   {
     std::string service_name;
-    std::string unused_alias;
+    std::string unused_alias, unused_local_hostname;
+    SproutletProxy::SPROUTLET_SELECTION_TYPES unused_selection_type = SproutletProxy::SPROUTLET_SELECTION_TYPES::NONE_SELECTED;
     Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
                                                             unused_alias,
-                                                            0);
+                                                            unused_local_hostname,
+                                                            unused_selection_type);
     if (sproutlet != NULL)
     {
       service_name = sproutlet->service_name();
@@ -719,7 +726,7 @@ public:
     string _content_type;
     string _body;
     string _extra;
-    int _forwards;
+    string _forwards;
     int _unique;
     string _via;
     string _route;
@@ -733,7 +740,7 @@ public:
       _from_tag("10.114.61.213+1+8c8b232a+5fb751cf"),
       _to_tag(""),
       _content_type("application/sdp"),
-      _forwards(68),
+      _forwards("68"),
       _via("10.83.18.38:36530"),
       _cseq(16567)
     {
@@ -778,7 +785,7 @@ public:
                        "Via: SIP/2.0/TCP %11$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%10$04dSPI\r\n"
                        "From: %2$s\r\n"
                        "To: %3$s\r\n"
-                       "Max-Forwards: %8$d\r\n"
+                       "%8$s"
                        "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%10$04dohntC@10.114.61.213\r\n"
                        "CSeq: %13$d %1$s\r\n"
                        "User-Agent: Accession 2.0.0.0\r\n"
@@ -796,7 +803,7 @@ public:
                        /*  5 */ (int)_body.length(),
                        /*  6 */ _body.c_str(),
                        /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /*  8 */ _forwards,
+                       /*  8 */ _forwards.empty() ? "" : string("Max-Forwards: ").append(_forwards).append("\r\n").c_str(),
                        /*  9 */ _requri.c_str(),
                        /* 10 */ _unique,
                        /* 11 */ _via.c_str(),
@@ -2108,9 +2115,95 @@ TEST_F(SproutletProxyTest, SproutletChain)
   delete tp;
 }
 
-TEST_F(SproutletProxyTest, LoopDetection)
+TEST_F(SproutletProxyTest, CompositeNetworkFunction)
+{
+  // Tests passing a request through a Network Function composed of multiple
+  // sproutlets.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the first Sproutlet in
+  // the composite newtork function.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:composite1.proxy1.homedomain;transport=TCP;lr>";
+  msg1._forwards = "100";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITEs.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the INVITE and send a 100 Trying.
+  // We sent in an initial Max-Forwards count of 100.  We've been through three
+  // sproutlets, but two of them were part of the same Network Function, so we
+  // expect the counter to have gone down by two (not three).
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+  EXPECT_EQ("sip:bob@proxy1.awaydomain:5060;transport=TCP",
+            str_uri(req->msg->line.req.uri));
+  EXPECT_EQ("Max-Forwards: 98", get_headers(req->msg, "Max-Forwards"));
+  EXPECT_EQ("", get_headers(req->msg, "Route"));
+  inject_msg(respond_to_txdata(req, 100));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(req, 200));
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an ACK
+  Message msg2;
+  msg2._method = "ACK";
+  msg2._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg2._from = "sip:alice@homedomain";
+  msg2._to = "sip:bob@awaydomain";
+  msg2._via = tp->to_string(false);
+  msg2._route = "Route: <sip:composite1.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg2.get_request(), tp);
+
+  // Check the ACK is forwarded.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  EXPECT_EQ("sip:bob@proxy1.awaydomain:5060;transport=TCP", str_uri(tdata->msg->line.req.uri));
+  EXPECT_EQ("", get_headers(tdata->msg, "Route"));
+  EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, LoopDetectionMaxForwards)
 {
   // Test loop detection of requests passing through a chain of sproutlets.
+  // We use two sproutlets that return different Network Function names,
+  // otherwise they'll be treated as a single entity, and only decrement the
+  // Max-Forwards count once.
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the listening port.
@@ -2127,8 +2220,8 @@ TEST_F(SproutletProxyTest, LoopDetection)
   msg1._from = "sip:alice@homedomain";
   msg1._to = "sip:bob@awaydomain";
   msg1._via = tp->to_string(false) + "1111";
-  msg1._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwd.proxy1.homedomain;transport=TCP;lr>";
-  msg1._forwards = 2;
+  msg1._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwdrr.proxy1.homedomain;transport=TCP;lr>";
+  msg1._forwards = "2";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying followed by 483 Too Many Hops response.
@@ -2141,7 +2234,7 @@ TEST_F(SproutletProxyTest, LoopDetection)
   EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
-  // Check the 486 Loop Detected.
+  // Check the 483 Loop Detected.
   tdata = current_txdata();
   RespMatcher(483).matches(tdata->msg);
   tp->expect_target(tdata);
@@ -2155,14 +2248,73 @@ TEST_F(SproutletProxyTest, LoopDetection)
   msg2._from = "sip:alice@homedomain";
   msg2._to = "sip:bob@awaydomain";
   msg2._via = tp->to_string(false) + "2222";
-  msg2._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwd.proxy1.homedomain;transport=TCP;lr>";
-  msg2._forwards = 2;
+  msg2._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwdrr.proxy1.homedomain;transport=TCP;lr>";
+  msg2._forwards = "2";
   inject_msg(msg2.get_request(), tp);
 
   // The ACK should be discarded.
   ASSERT_EQ(0, txdata_count());
 
   // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, LoopDetectionSproutletDepth)
+{
+  // Test loop detection when a request is sent around in a loop between
+  // sproutlets that are all part of the same Network Function.  In such cases,
+  // Max-Forwards won't help us, as it will only be decremented once by the
+  // Network Function, rather than once per sproutlet.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a INVITE with a Route header identifying the entry Sproutlet.  Omit
+  // the Max-Forwards header to avoid that ending the loop for us.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false) + "1111";
+  msg1._route = "Route: <sip:loop1.proxy1.homedomain;transport=TCP;lr>";
+  msg1._forwards = "";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying followed by 483 Too Many Hops response.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the 483 Loop Detected.
+  tdata = current_txdata();
+  RespMatcher(483).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Inject an ACK.
+  Message msg2;
+  msg2._method = "ACK";
+  msg2._requri = "sip:bob@proxy1.awaydomain";
+  msg2._from = "sip:alice@homedomain";
+  msg2._to = "sip:bob@awaydomain";
+  msg2._via = tp->to_string(false) + "2222";
+  msg2._route = "Route: <sip:loop1.proxy1.homedomain;transport=TCP;lr>";
+  msg2._forwards = "";
+  inject_msg(msg2.get_request(), tp);
+
+  // The ACK should be discarded.
   ASSERT_EQ(0, txdata_count());
 
   delete tp;

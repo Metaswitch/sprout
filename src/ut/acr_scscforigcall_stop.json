@@ -1,53 +1,45 @@
 {
   "event": {
-    "Accounting-Record-Type": 4,
-    "Event-Timestamp": 120,
+    "Accounting-Record-Type":4,
+    "Event-Timestamp":120,
     "Service-Information": {
-      "IMS-Information": {
-        "Called-Asserted-Identity": [
-          "sip:6505550001@homedomain",
-          "tel:6505550001"
-        ],
-        "Called-Party-Address": "sip:6505559999@10.83.18.50:12345;transport=TCP",
-        "Calling-Party-Address": [
-          "sip:6505550000@homedomain",
-          "tel:6505550000"
-        ],
-        "Cause-Code" : 0,
-        "Event-Type": {
-          "SIP-Method": "BYE"
-        },
-        "From-Address": "\"6505550000\" <sip:6505550000@homedomain>;tag=12345678",
-        "IMS-Charging-Identifier": "1234bc9876e",
-        "Instance-Id" : "<urn:uuid:00000000-0000-0000-0000-b665231f1213>",
-        "Inter-Operator-Identifier": [
-          {
-            "Originating-IOI": "homedomain",
-            "Terminating-IOI": "homedomain"
-          }
-        ],
-        "Node-Functionality": 0,
-        "Role-Of-Node": 0,
-        "Route-Header-Received": "<sip:sprout.homedomain:5054;transport=TCP;lr;orig>",
-        "Route-Header-Transmitted": "<sip:sprout.homedomain:5054;transport=TCP;lr;orig>",
-        "Time-Stamps": {
-          "SIP-Request-Timestamp": 120,
-          "SIP-Request-Timestamp-Fraction": 0,
-          "SIP-Response-Timestamp": 120,
-          "SIP-Response-Timestamp-Fraction": 20
-        },
-        "User-Session-Id": "0123456789abcdef-10.83.18.38"
+      "Subscription-Id": [{
+        "Subscription-Id-Type":2,
+        "Subscription-Id-Data":"sip:6505550000@homedomain"
       },
-      "Subscription-Id": [
-        {
-          "Subscription-Id-Data": "sip:6505550000@homedomain",
-          "Subscription-Id-Type": 2
+      {
+        "Subscription-Id-Type":0,
+        "Subscription-Id-Data":"6505550000"
+      }],
+      "IMS-Information": {
+        "Event-Type": {
+          "SIP-Method":"BYE"
         },
-        {
-          "Subscription-Id-Data": "6505550000",
-          "Subscription-Id-Type": 0
-        }
-      ]
+        "Role-Of-Node":0,
+        "Node-Functionality":0,
+        "User-Session-Id":"0123456789abcdef-10.83.18.38",
+        "Calling-Party-Address":["sip:6505550000@homedomain","tel:6505550000"],
+        "Called-Party-Address":"sip:6505559999@10.83.18.50:12345;transport=TCP",
+        "Called-Asserted-Identity":["sip:6505550001@homedomain","tel:6505550001"],
+        "Time-Stamps": {
+          "SIP-Request-Timestamp":120,
+          "SIP-Request-Timestamp-Fraction":0,
+          "SIP-Response-Timestamp":120,
+          "SIP-Response-Timestamp-Fraction":20
+        },
+        "Inter-Operator-Identifier": [{
+          "Originating-IOI":"homedomain",
+          "Terminating-IOI":"homedomain"
+        }],
+        "IMS-Charging-Identifier":"1234bc9876e",
+        "Cause-Code":0,
+        "Reason-Header":["SIP;cause=200;text=\"Call completed elsewhere\""],
+        "From-Address":"\"6505550000\" <sip:6505550000@homedomain>;tag=12345678",
+        "Route-Header-Received":"<sip:sprout.homedomain:5054;transport=TCP;lr;orig>",
+        "Route-Header-Transmitted":"<sip:sprout.homedomain:5054;transport=TCP;lr;orig>",
+        "Instance-Id":"<urn:uuid:00000000-0000-0000-0000-b665231f1213>"
+      }
     }
   }
 }
+

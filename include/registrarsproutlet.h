@@ -27,7 +27,7 @@
 #include "snmp_success_fail_count_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
-#include "forwardingsproutlet.h"
+#include "compositesproutlet.h"
 
 class RegistrarSproutletTsx;
 
@@ -37,6 +37,8 @@ public:
   RegistrarSproutlet(const std::string& name,
                      int port,
                      const std::string& uri,
+                     const std::list<std::string>& aliases,
+                     const std::string& network_function,
                      const std::string& next_hop_service,
                      SubscriberDataManager* reg_sdm,
                      std::vector<SubscriberDataManager*> reg_remote_sdms,
@@ -95,7 +97,7 @@ private:
 };
 
 
-class RegistrarSproutletTsx : public ForwardingSproutletTsx
+class RegistrarSproutletTsx : public CompositeSproutletTsx
 {
 public:
   RegistrarSproutletTsx(RegistrarSproutlet* registrar,
@@ -109,25 +111,29 @@ public:
 protected:
   void process_register_request(pjsip_msg* req);
 
-  SubscriberDataManager::AoRPair* write_to_store(
-                     SubscriberDataManager* primary_sdm,         ///<store to write to
-                     std::string aor,                            ///<address of record to write to
-                     AssociatedURIs* associated_uris,            ///<Associated IMPUs in Implicit Registration Set
-                     pjsip_msg* req,                             ///<received request to read headers from
-                     int now,                                    ///<time now
-                     int& expiry,                                ///<[out] longest expiry time
-                     bool& out_is_initial_registration,
-                     SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
-                     std::vector<SubscriberDataManager*> backup_sdms,
-                                                                 ///<backup stores to read from if no entry in store and no backup data
-                     std::string private_id,                     ///<private id that the binding was registered with
-                     bool& out_all_bindings_expired);
+  AoRPair* write_to_store(SubscriberDataManager* primary_sdm,         ///<store to write to
+                          std::string aor,                            ///<address of record to write to
+                          AssociatedURIs* associated_uris,            ///<Associated IMPUs in Implicit Registration Set
+                          pjsip_msg* req,                             ///<received request to read headers from
+                          int now,                                    ///<time now
+                          int& expiry,                                ///<[out] longest expiry time
+                          bool& out_is_initial_registration,
+                          AoRPair* backup_aor, ///<backup data if no entry in store
+                          std::vector<SubscriberDataManager*> backup_sdms,
+                                                                      ///<backup stores to read from if no entry in store and no backup data
+                          std::string private_id,                     ///<private id that the binding was registered with
+                          bool& out_all_bindings_expired);
 
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);
-  void log_bindings(const std::string& aor_name, SubscriberDataManager::AoR* aor_data);
+  void log_bindings(const std::string& aor_name, AoR* aor_data);
 
   RegistrarSproutlet* _registrar;
+
+  // The S-CSCF URI for this transaction. This is used on any SAR that is sent
+  // to the HSS. This field should not be changed once it has been set by the
+  // on_rx_intial_request() call.
+  std::string _scscf_uri;
 
   /// Member variables covering the IFCs.
   FIFCService* _fifc_service;

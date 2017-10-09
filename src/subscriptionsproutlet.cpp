@@ -38,6 +38,7 @@ extern "C" {
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              int port,
                                              const std::string& uri,
+                                             const std::string& network_function,
                                              const std::string& next_hop_service,
                                              SubscriberDataManager* sdm,
                                              std::vector<SubscriberDataManager*> remote_sdms,
@@ -45,7 +46,7 @@ SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              ACRFactory* acr_factory,
                                              AnalyticsLogger* analytics_logger,
                                              int cfg_max_expires) :
-  Sproutlet(name, port, uri),
+  Sproutlet(name, port, uri, "", {}, NULL, NULL, network_function),
   _sdm(sdm),
   _remote_sdms(remote_sdms),
   _hss(hss_connection),
@@ -79,11 +80,9 @@ SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletHelper* helper,
   }
 
   // We're not interested in the message so create a next hop URI.
-  pjsip_route_hdr* route = (pjsip_route_hdr*)
-                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-
+  pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
   next_hop = helper->next_hop_uri(_next_hop_service,
-                                  route,
+                                  base_uri,
                                   pool);
   return NULL;
 }
@@ -101,7 +100,9 @@ bool SubscriptionSproutlet::handle_request(pjsip_msg* req,
   URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
   TRC_INFO("URI class is %d", uri_class);
   if (((uri_class != NODE_LOCAL_SIP_URI) &&
-       (uri_class != HOME_DOMAIN_SIP_URI)) ||
+       (uri_class != HOME_DOMAIN_SIP_URI) &&
+       (uri_class != GLOBAL_PHONE_NUMBER) &&
+       (uri_class != LOCAL_PHONE_NUMBER)) ||
       !PJUtils::check_route_headers(req))
   {
     TRC_DEBUG("Not processing subscription request not targeted at this domain or node");
@@ -178,7 +179,7 @@ bool SubscriptionSproutlet::handle_request(pjsip_msg* req,
 
 SubscriptionSproutletTsx::SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
                                                    const std::string& next_hop_service) :
-  ForwardingSproutletTsx(subscription, next_hop_service),
+  CompositeSproutletTsx(subscription, next_hop_service),
   _subscription(subscription)
 {
   TRC_DEBUG("Subscription Transaction (%p) created", this);
@@ -350,19 +351,18 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
   // Write to the local store, checking the remote stores if there is no entry locally.
   // If the write to the local store succeeds, then write to the remote stores.
-  SubscriberDataManager::AoRPair* aor_pair =
-                              write_subscriptions_to_store(_subscription->_sdm,
-                                                           aor,
-                                                           &associated_uris,
-                                                           req,
-                                                           now,
-                                                           NULL,
-                                                           _subscription->_remote_sdms,
-                                                           public_id,
-                                                           true,
-                                                           acr,
-                                                           ccfs,
-                                                           ecfs);
+  AoRPair* aor_pair = write_subscriptions_to_store(_subscription->_sdm,
+                                                   aor,
+                                                   &associated_uris,
+                                                   req,
+                                                   now,
+                                                   NULL,
+                                                   _subscription->_remote_sdms,
+                                                   public_id,
+                                                   true,
+                                                   acr,
+                                                   ccfs,
+                                                   ecfs);
 
   if (aor_pair != NULL)
   {
@@ -377,19 +377,18 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     {
       if ((*it)->has_servers())
       {
-        SubscriberDataManager::AoRPair* remote_aor_pair =
-          write_subscriptions_to_store(*it,
-                                       aor,
-                                       &associated_uris,
-                                       req,
-                                       now,
-                                       aor_pair,
-                                       {},
-                                       public_id,
-                                       false,
-                                       acr,
-                                       ccfs,
-                                       ecfs);
+        AoRPair* remote_aor_pair = write_subscriptions_to_store(*it,
+                                                                aor,
+                                                                &associated_uris,
+                                                                req,
+                                                                now,
+                                                                aor_pair,
+                                                                {},
+                                                                public_id,
+                                                                false,
+                                                                acr,
+                                                                ccfs,
+                                                                ecfs);
         delete remote_aor_pair;
       }
     }
@@ -448,14 +447,14 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 /// primary SDM, we will either use the backup_aor or we will try and look up
 /// the AoR pair in the backup SDMs. Therefore either the backup_aor should be
 /// NULL, or backup_sdms should be empty.
-SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
+AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
                    SubscriberDataManager* primary_sdm,        ///<store to write to
                    std::string aor,                           ///<address of record to write to
                    AssociatedURIs* associated_uris,
                                                               ///<IMPUs associated with this IRS
                    pjsip_msg* req,                            ///<received request to read headers from
                    int now,                                   ///<time now
-                   SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
+                   AoRPair* backup_aor,                       ///<backup data if no entry in store
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                               ///<backup stores to read from if no entry in store and no backup data
                    std::string public_id,                     ///
@@ -476,7 +475,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   bool backup_aor_alloced = false;
   int expiry = 0;
   Store::Status set_rc;
-  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  AoRPair* aor_pair = NULL;
   std::string subscription_contact;
   std::string subscription_id;
 
@@ -513,7 +512,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       else
       {
         std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
-        SubscriberDataManager::AoRPair* local_backup_aor = NULL;
+        AoRPair* local_backup_aor = NULL;
 
         while ((it != backup_sdms.end()) && (!found_subscription))
         {
@@ -550,7 +549,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
       if (found_subscription)
       {
-        aor_pair->get_current()->copy_subscriptions_and_bindings(backup_aor->get_current());
+        aor_pair->get_current()->copy_aor(backup_aor->get_current());
       }
     }
 
@@ -574,7 +573,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       if (subscription_id == "")
       {
         // If there's no to tag, generate an unique one
-        // TODO: Should use unique depolyment and instance IDs here.
+        // TODO: Should use unique deployment and instance IDs here.
         subscription_id = std::to_string(Utils::generate_unique_integer(0, 0));
       }
 
@@ -582,7 +581,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
       // Find the appropriate subscription in the subscription list for this AoR. If it can't
       // be found a new empty subscription is created.
-      SubscriberDataManager::AoR::Subscription* subscription =
+      AoR::Subscription* subscription =
                     aor_pair->get_current()->get_subscription(subscription_id);
 
       // Update/create the subscription.
@@ -611,6 +610,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       subscription->_to_tag = subscription_id;
       subscription->_from_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from->uri);
       subscription->_from_tag = PJUtils::pj_str_to_string(&from->tag);
+      subscription->_refreshed = true;
 
       // Calculate the expiry period for the subscription.
       expiry = (expires != NULL) ?
@@ -628,7 +628,8 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
     // Try to write the AoR back to the store.
     bool unused;
-    set_rc = primary_sdm->set_aor_data(aor, associated_uris, aor_pair, trail(), unused);
+    aor_pair->get_current()->_associated_uris = *associated_uris;
+    set_rc = primary_sdm->set_aor_data(aor, aor_pair, trail(), unused);
 
     if (set_rc == Store::OK)
     {
@@ -686,15 +687,14 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 }
 
 void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,
-                                                 SubscriberDataManager::AoR* aor_data)
+                                                 AoR* aor_data)
 {
   TRC_DEBUG("Subscriptions for %s", aor_name.c_str());
-  for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
-         aor_data->subscriptions().begin();
+  for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
        i != aor_data->subscriptions().end();
        ++i)
   {
-    SubscriberDataManager::AoR::Subscription* subscription = i->second;
+    AoR::Subscription* subscription = i->second;
 
     TRC_DEBUG("%s URI=%s expires=%d from_uri=%s from_tag=%s to_uri=%s to_tag=%s call_id=%s",
               i->first.c_str(),

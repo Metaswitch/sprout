@@ -29,6 +29,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
                          impistore.cpp \
+                         astaire_impistore.cpp \
                          subscriber_data_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \
@@ -63,8 +64,10 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          httpstack.cpp \
                          httpstack_utils.cpp \
                          handlers.cpp \
+                         chronoshandlers.cpp \
                          contact_filtering.cpp \
                          sproutletproxy.cpp \
+                         compositesproutlet.cpp \
                          pluginloader.cpp \
                          alarm.cpp \
                          base_communication_monitor.cpp \
@@ -93,7 +96,11 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          sifcservice.cpp \
                          fifcservice.cpp \
                          mmfservice.cpp \
-                         mmftargets.cpp
+                         mmftargets.cpp \
+                         event_statistic_accumulator.cpp \
+                         aor.cpp \
+                         astaire_aor_store.cpp \
+                         sprout_xml_utils.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -136,7 +143,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
                        subscriber_data_manager_test.cpp \
-                       impistore_test.cpp \
+                       astaire_impistore_test.cpp \
                        registrar_test.cpp \
                        bono_test.cpp \
                        bgcfservice_test.cpp \
@@ -156,6 +163,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        acr_test.cpp \
                        subscription_test.cpp \
                        handlers_test.cpp \
+                       chronoshandlers_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp \
@@ -170,6 +178,11 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        uriclassifier_test.cpp \
                        ralf_processor_test.cpp \
                        mockhttpconnection.cpp \
+                       mockhttpstack.cpp \
+                       mocktsxhelper.cpp \
+                       mock_hss_connection.cpp \
+                       mock_analytics_logger.cpp \
+                       mock_sproutlet.cpp \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
@@ -187,12 +200,16 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
                        authenticationsproutlet.cpp \
-                       forwardingsproutlet.cpp \
+                       compositesproutlet.cpp \
                        pthread_cond_var_helper.cpp \
                        sifcservice_test.cpp \
                        mock_sifc_parser.cpp \
                        fifcservice_test.cpp \
-                       mmfservice_test.cpp
+                       mmfservice_test.cpp \
+                       scscf_utils.cpp \
+                       test_interposer.cpp \
+                       curl_interposer.cpp \
+                       testingcommon.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include
@@ -287,7 +304,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp forwardingsproutlet.cpp
+sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp scscf_utils.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
@@ -297,27 +314,22 @@ mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
 VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut ../modules/memento-as/src ../modules/memento-as/src/ut ../modules/memento-as/modules/memento-common/src mangelwurzel mangelwurzel/ut ut
 
+# Use valgrind suppression file for UT
+sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp
+
+# Exclude the Bono tests from valgrind unless SLOW is set
+sprout_test_VALGRIND_EXCL = $(if ${SLOW},,Stateful*Proxy*Test.*)
+
 include ../build-infra/cpp.mk
 
 # Special extra objects for sprout_test
-${BUILD_DIR}/bin/sprout_test : ${sprout_test_OBJECT_DIR}/md5.o \
-                               ${sprout_test_OBJECT_DIR}/test_interposer.so \
-                               ${sprout_test_OBJECT_DIR}/curl_interposer.so
+${BUILD_DIR}/bin/sprout_test : ${sprout_test_OBJECT_DIR}/md5.o
 
 # Build rules for SIPp cryptographic modules
 SIPP_DIR := ../modules/sipp
 $(sprout_test_OBJECT_DIR)/md5.o : $(SIPP_DIR)/md5.c
 	$(CC) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -I$(SIPP_DIR) -c $(SIPP_DIR)/md5.c -o $@
 CLEANS += ${sprout_test_OBJECT_DIR}/md5.o
-
-# Build rule for our interposer.
-${sprout_test_OBJECT_DIR}/test_interposer.so : ../modules/cpp-common/test_utils/test_interposer.cpp ../modules/cpp-common/test_utils/test_interposer.hpp
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
-CLEANS += ${sprout_test_OBJECT_DIR}/test_interposer.so
-
-${sprout_test_OBJECT_DIR}/curl_interposer.so : ../modules/cpp-common/test_utils/curl_interposer.cpp ../modules/cpp-common/test_utils/curl_interposer.hpp ../modules/cpp-common/test_utils/fakecurl.cpp ../modules/cpp-common/test_utils/fakecurl.hpp
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
-CLEANS += ${sprout_test_OBJECT_DIR}/curl_interposer.so
 
 # Alarm definition generation rules
 ROOT := $(abspath $(shell pwd)/../)

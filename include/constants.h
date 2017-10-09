@@ -43,6 +43,7 @@ const pj_str_t STR_P_PREFERRED_IDENTITY = pj_str((char*)"P-Preferred-Identity");
 const pj_str_t STR_P_ASSOCIATED_URI = pj_str((char*)"P-Associated-URI");
 const pj_str_t STR_REQUEST_DISPOSITION = pj_str((char*)"Request-Disposition");
 const pj_str_t STR_SERVICE_ROUTE = pj_str((char*)"Service-Route");
+const pj_str_t STR_IN_REPLY_TO = pj_str((char*)"In-Reply-To");
 const pj_str_t STR_ORIG = pj_str((char*)"orig");
 const pj_str_t STR_ORIG_CDIV = pj_str((char*)"orig-cdiv");
 const pj_str_t STR_NO_FORK = pj_str((char*)"no-fork");
@@ -135,11 +136,13 @@ const pj_str_t STR_REGISTRATION = pj_str((char*)"registration");
 const pj_str_t STR_CONTACT = pj_str((char*)"contact");
 const pj_str_t STR_URI = pj_str((char*)"uri");
 const pj_str_t STR_WILDCARD = pj_str((char*)"ere:wildcardedIdentity");
+const pj_str_t STR_UNKNOWN_PARAM = pj_str((char*)"unknown-param");
 
 /* XML node attribute constants */
 const pj_str_t STR_STATE = pj_str((char*)"state");
 const pj_str_t STR_AOR = pj_str((char*)"aor");
 const pj_str_t STR_ID = pj_str((char*)"id");
+const pj_str_t STR_NAME = pj_str((char*)"name");
 
 /* XML node registration STATE attribute enum constants. */
 const pj_str_t STR_INIT = pj_str((char*)"init");

@@ -38,6 +38,8 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                const std::string& bgcf_uri,
                                int port,
                                const std::string& uri,
+                               const std::string& network_function,
+                               const std::string& next_hop_service,
                                HSSConnection* hss,
                                ACRFactory* acr_factory,
                                SCSCFSelector* scscf_selector,
@@ -45,8 +47,16 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi) :
-  Sproutlet(icscf_name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(icscf_name,
+            port,
+            uri,
+            "",
+            {},
+            incoming_sip_transactions_tbl,
+            outgoing_sip_transactions_tbl,
+            network_function),
   _bgcf_uri(NULL),
+  _next_hop_service(next_hop_service),
   _hss(hss),
   _scscf_selector(scscf_selector),
   _acr_factory(acr_factory),
@@ -76,11 +86,13 @@ bool ICSCFSproutlet::init()
   // not continually converting from a string.
   _bgcf_uri = PJUtils::uri_from_string(_bgcf_uri_str, stack_data.pool, false);
 
+  // LCOV_EXCL_START - Don't test pjsip URI failures in the I-CSCF UTs
   if (_bgcf_uri == NULL)
   {
-    TRC_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str()); //LCOV_EXCL_LINE
+    TRC_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str());
     init_success = false;
   }
+  // LCOV_EXCL_STOP
 
   return init_success;
 }
@@ -97,11 +109,12 @@ SproutletTsx* ICSCFSproutlet::get_tsx(SproutletHelper* helper,
 {
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    return (SproutletTsx*)new ICSCFSproutletRegTsx(this);
+    return (SproutletTsx*)new ICSCFSproutletRegTsx(this, _next_hop_service);
   }
   else
   {
     return (SproutletTsx*)new ICSCFSproutletTsx(this,
+                                                _next_hop_service,
                                                 req->line.req.method.id);
   }
 }
@@ -133,8 +146,9 @@ void ICSCFSproutlet::translate_request_uri(pjsip_msg* req,
 /*****************************************************************************/
 
 /// Individual Tsx constructor for REGISTER requests.
-ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(ICSCFSproutlet* icscf) :
-  SproutletTsx(icscf),
+ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(ICSCFSproutlet* icscf,
+                                           const std::string& next_hop_service) :
+  CompositeSproutletTsx(icscf, next_hop_service),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL)
@@ -284,13 +298,15 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
 }
 
 
+// LCOV_EXCL_START - Excluding from UTs as this is a scenario that shouldn't
+// happen
 void ICSCFSproutletRegTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   // I-CSCF shouldn't need to handle in-dialog requests, but it happens, so
   // handle as an initial request.
   on_rx_initial_request(req);
 }
-
+// LCOV_EXCL_STOP
 
 void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
@@ -399,31 +415,15 @@ void ICSCFSproutletRegTsx::on_tx_response(pjsip_msg* rsp)
   }
 }
 
-
-void ICSCFSproutletRegTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
-{
-  if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&
-      (cancel_req != NULL))
-  {
-    // Create and send an ACR for the CANCEL request.
-    ACR* acr = _icscf->get_acr(trail());
-
-    // @TODO - timestamp from request.
-    acr->rx_request(cancel_req);
-    acr->send();
-
-    delete acr;
-  }
-}
-
 /*****************************************************************************/
 /* Non-REGISTER handling.                                                    */
 /*****************************************************************************/
 
 /// Individual Tsx constructor for non-REGISTER requests.
 ICSCFSproutletTsx::ICSCFSproutletTsx(ICSCFSproutlet* icscf,
+                                     const std::string& next_hop_service,
                                      pjsip_method_e req_type) :
-  SproutletTsx(icscf),
+  CompositeSproutletTsx(icscf, next_hop_service),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL),
@@ -710,14 +710,15 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
 }
 
-
+// LCOV_EXCL_START - Excluding from UTs as this is a scenario that shouldn't
+// happen
 void ICSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   // I-CSCF shouldn't need to handle in-dialog requests, but it happens, so
   // handle as an initial request.
   on_rx_initial_request(req);
 }
-
+// LCOV_EXCL_STOP
 
 void ICSCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
@@ -943,6 +944,8 @@ void ICSCFSproutletTsx::add_p_profile_header(const std::string& wildcard,
   }
   else
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the I-CSCF UTs
     TRC_ERROR("Invalid wildcard returned on LIA: %s", wildcard.c_str());
+    // LCOV_EXCL_STOP
   }
 }

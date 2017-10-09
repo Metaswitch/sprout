@@ -31,6 +31,7 @@ class IfcHandlerTest : public SipTest
 public:
   static FakeChronosConnection* _chronos_connection;
   static FakeHSSConnection* _hss_connection;
+  static AstaireAoRStore* _local_aor_store;
   static LocalStore* _local_data_store;
   static SubscriberDataManager* _sdm;
   static IfcHandler* _ifc_handler;
@@ -43,20 +44,19 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _ifc_handler = new IfcHandler();
   }
 
   static void TearDownTestCase()
   {
-    delete _sdm;
-    delete _local_data_store;
-    delete _ifc_handler;
-    _ifc_handler = NULL;
-    delete _hss_connection;
-    _hss_connection = NULL;
-    delete _chronos_connection;
-    _chronos_connection = NULL;
+    delete _sdm; _sdm = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
+    delete _local_data_store; _local_data_store = NULL;
+    delete _ifc_handler; _ifc_handler = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
 
     SipTest::TearDownTestCase();
   }
@@ -131,6 +131,7 @@ public:
 FakeChronosConnection* IfcHandlerTest::_chronos_connection;
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
 LocalStore* IfcHandlerTest::_local_data_store;
+AstaireAoRStore* IfcHandlerTest::_local_aor_store;
 SubscriberDataManager* IfcHandlerTest::_sdm;
 IfcHandler* IfcHandlerTest::_ifc_handler;
 
@@ -1395,6 +1396,52 @@ TEST_F(IfcHandlerTest, ReqURIMatch)
          true,
          SessionCase::Originating,
          true);
+}
+
+TEST_F(IfcHandlerTest, ReqURIMatchUrnURI)
+{
+  string str0("MESSAGE urn:service:sos SIP/2.0\n"
+              "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
+              "Max-Forwards: 69\n"
+              "From: <sip:5755550033@homedomain>;tag=13919SIPpTag0011234\n"
+              "To: <urn:service:sos>\n"
+              "Call-ID: 1-13919@10.151.20.48\n"
+              "CSeq: 4 MESSAGE\n"
+              "Route: <sip:127.0.0.1;transport=TCP;lr;orig>\n"
+              "Content-Type: application/sdp\n"
+              "Content-Length: 0\n\n");
+
+  string str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "");
+  pjsip_rx_data* rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  pjsip_msg* msg = rdata->msg_info.msg;
+
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "  <TriggerPoint>\n"
+             "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+             "    <SPT>\n"
+             "      <ConditionNegated>0</ConditionNegated>\n"
+             "      <Group>0</Group>\n"
+             "      <RequestURI>service:sos</RequestURI>\n"
+             "      <Extension></Extension>\n"
+             "    </SPT>\n"
+             "  </TriggerPoint>\n"
+             "  <ApplicationServer>\n"
+             "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "    <DefaultHandling>0</DefaultHandling>\n"
+             "  </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             msg,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             true,
+             false);
 }
 
 TEST_F(IfcHandlerTest, ReqURIMatchTelURI)

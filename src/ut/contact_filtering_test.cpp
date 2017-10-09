@@ -584,7 +584,7 @@ TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilterWithEvent)
 class ContactFilteringCreateBindingFixture : public ContactFilteringTest
 {
 public:
-  void create_binding(SubscriberDataManager::AoR::Binding& binding)
+  void create_binding(AoR::Binding& binding)
   {
     binding._uri = "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931";
     binding._cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
@@ -598,7 +598,6 @@ public:
     binding._params["+sip.string"] = "<hello>";
     binding._params["+sip.boolean"] = "";
     binding._params["methods"] = "invite,options";
-    binding._timer_id = "";
     binding._private_id = "user@domain.com";
     binding._emergency_registration = false;
   }
@@ -609,7 +608,7 @@ class ContactFilteringBindingToTargetTest : public ContactFilteringCreateBinding
 TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(aor);
+  AoR::Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   Target target;
@@ -649,7 +648,7 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversionPathUri)
   // binding.
 
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(aor);
+  AoR::Binding binding(aor);
   create_binding(binding);
   binding._path_headers.clear();
   std::string binding_id = "<sip:user@10.1.2.3>";
@@ -687,7 +686,7 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversionPathUri)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(aor);
+  AoR::Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._uri = "banana";
@@ -702,7 +701,7 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(aor);
+  AoR::Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._path_headers.push_back("banana");
@@ -717,7 +716,7 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidPathDownlevel)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(aor);
+  AoR::Binding binding(aor);
   create_binding(binding);
   binding._path_headers.clear();
   std::string binding_id = "<sip:user@10.1.2.3>";
@@ -737,8 +736,8 @@ class ContactFilteringFullStackTest :
 
 TEST_F(ContactFilteringFullStackTest, NoFiltering)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR* aor_data = new AoR(aor);
+  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -761,8 +760,8 @@ TEST_F(ContactFilteringFullStackTest, NoFiltering)
 }
 TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR* aor_data = new AoR(aor);
+  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   // Pick a method the contact doesn't support
@@ -788,8 +787,8 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 }
 TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR* aor_data = new AoR(aor);
+  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
   binding->_params.erase("methods");
 
@@ -817,8 +816,8 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR* aor_data = new AoR(aor);
+  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -856,8 +855,8 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR* aor_data = new AoR(aor);
+  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -894,8 +893,8 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR* aor_data = new AoR(aor);
+  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -931,8 +930,8 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 }
 TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR* aor_data = new AoR(aor);
+  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -970,8 +969,8 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 }
 TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR* aor_data = new AoR(aor);
+  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -1008,14 +1007,14 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 
 TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  AoR* aor_data = new AoR(aor);
 
   for (int ii = 0;
        ii < 20;
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    AoR::Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     // Change the features on some of the bindings.
@@ -1077,14 +1076,14 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
 
 TEST_F(ContactFilteringFullStackTest, GRUUNoMatch)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  AoR* aor_data = new AoR(aor);
 
   for (int ii = 0;
        ii < 20;
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    AoR::Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     binding->_expires = ii * 100;
@@ -1111,14 +1110,14 @@ TEST_F(ContactFilteringFullStackTest, GRUUNoMatch)
 
 TEST_F(ContactFilteringFullStackTest, GRUUMatch)
 {
-  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  AoR* aor_data = new AoR(aor);
 
   for (int ii = 0;
        ii < 20;
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    AoR::Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     // Change the features on some of the bindings.

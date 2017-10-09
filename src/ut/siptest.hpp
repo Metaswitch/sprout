@@ -8,6 +8,8 @@
  * Otherwise no rights are granted except for those provided to you by
  * Metaswitch Networks in a separate written agreement.
  */
+#ifndef SIPTEST_H__
+#define SIPTEST_H__
 
 #include <string>
 #include <sstream>
@@ -273,15 +275,19 @@ private:
 class MsgMatcher
 {
 public:
-  MsgMatcher(string expected_body="") :
-    _expected_body(expected_body)
+  MsgMatcher(string expected_body="",
+             string body_regex="") :
+    _expected_body(expected_body),
+    _body_regex(body_regex)
   {
   }
 
   void matches(pjsip_msg* msg);
+  void body_regex_matches(pjsip_msg* msg);
 
 private:
   string _expected_body;
+  string _body_regex;
 };
 
 /// Checker that asserts a PJSIP message is of the expected type,
@@ -297,8 +303,10 @@ public:
   }
 
   ReqMatcher(const string& method,
-             string expected_body) :
-    MsgMatcher(expected_body),
+             string expected_body,
+             string body_regex="") :
+    MsgMatcher(expected_body,
+               body_regex),
     _method(method)
   {
   }
@@ -422,3 +430,5 @@ private:
   string _header;
   std::list<string> _regexes;
 };
+
+#endif

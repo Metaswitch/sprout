@@ -26,7 +26,7 @@
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
-#include "forwardingsproutlet.h"
+#include "compositesproutlet.h"
 
 class SubscriptionSproutletTsx;
 
@@ -36,6 +36,7 @@ public:
   SubscriptionSproutlet(const std::string& name,
                         int port,
                         const std::string& uri,
+                        const std::string& network_function,
                         const std::string& next_hop_service,
                         SubscriberDataManager* sdm,
                         std::vector<SubscriberDataManager*> remote_sdms,
@@ -83,7 +84,7 @@ private:
 };
 
 
-class SubscriptionSproutletTsx : public ForwardingSproutletTsx
+class SubscriptionSproutletTsx : public CompositeSproutletTsx
 {
 public:
   SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
@@ -97,14 +98,14 @@ protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
 
-  SubscriberDataManager::AoRPair* write_subscriptions_to_store(
+  AoRPair* write_subscriptions_to_store(
                      SubscriberDataManager* primary_sdm,        ///<store to write to
                      std::string aor,                           ///<address of record to write to
                      AssociatedURIs* associated_uris,
                                                                 ///<IMPUs associated with this IRS
                      pjsip_msg* req,                            ///<received request to read headers from
                      int now,                                   ///<time now
-                     SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
+                     AoRPair* backup_aor,                       ///<backup data if no entry in store
                      std::vector<SubscriberDataManager*> backup_sdms,
                                                                 ///<backup stores to read from if no entry in store and no backup data
                      std::string public_id,                     ///
@@ -114,7 +115,7 @@ protected:
                      std::deque<std::string> ecfs);             ///
 
   void log_subscriptions(const std::string& aor_name,
-                         SubscriberDataManager::AoR* aor_data);
+                         AoR* aor_data);
 
   SubscriptionSproutlet* _subscription;
 };

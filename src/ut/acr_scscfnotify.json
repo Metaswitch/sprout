@@ -1,0 +1,29 @@
+{
+  "peers":{},
+  "event":{
+    "Accounting-Record-Type":1,
+    "Event-Timestamp":1,
+    "Service-Information":{
+      "IMS-Information":{
+        "Event-Type":{
+          "SIP-Method":"NOTIFY",
+          "Event":"telephone-event;duration=300"
+        },
+        "Role-Of-Node":0,
+        "Node-Functionality":0,
+        "User-Session-Id":"0123456789abcdef-10.83.18.38",
+        "Requested-Party-Address":"sip:homedomain",
+        "Time-Stamps":{
+          "SIP-Request-Timestamp":1,
+          "SIP-Request-Timestamp-Fraction":0
+        },
+        "IMS-Charging-Identifier":"",
+        "From-Address":"\"6505550000\" <sip:6505550000@homedomain>",
+        "Route-Header-Received":"<sip:sprout.homedomain:5054;transport=TCP;lr;orig>",
+        "Instance-Id":"<urn:uuid:00000000-0000-0000-0000-b665231f1213>"
+      }
+    }
+  }
+}
+
+

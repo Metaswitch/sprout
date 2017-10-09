@@ -97,18 +97,6 @@ std::string PJUtils::uri_to_string(pjsip_uri_context_e context,
 }
 
 
-std::string PJUtils::strip_uri_scheme(const std::string& uri)
-{
-  std::string s(uri);
-  size_t colon = s.find(':');
-  if (colon != std::string::npos)
-  {
-    s.erase(0, colon + 1);
-  }
-  return s;
-}
-
-
 /// Parse the supplied string to a PJSIP URI structure.  Note that if this
 /// finds a name-addr instead of a URI it will parse it to a pjsip_name_addr
 /// structure, so you must use pjsip_uri_get_uri to get to the URI piece.
@@ -907,14 +895,16 @@ void PJUtils::resolve(const std::string& name,
                       int port,
                       int transport,
                       int retries,
-                      std::vector<AddrInfo>& servers)
+                      std::vector<AddrInfo>& servers,
+                      int allowed_host_state)
 {
   stack_data.sipresolver->resolve(name,
                                   stack_data.addr_family,
                                   port,
                                   transport,
                                   retries,
-                                  servers);
+                                  servers,
+                                  allowed_host_state);
 }
 
 
@@ -922,6 +912,7 @@ void PJUtils::resolve(const std::string& name,
 void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
                                int retries,
                                std::vector<AddrInfo>& servers,
+                               int allowed_host_state,
                                SAS::TrailId trail)
 {
   // Get the next hop URI from the message and parse out the destination, port
@@ -951,6 +942,7 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
                                   transport,
                                   retries,
                                   servers,
+                                  allowed_host_state,
                                   trail);
 
   TRC_INFO("Resolved destination URI %s to %d servers",
@@ -1211,7 +1203,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport determined, so resolve the next hop for the message.
-    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
+    resolve_next_hop(tdata, retries, sss->servers, BaseResolver::ALL_LISTS, get_trail(tdata));
 
     if (!sss->servers.empty())
     {
@@ -1238,7 +1230,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     set_trail(tsx, get_trail(tdata));
     if (log_sas_branch)
     {
-      PJUtils::mark_sas_call_branch_ids(get_trail(tdata), NULL, tdata->msg);
+      PJUtils::mark_sas_call_branch_ids(get_trail(tdata), tdata->msg);
     }
 
     // Set up the module data for the new transaction to reference
@@ -1372,7 +1364,7 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport pre-selected so resolve the next hop to a set of servers.
-    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
+    resolve_next_hop(tdata, retries, sss->servers, BaseResolver::ALL_LISTS, get_trail(tdata));
 
     if (!sss->servers.empty())
     {
@@ -1667,8 +1659,9 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
   return std::string(buf2, len);
 }
 
-/// Add SAS markers for the specified call ID and branch IDs on the message (call ID may be omitted, but not message).
-void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg)
+/// Add SAS markers for the specified call IDs and branch IDs on the message
+// (msg must not be NULL).
+void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_msg* msg, const std::vector<std::string>& cids)
 {
   // Decide whether this is a message where we want to correlate on Call-ID or branch ID
   //
@@ -1689,11 +1682,11 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0)));
 
-  if (cid_hdr != NULL)
+  for (std::string cid : cids)
   {
-    TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
+    TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %s", cid.c_str());
     SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
-    cid_marker.add_var_param(cid_hdr->id.slen, cid_hdr->id.ptr);
+    cid_marker.add_var_param(cid.size(), (char*)cid.c_str());
     SAS::report_marker(cid_marker, branch_id_correlation ? SAS::Marker::Scope::None : SAS::Marker::Scope::Trace);
   }
 
@@ -1982,7 +1975,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       pj_str_t to_user = user_from_uri(to_uri);
 
       SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
-      sip_all_register.add_var_param(strip_uri_scheme(to_uri_str));
+      sip_all_register.add_var_param(Utils::strip_uri_scheme(to_uri_str));
       // Add the DN parameter. If the user part is not numeric just log it in
       // its entirety.
       sip_all_register.add_var_param(URIClassifier::is_user_numeric(to_user) ?
@@ -2005,7 +1998,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       sip_subscribe_notify.add_static_param(is_subscribe ?
                                             SASEvent::SubscribeNotifyType::SUBSCRIBE :
                                             SASEvent::SubscribeNotifyType::NOTIFY);
-      sip_subscribe_notify.add_var_param(strip_uri_scheme(to_uri_str));
+      sip_subscribe_notify.add_var_param(Utils::strip_uri_scheme(to_uri_str));
       // Add the DN parameter. If the user part is not numeric just log it in
       // its entirety.
       sip_subscribe_notify.add_var_param(URIClassifier::is_user_numeric(to_user) ?
@@ -2032,7 +2025,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
         }
 
         SAS::Marker called_uri(trail, MARKER_ID_INBOUND_CALLED_URI, 1u);
-        called_uri.add_var_param(strip_uri_scheme(
+        called_uri.add_var_param(Utils::strip_uri_scheme(
                                    uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri)));
         SAS::report_marker(called_uri);
       }
@@ -2048,7 +2041,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
         }
 
         SAS::Marker calling_uri(trail, MARKER_ID_INBOUND_CALLING_URI, 1u);
-        calling_uri.add_var_param(strip_uri_scheme(
+        calling_uri.add_var_param(Utils::strip_uri_scheme(
                                     uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from_uri)));
         SAS::report_marker(calling_uri);
       }
@@ -2158,6 +2151,7 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
   return (pjsip_uri*)tel_uri;
 }
 
+
 /// Takes a SIP URI, and adds a URI parameter using the passed in parameter
 /// name, and adds a parameter value if non-empty.
 ///
@@ -2177,19 +2171,11 @@ void PJUtils::add_parameter_to_sip_uri(pjsip_sip_uri* sip_uri,
   pj_strdup2(pool, &parameter->value, param_value);
 }
 
-static const boost::regex CHARS_TO_STRIP = boost::regex("[.)(-]");
-
-// Strip any visual separators from the number
-std::string PJUtils::remove_visual_separators(const std::string& number)
-{
-  return boost::regex_replace(number, CHARS_TO_STRIP, std::string(""));
-};
-
 // Strip any visual separators from the number
 std::string PJUtils::remove_visual_separators(const pj_str_t& number)
 {
   std::string s = pj_str_to_string(&number);
-  return remove_visual_separators(s);
+  return Utils::remove_visual_separators(s);
 };
 
 bool PJUtils::get_npdi(pjsip_uri* uri)

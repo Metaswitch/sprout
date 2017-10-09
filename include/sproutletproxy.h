@@ -28,20 +28,25 @@ class SproutletWrapper;
 class SproutletProxy : public BasicProxy, SproutletHelper
 {
 public:
+  static const int DEFAULT_MAX_SPROUTLET_DEPTH = 50;
+
   /// Constructor.
   ///
-  /// @param  endpt             - The pjsip endpoint to associate with.
-  /// @param  priority          - The pjsip priority to load at.
-  /// @param  host_aliases      - The IP addresses/domains that refer to this proxy.
-  /// @param  sproutlets        - Sproutlets to load in this proxy.
-  /// @param  stateless_proxies - A set of next-hops that are considered to be
-  ///                             stateless proxies.
+  /// @param  endpt               - The pjsip endpoint to associate with.
+  /// @param  priority            - The pjsip priority to load at.
+  /// @param  host_aliases        - The IP addresses/domains that refer to this proxy.
+  /// @param  sproutlets          - Sproutlets to load in this proxy.
+  /// @param  stateless_proxies   - A set of next-hops that are considered to be
+  ///                               stateless proxies.
+  /// @param  max_sproutlet_depth - The maximum number of Sproutlets that can be
+  ///                               invoked in a row before we break the loop.
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets,
-                 const std::set<std::string>& stateless_proxies);
+                 const std::set<std::string>& stateless_proxies,
+                 int max_sproutlet_depth=DEFAULT_MAX_SPROUTLET_DEPTH);
 
   /// Destructor.
   virtual ~SproutletProxy();
@@ -52,8 +57,16 @@ public:
   /// Constructs the next hop URI if a Sproutlet doesn't want to handle a
   /// request.
   pjsip_sip_uri* next_hop_uri(const std::string& service,
-                              const pjsip_route_hdr* route,
+                              const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
+
+  enum SPROUTLET_SELECTION_TYPES
+  {
+    SERVICE_NAME=0,
+    DOMAIN_PART,
+    USER_PART,
+    NONE_SELECTED=1000,
+  };
 
 protected:
   /// Pre-declaration
@@ -75,7 +88,8 @@ protected:
   /// Return the sproutlet that matches the URI supplied.
   Sproutlet* match_sproutlet_from_uri(const pjsip_uri* uri,
                                       std::string& alias,
-                                      SAS::TrailId trail);
+                                      std::string& local_hostname,
+                                      SPROUTLET_SELECTION_TYPES& selection_type) const;
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -89,20 +103,16 @@ protected:
   /// @param existing_uri - An existing URI to base the new URI on.
   pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
                                                const std::string& name,
-                                               pjsip_sip_uri* existing_uri) const;
+                                               const pjsip_sip_uri* existing_uri) const;
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
-  void report_sproutlet_selection_event(int selection_type,
-                                        std::string service_name,
-                                        std::string value,
-                                        std::string uri_str,
-                                        SAS::TrailId trail);
-
   bool is_uri_local(const pjsip_uri* uri);
-  bool is_host_local(const pj_str_t* host);
+  pjsip_sip_uri* get_routing_uri(const pjsip_msg* req) const;
+  std::string get_local_hostname(const pjsip_sip_uri* uri) const;
+  bool is_host_local(const pj_str_t* host) const;
   bool is_uri_reflexive(const pjsip_uri* uri,
                         Sproutlet* sproutlet,
                         SAS::TrailId trail);
@@ -124,6 +134,14 @@ protected:
     SproutletTimerCallback(pj_timer_entry* timer);
     void run() override;
   };
+
+  // A struct to wrap tx_data and allowed_host_state in a convenient bundle
+  // to pass over interfaces when sending a request.
+  typedef struct
+  {
+    pjsip_tx_data* tx_data;
+    int allowed_host_state;
+  } SendRequest;
 
   bool schedule_timer(pj_timer_entry* tentry, int duration);
   bool cancel_timer(pj_timer_entry* tentry);
@@ -157,7 +175,7 @@ protected:
 
     /// Notification that an client transaction is not responding.
     virtual void on_client_not_responding(UACTsx* uac_tsx,
-                                          pjsip_event_id_e event);
+                                          ForkErrorState fork_error);
 
     virtual void on_tsx_state(pjsip_event* event);
 
@@ -165,7 +183,7 @@ protected:
   private:
     void tx_request(SproutletWrapper* sproutlet,
                     int fork_id,
-                    pjsip_tx_data* req);
+                    SendRequest req);
 
     void schedule_requests();
 
@@ -217,6 +235,9 @@ protected:
     {
       pjsip_tx_data* req;
       std::pair<SproutletWrapper*, int> upstream;
+      int allowed_host_state;
+      int sproutlet_depth;
+      std::string upstream_network_func;
     } PendingRequest;
     std::queue<PendingRequest> _pending_req_q;
 
@@ -250,6 +271,8 @@ protected:
 
   std::list<Sproutlet*> _sproutlets;
 
+  const int _max_sproutlet_depth;
+
   static const pj_str_t STR_SERVICE;
 
   friend class UASTsx;
@@ -268,6 +291,8 @@ public:
                    const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
                    pjsip_transport* original_transport,
+                   const std::string& upstream_network_func,
+                   int depth,
                    SAS::TrailId trail_id);
 
   /// Virtual destructor.
@@ -290,7 +315,7 @@ public:
   pjsip_msg* create_response(pjsip_msg* req,
                              pjsip_status_code status_code,
                              const std::string& status_text="");
-  int send_request(pjsip_msg*& req);
+  int send_request(pjsip_msg*& req, int allowed_host_state);
   void send_response(pjsip_msg*& rsp);
   void cancel_fork(int fork_id, int reason=0);
   void cancel_pending_forks(int reason=0);
@@ -303,23 +328,28 @@ public:
   SAS::TrailId trail() const;
   bool is_uri_reflexive(const pjsip_uri*) const;
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
+  pjsip_sip_uri* get_routing_uri(const pjsip_msg* req) const;
   pjsip_sip_uri* next_hop_uri(const std::string& service,
-                              const pjsip_route_hdr* route,
+                              const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
+  std::string get_local_hostname(const pjsip_sip_uri* uri) const;
+  bool is_network_func_boundary() const;
+  int get_depth() const { return _depth; };
+  const std::string& get_network_function() const { return _this_network_func; };
 
 private:
   void rx_request(pjsip_tx_data* req);
   void rx_response(pjsip_tx_data* rsp, int fork_id);
   void rx_cancel(pjsip_tx_data* cancel);
   void rx_error(int status_code);
-  void rx_fork_error(pjsip_event_id_e event, int fork_id);
+  void rx_fork_error(ForkErrorState fork_error, int fork_id);
   void on_timer_pop(TimerID id, void* context);
   void register_tdata(pjsip_tx_data* tdata);
   void deregister_tdata(pjsip_tx_data* tdata);
 
   void process_actions(bool complete_after_actions);
   void aggregate_response(pjsip_tx_data* rsp);
-  void tx_request(pjsip_tx_data* req, int fork_id);
+  void tx_request(SproutletProxy::SendRequest req, int fork_id);
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);
   int compare_sip_sc(int sc1, int sc2);
@@ -350,10 +380,22 @@ private:
   // Immutable reference to the transport used by the original request.
   pjsip_transport* _original_transport;
 
+  // The name of the Network Function of this Sproutlet.
+  std::string _this_network_func;
+
+  // The name of the Network Function of the upstream Sproutlet (if any).
+  // This is used to detect transitions between Network Functions, so that we
+  // can perform SIP-entity-level operations like sending 100 Trying responses
+  // and decrementing the Max-Forwards counter.
+  std::string _upstream_network_func;
+
+  // The depth of this wrapper in the transaction tree.  Used to detect loops.
+  int _depth;
+
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;
 
-  typedef std::map<int, pjsip_tx_data*> Requests;
+  typedef std::map<int, SproutletProxy::SendRequest> Requests;
   Requests _send_requests;
 
   typedef std::list<pjsip_tx_data*> Responses;

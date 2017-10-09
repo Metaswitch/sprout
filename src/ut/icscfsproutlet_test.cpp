@@ -24,6 +24,7 @@
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
+#include "testingcommon.h"
 
 using namespace std;
 using testing::StrEq;
@@ -71,6 +72,8 @@ public:
                                           "sip:bgcf.homedomain",
                                           ICSCF_PORT,
                                           "sip:icscf.homedomain:5052;transport=tcp",
+                                          "icscf",
+                                          "",
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
@@ -118,153 +121,6 @@ public:
     delete _icscf_proxy; _icscf_proxy = NULL;
     delete _icscf_sproutlet; _icscf_sproutlet = NULL;
   }
-
-  class Message
-  {
-  public:
-    string _method;
-    string _requri; //< overrides toscheme:to@todomain
-    string _toscheme;
-    string _status;
-    string _from;
-    string _fromdomain;
-    string _to;
-    string _todomain;
-    string _content_type;
-    string _body;
-    string _extra;
-    int _forwards;
-    int _unique; //< unique to this dialog; inserted into Call-ID
-    string _via;
-    string _route;
-    int _cseq;
-
-    Message() :
-      _method("INVITE"),
-      _toscheme("sip"),
-      _status("200 OK"),
-      _from("6505551000"),
-      _fromdomain("homedomain"),
-      _to("6505551234"),
-      _todomain("homedomain"),
-      _content_type("application/sdp"),
-      _forwards(68),
-      _via("10.83.18.38:36530"),
-      _cseq(16567)
-    {
-      static int unique = 1042;
-      _unique = unique;
-      unique += 10; // leave room for manual increments
-    }
-
-    void set_route(pjsip_msg* msg)
-    {
-      string route = get_headers(msg, "Record-Route");
-      if (route != "")
-      {
-        // Convert to a Route set by replacing all instances of Record-Route: with Route:
-        for (size_t n = 0; (n = route.find("Record-Route:", n)) != string::npos;)
-        {
-          route.replace(n, 13, "Route:");
-        }
-      }
-      _route = route;
-    }
-
-    string get_request()
-    {
-      char buf[16384];
-
-      // The remote target.
-      string target = string(_toscheme).append(":").append(_to);
-      if (!_todomain.empty())
-      {
-        target.append("@").append(_todomain);
-      }
-
-      string requri = target;
-      string route = _route.empty() ? "" : _route + "\r\n";
-
-      int n = snprintf(buf, sizeof(buf),
-                       "%1$s %9$s SIP/2.0\r\n"
-                       "Via: SIP/2.0/TCP %12$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
-                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <%10$s>\r\n"
-                       "Max-Forwards: %8$d\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %14$d %1$s\r\n"
-                       "User-Agent: Accession 2.0.0.0\r\n"
-                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                       "%4$s"
-                       "%7$s"
-                       "%13$s"
-                       "Content-Length: %5$d\r\n"
-                       "\r\n"
-                       "%6$s",
-                       /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
-                       /*  3 */ _fromdomain.c_str(),
-                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ (int)_body.length(),
-                       /*  6 */ _body.c_str(),
-                       /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /*  8 */ _forwards,
-                       /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
-                       /* 10 */ target.c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _via.c_str(),
-                       /* 13 */ route.c_str(),
-                       /* 14 */ _cseq
-        );
-
-      EXPECT_LT(n, (int)sizeof(buf));
-
-      string ret(buf, n);
-      // cout << ret <<endl;
-      return ret;
-    }
-
-    string get_response()
-    {
-      char buf[16384];
-
-      int n = snprintf(buf, sizeof(buf),
-                       "SIP/2.0 %9$s\r\n"
-                       "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
-                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <sip:%7$s%8$s>\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %12$d %1$s\r\n"
-                       "User-Agent: Accession 2.0.0.0\r\n"
-                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                       "%4$s"
-                       "%10$s"
-                       "Content-Length: %5$d\r\n"
-                       "\r\n"
-                       "%6$s",
-                       /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
-                       /*  3 */ _fromdomain.c_str(),
-                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ (int)_body.length(),
-                       /*  6 */ _body.c_str(),
-                       /*  7 */ _to.c_str(),
-                       /*  8 */ _todomain.empty() ? "" : string("@").append(_todomain).c_str(),
-                       /*  9 */ _status.c_str(),
-                       /* 10 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _cseq,
-                       /* 13 */ _via.c_str()
-        );
-
-      EXPECT_LT(n, (int)sizeof(buf));
-
-      string ret(buf, n);
-      // cout << ret <<endl;
-      return ret;
-    }
-  };
-
 
 protected:
   static ACRFactory* _acr_factory;
@@ -326,7 +182,8 @@ protected:
 
     // Inject an INVITE request to a sip URI representing a telephone number with a
     // P-Served-User header.
-    Message msg1;
+    TestingCommon::Message msg1;
+    msg1._first_hop = true;
     msg1._method = "INVITE";
     msg1._requri = "sip:16505551234@homedomain;user=phone;isub=1234;ext=4321";
     msg1._to = "16505551234";
@@ -355,11 +212,11 @@ protected:
   }
 };
 
-
+using TestingCommon::Message;
 
 TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
 {
-  // Tests routing of REGISTER requests when the HSS responses with a server
+  // Tests routing of REGISTER requests when the HSS responds with a server
   // name.  There are two cases tested here - one where the impi is defaulted
   // from the impu and one where the impi is explicit specified in an
   // Authorization header.
@@ -380,6 +237,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -428,6 +286,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
 
   // Inject a REGISTER request.
   Message msg2;
+  msg2._first_hop = true;
   msg2._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg2._to = msg2._from;        // To header contains AoR in REGISTER requests.
@@ -498,6 +357,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSCaps)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -551,6 +411,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSCaps)
 
   // Inject a REGISTER request.
   Message msg2;
+  msg2._first_hop = true;
   msg2._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg2._to = msg2._from;        // To header contains AoR in REGISTER requests.
@@ -619,6 +480,7 @@ TEST_F(ICSCFSproutletTest, RouteEmergencyRegister)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -693,6 +555,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSCapsNoMatch)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -740,6 +603,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterICSCFLoop)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -791,6 +655,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterSCSCFReturnedCAPAB)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -885,6 +750,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterSCSCFReturnedCAPABAndServerName)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -960,6 +826,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSRetry)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -1050,6 +917,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSNoRetry)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -1122,6 +990,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSMultipleRetry)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -1231,6 +1100,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSMultipleDefaultCapabs)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -1314,6 +1184,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSFail)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -1357,6 +1228,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSBadResponse)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -1384,6 +1256,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSBadResponse)
 
   // Inject a REGISTER request.
   Message msg2;
+  msg2._first_hop = true;
   msg2._method = "REGISTER";
   msg2._requri = "sip:homedomain";
   msg2._to = msg2._from;        // To header contains AoR in REGISTER requests.
@@ -1415,6 +1288,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSBadResponse)
 
   // Inject a REGISTER request.
   Message msg3;
+  msg3._first_hop = true;
   msg3._method = "REGISTER";
   msg3._requri = "sip:homedomain";
   msg3._to = msg3._from;        // To header contains AoR in REGISTER requests.
@@ -1448,6 +1322,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSBadResponse)
 
   // Inject a REGISTER request.
   Message msg4;
+  msg4._first_hop = true;
   msg4._method = "REGISTER";
   msg4._requri = "sip:homedomain";
   msg4._to = msg4._from;        // To header contains AoR in REGISTER requests.
@@ -1500,6 +1375,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterAllSCSCFsTimeOut)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -1589,6 +1465,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSNotFound)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -1652,6 +1529,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -1742,6 +1620,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerNameWithWildcard)
 
   // Inject a INVITE request, and expect a 100 Trying and forwarded INVITE
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._route = "Route: <sip:homedomain;orig>";
   inject_msg(msg1.get_request(), tp);
@@ -1784,6 +1663,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerNameWithWildcard)
   // Inject a INVITE request, and expect a 100 Trying and forwarded INVITE.
   // The SIP URI is translated to a Tel URI during I-CSCF processing.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._route = "Route: <sip:homedomain>";
   msg1._requri = "sip:+16505551234@homedomain";
@@ -1825,6 +1705,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCaps)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -1897,6 +1778,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCapsNoMatch)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -1953,6 +1835,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetry)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -2028,6 +1911,136 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetry)
   delete tp;
 }
 
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetryWithWildcard)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the originating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB",
+                              "{\"result-code\": 2001,"
+                              " \"wildcard-identity\": \"sip:650![0-9].*!@homedomain\","
+                              " \"mandatory-capabilities\": [654],"
+                              " \"optional-capabilities\": [567]}");
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain;orig>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting a 100 Trying and an INVITE. Free the 100 Trying, then kill the
+  // TCP connection to the S-CSCF to force a retry.
+  ASSERT_EQ(2, txdata_count());
+  free_txdata();
+  tdata = current_txdata();
+  terminate_tcp_transport(tdata->tp_info.transport);
+  free_txdata();
+  cwtest_advance_time_ms(6000);
+  poll();
+
+  // The HSS is queried a second time for capabilities. This time S-CSCF
+  // scscf4.homedomain is selected, and the subscriber has a wildcard
+  // identity.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.4", 5058, tdata);
+
+  // Check that a P-Profile-Key has been added that uses the wildcard
+  string ppk = get_headers(tdata->msg, "P-Profile-Key");
+  ASSERT_EQ("P-Profile-Key: <sip:650![0-9].*!@homedomain>", PJUtils::unescape_string_for_uri(ppk, stack_data.pool));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r1(200);
+  r1.matches(tdata->msg);
+  free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
+
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB");
+
+  delete tp;
+}
+
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetryOnceNoMatchingSCSCF)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the originating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB",
+                              "{\"result-code\": 2001,"
+                              " \"mandatory-capabilities\": [765, 654],"
+                              " \"optional-capabilities\": [567]}");
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain;orig>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting a 100 Trying and an INVITE. Free the 100 Trying, then kill the
+  // TCP connection to the S-CSCF to force a retry.
+  ASSERT_EQ(2, txdata_count());
+  free_txdata();
+  tdata = current_txdata();
+  terminate_tcp_transport(tdata->tp_info.transport);
+  free_txdata();
+  cwtest_advance_time_ms(6000);
+  poll();
+
+  // Looking up the next S-CSCF in the HSS fails though as there are no S-CSCFs
+  // that match all the mandatory capabilites. Check the response - it should
+  // be a 503 (as that's what we got from the first S-CSCF we tried).
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(503);
+  r2.matches(tdata->msg);
+  free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
+
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB");
+
+  delete tp;
+}
 
 TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSFail)
 {
@@ -2045,6 +2058,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSFail)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -2076,6 +2090,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSFail)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg2;
+  msg2._first_hop = true;
   msg2._method = "INVITE";
   msg2._via = tp->to_string(false);
   msg2._extra = "Contact: sip:6505551000@" +
@@ -2128,6 +2143,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteCancel)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -2168,6 +2184,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteCancel)
 
   // Build and send a CANCEL chasing the INVITE.
   Message msg2;
+  msg2._first_hop = true;
   msg2._method = "CANCEL";
   msg2._via = tp->to_string(false);
   msg2._unique = msg1._unique;    // Make sure branch and call-id are same as the INVITE
@@ -2242,6 +2259,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerName)
 
   // Inject a terminating INVITE request with a P-Served-User header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -2327,6 +2345,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteCancel)
 
   // Inject a terminating INVITE request with a P-Served-User header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -2366,6 +2385,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteCancel)
 
   // Build and send a CANCEL chasing the INVITE.
   Message msg2;
+  msg2._first_hop = true;
   msg2._method = "CANCEL";
   msg2._via = tp->to_string(false);
   msg2._unique = msg1._unique;    // Make sure branch and call-id are same as the INVITE
@@ -2443,6 +2463,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSCaps)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -2512,6 +2533,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNoUnregisteredServices)
 
   // Inject a INVITE request
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._route = "Route: <sip:homedomain>";
@@ -2563,6 +2585,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetry)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -2680,6 +2703,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteTelURI)
 
   // Inject an INVITE request to a tel URI with a P-Served-User header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
   msg1._to = "+16505551234;npdi";
@@ -2753,6 +2777,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
 
   // Inject an INVITE request to a tel URI with a P-Served-User header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
   msg1._to = "+16605551234";
@@ -2821,6 +2846,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumBgcf)
 
   // Inject an INVITE request to a tel URI with a P-Served-User header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
   msg1._to = "+16607771234";
@@ -2888,6 +2914,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
 
   // Inject an INVITE request to a tel URI
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
   msg1._to = "+1690100001";
@@ -2941,6 +2968,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
 
   // Inject an INVITE request to a tel URI
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
   msg1._to = "+1690100001;rn=+16;npdi";
@@ -2999,6 +3027,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteTransitFunction)
 
   // Inject an INVITE request to a tel URI
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
   msg1._to = "+1690100001";
@@ -3056,6 +3085,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteUserPhone)
   // Inject an INVITE request to a sip URI representing a telephone number with a
   // P-Served-User header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:+16505551234@homedomain;user=phone;isub=1234;ext=4321";
   msg1._to = "+16505551234";
@@ -3225,6 +3255,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
   // Add NP data to the SIP URI - it should be ignored for the purposes of SIP -> Tel URI
   // conversion
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:+16505551234;npdi;rn=567@homedomain";
   msg1._to = "+16505551234";
@@ -3305,6 +3336,7 @@ TEST_F(ICSCFSproutletTest, ProxyAKARegisterChallenge)
 
   // Inject a REGISTER request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:homedomain";
   msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
@@ -3355,6 +3387,7 @@ TEST_F(ICSCFSproutletTest, RequestErrors)
 
   // Inject a INVITE request with a sips: RequestURI
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._toscheme = "sips";
   msg1._from = "alice";
@@ -3376,6 +3409,7 @@ TEST_F(ICSCFSproutletTest, RequestErrors)
 
   // Inject an INVITE request with Max-Forwards <= 1.
   Message msg2;
+  msg2._first_hop = true;
   msg2._method = "INVITE";
   msg2._requri = "sip:bob@awaydomain";
   msg2._from = "alice";
@@ -3424,6 +3458,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
@@ -3515,6 +3550,7 @@ TEST_F(ICSCFSproutletTest, INVITEWithTwoRouteHeaders)
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
   msg1._route = "Route: <sip:icscf.homedomain;lr>, <sip:scscf1.homedomain:5059;transport=TCP;lr;orig>";
@@ -3566,6 +3602,7 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
 
   // Inject an ACK request to a local URI
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "ACK";
   msg1._requri = "sip:3196914123@homedomain;transport=UDP";
   inject_msg(msg1.get_request(), tp);
@@ -3577,5 +3614,62 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
   // Allow the transaction to time out so we don't leak PJSIP memory.
   cwtest_advance_time_ms(33000L);
   poll();
+  delete tp;
+}
+
+// Test the I-CSCF can handle a MESSAGE where the Request URI is
+// "urn:service:sos".
+TEST_F(ICSCFSproutletTest, ICSCFHandlesUrnUri)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              "\"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject a SIP MESSAGE.
+  Message msg1;
+  msg1._first_hop = true;
+  msg1._method = "MESSAGE";
+  msg1._requri = "urn:service:sos";
+  msg1._full_to_header = "To: <urn:service:sos>";
+  msg1._route = "Route: <sip:homedomain;orig>";
+  std::string p_asserted_id = "P-Asserted-Identity: <sip:";
+  p_asserted_id.append(msg1._from).append("@").append(msg1._fromdomain).append(">");
+  msg1._extra = p_asserted_id;
+  inject_msg(msg1.get_request(), tp);
+
+  // Check that the MESSAGE is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Check the method and content of the MESSAGE is correct.
+  ReqMatcher r1("MESSAGE");
+  r1.matches(tdata->msg);
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  EXPECT_EQ("urn:service:sos", r1.uri());
+  EXPECT_THAT(get_headers(current_txdata()->msg, "To"),
+              testing::MatchesRegex("To: <urn:service:sos>"));
+
+  // Inject a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the correct response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+
+  //Clean up.
+  free_txdata();
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
   delete tp;
 }

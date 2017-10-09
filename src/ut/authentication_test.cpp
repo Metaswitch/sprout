@@ -23,12 +23,13 @@ extern "C" {
 #include "stack.h"
 #include "analyticslogger.h"
 #include "localstore.h"
-#include "impistore.h"
+#include "astaire_impistore.h"
 #include "sproutletproxy.h"
 #include "hssconnection.h"
 #include "authenticationsproutlet.h"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
+#include "mock_chronos_connection.h"
 #include "test_interposer.hpp"
 #include "md5.h"
 #include "fakesnmp.hpp"
@@ -57,12 +58,10 @@ public:
     SipTest::SetUpTestCase();
 
     _local_data_store = new LocalStore();
-    _impi_store = new ImpiStore(_local_data_store, ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI);
+    _impi_store = new AstaireImpiStore(_local_data_store);
     _remote_data_stores.push_back(new LocalStore());
-    _remote_impi_stores.push_back(new ImpiStore(_remote_data_stores[0],
-                                                ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI));
+    _remote_impi_stores.push_back(new AstaireImpiStore(_remote_data_stores[0]));
     _hss_connection = new FakeHSSConnection();
-    _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger();
     _acr_factory = new ACRFactory();
   }
@@ -71,7 +70,6 @@ public:
   {
     delete _acr_factory;
     delete _hss_connection;
-    delete _chronos_connection;
     delete _analytics;
     delete _impi_store;
     delete _local_data_store;
@@ -98,11 +96,13 @@ public:
 
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_auth_sproutlet);
+    std::unordered_set<std::string> additional_home_domains;
+    additional_home_domains.insert("sprout-site2.homedomain");
 
     _sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "sprout.homedomain",
-                                          std::unordered_set<std::string>(),
+                                          additional_home_domains,
                                           sproutlets,
                                           std::set<std::string>());
 
@@ -110,6 +110,7 @@ public:
                             stack_data.scscf_port,
                             "0.0.0.0",
                             5060);
+
   }
 
   void TearDown()
@@ -147,6 +148,9 @@ public:
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->reset_count();
+
+    // Make sure the fake connections have their results cleaned out.
+    _hss_connection->flush_all();
 
     // All the AKA tests use the same challenge so flush the data store after
     // each test to avoid tests interacting.
@@ -240,7 +244,6 @@ protected:
   static ImpiStore* _impi_store;
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
-  static FakeChronosConnection* _chronos_connection;
   static AnalyticsLogger* _analytics;
   static int _current_cseq;
   static std::vector<LocalStore*> _remote_data_stores;
@@ -255,27 +258,27 @@ LocalStore* BaseAuthenticationTest::_local_data_store;
 ImpiStore* BaseAuthenticationTest::_impi_store;
 ACRFactory* BaseAuthenticationTest::_acr_factory;
 FakeHSSConnection* BaseAuthenticationTest::_hss_connection;
-FakeChronosConnection* BaseAuthenticationTest::_chronos_connection;
 AnalyticsLogger* BaseAuthenticationTest::_analytics;
 int BaseAuthenticationTest::_current_cseq;
 std::vector<LocalStore*> BaseAuthenticationTest::_remote_data_stores;
 std::vector<ImpiStore*> BaseAuthenticationTest::_remote_impi_stores;
 
-
 /// A test fixture that is templated over a configuration class. This allows the
 /// authentication sproutlet to be set up in different ways without lots of
 /// boilerplate code.
-template<class C>
+template<class C, class ChronosHelper>
 class AuthenticationTestTemplate : public BaseAuthenticationTest
 {
   static void SetUpTestCase()
   {
+    ChronosHelper::create_chronos_connection();
     BaseAuthenticationTest::SetUpTestCase();
   }
 
   static void TearDownTestCase()
   {
     BaseAuthenticationTest::TearDownTestCase();
+    ChronosHelper::destroy_chronos_connection();
   }
 
   AuthenticationSproutlet* create_auth_sproutlet()
@@ -284,13 +287,14 @@ class AuthenticationTestTemplate : public BaseAuthenticationTest
       new AuthenticationSproutlet("authentication",
                                   stack_data.scscf_port,
                                   "sip:authentication.homedomain",
-                                  "registrar",
                                   { "scscf" },
+                                  "scscf",
+                                  "registrar",
                                   "homedomain",
                                   _impi_store,
                                   _remote_impi_stores,
                                   _hss_connection,
-                                  _chronos_connection,
+                                  ChronosHelper::get_chronos_connection(),
                                   _acr_factory,
                                   C::non_reg_auth(),
                                   _analytics,
@@ -301,6 +305,57 @@ class AuthenticationTestTemplate : public BaseAuthenticationTest
     return auth_sproutlet;
   }
 };
+
+class FakeChronosConnectionHelper
+{
+  static void create_chronos_connection()
+  {
+    _chronos_connection = new FakeChronosConnection();
+    // Set up the basic expected results
+    _chronos_connection->set_result("", HTTP_OK);
+    _chronos_connection->set_result("post_identity", HTTP_OK);
+  }
+
+  static ChronosConnection* get_chronos_connection()
+  {
+    return _chronos_connection;
+  }
+
+  static void destroy_chronos_connection()
+  {
+    _chronos_connection->flush_all();
+    delete _chronos_connection;
+  }
+
+protected:
+  static FakeChronosConnection* _chronos_connection;
+};
+
+/// Test fixture for the timer tests. This is the same as the Authenticaiton
+/// tests, but we want to use a MockChronosConnection, not a FakeChronosConnection
+class MockChronosConnectionHelper
+{
+  static void create_chronos_connection()
+  {
+    _mock_chronos_connection = new MockChronosConnection("localhost");
+  }
+
+  static MockChronosConnection* get_chronos_connection()
+  {
+    return _mock_chronos_connection;
+  }
+
+  static void destroy_chronos_connection()
+  {
+    delete _mock_chronos_connection;
+  }
+
+protected:
+  static MockChronosConnection* _mock_chronos_connection;
+};
+
+FakeChronosConnection* FakeChronosConnectionHelper::_chronos_connection;
+MockChronosConnection* MockChronosConnectionHelper::_mock_chronos_connection;
 
 /// Templated configuration class for use with the above fixture.
 template<uint32_t A, bool N>
@@ -552,7 +607,8 @@ string AuthenticationMessage::get()
 /// Test fixture for these tests. This is just a typedef of the test template +
 /// a particular configuration.
 typedef AuthenticationTestTemplate<
-  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, true>
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, true>,
+  FakeChronosConnectionHelper
 > AuthenticationTest;
 
 
@@ -663,7 +719,7 @@ TEST_F(AuthenticationTest, IntegrityProtectedIpAssocYes)
 {
   // Test that the authentication module challenges requests with an integrity
   // protected value of ip-assoc-yes.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   AuthenticationMessage msg("REGISTER");
@@ -677,14 +733,14 @@ TEST_F(AuthenticationTest, IntegrityProtectedIpAssocYes)
   RespMatcher(401).matches(tdata->msg);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 // Tests that authentication is needed on registers that have at least one non
 // emergency contact
 TEST_F(AuthenticationTest, AuthorizationEmergencyReg)
 {
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Test that the authentication is required for REGISTER requests with one non-emergency contact
@@ -700,7 +756,7 @@ TEST_F(AuthenticationTest, AuthorizationEmergencyReg)
   RespMatcher(401).matches(tdata->msg);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -710,7 +766,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -752,8 +808,63 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
+
+TEST_F(AuthenticationTest, DigestAuthSuccessRemoteSite)
+{
+  add_host_mapping("sprout-site2.homedomain", "5.6.7.8");
+
+  // Test a successful SIP Digest authentication flow where the route header is
+  // different from the configured S-CSCF URI.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  // Set the server_name to contain the local hostname part of the Route header.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout-site2.homedomain%3A5058%3Btransport%3DTCP",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  msg1._route_uri = "sip:sprout-site2.homedomain;transport=TCP;service=authentication";
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  msg2._route_uri = "sip:sprout-site2.homedomain;transport=TCP;service=authentication";
+  inject_msg(msg2.get());
+
+  // The authentication module lets the request through.
+  auth_sproutlet_allows_request();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout-site2.homedomain%3A5058%3Btransport%3DTCP");
+}
+
 
 TEST_F(AuthenticationTest, NoAlgorithmDigestAuthSuccess)
 {
@@ -761,7 +872,7 @@ TEST_F(AuthenticationTest, NoAlgorithmDigestAuthSuccess)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -803,7 +914,7 @@ TEST_F(AuthenticationTest, NoAlgorithmDigestAuthSuccess)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, DigestAuthSuccessWithNonceCount)
@@ -812,7 +923,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithNonceCount)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -871,7 +982,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithNonceCount)
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -881,7 +992,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessNonceCountJump)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -920,7 +1031,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessNonceCountJump)
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -935,7 +1046,7 @@ TEST_F(AuthenticationTest, NoAlgorithmBadNonceDigestAuthFailure)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send a new REGISTER request with an authentication header including the
@@ -959,7 +1070,7 @@ TEST_F(AuthenticationTest, NoAlgorithmBadNonceDigestAuthFailure)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -969,7 +1080,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with an authentication header, but with no
@@ -1013,7 +1124,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1024,7 +1135,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadIMPI)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with an authentication header with a bad IMPI.
@@ -1040,7 +1151,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadIMPI)
   EXPECT_EQ(0, ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1050,7 +1161,7 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query the default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with an authentication header with a response
@@ -1107,7 +1218,7 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1117,7 +1228,7 @@ TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -1162,7 +1273,7 @@ TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1173,9 +1284,9 @@ TEST_F(AuthenticationTest, DigestAuthFailTimeout)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                           503);
-  _hss_connection->set_rc("/impi/6505550002%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_rc("/impi/6505550002%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                           504);
 
   // Send in a REGISTER request.
@@ -1202,8 +1313,8 @@ TEST_F(AuthenticationTest, DigestAuthFailTimeout)
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   free_txdata();
 
-  _hss_connection->delete_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-  _hss_connection->delete_rc("/impi/6505550002%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+  _hss_connection->delete_rc("/impi/6505550002%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1213,7 +1324,7 @@ TEST_F(AuthenticationTest, DigestNonceCountTooLow)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -1282,7 +1393,7 @@ TEST_F(AuthenticationTest, DigestNonceCountTooLow)
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1292,7 +1403,7 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -1361,7 +1472,7 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 void BaseAuthenticationTest::TestAKAAuthSuccess(char* key)
@@ -1410,7 +1521,7 @@ void BaseAuthenticationTest::TestAKAAuthSuccess(char* key)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 // Test that a normal AKA authenticated registration succeeds.
@@ -1420,7 +1531,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                               "\"response\":\"12345678123456781234567812345678\","
                               "\"cryptkey\":\"0123456789abcdef\","
@@ -1438,7 +1549,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNullBytes)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                               "\"response\":\"12345678000000000000000012345678\","
                               "\"cryptkey\":\"0123456789abcdef\","
@@ -1456,7 +1567,7 @@ TEST_F(AuthenticationTest, AKAv2AuthSuccess)
   // The keys in this test case are precalculated to ensure that the eventual
   // Digest response matches the one generated by hashing the
   // response/cryptkey/integritykey.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka2?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka2?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                               "\"response\":\"2f46a9d4aa4fae35\","
                               "\"version\":2,"
@@ -1501,7 +1612,7 @@ TEST_F(AuthenticationTest, AKAv2AuthSuccess)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka2?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka2?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
@@ -1513,7 +1624,7 @@ TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                               "\"response\":\"12345678123456781234567812345678\","
                               "\"cryptkey\":\"0123456789abcdef\","
@@ -1561,7 +1672,7 @@ TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
@@ -1573,7 +1684,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                               "\"response\":\"12345678123456781234567812345678\","
                               "\"cryptkey\":\"0123456789abcdef\","
@@ -1638,7 +1749,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1651,7 +1762,7 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                               "\"response\":\"12345678123456781234567812345678\","
                               "\"cryptkey\":\"0123456789abcdef\","
@@ -1701,7 +1812,7 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, AKAAuthFailStale)
@@ -1711,7 +1822,7 @@ TEST_F(AuthenticationTest, AKAAuthFailStale)
 
   // Set up the HSS response for the AV query the default private user identity.
 
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"12345678123456781234567812345678\","
                               "\"response\":\"87654321876543218765432187654321\","
                               "\"cryptkey\":\"fedcba9876543210\","
@@ -1742,7 +1853,7 @@ TEST_F(AuthenticationTest, AKAAuthFailStale)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
@@ -1755,7 +1866,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"8765432187654321876543218765432187654321432=\","
                               "\"response\":\"12345678123456781234567812345678\","
                               "\"cryptkey\":\"0123456789abcdef\","
@@ -1785,7 +1896,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
 
   // Set up a second HSS response for the resync query from the authentication
   // module.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&resync-auth=87654321876543218765499td9td9td9td9td9td",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&resync-auth=87654321876543218765499td9td9td9td9td9td&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"1234567812345678123456781234567812345678123=\","
                               "\"response\":\"87654321876543218765432187654321\","
                               "\"cryptkey\":\"fedcba9876543210\","
@@ -1849,8 +1960,8 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&resync-auth=f3beb9e37db5f3beb9e37db5f3beb9e3df6d77db5df6d77db5df6d77db5d");
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&resync-auth=f3beb9e37db5f3beb9e37db5f3beb9e3df6d77db5df6d77db5df6d77db5d&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1865,7 +1976,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                                         "\"response\":\"12345678123456781234567812345678\","
                                         "\"cryptkey\":\"0123456789abcdef\","
@@ -1921,7 +2032,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1932,7 +2043,7 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
 
   // Set up the HSS response for the AV query using a default private user
   // identity, with no aka or digest body.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{}");
 
   // Send in a REGISTER request with an authentication header with
@@ -1947,11 +2058,11 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   RespMatcher(403).matches(tdata->msg);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 
   // Set up the HSS response for the AV query using a default private user
   // identity, with a malformed aka body.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                                         "\"cryptkey\":\"0123456789abcdef\","
                                         "\"integritykey\":\"fedcba9876543210\"}}");
@@ -1968,11 +2079,11 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   RespMatcher(403).matches(tdata->msg);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 
   // Set up the HSS response for the AV query the default private user identity,
   // with a malformed digest body.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\","
                                            "\"ha1\":\"12345678123456781234567812345678\"}}");
 
@@ -1990,7 +2101,7 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -1999,7 +2110,7 @@ TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -2037,7 +2148,7 @@ TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, ServiceRouteWithMD5Algorithm)
@@ -2045,7 +2156,7 @@ TEST_F(AuthenticationTest, ServiceRouteWithMD5Algorithm)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -2089,7 +2200,7 @@ TEST_F(AuthenticationTest, ServiceRouteWithMD5Algorithm)
               "orig;username=6505550001%40homedomain;nonce=" + auth_params["nonce"] + ">");
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, ServiceRouteWithAKAAlgorithm)
@@ -2101,7 +2212,7 @@ TEST_F(AuthenticationTest, ServiceRouteWithAKAAlgorithm)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                               "\"response\":\"12345678123456781234567812345678\","
                               "\"cryptkey\":\"0123456789abcdef\","
@@ -2152,7 +2263,7 @@ TEST_F(AuthenticationTest, ServiceRouteWithAKAAlgorithm)
             "Service-Route: <sip:scscf.sprout.example.com;orig>");
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, StoreFailsWhenCheckingAuthResponse)
@@ -2161,7 +2272,7 @@ TEST_F(AuthenticationTest, StoreFailsWhenCheckingAuthResponse)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -2205,7 +2316,7 @@ TEST_F(AuthenticationTest, StoreFailsWhenCheckingAuthResponse)
   tdata = current_txdata();
   RespMatcher(500).matches(tdata->msg);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 //
@@ -2223,7 +2334,8 @@ typedef ::testing::Types <
 > PxyAuthHdrTypes;
 
 // Need to define a new type so the parameterization works.
-template <class T> using AuthenticationPxyAuthHdrTest = AuthenticationTestTemplate<T>;
+template <class T> using AuthenticationPxyAuthHdrTest = AuthenticationTestTemplate<T,
+                                                         FakeChronosConnectionHelper>;
 TYPED_TEST_CASE(AuthenticationPxyAuthHdrTest, PxyAuthHdrTypes);
 
 TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
@@ -2232,7 +2344,7 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                                     "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a request with a Proxy-Authentication header.  This triggers
@@ -2298,7 +2410,7 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_successes);
 
-  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -2308,7 +2420,7 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallen
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                                     "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a request with a Proxy-Authentication header.  This triggers
@@ -2420,7 +2532,7 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallen
   // The authentication module lets the request through.
   this->auth_sproutlet_allows_request(true);
 
-  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
@@ -2429,7 +2541,7 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                                     "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a request with a Proxy-Authentication header.  This triggers
@@ -2487,7 +2599,7 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_failures);
   this->free_txdata();
 
-  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TYPED_TEST(AuthenticationPxyAuthHdrTest, NoProxyAuthorization)
@@ -2508,7 +2620,8 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, NoProxyAuthorization)
 //
 
 typedef AuthenticationTestTemplate<
-  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, false>
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, false>,
+  FakeChronosConnectionHelper
 > AuthenticationNonceCountDisabledTest;
 
 TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
@@ -2517,7 +2630,7 @@ TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
@@ -2581,7 +2694,7 @@ TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
   EXPECT_NE(auth_params["nonce"], auth_params2["nonce"]);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
@@ -2589,7 +2702,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Do an initial registration flow (REGISTER, 401, REGISTER, 200) so that we
@@ -2683,7 +2796,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
 
@@ -2694,7 +2807,7 @@ TEST_F(AuthenticationTest, DigestAuthFailureWithSetError)
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Force an error on the SET.  This means that we'll respond with a 500
@@ -2713,6 +2826,174 @@ TEST_F(AuthenticationTest, DigestAuthFailureWithSetError)
   RespMatcher(500).matches(tdata->msg);
 }
 
+//
+// Tests for auth_challenge timer creation and deletion
+//
+
+/// Test fixture for these tests. This is just a typedef of the test template +
+/// a particular configuration.
+typedef AuthenticationTestTemplate<
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, true>,
+  MockChronosConnectionHelper
+> AuthenticationTimerTest;
+
+
+// Basic Authentication flow, but checking that we create and delete the timer correctly.
+TEST_F(AuthenticationTimerTest, AuthSuccessTimerDelete)
+{
+  pjsip_tx_data* tdata;
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Check we're sending a timer out, and return a timer id
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_post(_,_,"/authentication-timeout",_,_,_))
+              .WillOnce(DoAll(SetArgReferee<0>("timer-id"),
+                              Return(HTTP_OK)));
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Check that we delete the timer id we were given earlier.
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_delete("timer-id",_))
+              .WillOnce(Return(HTTP_OK));
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // The authentication module lets the request through.
+  auth_sproutlet_allows_request();
+
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
+  // clean up
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+}
+
+// Assert that we don't send a delete if the timer creation failed.
+TEST_F(AuthenticationTimerTest, AuthSuccessTimerCreationFail)
+{
+
+  pjsip_tx_data* tdata;
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Set up the timer creation to return an error, simulating timer creation failure.
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_post(_,_,"/authentication-timeout",_,_,_))
+              .WillOnce(Return(HTTP_BAD_REQUEST));
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Assert that we do not attempt to delete any timers, as we didn't create one
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_delete(_,_)).Times(0);
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // The authentication module lets the request through.
+  auth_sproutlet_allows_request();
+
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
+  // clean up
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+}
+
+// Check that we attempt to delete the timer if the auth_challenge store failed.
+TEST_F(AuthenticationTimerTest, AuthStoreFailTimerDeleted)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Check that we create the timer, but then delete it following the failure
+  // to set the auth_challenge into the store.
+
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_post(_,_,"/authentication-timeout",_,_,_))
+              .WillOnce(DoAll(SetArgReferee<0>("timer-id"),
+                              Return(HTTP_OK)));
+
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_delete("timer-id",_))
+              .WillOnce(Return(HTTP_OK));
+
+  // Force an error on the SET.  This means that we'll respond with a 500
+  // Server Internal Error.
+  _local_data_store->force_error();
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 500 Server Internal Error response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(500).matches(tdata->msg);
+
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
+  // clean up
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+}
 
 //
 // Tests for authenticating non-REGISTER messages from a UE that authenticates
@@ -2729,24 +3010,24 @@ typedef ::testing::Types<
 > DigestUEsTypes;
 
 template <class T>
-class AuthenticationDigestUEsTest : public AuthenticationTestTemplate<T>
+class AuthenticationDigestUEsTest : public AuthenticationTestTemplate<T, FakeChronosConnectionHelper>
 {
 public:
   std::map<std::string, std::string> _reg_auth_params;
 
-  static void SetUpTestCase() { AuthenticationTestTemplate<T>::SetUpTestCase(); }
-  static void TearDownTestCase() { AuthenticationTestTemplate<T>::TearDownTestCase(); }
+  static void SetUpTestCase() { AuthenticationTestTemplate<T, FakeChronosConnectionHelper>::SetUpTestCase(); }
+  static void TearDownTestCase() { AuthenticationTestTemplate<T, FakeChronosConnectionHelper>::TearDownTestCase(); }
 
   // Start this test with a subscriber registered.
   virtual void SetUp()
   {
-    AuthenticationTestTemplate<T>::SetUp();
+    AuthenticationTestTemplate<T, FakeChronosConnectionHelper>::SetUp();
 
     // Test a successful SIP Digest authentication flow.
     pjsip_tx_data* tdata;
 
     // Set up the HSS response for the AV query using a default private user identity.
-    this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+    this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                                       "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
     // Send in a REGISTER request with no authentication header.  This triggers
@@ -2783,7 +3064,7 @@ public:
 
     // Delete the result from the HSS. This makes sure that when authenticating
     // the following INVITE we aren't accidentally querying the HSS.
-    this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+    this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 
     // Advance time by 1 minute to check that the challenge has not been written
     // with too-short a timeout.

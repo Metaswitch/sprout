@@ -83,6 +83,8 @@ SipTest::~SipTest()
 SipTest::TransportFlow* SipTest::_tp_default;
 SipTest* SipTest::_current_instance;
 pj_str_t scscf_domain = pj_str("scscf.proxy1.homedomain");
+pj_str_t sprout_hostname = pj_str("sprout.homedomain");
+pj_str_t sprout_site2_hostname = pj_str("sprout-site2.homedomain");
 
 /// Automatically run once, before the first test.
 void SipTest::SetUpTestCase()
@@ -94,14 +96,19 @@ void SipTest::SetUpTestCase()
 
   stack_data.scscf_uri_str = {NULL, 0};
   stack_data.scscf_uri = NULL;
+  stack_data.scscf_contact = {NULL, 0};
   stack_data.pcscf_untrusted_port = 5060;
   stack_data.pcscf_trusted_port = 5058; // NB - pcscf trusted port must be the
   stack_data.scscf_port = 5058;         // same as the scscf port for the UTs
   stack_data.local_host = pj_str("127.0.0.1");
   stack_data.public_host = pj_str("127.0.0.1");
   stack_data.home_domains.insert("homedomain");
+  stack_data.home_domains.insert("sprout.homedomain");
+  stack_data.home_domains.insert("sprout-site2.homedomain");
   stack_data.default_home_domain = pj_str("homedomain");
   URIClassifier::home_domains.push_back(&stack_data.default_home_domain);
+  URIClassifier::home_domains.push_back(&sprout_hostname);
+  URIClassifier::home_domains.push_back(&sprout_site2_hostname);
   URIClassifier::home_domains.push_back(&scscf_domain);
   stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name = {stack_data.local_host, stack_data.public_host, pj_str("sprout.homedomain")};
@@ -149,6 +156,15 @@ void SipTest::SetScscfUri(const std::string& scscf_uri)
 
   stack_data.scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(scscf_uri.c_str(),
                                                                   stack_data.pool);
+
+  // Need a version of the SCSCF URI in angle brackets for use as contact header.
+  if (stack_data.scscf_contact.ptr)
+  {
+    free(stack_data.scscf_contact.ptr);
+  }
+
+  std::string contact_str = "<"+scscf_uri+">";
+  stack_data.scscf_contact = pj_str(strdup(contact_str.c_str()));
 }
 
 /// Automatically run once, after the last test.
@@ -171,6 +187,10 @@ void SipTest::TearDownTestCase()
   if (stack_data.scscf_uri_str.ptr)
   {
     free(stack_data.scscf_uri_str.ptr);
+  }
+  if (stack_data.scscf_contact.ptr)
+  {
+    free(stack_data.scscf_contact.ptr);
   }
 }
 
@@ -579,8 +599,8 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   {
     hss->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
   }
-  SubscriberDataManager::AoRPair* aor = sdm->get_aor_data(uri, 0);
-  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  AoRPair* aor = sdm->get_aor_data(uri, 0);
+  AoR::Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
@@ -593,7 +613,7 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   }
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bool ret = sdm->set_aor_data(uri, &associated_uris, aor, 0);
+  bool ret = sdm->set_aor_data(uri, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 };
@@ -854,6 +874,17 @@ void MsgMatcher::matches(pjsip_msg* msg)
     int n = msg->body->print_body(msg->body, buf, sizeof(buf));
     string body(buf, n);
     EXPECT_EQ(_expected_body, body) << PjMsg(msg);
+  }
+}
+
+void MsgMatcher::body_regex_matches(pjsip_msg* msg)
+{
+  if (_body_regex != "")
+  {    
+    char buf[16384];
+    int n = msg->body->print_body(msg->body, buf, sizeof(buf));
+    string body(buf, n);
+    EXPECT_THAT(body, testing::MatchesRegex(_body_regex));
   }
 }
 

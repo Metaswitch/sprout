@@ -40,7 +40,7 @@ public:
                        const std::string&,
                        std::string,
                        std::string = "",
-                       const std::string& = "");
+                       const std::string& wildcard = "");
   void delete_result(const std::string& url);
   void set_rc(const std::string& url, long rc);
   void delete_rc(const std::string& url);
@@ -49,12 +49,14 @@ public:
   HTTPCode update_registration_state(const std::string&,
                                      const std::string&,
                                      const std::string&,
+                                     std::string,
                                      SAS::TrailId);
 
   HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
                                      const std::string& type,
                                      std::string& regstate,
+                                     std::string server_name,
                                      std::map<std::string, Ifcs >& service_profiles,
                                      AssociatedURIs& associated_uris,
                                      std::deque<std::string>& ccfs,
@@ -69,7 +71,7 @@ private:
 
   // Map of URL/body pair to result
   typedef std::pair<std::string, std::string> UrlBody;
-  std::map<UrlBody, std::string> _results;
+  std::map<std::string, std::string> _results;
   std::map<std::string, long> _rcs;
   std::set<UrlBody> _calls;
 

@@ -14,6 +14,7 @@
 
 #include "mockhttpstack.hpp"
 #include "handlers.h"
+#include "chronoshandlers.h"
 #include "gtest/gtest.h"
 #include "basetest.hpp"
 #include "siptest.hpp"
@@ -25,6 +26,7 @@
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
 #include "rapidjson/document.h"
+#include "handlers_test.h"
 
 using namespace std;
 using ::testing::_;
@@ -52,450 +54,6 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
                                       "<ClearwaterRegData>"
                                         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
                                       "</ClearwaterRegData>";
-
-class TestWithMockSdms : public SipTest
-{
-  MockSubscriberDataManager* store;
-  MockSubscriberDataManager* remote_store1;
-  MockSubscriberDataManager* remote_store2;
-  MockHttpStack* stack;
-  MockHSSConnection* mock_hss;
-
-  virtual void SetUp()
-  {
-    store = new MockSubscriberDataManager();
-    remote_store1 = new MockSubscriberDataManager();
-    remote_store2 = new MockSubscriberDataManager();
-    mock_hss = new MockHSSConnection();
-    stack = new MockHttpStack();
-  }
-
-  virtual void TearDown()
-  {
-    delete stack;
-    delete remote_store1; remote_store1 = NULL;
-    delete remote_store2; remote_store2 = NULL;
-    delete store; store = NULL;
-    delete mock_hss;
-  }
-
-  SubscriberDataManager::AoRPair* build_aor(std::string aor_id,
-                                            bool include_subscription = true)
-  {
-    SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
-    int now = time(NULL);
-    build_binding(aor, now);
-    if (include_subscription)
-    {
-      build_subscription(aor, now);
-    }
-    SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-    SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
-
-    return aor_pair;
-  }
-
-  SubscriberDataManager::AoR::Binding*
-    build_binding(SubscriberDataManager::AoR* aor,
-                  int now,
-                  const std::string& id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1")
-  {
-    SubscriberDataManager::AoR::Binding* b = aor->get_binding(std::string(id));
-    b->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
-    b->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
-    b->_cseq = 17038;
-    b->_expires = now + 5;
-    b->_priority = 0;
-    b->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-    b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
-    b->_params["reg-id"] = "1";
-    b->_params["+sip.ice"] = "";
-    b->_emergency_registration = false;
-    b->_private_id = "6505550231";
-    return b;
-  }
-
-  SubscriberDataManager::AoR::Subscription*
-    build_subscription(SubscriberDataManager::AoR* aor,
-                       int now,
-                       const std::string& id = "1234")
-  {
-    SubscriberDataManager::AoR::Subscription* s = aor->get_subscription(id);
-    s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
-    s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
-    s->_from_tag = std::string("4321");
-    s->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
-    s->_to_tag = std::string("1234");
-    s->_cid = std::string("xyzabc@192.91.191.29");
-    s->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-    s->_expires = now + 300;
-    return s;
-  }
-};
-
-class AoRTimeoutTasksTest : public TestWithMockSdms
-{
-public:
-  void TearDown()
-  {
-    delete config;
-    delete req;
-
-    TestWithMockSdms::TearDown();
-  }
-
-  void build_timeout_request(std::string body, htp_method method)
-  {
-    req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
-    config = new AoRTimeoutTask::Config(store, {remote_store1, remote_store2}, mock_hss);
-    handler = new AoRTimeoutTask(*req, config, 0);
-  }
-
-  MockHttpStack::Request* req;
-  AoRTimeoutTask::Config* config;
-  AoRTimeoutTask* handler;
-};
-
-// Test main flow, without a remote store.
-TEST_F(AoRTimeoutTasksTest, MainlineTest)
-{
-  // Build request
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
-  build_timeout_request(body, htp_method_POST);
-
-  // Set up subscriber_data_manager expectations
-  std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
-  SubscriberDataManager::AoRPair* remote_aor1 = build_aor(aor_id);
-  SubscriberDataManager::AoRPair* remote_aor2 = build_aor(aor_id);
-
-  // Set up IRS IMPU list to be returned by the mocked get_registration_data call.
-  // Add a bunch of random IMPUs to this list - they should all be passed to set_aor_data.
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri("tel:6505550232", false);
-  associated_uris.add_uri(aor_id, false);
-  associated_uris.add_uri("sip:another_user@another_domain.com", false);
-
-  {
-    InSequence s;
-      EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
-           .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
-                           Return(HTTP_OK)));
-      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                             Return(Store::OK)));
-      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor1));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote_aor1, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                             Return(Store::OK)));
-      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote_aor2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                             Return(Store::OK)));
-  }
-
-  handler->run();
-}
-
-// Test that an invalid HTTP method fails with HTTP_BADMETHOD
-TEST_F(AoRTimeoutTasksTest, InvalidHTTPMethodTest)
-{
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
-  build_timeout_request(body, htp_method_PUT);
-
-  EXPECT_CALL(*stack, send_reply(_, 405, _));
-
-  handler->run();
-}
-
-// Test that an invalid JSON body fails in parsing
-TEST_F(AoRTimeoutTasksTest, InvalidJSONTest)
-{
-  CapturingTestLogger log(5);
-
-  std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"notavalidID\"}";
-  build_timeout_request(body, htp_method_POST);
-
-  EXPECT_CALL(*stack, send_reply(_, 400, _));
-
-  handler->run();
-
-  EXPECT_TRUE(log.contains("Failed to parse opaque data as JSON:"));
-}
-
-// Test that a body without an AoR ID fails, logging "Badly formed opaque data"
-TEST_F(AoRTimeoutTasksTest, MissingAorJSONTest)
-{
-  CapturingTestLogger log(5);
-
-  std::string body = "{\"binding_id\": \"notavalidID\"}";
-  build_timeout_request(body, htp_method_POST);
-
-  EXPECT_CALL(*stack, send_reply(_, 400, _));
-
-  handler->run();
-
-  EXPECT_TRUE(log.contains("Badly formed opaque data (missing aor_id)"));
-}
-
-// Test with a remote AoR with no bindings
-TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
-{
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
-  build_timeout_request(body, htp_method_POST);
-
-  // Set up subscriber_data_manager expectations
-  std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
-
-  // Set up AoRs with no bindings for both remote stores.
-  SubscriberDataManager::AoR* remote1_aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote1_aor2 = new SubscriberDataManager::AoR(*remote1_aor1);
-  SubscriberDataManager::AoRPair* remote1_aor_pair = new SubscriberDataManager::AoRPair(remote1_aor1, remote1_aor2);
-  SubscriberDataManager::AoR* remote2_aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote2_aor2 = new SubscriberDataManager::AoR(*remote2_aor1);
-  SubscriberDataManager::AoRPair* remote2_aor_pair = new SubscriberDataManager::AoRPair(remote2_aor1, remote2_aor2);
-
-  // Set up IRS IMPU list to be returned by the mocked get_registration_data calls
-  // We'll return an empty list from the mocked get_registration_data.  We should still
-  // see our AoR in the irs_impus list passed to set_aor_data.
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor_id, false);
-
-  {
-    InSequence s;
-      EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _)).WillOnce(Return(HTTP_OK));
-      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                             Return(Store::OK)));
-      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor_pair, _, _))
-                   .WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                   Return(Store::OK)));
-      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor_pair, _, _))
-                   .WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                   Return(Store::OK)));
-  }
-
-  handler->run();
-}
-
-// Test with a remote store, and a local AoR with no bindings
-TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
-{
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
-  build_timeout_request(body, htp_method_POST);
-
-  // Set up subscriber_data_manager expectations
-  std::string aor_id = "sip:6505550231@homedomain";
-  // Set up local AoR with no bindings
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
-
-  SubscriberDataManager::AoRPair* remote1_aor1 = build_aor(aor_id);
-
-  // Set up the remote AoR again, to avoid problem of test process deleting
-  // the data of the first one. This is only a problem in the tests, as real
-  // use would correctly set the data to the store before deleting the local copy
-  SubscriberDataManager::AoRPair* remote1_aor2 = build_aor(aor_id);
-  SubscriberDataManager::AoRPair* remote2_aor = build_aor(aor_id);
-
-  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor_id, false);
-
-  {
-    InSequence s;
-      EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
-           .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
-                           Return(HTTP_OK)));
-      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
-      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor_pair, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                  Return(Store::OK)));
-      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                              Return(Store::OK)));
-      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                             Return(Store::OK)));
-  }
-
-  handler->run();
-}
-
-// Test with a remote store, and both AoRs with no bindings
-TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
-{
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
-
-  build_timeout_request(body, htp_method_POST);
-  // Set up subscriber_data_manager expectations
-  std::string aor_id = "sip:6505550231@homedomain";
-  // Set up AoRs with no bindings
-  SubscriberDataManager::AoR* aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor1);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor1, aor2);
-
-  SubscriberDataManager::AoR* remote1_aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote1_aor2 = new SubscriberDataManager::AoR(*remote1_aor1);
-  SubscriberDataManager::AoRPair* remote1_aor_pair1 = new SubscriberDataManager::AoRPair(remote1_aor1, remote1_aor2);
-  SubscriberDataManager::AoR* remote2_aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote2_aor2 = new SubscriberDataManager::AoR(*remote2_aor1);
-  SubscriberDataManager::AoRPair* remote2_aor_pair1 = new SubscriberDataManager::AoRPair(remote2_aor1, remote2_aor2);
-
-  // Set up the remote AoRs again, to avoid problem of test process deleting
-  // the data of the first one. This is only a problem in the tests, as real
-  // use would correctly set the data to the store before deleting the local copy
-  SubscriberDataManager::AoR* remote1_aor3 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote1_aor4 = new SubscriberDataManager::AoR(*remote1_aor3);
-  SubscriberDataManager::AoRPair* remote1_aor_pair2 = new SubscriberDataManager::AoRPair(remote1_aor3, remote1_aor4);
-  SubscriberDataManager::AoR* remote2_aor3 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote2_aor4 = new SubscriberDataManager::AoR(*remote2_aor3);
-  SubscriberDataManager::AoRPair* remote2_aor_pair2 = new SubscriberDataManager::AoRPair(remote2_aor3, remote2_aor4);
-
-  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor_id, false);
-
-  {
-    InSequence s;
-      EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
-           .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
-                           Return(HTTP_OK)));
-      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
-      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair1));
-      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor_pair, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                  SetArgReferee<4>(true),
-                                                                                  Return(Store::OK)));
-      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor_pair2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                                   SetArgReferee<4>(true),
-                                                                                                   Return(Store::OK)));
-      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor_pair2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                                   SetArgReferee<4>(true),
-                                                                                                   Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0));
-  }
-
-  handler->run();
-}
-
-// Test with NULL AoRs
-TEST_F(AoRTimeoutTasksTest, NullAoRTest)
-{
-  CapturingTestLogger log(5);
-
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
-  build_timeout_request(body, htp_method_POST);
-
-  // Set up subscriber_data_manager expectations
-  std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = NULL;
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
-  SubscriberDataManager::AoRPair* remote1_aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
-  SubscriberDataManager::AoRPair* remote2_aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
-
-  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor_id, false);
-
-  {
-    InSequence s;
-      EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
-           .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
-                           Return(HTTP_OK)));
-      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _, _)).Times(0);
-      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, _, _, _)).Times(0);
-      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, _, _, _)).Times(0);
-  }
-
-  handler->run();
-
-  EXPECT_TRUE(log.contains("Failed to get AoR binding for"));
-}
-
-class AoRTimeoutTasksMockStoreTest : public SipTest
-{
-  FakeChronosConnection* chronos_connection;
-  MockSubscriberDataManager* store;
-  FakeHSSConnection* fake_hss;
-
-  MockHttpStack stack;
-  MockHttpStack::Request* req;
-  AoRTimeoutTask::Config* chronos_config;
-
-  AoRTimeoutTask* handler;
-
-  void SetUp()
-  {
-    chronos_connection = new FakeChronosConnection();
-    store = new MockSubscriberDataManager();
-    fake_hss = new FakeHSSConnection();
-    req = new MockHttpStack::Request(&stack, "/", "timers");
-    chronos_config = new AoRTimeoutTask::Config(store, {}, fake_hss);
-    handler = new AoRTimeoutTask(*req, chronos_config, 0);
-  }
-
-  void TearDown()
-  {
-    delete handler;
-    delete chronos_config;
-    delete req;
-    delete fake_hss;
-    delete store; store = NULL;
-    delete chronos_connection; chronos_connection = NULL;
-  }
-
-};
-
-TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
-{
-  // Set up the SubscriberDataManager to fail all sets and respond to all gets with not
-  // found.
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR("sip:6505550231@homedomain");
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
-
-  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri("sip:6505550231@homedomain", false);
-
-  EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                  Return(Store::ERROR)));
-
-  // Parse and handle the request
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
-  int status = handler->parse_response(body);
-
-  ASSERT_EQ(status, 200);
-
-  handler->handle_response();
-}
 
 class DeregistrationTaskTest : public SipTest
 {
@@ -558,7 +116,7 @@ class DeregistrationTaskTest : public SipTest
   }
 
   void expect_sdm_updates(std::vector<std::string> aor_ids,
-                          std::vector<SubscriberDataManager::AoRPair*> aors)
+                          std::vector<AoRPair*> aors)
   {
     for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
     {
@@ -568,7 +126,7 @@ class DeregistrationTaskTest : public SipTest
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
+        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _)).WillOnce(Return(Store::OK));
       }
     }
   }
@@ -605,9 +163,9 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
 
   // Get an initial empty AoR record and add a standard binding
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -621,20 +179,20 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   b1->_private_id = "6505550231";
 
   // Set up the subscriber_data_manager expectations
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
   // The IMPI is also deleted from the local and remote stores.
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231");
-  EXPECT_CALL(*_local_impi_store, get_impi("6505550231", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*_local_impi_store, get_impi("6505550231", _, false)).WillOnce(Return(impi));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
 
   impi = new ImpiStore::Impi("6505550231");
-  EXPECT_CALL(*_remote_impi_store, get_impi("6505550231", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*_remote_impi_store, get_impi("6505550231", _, false)).WillOnce(Return(impi));
   EXPECT_CALL(*_remote_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
 
   // Run the task
@@ -656,20 +214,20 @@ TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
   std::string aor_id_2 = "sip:6505552002@homedomain";
   std::string aor_id_3 = "sip:6505552003@homedomain";
   std::string aor_id_4 = "sip:6505552004@homedomain";
-  SubscriberDataManager::AoR* aor_1 = new SubscriberDataManager::AoR(aor_id_1);
-  SubscriberDataManager::AoR* aor_11 = new SubscriberDataManager::AoR(*aor_1);
-  SubscriberDataManager::AoRPair* aor_pair_1 = new SubscriberDataManager::AoRPair(aor_1, aor_11);
-  SubscriberDataManager::AoR* aor_2 = new SubscriberDataManager::AoR(aor_id_2);
-  SubscriberDataManager::AoR* aor_22 = new SubscriberDataManager::AoR(*aor_2);
-  SubscriberDataManager::AoRPair* aor_pair_2 = new SubscriberDataManager::AoRPair(aor_2, aor_22);
-  SubscriberDataManager::AoR* aor_3 = new SubscriberDataManager::AoR(aor_id_3);
-  SubscriberDataManager::AoR* aor_33 = new SubscriberDataManager::AoR(*aor_3);
-  SubscriberDataManager::AoRPair* aor_pair_3 = new SubscriberDataManager::AoRPair(aor_3, aor_33);
-  SubscriberDataManager::AoR* aor_4 = new SubscriberDataManager::AoR(aor_id_4);
-  SubscriberDataManager::AoR* aor_44 = new SubscriberDataManager::AoR(*aor_4);
-  SubscriberDataManager::AoRPair* aor_pair_4 = new SubscriberDataManager::AoRPair(aor_4, aor_44);
+  AoR* aor_1 = new AoR(aor_id_1);
+  AoR* aor_11 = new AoR(*aor_1);
+  AoRPair* aor_pair_1 = new AoRPair(aor_1, aor_11);
+  AoR* aor_2 = new AoR(aor_id_2);
+  AoR* aor_22 = new AoR(*aor_2);
+  AoRPair* aor_pair_2 = new AoRPair(aor_2, aor_22);
+  AoR* aor_3 = new AoR(aor_id_3);
+  AoR* aor_33 = new AoR(*aor_3);
+  AoRPair* aor_pair_3 = new AoRPair(aor_3, aor_33);
+  AoR* aor_4 = new AoR(aor_id_4);
+  AoR* aor_44 = new AoR(*aor_4);
+  AoRPair* aor_pair_4 = new AoRPair(aor_4, aor_44);
   std::vector<std::string> aor_ids = {aor_id_1, aor_id_2, aor_id_3, aor_id_4};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair_1, aor_pair_2, aor_pair_3, aor_pair_4};
+  std::vector<AoRPair*> aors = {aor_pair_1, aor_pair_2, aor_pair_3, aor_pair_4};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -687,9 +245,9 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerFailureTest)
 
   // Set up the subscriber_data_manager expectations
   std::string aor_id = "sip:6505552001@homedomain";
-  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  AoRPair* aor_pair = NULL;
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -710,11 +268,11 @@ TEST_F(DeregistrationTaskTest, InvalidIMPUTest)
 
   // Set up the subscriber_data_manager expectations
   std::string aor_id = "notavalidsipuri";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor = new AoR(aor_id);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -776,11 +334,11 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerWritesFail)
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
   build_dereg_request(body);
 
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR("sip:6505550231@homedomain");
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor = new AoR("sip:6505550231@homedomain");
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(_,  _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
@@ -795,17 +353,17 @@ TEST_F(DeregistrationTaskTest, ImpiNotClearedWhenBindingNotDeregistered)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -825,23 +383,23 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
   // The corresponding IMPI is also deleted.
   ImpiStore::Impi* impi = new ImpiStore::Impi("impi1");
-  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _, false)).WillOnce(Return(impi));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
 
   // Run the task
@@ -882,46 +440,46 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 
   // Create an AoR with two bindings.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
 
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR::Binding* b2 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:2"));
+  AoR::Binding* b2 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:2"));
   b2->_expires = now + 300;
   b2->_emergency_registration = false;
   b2->_private_id = "impi2";
 
-  SubscriberDataManager::AoR* backup_aor = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, backup_aor);
+  AoR* backup_aor = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, backup_aor);
 
   // create another AoR with one binding.
   std::string aor_id2 = "sip:6505550232@homedomain";
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(aor_id2);
+  AoR* aor2 = new AoR(aor_id2);
 
-  SubscriberDataManager::AoR::Binding* b3 = aor2->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:3"));
+  AoR::Binding* b3 = aor2->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:3"));
   b3->_expires = now + 300;
   b3->_emergency_registration = false;
   b3->_private_id = "impi3";
 
-  SubscriberDataManager::AoR* backup_aor2 = new SubscriberDataManager::AoR(*aor2);
-  SubscriberDataManager::AoRPair* aor_pair2 = new SubscriberDataManager::AoRPair(aor2, backup_aor2);
+  AoR* backup_aor2 = new AoR(*aor2);
+  AoRPair* aor_pair2 = new AoRPair(aor2, backup_aor2);
 
   std::vector<std::string> aor_ids = {aor_id, aor_id2};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair, aor_pair2};
+  std::vector<AoRPair*> aors = {aor_pair, aor_pair2};
   expect_sdm_updates(aor_ids, aors);
 
   // The corresponding IMPIs are also deleted.
   ImpiStore::Impi* impi1 = new ImpiStore::Impi("impi1");
   ImpiStore::Impi* impi2 = new ImpiStore::Impi("impi2");
   ImpiStore::Impi* impi3 = new ImpiStore::Impi("impi3");
-  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _, false)).WillOnce(Return(impi1));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::OK));
-  EXPECT_CALL(*_local_impi_store, get_impi("impi2", _)).WillOnce(Return(impi2));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi2", _, false)).WillOnce(Return(impi2));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi2, _)).WillOnce(Return(Store::OK));
-  EXPECT_CALL(*_local_impi_store, get_impi("impi3", _)).WillOnce(Return(impi3));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi3", _, false)).WillOnce(Return(impi3));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi3, _)).WillOnce(Return(Store::OK));
 
   // Run the task
@@ -950,23 +508,23 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
   expect_sdm_updates(aor_ids, aors);
 
   // Simulate the IMPI not being found in the store. The handler does not go on
   // to try and delete the IMPI.
   ImpiStore::Impi* impi1 = NULL;
-  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _, false)).WillOnce(Return(impi1));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
@@ -981,23 +539,23 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
   expect_sdm_updates(aor_ids, aors);
 
   // Simulate the IMPI store failing when deleting the IMPI. The handler does
   // not retry the delete.
   ImpiStore::Impi* impi1 = new ImpiStore::Impi("impi1");
-  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _, false)).WillOnce(Return(impi1));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::ERROR));
 
   // Run the task
@@ -1013,17 +571,17 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
   expect_sdm_updates(aor_ids, aors);
 
   // We need to create two IMPIs when we return one on a call to get_impi we
@@ -1034,149 +592,15 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
     // Simulate the IMPI store returning data contention on the first delete.
     // The handler tries again.
     InSequence s;
-    EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
+    EXPECT_CALL(*_local_impi_store, get_impi("impi1", _, false)).WillOnce(Return(impi1));
     EXPECT_CALL(*_local_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::DATA_CONTENTION));
-    EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1a));
+    EXPECT_CALL(*_local_impi_store, get_impi("impi1", _, false)).WillOnce(Return(impi1a));
     EXPECT_CALL(*_local_impi_store, delete_impi(impi1a, _)).WillOnce(Return(Store::OK));
   }
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
-}
-
-
-class AuthTimeoutTest : public SipTest
-{
-  FakeChronosConnection* chronos_connection;
-  LocalStore* local_data_store;
-  ImpiStore* store;
-  FakeHSSConnection* fake_hss;
-
-  MockHttpStack stack;
-  MockHttpStack::Request* req;
-  AuthTimeoutTask::Config* chronos_config;
-
-  AuthTimeoutTask* handler;
-
-  void SetUp()
-  {
-    chronos_connection = new FakeChronosConnection();
-    local_data_store = new LocalStore();
-    store = new ImpiStore(local_data_store, ImpiStore::Mode::READ_IMPI_WRITE_IMPI);
-    fake_hss = new FakeHSSConnection();
-    req = new MockHttpStack::Request(&stack, "/", "authentication-timeout");
-    chronos_config = new AuthTimeoutTask::Config(store, fake_hss);
-    handler = new AuthTimeoutTask(*req, chronos_config, 0);
-  }
-
-  void TearDown()
-  {
-    delete handler;
-    delete chronos_config;
-    delete req;
-    delete fake_hss;
-    delete store; store = NULL;
-    delete local_data_store; local_data_store = NULL;
-    delete chronos_connection; chronos_connection = NULL;
-  }
-
-};
-
-// This tests the case where the AV record is still in memcached, but the Chronos timer has popped.
-// The subscriber's registration state is updated, and the record is deleted from the AV store.
-TEST_F(AuthTimeoutTest, NonceTimedOut)
-{
-  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
-  ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
-  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
-  auth_challenge->correlator = "abcde";
-  impi->auth_challenges.push_back(auth_challenge);
-  store->set_impi(impi, 0);
-
-  std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 200);
-  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}"));
-
-  delete impi; impi = NULL;
-}
-
-TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
-{
-  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
-  ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
-  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
-  impi->auth_challenges.push_back(auth_challenge);
-  store->set_impi(impi, 0);
-
-  std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 200);
-  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}"));
-
-  delete impi; impi = NULL;
-}
-
-TEST_F(AuthTimeoutTest, MainlineTest)
-{
-  ImpiStore::Impi* impi = new ImpiStore::Impi("test@example.com");
-  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
-  auth_challenge->nonce_count++; // Indicates that one successful authentication has occurred
-  auth_challenge->correlator = "abcde";
-  impi->auth_challenges.push_back(auth_challenge);
-  store->set_impi(impi, 0);
-
-  std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 200);
-  ASSERT_FALSE(fake_hss->url_was_requested("/impu/sip%3Atest%40example.com/reg-data?private_id=test%40example.com", "{\"reqtype\": \"dereg-auth-timeout\"}"));
-
-  delete impi; impi = NULL;
-}
-
-TEST_F(AuthTimeoutTest, NoIMPU)
-{
-  std::string body = "{\"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 400);
-}
-
-TEST_F(AuthTimeoutTest, CorruptIMPU)
-{
-  std::string body = "{\"impi\": \"test@example.com\", \"impu\": \"I am not a URI\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 500);
-}
-
-
-TEST_F(AuthTimeoutTest, NoIMPI)
-{
-  std::string body = "{\"impu\": \"sip:test@example.com\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 400);
-}
-
-TEST_F(AuthTimeoutTest, NoNonce)
-{
-  std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\"}";
-  int status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 400);
-}
-
-TEST_F(AuthTimeoutTest, BadJSON)
-{
-  std::string body = "{\"impu\" \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 400);
 }
 
 //
@@ -1197,12 +621,10 @@ TEST_F(GetBindingsTest, NoBindings)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor =
-    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
-                                       new SubscriberDataManager::AoR(aor_id));
-  SubscriberDataManager::AoRPair* remote_aor =
-    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
-                                       new SubscriberDataManager::AoR(aor_id));
+  AoRPair* aor = new AoRPair(new AoR(aor_id),
+                             new AoR(aor_id));
+  AoRPair* remote_aor = new AoRPair(new AoR(aor_id),
+                                    new AoR(aor_id));
 
   {
     InSequence s;
@@ -1228,7 +650,7 @@ TEST_F(GetBindingsTest, OneBinding)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
+  AoRPair* aor = build_aor(aor_id);
   std::string id = aor->get_current()->bindings().begin()->first;
   std::string contact = aor->get_current()->bindings().begin()->second->_uri;
 
@@ -1283,11 +705,11 @@ TEST_F(GetBindingsTest, TwoBindings)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   build_binding(aor, now, "123");
   build_binding(aor, now, "456");
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
 
   {
     InSequence s;
@@ -1359,12 +781,10 @@ TEST_F(GetSubscriptionsTest, NoSubscriptions)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor =
-    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
-                                       new SubscriberDataManager::AoR(aor_id));
-  SubscriberDataManager::AoRPair* remote_aor =
-    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
-                                       new SubscriberDataManager::AoR(aor_id));
+  AoRPair* aor = new AoRPair(new AoR(aor_id),
+                             new AoR(aor_id));
+  AoRPair* remote_aor = new AoRPair(new AoR(aor_id),
+                                    new AoR(aor_id));
 
   {
     InSequence s;
@@ -1390,7 +810,7 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
+  AoRPair* aor = build_aor(aor_id);
   std::string id = aor->get_current()->subscriptions().begin()->first;
   std::string uri = aor->get_current()->subscriptions().begin()->second->_req_uri;
 
@@ -1426,7 +846,6 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
   EXPECT_TRUE(subscription.HasMember("cid"));
   EXPECT_TRUE(subscription.HasMember("routes"));
   EXPECT_TRUE(subscription.HasMember("expires"));
-  EXPECT_TRUE(subscription.HasMember("timer_id"));
 
   // Do check the subscription ID and URI as a representative test.
   EXPECT_EQ(id, subscription_id.GetString());
@@ -1445,12 +864,12 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   build_binding(aor, now, "123");
   build_subscription(aor, now, "456");
   build_subscription(aor, now, "789");
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
 
   {
     InSequence s;
@@ -1565,17 +984,17 @@ TEST_F(DeleteImpuTaskTest, Mainline)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, false);
+  AoRPair* aor = build_aor(impu, false);
   build_task(impu_escaped);
 
   {
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings are expired.
+      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(200));
       EXPECT_CALL(*stack, send_reply(_, 200, _));
   }
@@ -1588,15 +1007,15 @@ TEST_F(DeleteImpuTaskTest, StoreFailure)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
   {
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(false), // Fail to expire bindings.
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(false), // Fail to expire bindings.
                         Return(Store::ERROR)));
       EXPECT_CALL(*stack, send_reply(_, 500, _));
   }
@@ -1609,17 +1028,17 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
   {
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(404));
       EXPECT_CALL(*stack, send_reply(_, 404, _));
   }
@@ -1632,17 +1051,17 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
   {
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(500));
       EXPECT_CALL(*stack, send_reply(_, 502, _));
   }
@@ -1655,17 +1074,17 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
   {
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(400));
       EXPECT_CALL(*stack, send_reply(_, 400, _));
   }
@@ -1678,23 +1097,23 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu);
-  SubscriberDataManager::AoRPair* remote_aor = build_aor(impu);
+  AoRPair* aor = build_aor(impu);
+  AoRPair* remote_aor = build_aor(impu);
   build_task(impu_escaped, htp_method_DELETE, true);
 
   {
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(200));
 
       EXPECT_CALL(*remote_store1, get_aor_data(impu, _)).WillOnce(Return(remote_aor));
-      EXPECT_CALL(*remote_store1, set_aor_data(impu, _, EmptyAoR(), _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*remote_store1, set_aor_data(impu, EmptyAoR(), _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
 
       EXPECT_CALL(*stack, send_reply(_, 200, _));
@@ -1711,5 +1130,247 @@ TEST_F(DeleteImpuTaskTest, BadMethod)
   build_task(impu_escaped, htp_method_PUT);
   EXPECT_CALL(*stack, send_reply(_, 405, _));
 
+  task->run();
+}
+
+
+
+
+class PushProfileTaskTest : public TestWithMockSdms
+{
+  MockHttpStack::Request* req;
+  PushProfileTask::Config* cfg;
+  PushProfileTask* task;
+
+  static void SetUpTestCase()
+  {
+    TestWithMockSdms::SetUpTestCase();
+    TestWithMockSdms::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
+  }
+
+  void SetUp()
+  {
+    TestWithMockSdms::SetUp();
+  }
+
+  void TearDown()
+  {
+    delete req;
+    delete cfg;
+    TestWithMockSdms::TearDown();
+  }
+
+  // Build the push profile request
+  void build_pushprofile_request(std::string body,
+                                 std::string default_uri,
+                                 htp_method method = htp_method_PUT,
+                                 bool configure_remote_store = false)
+  {
+    req = new MockHttpStack::Request(stack,
+                                     "/registrations/" + default_uri,
+                                     "",
+                                     "",
+                                     body,
+                                     method);
+    std::vector<SubscriberDataManager*> remote_stores;
+    if (configure_remote_store)
+    {
+      remote_stores.push_back(remote_store1);
+    }
+
+    cfg = new PushProfileTask::Config(store, remote_stores, mock_hss);
+    task = new PushProfileTask(*req, cfg, 0);
+  }
+};
+
+// Mainline Case. Complicated XML to make sure all components can be handled correctly
+TEST_F(PushProfileTaskTest, MainlineTest)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "<PublicIdentity><Identity>sip:6505550232@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>"
+                              "<InitialFilterCriteria>"
+                              "<Priority>1</Priority>"
+                              "<TriggerPoint>"
+                              "<ConditionTypeCNF>0</ConditionTypeCNF>"
+                              "<SPT>"
+                              "<ConditionNegated>0</ConditionNegated>"
+                              "<Group>0</Group>"
+                              "<Method>REGISTER</Method>"
+                              "<Extension></Extension>"
+                              "</SPT>"
+                              "</TriggerPoint>"
+                              "<ApplicationServer>"
+                              "<ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>"
+                              "<DefaultHandling>1</DefaultHandling>"
+                              "</ApplicationServer>"
+                              "</InitialFilterCriteria>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  AoR* aor = new AoR(default_uri);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  task->run();
+}
+
+// The method is not a put, and therefore is invalid. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, InvalidMethod)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri, htp_method_GET);
+
+  EXPECT_CALL(*stack, send_reply(_, 405, _));
+  task->run();
+}
+
+// The JSON is not valid, and therefore not able to be parsed. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, InvalidJSON)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body = " {{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+// The JSON is valid JSON, but does not contain the xml component as expected Sends HTTP_BAD_REQUEST
+TEST_F(PushProfileTaskTest, MissingXMLfromJSON)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body = "{\"public-identity\":\""+ default_uri + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+
+// The XML is not valid and therefore not able to be parsed. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, InvalidXML)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "<<"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+// The XML does not contain any service profiles. Sends HTTP_BAD_REQUEST
+TEST_F(PushProfileTaskTest, MissingServiceProfileXML)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</IMSSubscription>";
+  std::string body = "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+
+
+// The XML does not contain the relevant Public Identities. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, MissingPublicIdentityXML)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =  "<IMSSubscription><ServiceProfile>"
+                           "</ServiceProfile></IMSSubscription>";
+  std::string body =       "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+// get_aor_data returns a NULL pointer. Sends HTTP_SERVER_ERROR
+TEST_F(PushProfileTaskTest, SubscriberDataManagerFails)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  AoRPair* aor_pair;
+  aor_pair = NULL;
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*stack, send_reply(_, 500, _));
+  task->run();
+}
+
+// set_aor_data fails. Sends HTTP_SERVER_ERROR
+TEST_F(PushProfileTaskTest, SubscriberDataManagerWriteFails)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  AoR* aor = new AoR(default_uri);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*stack, send_reply(_, 500, _));
+  task->run();
+}
+
+// all bindings are expired - triggers a deregistration
+TEST_F(PushProfileTaskTest, AllBindingExpired)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  AoR* aor = new AoR(default_uri);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _))
+    .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
+                    Return(Store::OK)));
+  EXPECT_CALL(*mock_hss, update_registration_state(default_uri, _, "dereg-timeout", "", 0))
+    .WillOnce(Return(200));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
   task->run();
 }

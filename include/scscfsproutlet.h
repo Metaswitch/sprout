@@ -38,6 +38,7 @@ extern "C" {
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
+#include "compositesproutlet.h"
 
 class SCSCFSproutletTsx;
 
@@ -57,6 +58,8 @@ public:
                  const std::string& mmf_node_uri,
                  int port,
                  const std::string& uri,
+                 const std::string& network_function,
+                 const std::string& next_hop_service,
                  SubscriberDataManager* sdm,
                  std::vector<SubscriberDataManager*> remote_sdms,
                  HSSConnection* hss,
@@ -126,7 +129,7 @@ private:
   /// Gets all bindings for the specified Address of Record from the local or
   /// remote registration stores.
   void get_bindings(const std::string& aor,
-                    SubscriberDataManager::AoRPair** aor_pair,
+                    AoRPair** aor_pair,
                     SAS::TrailId trail);
 
   /// Removes the specified binding for the specified Address of Record from
@@ -140,6 +143,7 @@ private:
   long read_hss_data(const std::string& public_id,
                      const std::string& private_id,
                      const std::string& req_type,
+                     const std::string& scscf_uri,
                      bool cache_allowed,
                      bool& registered,
                      bool& barred,
@@ -210,6 +214,8 @@ private:
   /// Sprout node only.
   pjsip_uri* _mmf_node_uri;
 
+  std::string _next_hop_service;
+
   SubscriberDataManager* _sdm;
   std::vector<SubscriberDataManager*> _remote_sdms;
 
@@ -251,10 +257,12 @@ private:
 };
 
 
-class SCSCFSproutletTsx : public SproutletTsx
+class SCSCFSproutletTsx : public CompositeSproutletTsx
 {
 public:
-  SCSCFSproutletTsx(SCSCFSproutlet* scscf, pjsip_method_e req_type);
+  SCSCFSproutletTsx(SCSCFSproutlet* scscf,
+                    const std::string& next_hop_service,
+                    pjsip_method_e req_type);
   ~SCSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
@@ -495,6 +503,11 @@ private:
 
   /// Get the base request that the S-CSCF should use when retrying a request.
   pjsip_msg* get_base_request();
+
+  /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
+  /// HSS. This field should not be changed once it has been set by the
+  /// on_rx_intial_request() call.
+  std::string _scscf_uri;
 };
 
 #endif

@@ -28,6 +28,7 @@ public:
                int transport,
                int retries,
                std::vector<AddrInfo>& targets,
+               int allowed_host_state,
                SAS::TrailId trail = 0);
 
   /// Default duration to blacklist hosts after we fail to connect to them.

@@ -102,6 +102,21 @@ get_settings()
         authentication=Y
         . /etc/clearwater/config
 
+        # Calculate the correct homestead latency:
+        #  - if we have sprout_homestead_timeout_ms set, use that
+        #  - else:
+        #    - if we have diameter_timeout_ms set, use 1000 + double that
+        #    - else use 1200
+        if [ -z "$sprout_homestead_timeout_ms" ];
+        then
+          if [ -z "$diameter_timeout_ms" ];
+          then
+            sprout_homestead_timeout_ms=1200
+          else
+            sprout_homestead_timeout_ms=$((diameter_timeout_ms * 2 + 1000))
+          fi
+        fi
+
         # Work out which features are enabled.
         MMTEL_SERVICES_ENABLED=Y
         if [ -d /etc/clearwater/features.d ]
@@ -205,7 +220,8 @@ get_daemon_args()
                      --analytics=$log_directory
                      --log-file=$log_directory
                      --log-level=$log_level
-                     --alias=$public_ip,$public_hostname,$alias_list"
+                     --alias=$public_ip,$public_hostname,$alias_list
+                     --homestead-timeout=$sprout_homestead_timeout_ms"
 
         if [ -n "$reg_max_expires" ]
         then
@@ -279,9 +295,9 @@ get_daemon_args()
         [ "$session_continued_timeout_ms" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --session-continued-timeout=$session_continued_timeout_ms"
         [ "$session_terminated_timeout_ms" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --session-terminated-timeout=$session_terminated_timeout_ms"
         [ "$stateless_proxies" = "" ]             || DAEMON_ARGS="$DAEMON_ARGS --stateless-proxies=$stateless_proxies"
+        [ "$max_sproutlet_depth" = "" ]           || DAEMON_ARGS="$DAEMON_ARGS --max-sproutlet-depth=$max_sproutlet_depth"
         [ "$ralf_threads" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --ralf-threads=$ralf_threads"
         [ "$non_register_authentication" = "" ]   || DAEMON_ARGS="$DAEMON_ARGS --non-register-authentication=$non_register_authentication"
-        [ "$impi_store_mode" = "" ]               || DAEMON_ARGS="$DAEMON_ARGS --impi-store-mode=$impi_store_mode"
         [ "$nonce_count_supported" != "Y" ]       || DAEMON_ARGS="$DAEMON_ARGS --nonce-count-supported"
         [ "$listen_port" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --listen-port=$listen_port"
 

@@ -1,4 +1,4 @@
-/**
+/*,
  * @file main.cpp
  *
  * Copyright (C) Metaswitch Networks 2017
@@ -60,6 +60,7 @@ extern "C" {
 #include "localstore.h"
 #include "scscfselector.h"
 #include "chronosconnection.h"
+#include "chronoshandlers.h"
 #include "handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
@@ -85,6 +86,7 @@ extern "C" {
 #include "ralf_processor.h"
 #include "sprout_alarmdefinition.h"
 #include "sproutlet_options.h"
+#include "astaire_impistore.h"
 
 enum OptionTypes
 {
@@ -97,7 +99,6 @@ enum OptionTypes
   OPT_CALL_LIST_TTL,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
-  OPT_MEMCACHED_WRITE_FORMAT,
   OPT_OVERRIDE_NPDI,
   OPT_MAX_TOKENS,
   OPT_INIT_TOKEN_RATE,
@@ -114,6 +115,7 @@ enum OptionTypes
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
+  OPT_MAX_SPROUTLET_DEPTH,
   OPT_RALF_THREADS,
   OPT_NON_REGISTERING_PBXES,
   OPT_PBX_SERVICE_ROUTE,
@@ -124,7 +126,6 @@ enum OptionTypes
   OPT_SPROUT_HOSTNAME,
   OPT_LISTEN_PORT,
   SPROUTLET_MACRO(SPROUTLET_OPTION_TYPES)
-  OPT_IMPI_STORE_MODE,
   OPT_NONCE_COUNT_SUPPORTED,
   OPT_LOCAL_SITE_NAME,
   OPT_REGISTRATION_STORES,
@@ -139,6 +140,7 @@ enum OptionTypes
   OPT_REJECT_IF_NO_MATCHING_IFCS,
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
+  OPT_HOMESTEAD_TIMEOUT,
 };
 
 
@@ -192,7 +194,6 @@ const static struct pj_getopt_option long_opt[] =
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
   { "help",                         no_argument,       0, 'h'},
-  { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
   { "override-npdi",                no_argument,       0, OPT_OVERRIDE_NPDI},
   { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
@@ -218,7 +219,6 @@ const static struct pj_getopt_option long_opt[] =
   { "sprout-hostname",              required_argument, 0, OPT_SPROUT_HOSTNAME},
   { "listen-port",                  required_argument, 0, OPT_LISTEN_PORT},
   SPROUTLET_MACRO(SPROUTLET_CFG_PJ_STRUCT)
-  { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
@@ -229,6 +229,7 @@ const static struct pj_getopt_option long_opt[] =
   { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
+  { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
   { NULL,                           0,                 0, 0}
 };
 
@@ -365,9 +366,6 @@ static void usage(void)
        "     --memento-notify-url <url>\n"
        "                            URL Memento should notify when call lists change.\n"
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
-       "     --memcached-write-format\n"
-       "                            The data format to use when writing registration and subscription data\n"
-       "                            to memcached. Valid values are 'binary' and 'json' (default is 'json')\n"
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
        "     --exception-max-ttl <secs>\n"
@@ -418,9 +416,6 @@ static void usage(void)
        "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
-       "     --impi-store-mode (av-impi|impi)\n"
-       "                            Whether to run the IMPI store in AV and IMPI mode (historical) or\n"
-       "                            IMPI-only (forward-looking) mode\n"
        "     --nonce-count-supported\n"
        "                            Whether sprout accepts authentication responses with a nonce count\n"
        "                            greater than 1\n"
@@ -450,6 +445,7 @@ static void usage(void)
        "                            then the iFC is skipped over.\n"
        "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
        "                            to SAS\n"
+       "     --homestead-timeout    The timeout in ms to use on HTTP requests to Homestead\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -763,12 +759,19 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       {
         std::vector<std::string> sas_options;
         Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
-        if (sas_options.size() == 2)
+
+        if ((sas_options.size() == 2) &&
+            !sas_options[0].empty() &&
+            !sas_options[1].empty())
         {
           options->sas_server = sas_options[0];
           options->sas_system_name = sas_options[1];
           TRC_INFO("SAS set to %s", options->sas_server.c_str());
           TRC_INFO("System name is set to %s", options->sas_system_name.c_str());
+        }
+        else
+        {
+          TRC_WARNING("Invalid --sas option: %s", pj_optarg);
         }
       }
       break;
@@ -881,27 +884,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         VALIDATE_INT_PARAM_NON_ZERO(options->min_token_rate,
                                     min_token_rate,
                                     Minimum token rate);
-      }
-      break;
-
-    case OPT_MEMCACHED_WRITE_FORMAT:
-      if (strcmp(pj_optarg, "binary") == 0)
-      {
-        TRC_INFO("Memcached write format set to 'binary'");
-        options->memcached_write_format = MemcachedWriteFormat::BINARY;
-      }
-      else if (strcmp(pj_optarg, "json") == 0)
-      {
-        TRC_INFO("Memcached write format set to 'json'");
-        options->memcached_write_format = MemcachedWriteFormat::JSON;
-      }
-      else
-      {
-        TRC_WARNING("Invalid value for memcached-write-format, using '%s'."
-                    "Got '%s', valid vales are 'json' and 'binary'",
-                    ((options->memcached_write_format == MemcachedWriteFormat::JSON) ?
-                     "json" : "binary"),
-                    pj_optarg);
       }
       break;
 
@@ -1122,6 +1104,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_MAX_SPROUTLET_DEPTH:
+      {
+        VALIDATE_INT_PARAM(options->max_sproutlet_depth,
+                           max_sproutlet_depth,
+                           Maximum depth of Sproutlet recursion);
+      }
+      break;
+
     case OPT_NON_REGISTERING_PBXES:
       {
         options->pbxes = std::string(pj_optarg);
@@ -1184,23 +1174,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_PIDFILE:
       options->pidfile = std::string(pj_optarg);
       TRC_INFO("Pidfile set to %s", pj_optarg);
-      break;
-
-    case OPT_IMPI_STORE_MODE:
-      if (stricmp(pj_optarg, "av-impi") == 0)
-      {
-        options->impi_store_mode = ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI;
-        TRC_INFO("IMPI store mode set to: av-impi");
-      }
-      else if (stricmp(pj_optarg, "impi") == 0)
-      {
-        options->impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
-        TRC_INFO("IMPI store mode set to: impi");
-      }
-      else
-      {
-        TRC_ERROR("Unknown IMPI store mode: %s", pj_optarg);
-      }
       break;
 
     case OPT_NONCE_COUNT_SUPPORTED:
@@ -1289,6 +1262,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_HTTP_ACR_LOGGING:
       options->http_acr_logging = true;
       TRC_INFO("Bodies of ACR HTTP messages will be logged to SAS");
+      break;
+
+    case OPT_HOMESTEAD_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->homestead_timeout,
+                          homestead_timeout,
+                          Homestead HTTP timeout);
+      }
       break;
 
     case OPT_LISTEN_PORT:
@@ -1409,26 +1390,6 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
   }
 }
 
-
-void create_sdm_plugins(SubscriberDataManager::SerializerDeserializer*& serializer,
-                        std::vector<SubscriberDataManager::SerializerDeserializer*>& deserializers,
-                        MemcachedWriteFormat write_format)
-{
-  deserializers.clear();
-  deserializers.push_back(new SubscriberDataManager::JsonSerializerDeserializer());
-  deserializers.push_back(new SubscriberDataManager::BinarySerializerDeserializer());
-
-  if (write_format == MemcachedWriteFormat::JSON)
-  {
-    serializer = new SubscriberDataManager::JsonSerializerDeserializer();
-  }
-  else
-  {
-    serializer = new SubscriberDataManager::BinarySerializerDeserializer();
-  }
-}
-
-
 // Objects that must be shared with dynamically linked sproutlets must be
 // globally scoped.
 LoadMonitor* load_monitor = NULL;
@@ -1437,6 +1398,8 @@ Store* local_data_store = NULL;
 std::vector<Store*> remote_data_stores;
 Store* local_impi_data_store = NULL;
 std::vector<Store*> remote_impi_data_stores;
+AoRStore* local_aor_store = NULL;
+std::vector<AoRStore*> remote_aor_stores;
 SubscriberDataManager* local_sdm = NULL;
 std::vector<SubscriberDataManager*> remote_sdms;
 ImpiStore* local_impi_store = NULL;
@@ -1454,40 +1417,208 @@ SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
 MMFService* mmf_service = NULL;
 
-bool parse_multi_site_stores_arg(const std::vector<std::string>& stores_arg,
-                                 const std::string& local_site_name,
-                                 const char* store_name,
-                                 std::string& store_location,
-                                 std::vector<std::string>& remote_stores_locations)
+int create_astaire_stores(struct options opt,
+                          AstaireResolver*& astaire_resolver,
+                          CommunicationMonitor*& astaire_comm_monitor,
+                          CommunicationMonitor*& remote_astaire_comm_monitor)
 {
-  if (!stores_arg.empty())
-  {
-    if (!Utils::parse_stores_arg(stores_arg,
-                                 local_site_name,
-                                 store_location,
-                                 remote_stores_locations))
-    {
-      TRC_ERROR("Invalid format of %s program argument", store_name);
-      return false;
-    }
+  // Parse the registration-stores argument.
+  std::string registration_store_location;
+  std::vector<std::string> remote_registration_stores_locations;
 
-    if (store_location == "")
+  if (!Utils::parse_multi_site_stores_arg(opt.registration_stores,
+                                          opt.local_site_name,
+                                          "registration-store",
+                                          registration_store_location,
+                                          remote_registration_stores_locations))
+  {
+    return 1;
+  }
+
+  // Parse the impi-stores argument.
+  std::string impi_store_location;
+  std::vector<std::string> remote_impi_stores_locations;
+
+  if (opt.impi_stores.empty())
+  {
+    // The config option was not specified so use the same locations as for the
+    // regstore.
+    TRC_DEBUG("Use same store locations for IMPI stores as reg stores");
+    impi_store_location = registration_store_location;
+    remote_impi_stores_locations = remote_registration_stores_locations;
+  }
+  else
+  {
+    TRC_DEBUG("Parse IMPI store locations argument");
+    if (!Utils::parse_multi_site_stores_arg(opt.impi_stores,
+                                            opt.local_site_name,
+                                            "impi-store",
+                                            impi_store_location,
+                                            remote_impi_stores_locations))
     {
-      // If we've failed to find a local site registration store then Sprout has
-      // been misconfigured.
-      TRC_ERROR("No local site %s specified", store_name);
-      return false;
-    }
-    else
-    {
-      TRC_INFO("Using memcached %s", store_name);
-      TRC_INFO("  Primary store: %s", store_location.c_str());
-      std::string remote_stores_str = boost::algorithm::join(remote_stores_locations, ", ");
-      TRC_INFO("  Backup store(s): %s", remote_stores_str.c_str());
+      return 1;
     }
   }
 
-  return true;
+  astaire_resolver = new AstaireResolver(dns_resolver,
+                                         stack_data.addr_family,
+                                         opt.astaire_blacklist_duration);
+
+  astaire_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                            "sprout",
+                                                            AlarmDef::SPROUT_ASTAIRE_COMM_ERROR,
+                                                            AlarmDef::CRITICAL),
+                                                  "Sprout",
+                                                  "Astaire");
+
+  remote_astaire_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                                   "sprout",
+                                                                   AlarmDef::SPROUT_REMOTE_ASTAIRE_COMM_ERROR,
+                                                                   AlarmDef::CRITICAL),
+                                                         "Sprout",
+                                                         "remote Astaire");
+
+  if (registration_store_location != "")
+  {
+    // Use memcached store.
+    TRC_STATUS("Using memcached store");
+    local_data_store = (Store*)new TopologyNeutralMemcachedStore(registration_store_location,
+                                                                 astaire_resolver,
+                                                                 false,
+                                                                 astaire_comm_monitor);
+
+    if (!remote_registration_stores_locations.empty())
+    {
+      // Use remote memcached store too.
+      TRC_STATUS("Using remote memcached stores");
+       for (std::vector<std::string>::iterator it = remote_registration_stores_locations.begin();
+           it != remote_registration_stores_locations.end();
+           ++it)
+      {
+        Store* remote_data_store = (Store*)new TopologyNeutralMemcachedStore(*it,
+                                                                             astaire_resolver,
+                                                                             true,
+                                                                             remote_astaire_comm_monitor);
+        remote_data_stores.push_back(remote_data_store);
+      }
+    }
+  }
+  else
+  {
+    // Use local store.
+    TRC_STATUS("Using local store");
+    local_data_store = (Store*)new LocalStore();
+  }
+
+  if (local_data_store == NULL)
+  {
+    TRC_ERROR("Failed to connect to data store");
+    return 1;
+  }
+
+  local_aor_store = new AstaireAoRStore(local_data_store);
+
+  for (std::vector<Store*>::iterator it = remote_data_stores.begin();
+       it != remote_data_stores.end();
+       ++it)
+  {
+    AoRStore* remote_aor_store = new AstaireAoRStore(*it);
+    remote_aor_stores.push_back(remote_aor_store);
+  }
+
+  // Create an AV store using the local store and initialise the authentication
+  // sproutlet.
+  if (impi_store_location != "")
+  {
+    // Use memcached store.
+    TRC_STATUS("Using memcached store");
+    local_impi_data_store = (Store*)new TopologyNeutralMemcachedStore(impi_store_location,
+                                                                      astaire_resolver,
+                                                                      false,
+                                                                      astaire_comm_monitor);
+    local_impi_store = new AstaireImpiStore(local_impi_data_store);
+
+    // Only set up remote IMPI stores if some have been configured, and we need
+    // the IMPI store to be GR.
+    if (!remote_impi_stores_locations.empty() &&
+        (opt.non_register_auth_mode &
+           NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
+    {
+      // Use remote memcached store too.
+      TRC_STATUS("Using remote memcached stores");
+       for (std::vector<std::string>::iterator it = remote_impi_stores_locations.begin();
+           it != remote_impi_stores_locations.end();
+           ++it)
+      {
+        Store* remote_data_store = (Store*)new TopologyNeutralMemcachedStore(*it,
+                                                                             astaire_resolver,
+                                                                             true,
+                                                                             remote_astaire_comm_monitor);
+        remote_impi_data_stores.push_back(remote_data_store);
+        remote_impi_stores.push_back(new AstaireImpiStore(remote_data_store));
+      }
+    }
+  }
+  else
+  {
+    // Use local store.
+    TRC_STATUS("Using local store");
+    local_impi_data_store = (Store*)new LocalStore();
+    local_impi_store = new AstaireImpiStore(local_data_store);
+  }
+  return 0;
+}
+
+void create_chronos_connection(struct options opt,
+                               CommunicationMonitor*& chronos_comm_monitor)
+{
+  chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                            "sprout",
+                                                            AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
+                                                            AlarmDef::MAJOR),
+                                                  "Sprout",
+                                                  "Chronos");
+
+  // Create a connection to Chronos.
+  std::string port_str = std::to_string(opt.http_port);
+
+  std::string chronos_service;
+  std::string chronos_callback_host = "127.0.0.1:" + port_str;
+
+  if (opt.chronos_hostname == "")
+  {
+    chronos_service = "127.0.0.1:7253";
+
+    Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
+
+    if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
+        (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
+        (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
+    {
+      chronos_callback_host = "[::1]:" + port_str;
+    }
+  }
+  else
+  {
+    std::string chronos_callback_uri = opt.sprout_chronos_callback_uri;
+
+    if (chronos_callback_uri == "")
+    {
+      chronos_callback_uri = opt.sprout_hostname;
+    }
+
+    chronos_service = opt.chronos_hostname + ":7253";
+    chronos_callback_host = chronos_callback_uri + ":" + port_str;
+  }
+
+  TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
+             chronos_service.c_str(),
+             chronos_callback_host.c_str());
+  chronos_connection = new ChronosConnection(chronos_service,
+                                             chronos_callback_host,
+                                             http_resolver,
+                                             chronos_comm_monitor);
+
 }
 
 /*
@@ -1499,7 +1630,6 @@ int main(int argc, char* argv[])
   struct options opt;
 
   SIPResolver* sip_resolver = NULL;
-  AstaireResolver* astaire_resolver = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
@@ -1509,6 +1639,7 @@ int main(int argc, char* argv[])
   CommunicationMonitor* chronos_comm_monitor = NULL;
   CommunicationMonitor* enum_comm_monitor = NULL;
   CommunicationMonitor* hss_comm_monitor = NULL;
+  AstaireResolver* astaire_resolver = NULL;
   CommunicationMonitor* astaire_comm_monitor = NULL;
   CommunicationMonitor* remote_astaire_comm_monitor = NULL;
   CommunicationMonitor* ralf_comm_monitor = NULL;
@@ -1562,7 +1693,6 @@ int main(int argc, char* argv[])
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
-  opt.memcached_write_format = MemcachedWriteFormat::JSON;
   opt.override_npdi = PJ_FALSE;
   opt.exception_max_ttl = 600;
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
@@ -1574,12 +1704,12 @@ int main(int argc, char* argv[])
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
   opt.stateless_proxies.clear();
+  opt.max_sproutlet_depth = SproutletProxy::DEFAULT_MAX_SPROUTLET_DEPTH;
   opt.ralf_threads = 25;
   opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
   opt.force_third_party_register_body = false;
   opt.listen_port = 0;
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
-  opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
   opt.nonce_count_supported = false;
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
@@ -1588,6 +1718,7 @@ int main(int argc, char* argv[])
   opt.reject_if_no_matching_ifcs = false;
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
+  opt.homestead_timeout = 750;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1742,43 +1873,6 @@ int main(int argc, char* argv[])
     TRC_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
   }
 
-  // Parse the registration-stores argument.
-  std::string registration_store_location;
-  std::vector<std::string> remote_registration_stores_locations;
-
-  if (!parse_multi_site_stores_arg(opt.registration_stores,
-                                   opt.local_site_name,
-                                   "registration-store",
-                                   registration_store_location,
-                                   remote_registration_stores_locations))
-  {
-    return 1;
-  }
-
-  // Parse the impi-stores argument.
-  std::string impi_store_location;
-  std::vector<std::string> remote_impi_stores_locations;
-
-  if (opt.impi_stores.empty())
-  {
-    // The config option was not specified so use the same locations as for the
-    // regstore.
-    TRC_DEBUG("Use same store locations for IMPI stores as reg stores");
-    impi_store_location = registration_store_location;
-    remote_impi_stores_locations = remote_registration_stores_locations;
-  }
-  else
-  {
-    TRC_DEBUG("Parse IMPI store locations argument");
-    if (!parse_multi_site_stores_arg(opt.impi_stores,
-                                     opt.local_site_name,
-                                     "impi-store",
-                                     impi_store_location,
-                                     remote_impi_stores_locations))
-    {
-      return 1;
-    }
-  }
 
 
   // Ensure our random numbers are unpredictable.
@@ -1868,13 +1962,6 @@ int main(int argc, char* argv[])
   // Create Sprout's alarm objects.
   alarm_manager = new AlarmManager();
 
-  chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                            "sprout",
-                                                            AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
-                                                            AlarmDef::MAJOR),
-                                                  "Sprout",
-                                                  "Chronos");
-
   enum_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
                                                          "sprout",
                                                          AlarmDef::SPROUT_ENUM_COMM_ERROR,
@@ -1888,20 +1975,6 @@ int main(int argc, char* argv[])
                                                         AlarmDef::CRITICAL),
                                               "Sprout",
                                               "Homestead");
-
-  astaire_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                            "sprout",
-                                                            AlarmDef::SPROUT_ASTAIRE_COMM_ERROR,
-                                                            AlarmDef::CRITICAL),
-                                                  "Sprout",
-                                                  "Astaire");
-
-  remote_astaire_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                                   "sprout",
-                                                                   AlarmDef::SPROUT_REMOTE_ASTAIRE_COMM_ERROR,
-                                                                   AlarmDef::CRITICAL),
-                                                         "Sprout",
-                                                         "remote Astaire");
 
   ralf_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
                                                          "sprout",
@@ -2016,7 +2089,8 @@ int main(int argc, char* argv[])
   if (opt.hss_server != "")
   {
     // Create a connection to the HSS.
-    TRC_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
+    TRC_STATUS("Creating connection to HSS %s with HTTP timeout %d",
+               opt.hss_server.c_str(), opt.homestead_timeout);
     sifc_service = new SIFCService(new Alarm(alarm_manager,
                                              "sprout",
                                              AlarmDef::SPROUT_SIFC_STATUS,
@@ -2032,8 +2106,8 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf,
-                                       sifc_service);
+                                       sifc_service,
+                                       opt.homestead_timeout);
   }
 
   // Create FIFC service
@@ -2119,121 +2193,35 @@ int main(int argc, char* argv[])
     }
   }
 
-  // Create a connection to Chronos.
-  std::string port_str = std::to_string(opt.http_port);
-
-  std::string chronos_service;
-  std::string chronos_callback_host = "127.0.0.1:" + port_str;
-
-  if (opt.chronos_hostname == "")
-  {
-    chronos_service = "127.0.0.1:7253";
-
-    Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
-
-    if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
-        (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
-        (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
-    {
-      chronos_callback_host = "[::1]:" + port_str;
-    }
-  }
-  else
-  {
-    std::string chronos_callback_uri = opt.sprout_chronos_callback_uri;
-
-    if (chronos_callback_uri == "")
-    {
-      chronos_callback_uri = opt.sprout_hostname;
-    }
-
-    chronos_service = opt.chronos_hostname + ":7253";
-    chronos_callback_host = chronos_callback_uri + ":" + port_str;
-  }
-
-  TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
-             chronos_service.c_str(),
-             chronos_callback_host.c_str());
-  chronos_connection = new ChronosConnection(chronos_service,
-                                             chronos_callback_host,
-                                             http_resolver,
-                                             chronos_comm_monitor);
+  create_chronos_connection(opt,
+                            chronos_comm_monitor);
 
   scscf_acr_factory = (ralf_processor != NULL) ?
                     (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
                     new ACRFactory();
 
-  astaire_resolver = new AstaireResolver(dns_resolver,
-                                         stack_data.addr_family,
-                                         opt.astaire_blacklist_duration);
-
-  if (registration_store_location != "")
+  // Create the SDM and IMPI stores
+  int rc = create_astaire_stores(opt,
+                                 astaire_resolver,
+                                 astaire_comm_monitor,
+                                 remote_astaire_comm_monitor);
+  if (rc != 0)
   {
-    // Use memcached store.
-    TRC_STATUS("Using memcached store");
-    local_data_store = (Store*)new TopologyNeutralMemcachedStore(registration_store_location,
-                                                                 astaire_resolver,
-                                                                 false,
-                                                                 astaire_comm_monitor);
-
-    if (!remote_registration_stores_locations.empty())
-    {
-      // Use remote memcached store too.
-      TRC_STATUS("Using remote memcached stores");
-       for (std::vector<std::string>::iterator it = remote_registration_stores_locations.begin();
-           it != remote_registration_stores_locations.end();
-           ++it)
-      {
-        Store* remote_data_store = (Store*)new TopologyNeutralMemcachedStore(*it,
-                                                                             astaire_resolver,
-                                                                             true,
-                                                                             remote_astaire_comm_monitor);
-        remote_data_stores.push_back(remote_data_store);
-      }
-    }
-  }
-  else
-  {
-    // Use local store.
-    TRC_STATUS("Using local store");
-    local_data_store = (Store*)new LocalStore();
+    return rc;
   }
 
-  if (local_data_store == NULL)
-  {
-    TRC_ERROR("Failed to connect to data store");
-    exit(0);
-  }
-
-  // Create local and optionally remote registration data stores.
-  //
-  // It is fine to reuse these variables for creating both stores, as
-  // ownership of the objects they point to is transferred to the store when
-  // it is constructed.
-  SubscriberDataManager::SerializerDeserializer* serializer;
-  std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers;
-
-  create_sdm_plugins(serializer,
-                     deserializers,
-                     opt.memcached_write_format);
-  local_sdm = new SubscriberDataManager(local_data_store,
-                                        serializer,
-                                        deserializers,
+  // Use the AOR stores we've create to create the local (and optionally remote)
+  // SDMs.
+  local_sdm = new SubscriberDataManager(local_aor_store,
                                         chronos_connection,
                                         analytics_logger,
                                         true);
 
-
-  for (std::vector<Store*>::iterator it = remote_data_stores.begin();
-       it != remote_data_stores.end();
+  for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
+       it != remote_aor_stores.end();
        ++it)
   {
-    create_sdm_plugins(serializer,
-                       deserializers,
-                       opt.memcached_write_format);
     SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
-                                                                  serializer,
-                                                                  deserializers,
                                                                   chronos_connection,
                                                                   NULL,
                                                                   false);
@@ -2274,47 +2262,6 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  // Create an AV store using the local store and initialise the authentication
-  // sproutlet.
-  if (impi_store_location != "")
-  {
-    // Use memcached store.
-    TRC_STATUS("Using memcached store");
-    local_impi_data_store = (Store*)new TopologyNeutralMemcachedStore(impi_store_location,
-                                                                      astaire_resolver,
-                                                                      false,
-                                                                      astaire_comm_monitor);
-    local_impi_store = new ImpiStore(local_impi_data_store, opt.impi_store_mode);
-
-    // Only set up remote IMPI stores if some have been configured, and we need
-    // the IMPI store to be GR.
-    if (!remote_impi_stores_locations.empty() &&
-        (opt.non_register_auth_mode &
-           NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
-    {
-      // Use remote memcached store too.
-      TRC_STATUS("Using remote memcached stores");
-       for (std::vector<std::string>::iterator it = remote_impi_stores_locations.begin();
-           it != remote_impi_stores_locations.end();
-           ++it)
-      {
-        Store* remote_data_store = (Store*)new TopologyNeutralMemcachedStore(*it,
-                                                                             astaire_resolver,
-                                                                             true,
-                                                                             remote_astaire_comm_monitor);
-        remote_impi_data_stores.push_back(remote_data_store);
-        remote_impi_stores.push_back(new ImpiStore(remote_data_store, opt.impi_store_mode));
-      }
-    }
-  }
-  else
-  {
-    // Use local store.
-    TRC_STATUS("Using local store");
-    local_impi_data_store = (Store*)new LocalStore();
-    local_impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
-  }
-
   // Load the sproutlet plugins.
   PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins",
                                           opt);
@@ -2353,7 +2300,8 @@ int main(int argc, char* argv[])
                                          opt.sprout_hostname,
                                          host_aliases,
                                          sproutlets,
-                                         opt.stateless_proxies);
+                                         opt.stateless_proxies,
+                                         opt.max_sproutlet_depth);
     if (sproutlet_proxy == NULL)
     {
       TRC_ERROR("Failed to create SproutletProxy");
@@ -2389,12 +2337,6 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  AoRTimeoutTask::Config aor_timeout_config(local_sdm,
-                                            remote_sdms,
-                                            hss_connection);
-  AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
-                                              hss_connection);
-
   // These tasks can cause a request to be sent to an application server
   // relating to a third party registration, which may cause fallback iFCs to
   // be invoked. We don't increment any statistics relating to the fallback
@@ -2412,6 +2354,9 @@ int main(int argc, char* argv[])
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
+  PushProfileTask::Config push_profile_config(local_sdm,
+                                              remote_sdms,
+                                              hss_connection);
   GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
   DeleteImpuTask::Config delete_impu_config(local_sdm,
                                             remote_sdms,
@@ -2423,11 +2368,16 @@ int main(int argc, char* argv[])
                                                              NULL,
                                                              NULL));
 
-  // The AoRTimeoutTask and AuthTimeoutTask both handle
-  // chronos requests, so use the ChronosHandler.
-  ChronosHandler<AoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
-  ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+  AoRTimeoutTask::Config aor_timeout_config(local_sdm,
+                                            remote_sdms,
+                                            hss_connection);
+  AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
+                                              hss_connection);
+
+  TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
+  HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
   HttpStackUtils::PingHandler ping_handler;
   HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
   HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
@@ -2445,6 +2395,8 @@ int main(int argc, char* argv[])
                                        &auth_timeout_handler);
       http_stack_sig->register_handler("^/registrations?*$",
                                        &deregistration_handler);
+      http_stack_sig->register_handler("^/registrations/[^/]+$",
+                                       &push_profile_handler);
       http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
       http_stack_sig->start(&reg_httpthread_with_pjsip);
     }
@@ -2561,6 +2513,8 @@ int main(int argc, char* argv[])
   delete exception_handler;
   delete load_monitor;
   delete local_sdm;
+  delete local_aor_store;
+  delete local_data_store;
 
   for (std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
        it != remote_sdms.end();
@@ -2570,7 +2524,13 @@ int main(int argc, char* argv[])
   }
   remote_sdms.clear();
 
-  delete local_data_store;
+  for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
+       it != remote_aor_stores.end();
+       ++it)
+  {
+    delete *it;
+  }
+  remote_aor_stores.clear();
 
   for (std::vector<Store*>::iterator it = remote_data_stores.begin();
        it != remote_data_stores.end();
@@ -2643,3 +2603,4 @@ int main(int argc, char* argv[])
 
   return 0;
 }
+

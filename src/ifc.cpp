@@ -280,6 +280,15 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
       // of 3GPP TS 29.228.
       test_string = PJUtils::pj_str_to_string(&req_uri->number);
     }
+    else if (PJSIP_URI_SCHEME_IS_URN(msg->line.req.uri))
+    {
+      pjsip_other_uri* req_uri = (pjsip_other_uri*)pjsip_uri_get_uri(msg->line.req.uri);
+
+      // There is nothing in TS 29.228 about what to match against in the case
+      // of a urn URI. So just pull out the entire content (which is everything
+      // after "urn:").
+      test_string = PJUtils::pj_str_to_string(&req_uri->content);
+    }
     else
     {
       pjsip_sip_uri* req_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(msg->line.req.uri);
@@ -548,10 +557,14 @@ bool Ifc::filter_matches(const SessionCase& session_case,
   }
   catch (xml_error err)
   {
-    // Ignore individual criteria which can't be parsed. SAS logging
-    // should already have happened by this point.
+    // Generic SAS event is logged to make it clear that this iFC is being
+    // skipped since it is invalid. In most cases, a specific SAS event
+    // detailing the exact error will already have been logged as well.
     std::string err_str = "iFC evaluation error: " + std::string(err.what());
     TRC_ERROR(err_str.c_str());
+    SAS::Event event(trail, SASEvent::INVALID_IFC_IGNORED, 0);
+    event.add_var_param(std::string(err.what()));
+    SAS::report_event(event);
     return false;
   }
 }

@@ -675,9 +675,10 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
   // This would have been checked by transport layer.
 
   // 2. URI scheme.
-  // We support "sip:" and "tel:" URI schemes in this simple proxy.
+  // We support "sip:", "tel:" and "urn:" URI schemes in this simple proxy.
   if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
-        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri)))
+        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri) ||
+        PJSIP_URI_SCHEME_IS_URN(rdata->msg_info.msg->line.req.uri)))
   {
     return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
@@ -2796,7 +2797,7 @@ void UACTransaction::set_target(const struct Target& target)
   {
     // Resolve the next hop destination for this request to a set of servers.
     TRC_DEBUG("Resolve next hop destination");
-    PJUtils::resolve_next_hop(_tdata, 0, _servers, trail());
+    PJUtils::resolve_next_hop(_tdata, 0, _servers, BaseResolver::ALL_LISTS, trail());
   }
 
   exit_context();

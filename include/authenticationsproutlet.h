@@ -30,7 +30,7 @@ extern "C" {
 #include "analyticslogger.h"
 #include "snmp_success_fail_count_table.h"
 #include "cfgoptions.h"
-#include "forwardingsproutlet.h"
+#include "compositesproutlet.h"
 
 typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
 
@@ -90,8 +90,9 @@ public:
   AuthenticationSproutlet(const std::string& name,
                           int port,
                           const std::string& uri,
-                          const std::string& next_hop_service,
                           const std::list<std::string>& aliases,
+                          const std::string& network_function,
+                          const std::string& next_hop_service,
                           const std::string& realm_name,
                           ImpiStore* impi_store,
                           std::vector<ImpiStore*> remote_impi_stores,
@@ -114,8 +115,6 @@ public:
                         pj_pool_t* pool,
                         SAS::TrailId trail) override;
 
-  const std::list<std::string> aliases() const override;
-
 private:
   bool needs_authentication(pjsip_msg* req,
                             SAS::TrailId trail);
@@ -124,12 +123,10 @@ private:
   /// to GR stores if necessary).
   ///
   /// @param impi  - The IMPI to read.
-  /// @param nonce - The nonce that the caller is in interested in.
   /// @param trail - SAS trail ID.
   ///
   /// @return      - The IMPI object, or NULL if there was a store failure.
   ImpiStore::Impi* read_impi(const std::string& impi,
-                             const std::string& nonce,
                              SAS::TrailId trail);
 
   /// Write a challenge to the IMPI stores. This handles GR replication.
@@ -209,13 +206,10 @@ private:
   // The next service to route requests onto if the sproutlet does not handle them
   // itself.
   std::string _next_hop_service;
-
-  // Aliases that this sproutlet registers for.
-  const std::list<std::string> _aliases;
 };
 
 
-class AuthenticationSproutletTsx : public ForwardingSproutletTsx
+class AuthenticationSproutletTsx : public CompositeSproutletTsx
 {
 public:
   AuthenticationSproutletTsx(AuthenticationSproutlet* authentication,
@@ -254,6 +248,11 @@ protected:
 
   // Whether the user has authenticated using the SIP digest mechanism.
   bool _authenticated_using_sip_digest;
+
+  // The S-CSCF URI for this transaction. This is used on the SAR sent to the
+  // HSS. This field should not be changed once it has been set by the
+  // on_rx_intial_request() call.
+  std::string _scscf_uri;
 };
 
 #endif

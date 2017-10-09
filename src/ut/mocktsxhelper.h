@@ -18,7 +18,8 @@
 class MockSproutletTsxHelper : public SproutletTsxHelper
 {
 public:
-  MockSproutletTsxHelper() {}
+  MockSproutletTsxHelper();
+  ~MockSproutletTsxHelper();
 
   const std::string& dialog_id() const {return _dialog_id;}
   std::string _dialog_id;
@@ -36,7 +37,7 @@ public:
   MOCK_METHOD1(clone_request, pjsip_msg*(pjsip_msg*));
   MOCK_METHOD1(clone_msg, pjsip_msg*(pjsip_msg*));
   MOCK_METHOD3(create_response, pjsip_msg*(pjsip_msg*, pjsip_status_code, const std::string&));
-  MOCK_METHOD1(send_request, int(pjsip_msg*&));
+  MOCK_METHOD2(send_request, int(pjsip_msg*&, int));
   MOCK_METHOD1(send_response, void(pjsip_msg*&));
   MOCK_METHOD2(cancel_fork, void(int, int));
   MOCK_METHOD1(cancel_pending_forks, void(int));
@@ -47,9 +48,11 @@ public:
   MOCK_METHOD3(schedule_timer, bool(void*, TimerID&, int));
   MOCK_METHOD1(cancel_timer, void(TimerID));
   MOCK_METHOD1(timer_running, bool(TimerID));
+  MOCK_CONST_METHOD1(get_routing_uri, pjsip_sip_uri*(const pjsip_msg* req));
   MOCK_CONST_METHOD3(next_hop_uri, pjsip_sip_uri*(const std::string& service,
-                                                  const pjsip_route_hdr* route,
+                                                  const pjsip_sip_uri* base_uri,
                                                   pj_pool_t* pool));
+  MOCK_CONST_METHOD1(get_local_hostname, std::string(const pjsip_sip_uri* uri));
 };
 
 #endif

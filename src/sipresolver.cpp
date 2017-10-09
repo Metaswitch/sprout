@@ -48,6 +48,7 @@ void SIPResolver::resolve(const std::string& name,
                           int transport,
                           int retries,
                           std::vector<AddrInfo>& targets,
+                          int allowed_host_state,
                           SAS::TrailId trail)
 {
   int dummy_ttl = 0;
@@ -71,23 +72,44 @@ void SIPResolver::resolve(const std::string& name,
     SAS::report_event(event);
   }
 
-  if (parse_ip_target(name, ai.address))
+  if (Utils::parse_ip_target(name, ai.address))
   {
     // The name is already an IP address, so no DNS resolution is possible.
     // Use specified transport and port or defaults if not specified.
     TRC_DEBUG("Target is an IP address - default port/transport if required");
+
+    // Check which host states are permitted.
+    const bool whitelisted_allowed = allowed_host_state & BaseResolver::WHITELISTED;
+    const bool blacklisted_allowed = allowed_host_state & BaseResolver::BLACKLISTED;
+
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
-    targets.push_back(ai);
+
+    bool addr_blacklisted = blacklisted(ai);
+    bool addr_rejected = false;
+
+    if ((!addr_blacklisted && whitelisted_allowed)||
+        ( addr_blacklisted && blacklisted_allowed))
+    {
+      targets.push_back(ai);
+    }
+    else
+    {
+      TRC_DEBUG("IP address rejected as host state %s was not allowed",
+                          (addr_blacklisted) ? "blacklisted" : "whitelisted");
+      addr_rejected = true;
+    }
 
     if (trail != 0)
     {
       SAS::Event event(trail, SASEvent::SIPRESOLVE_IP_ADDRESS, 0);
       event.add_var_param(name);
+      event.add_static_param(addr_rejected);
       std::string port_str = std::to_string(ai.port);
       std::string transport_str = get_transport_str(ai.transport);
       event.add_var_param(transport_str);
       event.add_var_param(port_str);
+      event.add_static_param(addr_blacklisted);
       SAS::report_event(event);
     }
   }
@@ -264,7 +286,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      srv_resolve(srv_name, af, transport, retries, targets, dummy_ttl, trail);
+      srv_resolve(srv_name, af, transport, retries, targets, dummy_ttl, trail, allowed_host_state);
     }
     else
     {
@@ -282,15 +304,30 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      a_resolve(a_name, af, port, transport, retries, targets, dummy_ttl, trail);
+      a_resolve(a_name, af, port, transport, retries, targets, dummy_ttl, trail, allowed_host_state);
     }
   }
 
   if ((targets.size() == 0) && (trail != 0))
   {
-    SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_RECORDS, 0);
-    event.add_var_param(name);
-    SAS::report_event(event);
+    if ((allowed_host_state == BaseResolver::WHITELISTED) ||
+        (allowed_host_state == BaseResolver::BLACKLISTED))
+    {
+      // The search was restricted to either just blacklisted or just
+      // whitelisted addresses - there were none with the specified state.
+      bool blacklisted = (allowed_host_state == BaseResolver::BLACKLISTED);
+      SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_ALLOWED_RECORDS, 0);
+      event.add_var_param(name);
+      event.add_static_param(blacklisted);
+      SAS::report_event(event);
+    }
+    else
+    {
+      // No records at all for this address
+      SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_RECORDS, 0);
+      event.add_var_param(name);
+      SAS::report_event(event);
+    }
   }
 }
 
