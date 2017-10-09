@@ -226,6 +226,16 @@ static bool ignore_overload(pjsip_rx_data* rdata)
   return false;
 }
 
+static int get_rx_msg_priority(pjsip_rx_data* rdata)
+{
+  if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG &&
+      rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD)
+  {
+    return SipPriorityLevel::HIGH_PRIORITY;
+  }
+  return SipPriorityLevel::NORMAL_PRIORITY;
+}
+
 // Reject a SIP message with a 503 Service Unavailable
 static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
@@ -262,13 +272,6 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
   // to rebalance load if possible triggered by receipt of the 503 responses.
 
   overload_counter->increment();
-}
-
-static int get_rx_msg_priority(pjsip_rx_data* rdata)
-{
-  // TODO: Determine priority from message
-  // TODO: SAS log priority
-  return 4;
 }
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
@@ -419,7 +422,7 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   SipEvent qe;
   qe.type = CALLBACK;
   qe.event_data.callback = cb;
-  // TODO: Set priority
+  qe.priority = SipPriorityLevel::NORMAL_PRIORITY; // TODO: Check priority
 
   // Track the current queue size
   queue_size_table->accumulate(sip_event_queue.size());

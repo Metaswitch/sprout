@@ -40,6 +40,14 @@ void stop_worker_threads(); // TODO: Should this return its status?
 // A SipEvent on the queue is either a SIP message or a callback
 enum SipEventType { MESSAGE, CALLBACK };
 
+// Allowable priority levels for SIP events. Levels with lower values correspond
+// to higher priorities.
+namespace SipPriorityLevel
+{
+  const int NORMAL_PRIORITY = 1;
+  const int HIGH_PRIORITY = 0;
+} //namespace SipPriorityLevel
+
 union SipEventData
 {
   pjsip_rx_data* rdata;
