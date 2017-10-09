@@ -30,15 +30,6 @@ const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
 const ForkState NULL_FORK_STATE = {PJSIP_TSX_STATE_NULL, NONE};
 
-SproutletProxy::SproutletTimerCallback::SproutletTimerCallback(pj_timer_entry* timer) :
-_timer_entry(timer)
-{
-}
-
-void SproutletProxy::SproutletTimerCallback::run()
-{
-  ((SproutletTimerCallbackData*)_timer_entry->user_data)->uas_tsx->process_timer_pop(_timer_entry);
-}
 
 /// Constructor.
 SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
@@ -604,6 +595,16 @@ bool SproutletProxy::timer_running(pj_timer_entry* tentry)
 }
 
 
+SproutletProxy::UASTsx::TimerCallback::TimerCallback(pj_timer_entry* timer) :
+  _timer_entry(timer)
+{
+}
+
+void SproutletProxy::UASTsx::TimerCallback::run()
+{
+  ((TimerCallbackData*)_timer_entry->user_data)->uas_tsx->process_timer_pop(_timer_entry);
+}
+
 SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   BasicProxy::UASTsx(proxy),
   _root(NULL),
@@ -625,7 +626,7 @@ SproutletProxy::UASTsx::~UASTsx()
        timer != _timers.end();
        ++timer)
   {
-    SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)(*timer)->user_data;
+    TimerCallbackData* tdata = (TimerCallbackData*)(*timer)->user_data;
     delete tdata;
     delete *timer;
   }
@@ -1014,7 +1015,7 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
                                             TimerID& id,
                                             int duration)
 {
-  SproutletTimerCallbackData* tdata = new SproutletTimerCallbackData;
+  TimerCallbackData* tdata = new TimerCallbackData;
   tdata->uas_tsx = this;
   tdata->sproutlet_wrapper = tsx;
   tdata->context = context;
@@ -1056,20 +1057,21 @@ bool SproutletProxy::UASTsx::timer_running(TimerID id)
 void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
                                           pj_timer_entry* tentry)
 {
-  TRC_DEBUG("Sproutlet timer popped, id = %ld", (TimerID)tentry);
 
-  SproutletTimerCallback* callback = new SproutletTimerCallback(tentry);
+  TimerCallback* callback = new TimerCallback(tentry);
 #ifndef UNIT_TEST
   if (is_pjsip_transport_thread())
   {
     // Timer pops happen on the main pjsip transport thread, but we want to
     // handle them on a worker thread
+    TRC_DEBUG("Sproutlet timer popped, id = %ld, adding to queue", (TimerID)tentry);
     add_callback_to_queue(callback);
   }
   else
 #endif
   {
     // The UTs have a different threading model, so we run the callback directly
+    TRC_DEBUG("Sproutlet timer popped, id = %ld, running immediately", (TimerID)tentry);
     callback->run();
     delete callback; callback = NULL;
   }
@@ -1081,7 +1083,7 @@ void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
   enter_context();
 
   _pending_timers.erase(tentry);
-  SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)tentry->user_data;
+  TimerCallbackData* tdata = (TimerCallbackData*)tentry->user_data;
   tdata->sproutlet_wrapper->on_timer_pop((TimerID)tentry, tdata->context);
   schedule_requests();
 

@@ -117,24 +117,6 @@ protected:
                         Sproutlet* sproutlet,
                         SAS::TrailId trail);
 
-  /// Defintion of a timer set by an child sproutlet transaction.
-  struct SproutletTimerCallbackData
-  {
-    SproutletProxy::UASTsx* uas_tsx;
-    SproutletWrapper* sproutlet_wrapper;
-    void* context;
-  };
-
-  // The timer callback object, which is run on a worker thread
-  class SproutletTimerCallback : public PJUtils::Callback
-  {
-    pj_timer_entry* _timer_entry;
-
-  public:
-    SproutletTimerCallback(pj_timer_entry* timer);
-    void run() override;
-  };
-
   // A struct to wrap tx_data and allowed_host_state in a convenient bundle
   // to pass over interfaces when sending a request.
   typedef struct
@@ -181,6 +163,24 @@ protected:
 
 
   private:
+    /// Defintion of a timer set by a sproutlet transaction.
+    struct TimerCallbackData
+    {
+      UASTsx* uas_tsx;
+      SproutletWrapper* sproutlet_wrapper;
+      void* context;
+    };
+
+    // The timer callback object, which is run on a worker thread
+    class TimerCallback : public PJUtils::Callback
+    {
+      pj_timer_entry* _timer_entry;
+
+    public:
+      TimerCallback(pj_timer_entry* timer);
+      void run() override;
+    };
+
     void tx_request(SproutletWrapper* sproutlet,
                     int fork_id,
                     SendRequest req);
@@ -257,7 +257,6 @@ protected:
     std::set<pj_timer_entry*> _pending_timers;
 
     friend class SproutletWrapper;
-    friend class SproutletTimerCallback;
   };
 
   pjsip_sip_uri* _root_uri;
