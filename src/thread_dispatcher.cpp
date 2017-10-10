@@ -369,7 +369,6 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   exception_handler = exception_handler_arg;
 
   // Register the PJSIP module.
-  stack_data = stack_data_arg;
   pjsip_endpt_register_module(stack_data.endpt, &mod_thread_dispatcher);
 
   return PJ_SUCCESS;

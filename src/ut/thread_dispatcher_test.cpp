@@ -39,25 +39,25 @@ public:
     status = pjlib_util_init();
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
-    pj_caching_pool_init(&cp, &pj_pool_factory_default_policy, 0);
+    pj_caching_pool_init(&stack_data.cp, &pj_pool_factory_default_policy, 0);
 
-    status = pjsip_endpt_create(&cp.factory, NULL, &endpt);
+    status = pjsip_endpt_create(&stack_data.cp.factory, NULL, &stack_data.endpt);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
     //status = pjsip_tsx_layer_init_module(endpt);
 
-    pool = pj_pool_create(&cp.factory,
-                          "test-pool",
-                          4000,
-                          4000,
-                          NULL);
+    stack_data.pool = pj_pool_create(&stack_data.cp.factory,
+                                     "test-pool",
+                                     4000,
+                                     4000,
+                                     NULL);
 
     status = register_custom_headers();
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
     //PJUtils::init();
 
-    mod_mock = new MockPJSipModule(endpt,
+    mod_mock = new MockPJSipModule(stack_data.endpt,
                                    "test-module",
                                    PJSIP_MOD_PRIORITY_TRANSPORT_LAYER);
     init_thread_dispatcher(1, NULL, NULL, &load_monitor, NULL, NULL);
@@ -69,22 +69,23 @@ public:
 
   virtual void inject_msg(const string& msg)
   {
-    pjsip_rx_data* rdata = PJ_POOL_ZALLOC_T(pool, pjsip_rx_data);
+    pjsip_rx_data* rdata = PJ_POOL_ZALLOC_T(stack_data.pool, pjsip_rx_data);
 
-    rdata->pkt_info.packet = (char*)pj_pool_alloc(pool, strlen(msg.data()) + 1);
+    rdata->pkt_info.packet = (char*)pj_pool_alloc(stack_data.pool,
+                                                  strlen(msg.data()) + 1);
     strcpy(rdata->pkt_info.packet, msg.data());
     rdata->pkt_info.len = msg.length();
 
-    pjsip_endpt_process_rx_data(endpt, rdata, &entry_point, NULL);
+    pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &entry_point, NULL);
   }
 
   virtual void term_test_pjsip()
   {
     //PJUtils::term();
     //pjsip_tsx_layer_destroy();
-    pjsip_endpt_destroy(endpt);
-    pj_pool_release(pool);
-    pj_caching_pool_destroy(&cp);
+    pjsip_endpt_destroy(stack_data.endpt);
+    pj_pool_release(stack_data.pool);
+    pj_caching_pool_destroy(&stack_data.cp);
     pj_shutdown();
   }
 
@@ -99,16 +100,10 @@ public:
   MockPJSipModule* mod_mock;
   MockLoadMonitor load_monitor;
   pjsip_process_rdata_param entry_point;
-
-protected:
-  pj_caching_pool cp;
-  pj_pool_t* pool;
-  pjsip_endpoint* endpt;
 };
 
 TEST_F(ThreadDispatcherTest, NullTest)
 {
-  /*
   TestingCommon::Message msg;
   msg._first_hop = true;
   msg._method = "INVITE";
@@ -116,8 +111,7 @@ TEST_F(ThreadDispatcherTest, NullTest)
   msg._from = "alice";
   msg._to = "bob";
   msg._todomain = "awaydomain";
-  inject_msg(msg.get_request());
-  */
+  //inject_msg(msg.get_request());
 }
 
 class SipEventQueueTest : public ::testing::Test
