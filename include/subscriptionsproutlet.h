@@ -98,6 +98,15 @@ protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
 
+  Store::Status update_subscriptions_in_stores(SubscriptionSproutlet* _subscription,
+                                               std::string aor,
+                                               AssociatedURIs associated_uris,
+                                               pjsip_msg* req,
+                                               std::string public_id,
+                                               ACR* acr,
+                                               std::deque<std::string> ccfs,
+                                               std::deque<std::string> ecfs);
+
   AoRPair* write_subscriptions_to_store(
                      SubscriberDataManager* primary_sdm,        ///<store to write to
                      std::string aor,                           ///<address of record to write to

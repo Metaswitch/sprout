@@ -346,52 +346,20 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   TRC_DEBUG("aor = %s", aor.c_str());
   TRC_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
-  // Get the system time in seconds for calculating absolute expiry times.
-  int now = time(NULL);
 
-  // Write to the local store, checking the remote stores if there is no entry locally.
-  // If the write to the local store succeeds, then write to the remote stores.
-  AoRPair* aor_pair = write_subscriptions_to_store(_subscription->_sdm,
-                                                   aor,
-                                                   &associated_uris,
-                                                   req,
-                                                   now,
-                                                   NULL,
-                                                   _subscription->_remote_sdms,
-                                                   public_id,
-                                                   true,
-                                                   acr,
-                                                   ccfs,
-                                                   ecfs);
+  // Update the local and remote stores with the new subscription
+  Store::Status status = update_subscriptions_in_stores(_subscription,
+                                                        aor,
+                                                        associated_uris,
+                                                        req,
+                                                        public_id,
+                                                        acr,
+                                                        ccfs,
+                                                        ecfs);
 
-  if (aor_pair != NULL)
+  if (status == Store::Status::OK)
   {
-    // Log the subscriptions.
-    log_subscriptions(aor, aor_pair->get_current());
-
-    // If we have any remote stores, try to store this there too.  We don't worry
-    // about failures in this case.
-    for (std::vector<SubscriberDataManager*>::iterator it = _subscription->_remote_sdms.begin();
-         it != _subscription->_remote_sdms.end();
-         ++it)
-    {
-      if ((*it)->has_servers())
-      {
-        AoRPair* remote_aor_pair = write_subscriptions_to_store(*it,
-                                                                aor,
-                                                                &associated_uris,
-                                                                req,
-                                                                now,
-                                                                aor_pair,
-                                                                {},
-                                                                public_id,
-                                                                false,
-                                                                acr,
-                                                                ccfs,
-                                                                ecfs);
-        delete remote_aor_pair;
-      }
-    }
+  // send the 200 etc.
   }
   else
   {
@@ -439,8 +407,74 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SAS::report_marker(end_marker);
 
   free_msg(req);
+}
 
+// Handles all necessary logic for getting, updating, and setting AoRs from
+// local and remote sites, handling any data contention issues etc.
+Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(SubscriptionSproutlet* _subscription,
+                                             std::string aor,
+                                             AssociatedURIs associated_uris,
+                                             pjsip_msg* req,
+                                             std::string public_id,
+                                             ACR* acr,
+                                             std::deque<std::string> ccfs,
+                                             std::deque<std::string> ecfs)
+{
+  Store::Status status;
+  // Get the system time in seconds for calculating absolute expiry times.
+  int now = time(NULL);
+
+  // Write to the local store, checking the remote stores if there is no entry locally.
+  // If the write to the local store succeeds, then write to the remote stores.
+  AoRPair* aor_pair = write_subscriptions_to_store(_subscription->_sdm,
+                                                   aor,
+                                                   &associated_uris,
+                                                   req,
+                                                   now,
+                                                   NULL,
+                                                   _subscription->_remote_sdms,
+                                                   public_id,
+                                                   true,
+                                                   acr,
+                                                   ccfs,
+                                                   ecfs);
+
+  if (aor_pair != NULL)
+  {
+    // Log the subscriptions.
+    log_subscriptions(aor, aor_pair->get_current());
+
+    // If we have any remote stores, try to store this there too.  We don't worry
+    // about failures in this case.
+    for (std::vector<SubscriberDataManager*>::iterator it = _subscription->_remote_sdms.begin();
+         it != _subscription->_remote_sdms.end();
+         ++it)
+    {
+      if ((*it)->has_servers())
+      {
+        AoRPair* remote_aor_pair = write_subscriptions_to_store(*it,
+                                                                aor,
+                                                                &associated_uris,
+                                                                req,
+                                                                now,
+                                                                aor_pair,
+                                                                {},
+                                                                public_id,
+                                                                false,
+                                                                acr,
+                                                                ccfs,
+                                                                ecfs);
+        delete remote_aor_pair;
+      }
+    }
+    status = Store::Status::OK;
+  }
+  else
+  {
+    status = Store::Status::ERROR;
+  }
   delete aor_pair;
+  return status;
 }
 
 /// Write to the registration store. If we can't find the AoR pair in the
