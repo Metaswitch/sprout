@@ -11,14 +11,14 @@ ${OPENSSL_CONFIG_MARKER}:
 	touch ${OPENSSL_CONFIG_MARKER}
 
 openssl: ${OPENSSL_CONFIG_MARKER}
-	${MAKE} -C ${OPENSSL_DIR}
-	${MAKE} -C ${OPENSSL_DIR} install_sw
+	${MAKE} -j1 -C ${OPENSSL_DIR}
+	${MAKE} -j1 -C ${OPENSSL_DIR} install_sw
 
 openssl_test: ${OPENSSL_CONFIG_MARKER}
-	${MAKE} -C ${OPENSSL_DIR} test
+	${MAKE} -j1 -C ${OPENSSL_DIR} test
 
 openssl_clean: ${OPENSSL_CONFIG_MARKER}
-	${MAKE} -C ${OPENSSL_DIR} clean
+	${MAKE} -j1 -C ${OPENSSL_DIR} clean
 
 openssl_distclean: openssl_clean
 	rm -f ${OPENSSL_CONFIG_MARKER}

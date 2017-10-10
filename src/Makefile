@@ -200,7 +200,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
                        authenticationsproutlet.cpp \
-                       compositesproutlet.cpp \
                        pthread_cond_var_helper.cpp \
                        sifcservice_test.cpp \
                        mock_sifc_parser.cpp \
@@ -341,6 +340,7 @@ include ../modules/cpp-common/makefiles/alarm-utils.mk
 	$< -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
 	mv sprout_alarmdefinition.h $@
 ${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
+${sprout_scscf.so_OBJECT_DIR}/scscfplugin.o : ../usr/include/sprout_alarmdefinition.h
 CLEANS += ../usr/include/sprout_alarmdefinition.h
 
 ../usr/include/memento_as_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
