@@ -2014,7 +2014,7 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
 
 void SproutletWrapper::on_timer_pop(TimerID id, void* context)
 {
-  TRC_DEBUG("Timer has popped");
+  TRC_DEBUG("Processing timer pop");
   _pending_timers.erase(id);
   _sproutlet_tsx->on_timer_expiry(context);
   process_actions(false);
