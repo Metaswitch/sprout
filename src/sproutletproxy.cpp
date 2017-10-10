@@ -30,7 +30,6 @@ const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
 const ForkState NULL_FORK_STATE = {PJSIP_TSX_STATE_NULL, NONE};
 
-
 /// Constructor.
 SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                int priority,
