@@ -1154,22 +1154,11 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
     if (sss->cb_builder != NULL)
     {
       PJUtils::Callback* cb = (sss->cb_builder)(sss->user_token, event);
-#ifndef UNIT_TEST
-      if (is_pjsip_transport_thread())
-      {
-        // On a transport error, this callback will be on the main PJSIP thread,
-        // so we add the callback to the queue to get picked up by a worker
-        // thread.
-        add_callback_to_queue(cb);
-      }
-      else
-#endif
-      {
-        // If we're already on a worker thread (or in the UTs, which have a
-        // different threading model) we just run the Callback directly.
-        cb->run();
-        delete cb; cb = NULL;
-      }
+
+      // On a transport error, this callback will be on the main PJSIP thread,
+      // so we add the callback to the queue to get picked up by a worker
+      // thread.
+      PJUtils::run_callback_on_worker_thread(cb);
     }
 
     // The transaction has completed, so decrement our reference to the tx_data
@@ -1179,6 +1168,29 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
   }
 }
 
+/// Runs a Callback object on a worker thread.
+/// Takes ownership of the Callback and is responsible for deleting it
+void PJUtils::run_callback_on_worker_thread(PJUtils::Callback* cb)
+{
+  // The UTs have a different threading model - in those we run the callback
+  // directly on whatever thread we're on
+#ifndef UNIT_TEST
+  if (is_pjsip_transport_thread())
+  {
+    // We're on the transport thread, so we must add the callback to the worker
+    // thread's queue
+    // This relinquishes ownership of the Callback object
+    add_callback_to_queue(cb);
+  }
+  else
+#endif
+  {
+    // If we're already on a worker thread (or in the UTs, which have a
+    // different threading model) we just run the Callback directly.
+    cb->run();
+    delete cb; cb = NULL;
+  }
+}
 
 /// This provides function similar to the pjsip_endpt_send_request method
 /// but includes setting the SAS trail.

@@ -24,7 +24,6 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
 #include "snmp_sip_request_types.h"
-#include "thread_dispatcher.h"
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
@@ -1058,22 +1057,11 @@ void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
 {
 
   TimerCallback* callback = new TimerCallback(tentry);
-#ifndef UNIT_TEST
-  if (is_pjsip_transport_thread())
-  {
-    // Timer pops happen on the main pjsip transport thread, but we want to
-    // handle them on a worker thread
-    TRC_DEBUG("Sproutlet timer popped, id = %ld, adding to queue", (TimerID)tentry);
-    add_callback_to_queue(callback);
-  }
-  else
-#endif
-  {
-    // The UTs have a different threading model, so we run the callback directly
-    TRC_DEBUG("Sproutlet timer popped, id = %ld, running immediately", (TimerID)tentry);
-    callback->run();
-    delete callback; callback = NULL;
-  }
+
+  // Timer pops happen on the main pjsip transport thread, but we want to handle
+  // them on a worker thread.
+  // We relinquish ownership of the TimerCallback
+  PJUtils::run_callback_on_worker_thread(callback);
 }
 
 
@@ -2013,7 +2001,7 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
 
 void SproutletWrapper::on_timer_pop(TimerID id, void* context)
 {
-  TRC_DEBUG("Processing timer pop");
+  TRC_DEBUG("Processing timer pop, id = %ld", id);
   _pending_timers.erase(id);
   _sproutlet_tsx->on_timer_expiry(context);
   process_actions(false);
