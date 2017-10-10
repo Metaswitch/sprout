@@ -141,6 +141,7 @@ enum OptionTypes
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
   OPT_HOMESTEAD_TIMEOUT,
+  OPT_REQUEST_ON_QUEUE_TIMEOUT
 };
 
 
@@ -230,6 +231,7 @@ const static struct pj_getopt_option long_opt[] =
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
+  { "request-on-queue-timeout",     required_argument, 0, OPT_REQUEST_ON_QUEUE_TIMEOUT},
   { NULL,                           0,                 0, 0}
 };
 
@@ -1290,6 +1292,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_REQUEST_ON_QUEUE_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->request_on_queue_timeout,
+                           request_on_queue_timeout,
+                           Maximum time (in ms) a request can wait to be processed);
+      }
+      break;
+
     SPROUTLET_MACRO(SPROUTLET_OPTIONS)
 
     case 'h':
@@ -1719,6 +1729,7 @@ int main(int argc, char* argv[])
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
+  opt.request_on_queue_timeout = 4000; // TODO decide on actual default
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -2316,9 +2327,10 @@ int main(int argc, char* argv[])
   init_thread_dispatcher(opt.worker_threads,
                          latency_table,
                          queue_size_table,
-                         load_monitor,
                          overload_counter,
-                         exception_handler);
+                         load_monitor,
+                         exception_handler,
+                         opt.request_on_queue_timeout);
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.

@@ -223,6 +223,7 @@ namespace SASEvent
   const int MMF_INVOKE_BEFORE_AS = SPROUT_BASE + 0x0160;
   const int MMF_INVOKE_AFTER_AS = SPROUT_BASE + 0x0161;
 
+  const int SIP_TOO_LONG_IN_QUEUE = SPROUT_BASE + 0x0170;
 } //namespace SASEvent
 
 #endif

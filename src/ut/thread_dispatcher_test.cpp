@@ -15,7 +15,6 @@
 
 #include "thread_dispatcher.h"
 
-
 class SipEventQueueTest : public ::testing::Test
 {
 public:

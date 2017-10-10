@@ -28,9 +28,10 @@ extern "C" {
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* latency_tbl_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_tbl_arg,
-                                   LoadMonitor* load_monitor_arg,
                                    SNMP::CounterByScopeTable* overload_counter_arg,
-                                   ExceptionHandler* exception_handler_arg);
+                                   LoadMonitor* load_monitor_arg,
+                                   ExceptionHandler* exception_handler_arg,
+                                   unsigned long request_on_queue_timeout);
 
 void unregister_thread_dispatcher(void);
 

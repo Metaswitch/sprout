@@ -142,6 +142,7 @@ struct options
   std::string                          dummy_app_server;
   bool                                 http_acr_logging;
   int                                  homestead_timeout;
+  int                                  request_on_queue_timeout;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
