@@ -2385,6 +2385,12 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
       }
     }
   }
+  else if (uri_class == LOCAL_PHONE_NUMBER)
+  {
+    TRC_DEBUG("Not doing ENUM lookup as URI was classified as local DN");
+    SAS::Event event(trail, SASEvent::NO_ENUM_LOOKUP_LOCAL_DN, 0);
+    SAS::report_event(event);
+  }
 }
 
 void PJUtils::update_request_uri_np_data(pjsip_msg* req,
@@ -2437,6 +2443,12 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
         }
       }
     }
+  }
+  else if (uri_class == LOCAL_PHONE_NUMBER)
+  {
+    TRC_DEBUG("Not doing ENUM lookup as URI was classified as local DN");
+    SAS::Event event(trail, SASEvent::NO_ENUM_LOOKUP_LOCAL_DN, 1);
+    SAS::report_event(event);
   }
   else
   {
