@@ -34,9 +34,12 @@
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
 #include "mock_as_communication_tracker.h"
+#include "mock_ralf_processor.h"
+#include "acr.h"
 #include "testingcommon.h"
 
 using namespace std;
+using namespace TestingCommon;
 using testing::StrEq;
 using testing::ElementsAre;
 using testing::MatchesRegex;
@@ -47,6 +50,7 @@ using testing::NiceMock;
 using testing::HasSubstr;
 using ::testing::Return;
 using ::testing::AtLeast;
+using ::testing::SaveArg;
 
 // TODO - make this class more consistent with the
 // TestingCommon::SubscriptionBuilder class (ie. have function "set_route",
@@ -330,6 +334,8 @@ public:
                                           "sip:44.33.22.11:5053;service=mmf",
                                           5058,
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          "scscf",
+                                          "",
                                           _sdm,
                                           {},
                                           _hss_connection,
@@ -355,13 +361,16 @@ public:
                                           "sip:bgcf@homedomain:5058",
                                           5059,
                                           "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          "icscf",
+                                          "",
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
                                           _enum_service,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false
+                                          false,
+                                          5059
                                           );
     _icscf_sproutlet->init();
 
@@ -392,7 +401,6 @@ public:
   }
 };
 
-using namespace TestingCommon;
 
 void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
 {
@@ -5896,102 +5904,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   free_txdata();
 }
 
-
-// Test attempted AS chain link after chain has expired.
-TEST_F(SCSCFTest, ExpiredChain)
-{
-  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
-  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": 2001,"
-                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-
-  // ---------- Send INVITE
-  // We're within the trust boundary, so no stripping should occur.
-  SCSCFMessage msg;
-  msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain";
-  msg._todomain = "";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
-  msg._requri = "sip:6505551234@homedomain";
-
-  msg._method = "INVITE";
-  inject_msg(msg.get_request(), &tpBono);
-  poll();
-  ASSERT_EQ(2, txdata_count());
-
-  // 100 Trying goes back to bono
-  pjsip_msg* out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  free_txdata();
-
-  // INVITE passed on to AS1
-  SCOPED_TRACE("INVITE (S)");
-  out = current_txdata()->msg;
-  ReqMatcher r1("INVITE");
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS1.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig;service=scscf>"));
-
-  // ---------- AS1 gives final response, ending the transaction.
-  string fresp = respond_to_txdata(current_txdata(), 404);
-  pjsip_msg* saved = pop_txdata()->msg;
-  inject_msg(fresp, &tpAS1);
-
-  // ACK goes back to AS1
-  SCOPED_TRACE("ACK");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
-  free_txdata();
-
-  // 404 response goes back to bono
-  SCOPED_TRACE("404");
-  out = current_txdata()->msg;
-  RespMatcher(404).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.convert_routeset(out);
-  msg._cseq++;
-  free_txdata();
-
-  // ---------- Send ACK from bono
-  SCOPED_TRACE("ACK");
-  msg._method = "ACK";
-  inject_msg(msg.get_request(), &tpBono);
-
-  // Allow time to pass, so the initial Sprout UAS transaction moves
-  // from Completed to Terminated to Destroyed.  32s is the default
-  // timeout. This causes the ODI token to expire.
-  cwtest_advance_time_ms(33000L);
-  poll();
-
-  // ---------- AS1 attempts to turn the message around (acting as proxy)
-  const pj_str_t STR_ROUTE = pj_str("Route");
-  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(saved, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-
-  char buf[65535];
-  pj_ssize_t len = pjsip_msg_print(saved, buf, sizeof(buf));
-  doAsOriginated(string(buf, len), true);
-}
-
 // Test a simple MMTEL flow.
 TEST_F(SCSCFTest, MmtelFlow)
 {
@@ -9689,6 +9601,8 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                           "sip:44.33.22.11:5053;service=mmf",
                                           5058,
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          "scscf",
+                                          "",
                                           _sdm,
                                           {},
                                           _hss_connection,
@@ -9714,13 +9628,16 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                           "sip:bgcf@homedomain:5058",
                                           5059,
                                           "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          "icscf",
+                                          "",
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
                                           _enum_service,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false
+                                          false,
+                                          5059
                                           );
     _icscf_sproutlet->init();
 
@@ -9797,6 +9714,8 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
                                           "sip:44.33.22.11:5053;service=mmf",
                                           5058,
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          "scscf",
+                                          "",
                                           _sdm,
                                           {_remote_sdm},
                                           _hss_connection,
@@ -9822,13 +9741,16 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
                                           "sip:bgcf@homedomain:5058",
                                           5059,
                                           "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          "icscf",
+                                          "",
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
                                           _enum_service,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false
+                                          false,
+                                          5059
                                           );
     _icscf_sproutlet->init();
 
@@ -9895,3 +9817,277 @@ TEST_F(SCSCFTestWithRemoteSDM, TestGetBindingFromRemoteStore)
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
+
+class SCSCFTestWithRalf : public SCSCFTestBase
+{
+  static void SetUpTestCase()
+  {
+    SCSCFTestBase::SetUpTestCase();
+    _ralf_connection = new NiceMock<MockHttpConnection>();
+    _ralf_processor = new NiceMock<MockRalfProcessor>(_ralf_connection);
+    _ralf_acr_factory = new RalfACRFactory(_ralf_processor, ACR::SCSCF);
+  }
+  static void TearDownTestCase()
+  {
+    delete _ralf_acr_factory; _ralf_acr_factory = NULL;
+    delete _ralf_processor; _ralf_processor = NULL;
+    delete _ralf_connection; _ralf_connection = NULL;
+    SCSCFTestBase::TearDownTestCase();
+  }
+
+  SCSCFTestWithRalf() : SCSCFTestBase()
+  {
+    // Create the S-CSCF Sproutlet.
+    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
+    _scscf_sproutlet = new SCSCFSproutlet("scscf",
+                                          "scscf",
+                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          "sip:127.0.0.1:5058",
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          "sip:bgcf@homedomain:5058",
+                                          "sip:11.22.33.44;service=mmf",
+                                          "sip:44.33.22.11:5053;service=mmf",
+                                          5058,
+                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          "scscf",
+                                          "",
+                                          _sdm,
+                                          {},
+                                          _hss_connection,
+                                          _enum_service,
+                                          _ralf_acr_factory,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false,
+                                          _mmf_service,
+                                          _fifc_service,
+                                          ifc_configuration,
+                                          3000, // Session continue timeout - different from default
+                                          6000, // Session terminated timeout - different from default
+                                          _sess_term_comm_tracker,
+                                          _sess_cont_comm_tracker
+                                          );
+    _scscf_sproutlet->init();
+
+    // Create the I-CSCF Sproutlets.
+    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
+                                        string(UT_DIR).append("/test_icscf.json"));
+    _icscf_sproutlet = new ICSCFSproutlet("icscf",
+                                          "sip:bgcf@homedomain:5058",
+                                          5059,
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          "icscf",
+                                          "",
+                                          _hss_connection,
+                                          _ralf_acr_factory,
+                                          _scscf_selector,
+                                          _enum_service,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false,
+                                          5059
+                                          );
+    _icscf_sproutlet->init();
+
+    // Add common sproutlet to the list for Proxy use
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_scscf_sproutlet);
+    sproutlets.push_back(_icscf_sproutlet);
+    sproutlets.push_back(_bgcf_sproutlet);
+    sproutlets.push_back(_mmtel_sproutlet);
+
+    // Add additional home domain for Proxy use
+    std::unordered_set<std::string> additional_home_domains;
+    additional_home_domains.insert("sprout.homedomain");
+    additional_home_domains.insert("sprout-site2.homedomain");
+    additional_home_domains.insert("127.0.0.1");
+
+    _proxy = new SproutletProxy(stack_data.endpt,
+                                PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
+                                "homedomain",
+                                additional_home_domains,
+                                sproutlets,
+                                std::set<std::string>());
+  }
+
+  ~SCSCFTestWithRalf()
+  {
+  }
+protected:
+  static MockHttpConnection* _ralf_connection;
+  static MockRalfProcessor* _ralf_processor;
+  static RalfACRFactory* _ralf_acr_factory;
+
+};
+MockHttpConnection* SCSCFTestWithRalf::_ralf_connection;
+MockRalfProcessor* SCSCFTestWithRalf::_ralf_processor;
+RalfACRFactory* SCSCFTestWithRalf::_ralf_acr_factory;
+
+// Test complete mainline call flow and check ralf processor for sending right
+// ACR in sequence.
+TEST_F(SCSCFTestWithRalf, MainlineBilling)
+{
+  SCSCFMessage msg;
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  list<HeaderMatcher> hdrs;
+  CapturingTestLogger log;
+
+  // Save the ralf request being sent out by ralf processor in sequence.
+  RalfProcessor::RalfRequest* ralf_request_1;
+  RalfProcessor::RalfRequest* ralf_request_2;
+  RalfProcessor::RalfRequest* ralf_request_3;
+  EXPECT_CALL(*_ralf_processor, send_request_to_ralf(_))
+    .WillOnce(SaveArg<0>(&ralf_request_1))
+    .WillOnce(SaveArg<0>(&ralf_request_2))
+    .WillOnce(SaveArg<0>(&ralf_request_3));
+
+  // Complete call flow with ACK and BYE.
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+
+  // Check Node Function is S-CSCF.
+  EXPECT_THAT(ralf_request_1->path,MatchesRegex("/call-id/.*%4010.114.61.213"));
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Node-Functionality\":0.*"));
+
+  // First ACR is sent for INVITE and is START_RECORD
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Accounting-Record-Type\":2.*"));
+
+  // Second ACR is sent for ACK and is EVENT_RECORD
+  EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"SIP-Method\":\"ACK\".*"));
+  EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"Accounting-Record-Type\":1.*"));
+
+  // Third request is sent for BYE and has STOP_RECORD
+  EXPECT_THAT(ralf_request_3->message,MatchesRegex(".*\"SIP-Method\":\"BYE\".*"));
+  EXPECT_THAT(ralf_request_3->message,MatchesRegex(".*\"Accounting-Record-Type\":4.*"));
+
+  delete ralf_request_1; ralf_request_1 = NULL;
+  delete ralf_request_2; ralf_request_2 = NULL;
+  delete ralf_request_3; ralf_request_3 = NULL;
+}
+
+// Test attempted AS chain link after chain has expired, with additional check
+// that ralf processor is sending ACR request with right cause code.
+TEST_F(SCSCFTestWithRalf, ExpiredChain)
+{
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // Save Ralf request for checking and manual deletion as mock ralf processor
+  // will not free up the request autimatically.
+  RalfProcessor::RalfRequest* ralf_request;
+  RalfProcessor::RalfRequest* ralf_request_1;
+  RalfProcessor::RalfRequest* ralf_request_2;
+  RalfProcessor::RalfRequest* ralf_request_3;
+  RalfProcessor::RalfRequest* ralf_request_4;
+  EXPECT_CALL(*_ralf_processor, send_request_to_ralf(_))
+    .WillOnce(SaveArg<0>(&ralf_request))
+    .WillOnce(SaveArg<0>(&ralf_request_1))
+    .WillOnce(SaveArg<0>(&ralf_request_2))
+    .WillOnce(SaveArg<0>(&ralf_request_3))
+    .WillOnce(SaveArg<0>(&ralf_request_4));
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig;service=scscf>"));
+
+  // ---------- AS1 gives final response, ending the transaction.
+  string fresp = respond_to_txdata(current_txdata(), 404);
+  pjsip_msg* saved = pop_txdata()->msg;
+  inject_msg(fresp, &tpAS1);
+
+  // ACK goes back to AS1
+  SCOPED_TRACE("ACK");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
+  free_txdata();
+
+  // 404 response goes back to bono
+  SCOPED_TRACE("404");
+  out = current_txdata()->msg;
+  RespMatcher(404).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  msg._cseq++;
+  free_txdata();
+
+  // ---------- Send ACK from bono
+  SCOPED_TRACE("ACK");
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpBono);
+
+  // Allow time to pass, so the initial Sprout UAS transaction moves
+  // from Completed to Terminated to Destroyed.  32s is the default
+  // timeout. This causes the ODI token to expire.
+  cwtest_advance_time_ms(33000L);
+  poll();
+
+  // ---------- AS1 attempts to turn the message around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(saved, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+
+  char buf[65535];
+  pj_ssize_t len = pjsip_msg_print(saved, buf, sizeof(buf));
+  doAsOriginated(string(buf, len), true);
+
+  // Check first ralf request.
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Accounting-Record-Type\":1.*")); // EVENT_RECORD
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Role-Of-Node\":0.*"));  // NODE_ROLE_ORIGINATING
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Application-Server\":\"sip:1.2.3.4:56789;transport=UDP\".*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Status-Code\":0.*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Cause-Code\":404.*"));
+
+  delete ralf_request; ralf_request = NULL;
+  delete ralf_request_1; ralf_request_1 = NULL;
+  delete ralf_request_2; ralf_request_2 = NULL;
+  delete ralf_request_3; ralf_request_3 = NULL;
+  delete ralf_request_4; ralf_request_4 = NULL;
+
+}
+
+

@@ -32,6 +32,7 @@ extern "C" {
 #include "sproutlet.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
 #include "snmp_success_fail_count_table.h"
+#include "compositesproutlet.h"
 
 class ICSCFSproutletTsx;
 class ICSCFSproutletRegTsx;
@@ -43,13 +44,16 @@ public:
                  const std::string& bgcf_uri,
                  int port,
                  const std::string& uri,
+                 const std::string& network_function,
+                 const std::string& next_hop_service,
                  HSSConnection* hss,
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector,
                  EnumService* enum_service,
                  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
-                 bool override_npdi);
+                 bool override_npdi,
+                 int network_function_port);
 
   virtual ~ICSCFSproutlet();
 
@@ -85,6 +89,11 @@ private:
     return _override_npdi;
   }
 
+  inline int network_function_port() const
+  {
+    return _network_function_port;
+  }
+
   /// Attempts to use ENUM to translate the specified Tel URI into a SIP URI.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
@@ -97,6 +106,8 @@ private:
 
   /// A URI which routes to the BGCF.
   pjsip_uri* _bgcf_uri;
+
+  const std::string _next_hop_service;
 
   HSSConnection* _hss;
 
@@ -114,13 +125,18 @@ private:
   /// Stats tables
   SNMP::SuccessFailCountTable* _session_establishment_tbl = NULL;
   SNMP::SuccessFailCountTable* _session_establishment_network_tbl = NULL;
+
+  /// Port owned by this network function, for purposes other than Sproutlet
+  /// routing.
+  int _network_function_port;
 };
 
 
-class ICSCFSproutletTsx : public SproutletTsx
+class ICSCFSproutletTsx : public CompositeSproutletTsx
 {
 public:
   ICSCFSproutletTsx(ICSCFSproutlet* icscf,
+                    const std::string& next_hop_service,
                     pjsip_method_e req_type);
   ~ICSCFSproutletTsx();
 
@@ -173,10 +189,10 @@ private:
   bool _session_set_up;
 };
 
-class ICSCFSproutletRegTsx : public SproutletTsx
+class ICSCFSproutletRegTsx : public CompositeSproutletTsx
 {
 public:
-  ICSCFSproutletRegTsx(ICSCFSproutlet* icscf);
+  ICSCFSproutletRegTsx(ICSCFSproutlet* icscf, const std::string& next_hop_service);
   ~ICSCFSproutletRegTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;

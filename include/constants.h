@@ -43,6 +43,7 @@ const pj_str_t STR_P_PREFERRED_IDENTITY = pj_str((char*)"P-Preferred-Identity");
 const pj_str_t STR_P_ASSOCIATED_URI = pj_str((char*)"P-Associated-URI");
 const pj_str_t STR_REQUEST_DISPOSITION = pj_str((char*)"Request-Disposition");
 const pj_str_t STR_SERVICE_ROUTE = pj_str((char*)"Service-Route");
+const pj_str_t STR_IN_REPLY_TO = pj_str((char*)"In-Reply-To");
 const pj_str_t STR_ORIG = pj_str((char*)"orig");
 const pj_str_t STR_ORIG_CDIV = pj_str((char*)"orig-cdiv");
 const pj_str_t STR_NO_FORK = pj_str((char*)"no-fork");

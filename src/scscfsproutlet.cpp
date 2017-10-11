@@ -39,6 +39,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                const std::string& mmf_node_uri,
                                int port,
                                const std::string& uri,
+                               const std::string& network_function,
+                               const std::string& next_hop_service,
                                SubscriberDataManager* sdm,
                                std::vector<SubscriberDataManager*> remote_sdms,
                                HSSConnection* hss,
@@ -54,7 +56,14 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
                                AsCommunicationTracker* sess_cont_as_tracker) :
-  Sproutlet(name, port, uri, "", {}, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(name,
+            port,
+            uri,
+            "",
+            {},
+            incoming_sip_transactions_tbl,
+            outgoing_sip_transactions_tbl,
+            network_function),
   _scscf_name(scscf_name),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
@@ -62,6 +71,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _bgcf_uri(NULL),
   _mmf_cluster_uri(NULL),
   _mmf_node_uri(NULL),
+  _next_hop_service(next_hop_service),
   _sdm(sdm),
   _remote_sdms(remote_sdms),
   _hss(hss),
@@ -206,7 +216,7 @@ SproutletTsx* SCSCFSproutlet::get_tsx(SproutletHelper* helper,
                                       SAS::TrailId trail)
 {
   pjsip_method_e req_type = req->line.req.method.id;
-  return (SproutletTsx*)new SCSCFSproutletTsx(this, req_type);
+  return (SproutletTsx*)new SCSCFSproutletTsx(this, _next_hop_service, req_type);
 }
 
 
@@ -456,8 +466,9 @@ void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
 }
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
+                                     const std::string& next_hop_service,
                                      pjsip_method_e req_type) :
-  SproutletTsx(scscf),
+  CompositeSproutletTsx(scscf, next_hop_service),
   _scscf(scscf),
   _cancelled(false),
   _session_case(NULL),

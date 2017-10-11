@@ -3,13 +3,13 @@
 SIPP_DIR := ${MODULE_DIR}/sipp
 
 sipp:
-	${MAKE} -C ${SIPP_DIR} debug_ossl
+	${MAKE} -j1 -C ${SIPP_DIR} debug_ossl
 
 sipp_test:
 	true
 
 sipp_clean:
-	${MAKE} -C ${SIPP_DIR} clean
+	${MAKE} -j1 -C ${SIPP_DIR} clean
 
 sipp_distclean: sipp_clean
 

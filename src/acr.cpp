@@ -58,10 +58,12 @@ void ACR::send_message(pj_time_val timestamp)
   TRC_DEBUG("Sending Null ACR (%p)", this);
 }
 
+// LCOV_EXCL_START - never used, exists to provide same interface as RalfACR
 std::string ACR::get_message(pj_time_val timestamp)
 {
   return std::string();
 }
+// LCOV_EXCL_STOP
 
 void ACR::set_default_ccf(const std::string& default_ccf)
 {
@@ -103,8 +105,10 @@ std::string ACR::node_name(Node node_functionality)
     case IBCF:
       return "IBCF";
 
+    // LCOV_EXCL_START - logic errors not covered in UTs
     default:
       return "Unknown";
+    // LCOV_EXCL_STOP
   }
 }
 
@@ -118,8 +122,10 @@ std::string ACR::node_role_str(NodeRole role)
     case NODE_ROLE_TERMINATING:
       return "Terminating";
 
+    // LCOV_EXCL_START - logic errors not covered in UTs
     default:
       return "Unknown";
+    // LCOV_EXCL_STOP
   }
 }
 
@@ -257,24 +263,11 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
       }
     }
 
-    // Store the content of the expires header if present.
-    pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)
-                                pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
-    if (expires_hdr != NULL)
+    if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) || 
+        ( (req->line.req.method.id == PJSIP_OTHER_METHOD) &&
+          (pj_strcmp2(&(req->line.req.method.name), "SUBSCRIBE") == 0)))
     {
-      _expires = expires_hdr->ivalue;
-    }
-    else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
-    {
-      // Check for expires values in Contact headers.  Set the default to
-      // -1, so if there are no contact headers, or no expires values in the
-      // contact headers we won't include an Expires AVP.
-      if (!PJUtils::get_max_expires(req, -1, _expires))
-      {
-        // Max expires isn't meaningful for this request (it has no Contact
-        // headers), so use the default of -1.
-        _expires = -1;
-      }
+      PJUtils::get_max_expires(req, -1, _expires);
     }
     else
     {
@@ -661,10 +654,13 @@ void RalfACR::send_message(pj_time_val timestamp)
     // There's no CCF or ECF to send to, and we need one.  Drop the ACR.  This
     // is a software or configuration fault - we shouldn't be trying to supply
     // an ACR without a CCF.
+     
+    // LCOV_EXCL_START - TODO, may be dead code
     TRC_INFO("No CCF or ECF to send ACR for session %s to - dropping!",
              _user_session_id.c_str());
     SAS::Event event(_trail, SASEvent::NO_CCFS_FOR_ACR, 0);
     SAS::report_event(event);
+    // LCOV_EXCL_STOP
   }
 }
 
@@ -1074,6 +1070,9 @@ std::string RalfACR::get_message(pj_time_val timestamp)
         (_record_type == EVENT_RECORD))
     {
       TRC_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
+
+      // LCOV_EXCL_START - missing code to populate _early_media, raised in
+      // clearwater-issues
       if (_early_media.size() > 0)
       {
         writer.String("Early-Media-Description");
@@ -1090,6 +1089,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
 
         writer.EndArray();
       }
+      // LCOV_EXCL_STOP
     }
 
     if ((_record_type == START_RECORD) ||
@@ -1158,12 +1158,15 @@ std::string RalfACR::get_message(pj_time_val timestamp)
         // the subscriber, so use a cause code of 0
         cause_code = 0;
       }
+      // LCOV_EXCL_START - TODO, currently only stores _expires on _first_req in
+      // a dialog, may not be right as SDP etc. does change in a dialog
       else if ((_method == "SUBSCRIBE") &&
                (_expires == 0))
       {
         // End of SUBSCRIBE dialog.
         cause_code = -2;
       }
+      // LCOV_EXCL_STOP
       else if ((_method == "REGISTER") &&
                (_expires == 0))
       {
@@ -1612,6 +1615,9 @@ void RalfACR::store_media_description(pjsip_msg* msg, MediaDescription& descript
   // If the message has an SDP body store it in the offer or answer slot.
   pjsip_msg_body* body = msg->body;
 
+  // LCOV_EXCL_START - TODO, currently only stores _method on _first_req in a 
+  // dialog (hence _method is never ACK), may not be right as SDP etc. does 
+  // change in a dialog
   if ((body != NULL) &&
       (pj_stricmp(&body->content_type.type, &STR_APPLICATION) == 0) &&
       (pj_stricmp(&body->content_type.subtype, &STR_SDP) == 0))
@@ -1634,6 +1640,7 @@ void RalfACR::store_media_description(pjsip_msg* msg, MediaDescription& descript
       store_media_components(msg, description.answer);
     }
   }
+  // LCOV_EXCL_STOP
 }
 
 void RalfACR::store_media_components(pjsip_msg* msg, MediaComponents& components)
@@ -1694,6 +1701,7 @@ void RalfACR::store_message_bodies(pjsip_msg* msg)
     body.length = msg_body->len;
     pjsip_generic_string_hdr* cdisp_hdr = (pjsip_generic_string_hdr*)
                pjsip_msg_find_hdr_by_name(msg, &STR_CONTENT_DISPOSITION, NULL);
+
     if (cdisp_hdr != NULL)
     {
       // Get disposition from header.
@@ -1705,6 +1713,7 @@ void RalfACR::store_message_bodies(pjsip_msg* msg)
       body.disposition = "render";
     }
 
+    // LCOV_EXCL_START - TODO
     if (((_initiator == Initiator::CALLING_PARTY) &&
          (msg->type == PJSIP_REQUEST_MSG)) ||
         ((_initiator == Initiator::CALLED_PARTY) &&
@@ -1716,6 +1725,7 @@ void RalfACR::store_message_bodies(pjsip_msg* msg)
     {
       body.originator = Originator::CALLED_PARTY;
     }
+    // LCOV_EXCL_STOP
 
     _msg_bodies.push_back(body);
   }

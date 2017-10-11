@@ -27,7 +27,7 @@
 #include "snmp_success_fail_count_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
-#include "forwardingsproutlet.h"
+#include "compositesproutlet.h"
 
 class RegistrarSproutletTsx;
 
@@ -37,8 +37,9 @@ public:
   RegistrarSproutlet(const std::string& name,
                      int port,
                      const std::string& uri,
-                     const std::string& next_hop_service,
                      const std::list<std::string>& aliases,
+                     const std::string& network_function,
+                     const std::string& next_hop_service,
                      SubscriberDataManager* reg_sdm,
                      std::vector<SubscriberDataManager*> reg_remote_sdms,
                      HSSConnection* hss_connection,
@@ -96,7 +97,7 @@ private:
 };
 
 
-class RegistrarSproutletTsx : public ForwardingSproutletTsx
+class RegistrarSproutletTsx : public CompositeSproutletTsx
 {
 public:
   RegistrarSproutletTsx(RegistrarSproutlet* registrar,
