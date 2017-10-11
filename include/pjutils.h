@@ -196,6 +196,9 @@ public:
 // object that can safely be run on another thread.
 typedef Callback* (*send_callback_builder)(void* token, pjsip_event* event);
 
+// Runs the specified callback on a worker thread
+void run_callback_on_worker_thread(PJUtils::Callback* cb);
+
 pj_status_t send_request(pjsip_tx_data* tdata,
                          int retries=0,
                          void* token=NULL,
