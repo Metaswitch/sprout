@@ -27,7 +27,8 @@ ICSCFRouter::ICSCFRouter(HSSConnection* hss,
                          SCSCFSelector* scscf_selector,
                          SAS::TrailId trail,
                          ACR* acr,
-                         int port) :
+                         int port,
+                         std::vector<std::string> blacklisted_scscfs) :
   _hss(hss),
   _scscf_selector(scscf_selector),
   _trail(trail),
@@ -35,7 +36,8 @@ ICSCFRouter::ICSCFRouter(HSSConnection* hss,
   _port(port),
   _queried_caps(false),
   _hss_rsp(),
-  _attempted_scscfs()
+  _attempted_scscfs(),
+  _blacklisted_scscfs(blacklisted_scscfs)
 {
 }
 
@@ -64,6 +66,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
   int status_code = PJSIP_SC_OK;
   std::string scscf;
   scscf_sip_uri = NULL;
+  bool scscf_blacklisted = false;
 
   if (!_queried_caps)
   {
@@ -79,8 +82,17 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
   if (status_code == PJSIP_SC_OK)
   {
     wildcard = _hss_rsp.wildcard;
-
-    if ((!_hss_rsp.scscf.empty()) &&
+    if ((!_hss_rsp.scscf.empty()) && 
+        (std::find(_blacklisted_scscfs.begin(), _blacklisted_scscfs.end(),
+        _hss_rsp.scscf) != _blacklisted_scscfs.end()))
+    {
+      // The HSS returned a S-CSCF name that is one of the blacklisted
+      // S-CSCFs. Behave as if the HSS failed to return a S-CSCF.
+      scscf_blacklisted = true;
+      scscf = "";
+      TRC_DEBUG("S-CSCF %s is blacklisted - not routing request to this S-CSCF", _hss_rsp.scscf.c_str());
+    }
+    else if ((!_hss_rsp.scscf.empty()) &&
         (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
                    _hss_rsp.scscf) == _attempted_scscfs.end()))
     {
@@ -167,6 +179,10 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
     event.add_var_param(scscf);
     event.add_var_param(_hss_rsp.scscf);
     SAS::report_event(event);
+  }
+  else if (scscf_blacklisted)
+  {
+    
   }
   else
   {
@@ -305,8 +321,9 @@ ICSCFUARouter::ICSCFUARouter(HSSConnection* hss,
                              const std::string& impu,
                              const std::string& visited_network,
                              const std::string& auth_type,
-                             const bool& emergency) :
-  ICSCFRouter(hss, scscf_selector, trail, acr, port),
+                             const bool& emergency,
+                             std::vector<std::string> blacklisted_scscfs) :
+  ICSCFRouter(hss, scscf_selector, trail, acr, port, blacklisted_scscfs),
   _impi(impi),
   _impu(impu),
   _visited_network(visited_network),
@@ -382,8 +399,9 @@ ICSCFLIRouter::ICSCFLIRouter(HSSConnection* hss,
                              ACR* acr,
                              int port,
                              const std::string& impu,
-                             bool originating) :
-  ICSCFRouter(hss, scscf_selector, trail, acr, port),
+                             bool originating,
+                             std::vector<std::string> blacklisted_scscfs) :
+  ICSCFRouter(hss, scscf_selector, trail, acr, port, blacklisted_scscfs),
   _impu(impu),
   _originating(originating)
 {

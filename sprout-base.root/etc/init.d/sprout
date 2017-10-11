@@ -84,6 +84,7 @@ get_settings()
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
+        blacklisted_scscfs=""
         scscf_node_uri=""
 
         # Enable no-ENUM TEL URI translation fallback by default for backwards compatibility
@@ -231,7 +232,8 @@ get_daemon_args()
                      --log-file=$log_directory
                      --log-level=$log_level
                      --alias=$public_ip,$public_hostname,$alias_list
-                     --homestead-timeout=$sprout_homestead_timeout_ms"
+                     --homestead-timeout=$sprout_homestead_timeout_ms
+                     --blacklisted_scscfs=$blacklisted_scscfs"
 
         if [ -n "$reg_max_expires" ]
         then

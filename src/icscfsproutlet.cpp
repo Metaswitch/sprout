@@ -47,7 +47,8 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
-                               int network_function_port) :
+                               int network_function_port,
+                               std::vector<std::string> blacklisted_scscfs) :
   Sproutlet(icscf_name,
             port,
             uri,
@@ -64,7 +65,8 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
   _enum_service(enum_service),
   _override_npdi(override_npdi),
   _bgcf_uri_str(bgcf_uri),
-  _network_function_port(network_function_port)
+  _network_function_port(network_function_port),
+  _blacklisted_scscfs(blacklisted_scscfs)
 {
   _session_establishment_tbl = SNMP::SuccessFailCountTable::create("icscf_session_establishment",
                                                                    "1.2.826.0.1.1578918.9.3.36");
@@ -275,7 +277,8 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
                                             impu,
                                             visited_network,
                                             auth_type,
-                                            emergency);
+                                            emergency,
+                                            _icscf->_blacklisted_scscfs);
 
   // We have a router, query it for an S-CSCF to use.
   pjsip_sip_uri* scscf_sip_uri = NULL;

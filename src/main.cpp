@@ -141,6 +141,7 @@ enum OptionTypes
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
   OPT_HOMESTEAD_TIMEOUT,
+  OPT_BLACKLISTED_SCSCFS,
 };
 
 
@@ -230,6 +231,7 @@ const static struct pj_getopt_option long_opt[] =
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
+  { "blacklisted-scscfs",           required_argument, 0, OPT_BLACKLISTED_SCSCFS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -1011,6 +1013,13 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_BLACKLISTED_SCSCFS:
+      options->blacklisted_scscfs.clear();
+      Utils::split_string(std::string(pj_optarg), ',', options->blacklisted_scscfs, 0, false);
+      TRC_INFO("%d blacklisted S-CSCFs passed on the command line",
+                options->blacklisted_scscfs.size());   
+      break;
+      
     case OPT_DNS_SERVER:
       options->dns_servers.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->dns_servers, 0, false);
@@ -1021,7 +1030,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_OVERRIDE_NPDI:
       options->override_npdi = true;
       TRC_INFO("Number portability lookups will be done on URIs containing the 'npdi' indicator");
-      break;
+      break;          
 
     case OPT_EXCEPTION_MAX_TTL:
       {
