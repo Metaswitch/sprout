@@ -293,6 +293,12 @@ public:
 class AoRPair
 {
 public:
+  AoRPair(std::string aor_id)
+  {
+    _orig_aor = new AoR(aor_id);
+    _current_aor = new AoR(aor_id);
+  }
+
   AoRPair(AoR* orig_aor, AoR* current_aor):
     _orig_aor(orig_aor),
     _current_aor(current_aor)

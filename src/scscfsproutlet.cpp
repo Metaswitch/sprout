@@ -363,12 +363,14 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
 {
   AssociatedURIs associated_uris = {};
   std::string regstate;
+  std::string unused_prev_regstate;
   std::map<std::string, Ifcs> ifc_map;
 
   long http_code = _hss->update_registration_state(public_id,
                                                    private_id,
                                                    req_type,
                                                    regstate,
+                                                   unused_prev_regstate,
                                                    scscf_uri,
                                                    ifc_map,
                                                    associated_uris,

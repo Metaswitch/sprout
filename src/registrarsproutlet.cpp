@@ -201,7 +201,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     num_contacts++;
     pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
-    expiry = _registrar->expiry_for_binding(contact_hdr, expires);
+    expiry = RegistrationUtils::expiry_for_binding(contact_hdr, expires, _registrar->_max_expires);
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -334,19 +334,20 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                             scscf_uri);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
+  std::string prev_regstate;
   std::string regstate;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
-  HTTPCode http_code = _registrar->_hss->update_registration_state(public_id,
-                                                                   private_id,
-                                                                   HSSConnection::REG,
-                                                                   regstate,
-                                                                   _scscf_uri,
-                                                                   ifc_map,
-                                                                   associated_uris,
-                                                                   ccfs,
-                                                                   ecfs,
-                                                                   trail());
+  HTTPCode http_code = _registrar->_hss->update_registration_state_reg(public_id,
+                                                                       private_id,
+                                                                       regstate,
+                                                                       prev_regstate,
+                                                                       _scscf_uri,
+                                                                       ifc_map,
+                                                                       associated_uris,
+                                                                       ccfs,
+                                                                       ecfs,
+                                                                       trail());
 
   st_code = determine_hss_sip_response(http_code, regstate, "REGISTER");
 
@@ -445,12 +446,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Write to the local store, checking the remote stores if there is no entry locally.
   bool all_bindings_expired;
+  int max_expiry;
   AoRPair* aor_pair = write_to_store(_registrar->_sdm,
                                      aor,
                                      &associated_uris,
                                      req,
                                      now,
-                                     expiry,
+                                     max_expiry,
+                                     (prev_regstate == RegDataXMLUtils::STATE_NOT_REGISTERED),
                                      is_initial_registration,
                                      NULL,
                                      _registrar->_remote_sdms,
@@ -488,6 +491,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                   req,
                                                   now,
                                                   tmp_expiry,
+                                                  false,
                                                   ignored,
                                                   aor_pair,
                                                   {},
@@ -870,6 +874,148 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   delete aor_pair;
 }
 
+/// Updates an existing set of binding data (typically just retrieved from the
+/// AoR store), with updated binding information from a REGISTER request.
+void RegistrarSproutletTsx::update_bindings_from_req(AoRPair* aor_pair,      ///<AoR pair containing any existing bindings
+                                                     pjsip_msg* req,         ///<REGISTER request containing new binding information
+                                                     int now,                ///<the time now.
+                                                     std::string private_id, ///<private ID that the request refers to
+                                                     int& changed_bindings,  ///<[out] the number of bindings in the request
+                                                     int& max_expiry)        ///<[out] the max_expiry time of bindings in the request
+{
+  // Find the expire headers in the message.
+  pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
+
+  // Get the call identifier and the cseq number from the respective headers.
+  std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id);
+  int cseq = ((pjsip_cseq_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CSEQ, NULL))->cseq;
+
+  changed_bindings = 0;
+  int expiry;
+  max_expiry = 0;
+
+  // @@@ ToDo: Optimization -- we don't need to repeat this in the loop in the
+  // case of an initial registration -- it's going to be the same outcome
+  // each time!
+
+  // Now loop through all the contacts.  If there are multiple contacts in
+  // the contact header in the SIP message, pjsip parses them to separate
+  // contact header structures.
+  pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
+
+  while (contact != NULL)
+  {
+    changed_bindings++;
+    expiry = RegistrationUtils::expiry_for_binding(contact, expires, _registrar->_max_expires);
+    max_expiry = (expiry > max_expiry) ? expiry : max_expiry;
+
+    if (contact->star)
+    {
+      // Wildcard contact, which can only be used to clear all bindings for
+      // the AoR (and only if the expiry is 0). It won't clear any emergency
+      // bindings
+      aor_pair->get_current()->clear(false);
+      break;
+    }
+
+    pjsip_uri* uri = (contact->uri != NULL) ?
+                         (pjsip_uri*)pjsip_uri_get_uri(contact->uri) :
+                         NULL;
+
+    if ((uri != NULL) &&
+        (PJSIP_URI_SCHEME_IS_SIP(uri)))
+    {
+      // The binding identifier is based on the +sip.instance parameter if
+      // it is present.  If not the contact URI is used instead.
+      std::string contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
+      std::string binding_id = get_binding_id(contact);
+
+      if (binding_id == "")
+      {
+        binding_id = contact_uri;
+      }
+
+      TRC_DEBUG("Binding identifier for contact = %s", binding_id.c_str());
+
+      // Find the appropriate binding in the bindings list for this AoR.
+      AoR::Binding* binding = aor_pair->get_current()->get_binding(binding_id);
+
+      if ((cid != binding->_cid) ||
+          (cseq > binding->_cseq))
+      {
+        // Either this is a new binding, has come from a restarted device, or
+        // is an update to an existing binding.
+        binding->_uri = contact_uri;
+
+        // TODO Examine Via header to see if we're the first hop
+        // TODO Only if we're not the first hop, check that the top path header has "ob" parameter
+
+        // Get the Path headers, if present.  RFC 3327 allows us the option of
+        // rejecting a request with a Path header if there is no corresponding
+        // "path" entry in the Supported header but we don't do so on the assumption
+        // that the edge proxy knows what it's doing.
+        //
+        // We store the full path header in the _path_headers field. For
+        // backwards compatibility, we also store the URI part of the path
+        // header in the _path_uris field.
+        binding->_path_headers.clear();
+        binding->_path_uris.clear();
+        pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
+                            pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
+
+        while (path_hdr)
+        {
+          std::string path = PJUtils::get_header_value((pjsip_hdr*)path_hdr);
+          std::string path_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                        path_hdr->name_addr.uri);
+          TRC_DEBUG("Path header %s", path.c_str());
+
+          // Extract all the paths from this header.
+          binding->_path_headers.push_back(path);
+          binding->_path_uris.push_back(path_uri);
+
+          // Look for the next header.
+          path_hdr = (pjsip_routing_hdr*)
+                  pjsip_msg_find_hdr_by_name(req, &STR_PATH, path_hdr->next);
+        }
+
+        binding->_cid = cid;
+        binding->_cseq = cseq;
+        binding->_priority = contact->q1000;
+        binding->_params.clear();
+        pjsip_param* p = contact->other_param.next;
+
+        while ((p != NULL) && (p != &contact->other_param))
+        {
+          std::string pname = PJUtils::pj_str_to_string(&p->name);
+          std::string pvalue = PJUtils::pj_str_to_string(&p->value);
+          // Skip parameters that must not be user-specified
+          if (pname != "pub-gruu")
+          {
+            binding->_params[pname] = pvalue;
+          }
+          p = p->next;
+        }
+
+        binding->_private_id = private_id;
+        binding->_emergency_registration = PJUtils::is_emergency_registration(contact);
+
+        // If the new expiry is less than the current expiry, and it's an emergency registration,
+        // don't update the expiry time
+        if ((binding->_expires >= now + expiry) && (binding->_emergency_registration))
+        {
+          TRC_DEBUG("Don't reduce expiry time for an emergency registration");
+        }
+        else
+        {
+          binding->_expires = now + expiry;
+        }
+      }
+    }
+    contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact->next);
+  }
+}
+
 /// Write to the registration store. If we can't find the AoR pair in the
 /// primary SDM, we will either use the backup_aor or we will try and look up
 /// the AoR pair in the backup SDMs. Therefore either the backup_aor should be
@@ -881,218 +1027,63 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
                                                                ///<Associated IMPUs in Implicit Registration Set
                    pjsip_msg* req,                             ///<received request to read headers from
                    int now,                                    ///<time now
-                   int& expiry,                                ///<[out] longest expiry time
-                   bool& out_is_initial_registration,
+                   int& max_expiry,                            ///<[out] longest expiry time
+                   bool is_initial_registration,               ///<Does the caller believe that this is an initial registration?
+                   bool& out_no_bindings_found,                ///<[out] true if no bindings were found.
                    AoRPair* backup_aor, ///<backup data if no entry in store
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
                    std::string private_id,                     ///<private id that the binding was registered with
                    bool& out_all_bindings_expired)
 {
-  // Get the call identifier and the cseq number from the respective headers.
-  std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id);
-  int cseq = ((pjsip_cseq_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CSEQ, NULL))->cseq;
-
-  // Find the expire headers in the message.
-  pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
 
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
   AoRPair* aor_pair = NULL;
-  bool backup_aor_alloced = false;
-  bool is_initial_registration = true;
   bool all_bindings_expired = false;
   Store::Status set_rc;
 
-  do
+  out_no_bindings_found = true;
+
+  do // While the operations fail due to data contention
   {
-    // delete NULL is safe, so we can do this on every iteration.
-    delete aor_pair;
-
-    // Find the current bindings for the AoR.
-    aor_pair = primary_sdm->get_aor_data(aor, trail());
-    TRC_DEBUG("Retrieved AoR data %p", aor_pair);
-
-    if ((aor_pair == NULL) ||
-        (aor_pair->get_current() == NULL))
+    if (is_initial_registration)
     {
-      // Failed to get data for the AoR because there is no connection
-      // to the store.
-      TRC_ERROR("Failed to get AoR binding for %s from store", aor.c_str());
-      break;
+      // We think this is an initial registration so there won't be any
+      // bingings unless we've hit a race condition.  Optimize for the mainline
+      // by initially just trying to ADD the data.
+      TRC_DEBUG("This is an initial registration -- attempt to ADD the data");
+      aor_pair = new AoRPair(aor);
+
+      // If this fails because there actually is already data for the AoR then
+      // we'll get a DATA_CONTENTION error and retry.  Next time we want to do
+      // the usual GET and update.
+      is_initial_registration = false;
     }
-
-    // If we don't have any bindings, try the backup AoR and/or stores.
-    if (aor_pair->get_current()->bindings().empty())
+    else
     {
-      bool found_binding = false;
-
-      if ((backup_aor != NULL) &&
-          (backup_aor->current_contains_bindings()))
+      if (!RegistrationUtils::get_bindings(&aor_pair,
+                        aor,
+                        primary_sdm,
+                        backup_sdms,
+                        backup_aor,
+                        trail()))
       {
-        found_binding = true;
-      }
-      else
-      {
-        std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
-        AoRPair* local_backup_aor = NULL;
-
-        while ((it != backup_sdms.end()) && (!found_binding))
-        {
-          if ((*it)->has_servers())
-          {
-            local_backup_aor = (*it)->get_aor_data(aor, trail());
-
-            if ((local_backup_aor != NULL) &&
-                (local_backup_aor->current_contains_bindings()))
-            {
-              found_binding = true;
-              backup_aor = local_backup_aor;
-
-              // Flag that we have allocated the memory for the backup pair so
-              // that we can tidy it up later.
-              backup_aor_alloced = true;
-            }
-          }
-
-          if (!found_binding)
-          {
-            ++it;
-
-            if (local_backup_aor != NULL)
-            {
-              delete local_backup_aor;
-              local_backup_aor = NULL;
-            }
-          }
-        }
-      }
-
-      if (found_binding)
-      {
-        aor_pair->get_current()->copy_aor(backup_aor->get_current());
-      }
-    }
-
-    is_initial_registration = is_initial_registration && aor_pair->get_current()->bindings().empty();
-
-    // Now loop through all the contacts.  If there are multiple contacts in
-    // the contact header in the SIP message, pjsip parses them to separate
-    // contact header structures.
-    pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
-    int changed_bindings = 0;
-
-    while (contact != NULL)
-    {
-      changed_bindings++;
-      expiry = _registrar->expiry_for_binding(contact, expires);
-
-      if (contact->star)
-      {
-        // Wildcard contact, which can only be used to clear all bindings for
-        // the AoR (and only if the expiry is 0). It won't clear any emergency
-        // bindings
-        aor_pair->get_current()->clear(false);
+        // Error reading bindings.
+        TRC_ERROR("Failed to get AoR binding for %s", aor.c_str());
         break;
       }
-
-      pjsip_uri* uri = (contact->uri != NULL) ?
-                           (pjsip_uri*)pjsip_uri_get_uri(contact->uri) :
-                           NULL;
-
-      if ((uri != NULL) &&
-          (PJSIP_URI_SCHEME_IS_SIP(uri)))
-      {
-        // The binding identifier is based on the +sip.instance parameter if
-        // it is present.  If not the contact URI is used instead.
-        std::string contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
-        std::string binding_id = get_binding_id(contact);
-
-        if (binding_id == "")
-        {
-          binding_id = contact_uri;
-        }
-
-        TRC_DEBUG("Binding identifier for contact = %s", binding_id.c_str());
-
-        // Find the appropriate binding in the bindings list for this AoR.
-        AoR::Binding* binding = aor_pair->get_current()->get_binding(binding_id);
-
-        if ((cid != binding->_cid) ||
-            (cseq > binding->_cseq))
-        {
-          // Either this is a new binding, has come from a restarted device, or
-          // is an update to an existing binding.
-          binding->_uri = contact_uri;
-
-          // TODO Examine Via header to see if we're the first hop
-          // TODO Only if we're not the first hop, check that the top path header has "ob" parameter
-
-          // Get the Path headers, if present.  RFC 3327 allows us the option of
-          // rejecting a request with a Path header if there is no corresponding
-          // "path" entry in the Supported header but we don't do so on the assumption
-          // that the edge proxy knows what it's doing.
-          //
-          // We store the full path header in the _path_headers field. For
-          // backwards compatibility, we also store the URI part of the path
-          // header in the _path_uris field.
-          binding->_path_headers.clear();
-          binding->_path_uris.clear();
-          pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
-                              pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
-
-          while (path_hdr)
-          {
-            std::string path = PJUtils::get_header_value((pjsip_hdr*)path_hdr);
-            std::string path_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                                          path_hdr->name_addr.uri);
-            TRC_DEBUG("Path header %s", path.c_str());
-
-            // Extract all the paths from this header.
-            binding->_path_headers.push_back(path);
-            binding->_path_uris.push_back(path_uri);
-
-            // Look for the next header.
-            path_hdr = (pjsip_routing_hdr*)
-                    pjsip_msg_find_hdr_by_name(req, &STR_PATH, path_hdr->next);
-          }
-
-          binding->_cid = cid;
-          binding->_cseq = cseq;
-          binding->_priority = contact->q1000;
-          binding->_params.clear();
-          pjsip_param* p = contact->other_param.next;
-
-          while ((p != NULL) && (p != &contact->other_param))
-          {
-            std::string pname = PJUtils::pj_str_to_string(&p->name);
-            std::string pvalue = PJUtils::pj_str_to_string(&p->value);
-            // Skip parameters that must not be user-specified
-            if (pname != "pub-gruu")
-            {
-              binding->_params[pname] = pvalue;
-            }
-            p = p->next;
-          }
-
-          binding->_private_id = private_id;
-          binding->_emergency_registration = PJUtils::is_emergency_registration(contact);
-
-          // If the new expiry is less than the current expiry, and it's an emergency registration,
-          // don't update the expiry time
-          if ((binding->_expires >= now + expiry) && (binding->_emergency_registration))
-          {
-            TRC_DEBUG("Don't reduce expiry time for an emergency registration");
-          }
-          else
-          {
-            binding->_expires = now + expiry;
-          }
-        }
-      }
-      contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact->next);
+      out_no_bindings_found = out_no_bindings_found && aor_pair->get_current()->bindings().empty();
     }
+
+    int changed_bindings = 0;
+    update_bindings_from_req(aor_pair,
+                             req,
+                             now,
+                             private_id,
+                             changed_bindings,
+                             max_expiry);
 
     // Set the S-CSCF URI on the AoR.
     AoR* aor_data = aor_pair->get_current();
@@ -1123,13 +1114,6 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
   }
   while (set_rc == Store::DATA_CONTENTION);
 
-  // If we allocated the backup AoR, tidy up.
-  if (backup_aor_alloced)
-  {
-    delete backup_aor; // LCOV_EXCL_LINE
-  }
-
-  out_is_initial_registration = is_initial_registration;
   out_all_bindings_expired = all_bindings_expired;
 
   return aor_pair;
@@ -1230,17 +1214,3 @@ void RegistrarSproutletTsx::log_bindings(const std::string& aor_name,
   }
 }
 
-int RegistrarSproutlet::expiry_for_binding(pjsip_contact_hdr* contact,
-                                           pjsip_expires_hdr* expires)
-{
-  int expiry = (contact->expires != -1) ? contact->expires :
-               (expires != NULL) ? expires->ivalue :
-               _max_expires;
-  if (expiry > _max_expires)
-  {
-    // Expiry is too long, set it to the maximum.
-    expiry = _max_expires;
-  }
-
-  return expiry;
-}

@@ -765,3 +765,112 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   return all_bindings_expired;
 }
+
+/// Gets binding information for a specified AoR.   This function will look in
+/// the following places and stop as soon as it finds a record for the
+/// specified AoR that has > 0 bindings.
+/// -- the primary_sdm
+/// -- the provided backup_aor_pair (if not null)
+/// -- the specified backup_sdms (if any have been provided).
+/// The function returns true unless it is unable to connect to the
+/// primary_sdm.  If it returns True then it will have created an AoRPair (even
+/// if it is empty because no bindings were found) and ownership of this
+/// AoRPair is transferred to the caller on exit (aor_pair).
+bool RegistrationUtils::get_bindings(AoRPair** aor_pair,
+                                     std::string aor_id,
+                                     SubscriberDataManager* primary_sdm,
+                                     std::vector<SubscriberDataManager*> backup_sdms,
+                                     AoRPair* backup_aor_pair,
+                                     SAS::TrailId trail)
+{
+  // Find the current bindings for the AoR.
+  delete *aor_pair;
+  *aor_pair = primary_sdm->get_aor_data(aor_id, trail);
+  TRC_DEBUG("Retrieved AoR data %p", *aor_pair);
+
+  if ((*aor_pair == NULL) ||
+      ((*aor_pair)->get_current() == NULL))
+  {
+    // Failed to get data for the AoR because there is no connection
+    // to the store.
+    TRC_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
+    return false;
+  }
+
+  // If we don't have any bindings, try the backup AoR and/or stores.
+  if ((*aor_pair)->get_current()->bindings().empty())
+  {
+    bool found_binding = false;
+    bool backup_aor_pair_alloced = false;
+
+    if ((backup_aor_pair != NULL) &&
+        (backup_aor_pair->current_contains_bindings()))
+    {
+      found_binding = true;
+    }
+    else
+    {
+      std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
+      AoRPair* local_backup_aor_pair = NULL;
+
+      while ((it != backup_sdms.end()) && (!found_binding))
+      {
+        if ((*it)->has_servers())
+        {
+          local_backup_aor_pair = (*it)->get_aor_data(aor_id, trail);
+
+          if ((local_backup_aor_pair != NULL) &&
+              (local_backup_aor_pair->current_contains_bindings()))
+          {
+            found_binding = true;
+            backup_aor_pair = local_backup_aor_pair;
+
+            // Flag that we have allocated the memory for the backup pair so
+            // that we can tidy it up later.
+            backup_aor_pair_alloced = true;
+          }
+        }
+
+        if (!found_binding)
+        {
+          ++it;
+
+          if (local_backup_aor_pair != NULL)
+          {
+            delete local_backup_aor_pair;
+            local_backup_aor_pair = NULL;
+          }
+        }
+      }
+    }
+
+    if (found_binding)
+    {
+      (*aor_pair)->get_current()->copy_aor(backup_aor_pair->get_current());
+    }
+
+    if (backup_aor_pair_alloced)
+    {
+      delete backup_aor_pair;
+      backup_aor_pair = NULL;
+    }
+  }
+
+  return true;
+}
+
+int RegistrationUtils::expiry_for_binding(pjsip_contact_hdr* contact,
+                                          pjsip_expires_hdr* expires,
+                                          int max_expires)
+{
+  int expiry = (contact->expires != -1) ? contact->expires :
+               (expires != NULL) ? expires->ivalue :
+               max_expires;
+  if (expiry > max_expires)
+  {
+    // Expiry is too long, set it to the maximum.
+    expiry = max_expires;
+  }
+
+  return expiry;
+}
