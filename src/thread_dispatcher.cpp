@@ -182,7 +182,10 @@ static int worker_thread(void* p)
         if (qe.stop_watch.read(latency_us))
         {
           TRC_DEBUG("Request latency = %ldus", latency_us);
-          latency_table->accumulate(latency_us);
+          if (latency_table)
+          {
+            latency_table->accumulate(latency_us);
+          }
           load_monitor->request_complete(latency_us);
         }
         else
@@ -271,7 +274,10 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
   // long to get feedback to the downstream node.  We expect downstream nodes
   // to rebalance load if possible triggered by receipt of the 503 responses.
 
-  overload_counter->increment();
+  if (overload_counter)
+  {
+    overload_counter->increment();
+  }
 }
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
@@ -340,7 +346,10 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::report_event(priority_event);
 
   // Track the current queue size
-  queue_size_table->accumulate(sip_event_queue.size());
+  if (queue_size_table)
+  {
+    queue_size_table->accumulate(sip_event_queue.size());
+  }
   sip_event_queue.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
@@ -430,7 +439,10 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   qe.priority = SipPriorityLevel::NORMAL_PRIORITY; // TODO: Check priority
 
   // Track the current queue size
-  queue_size_table->accumulate(sip_event_queue.size());
+  if (queue_size_table)
+  {
+    queue_size_table->accumulate(sip_event_queue.size());
+  }
 
   // Add the SipEvent
   sip_event_queue.push(qe);

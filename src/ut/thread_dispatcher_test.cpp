@@ -12,95 +12,13 @@
 
 #include "gtest/gtest.h"
 #include "test_interposer.hpp"
-#include "mock_load_monitor.h"
-#include "mock_pjsip_module.h"
-#include "custom_headers.h"
-#include "stack.h"
+#include "thread_dispatcher_test.hpp"
 #include "testingcommon.h"
 
 #include "thread_dispatcher.h"
 
-class ThreadDispatcherTest : public ::testing::Test
-{
-public:
-  virtual void SetUp()
-  {
-    init_test_pjsip();
-  }
-
-  // TODO: Fix memory leaks and check code
-  virtual pj_status_t init_test_pjsip()
-  {
-    pj_status_t status;
-
-    status = pj_init();
-    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
-    status = pjlib_util_init();
-    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
-    pj_caching_pool_init(&stack_data.cp, &pj_pool_factory_default_policy, 0);
-
-    status = pjsip_endpt_create(&stack_data.cp.factory, NULL, &stack_data.endpt);
-    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
-    //status = pjsip_tsx_layer_init_module(endpt);
-
-    stack_data.pool = pj_pool_create(&stack_data.cp.factory,
-                                     "test-pool",
-                                     4000,
-                                     4000,
-                                     NULL);
-
-    status = register_custom_headers();
-    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
-    //PJUtils::init();
-
-    mod_mock = new MockPJSipModule(stack_data.endpt,
-                                   "test-module",
-                                   PJSIP_MOD_PRIORITY_TRANSPORT_LAYER);
-    init_thread_dispatcher(1, NULL, NULL, &load_monitor, NULL, NULL);
-    pjsip_process_rdata_param_default(&entry_point);
-    entry_point.start_mod = get_mod_thread_dispatcher();
-
-    return status;
-  }
-
-  virtual void inject_msg(const string& msg)
-  {
-    pjsip_rx_data* rdata = PJ_POOL_ZALLOC_T(stack_data.pool, pjsip_rx_data);
-
-    rdata->pkt_info.packet = (char*)pj_pool_alloc(stack_data.pool,
-                                                  strlen(msg.data()) + 1);
-    strcpy(rdata->pkt_info.packet, msg.data());
-    rdata->pkt_info.len = msg.length();
-
-    pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &entry_point, NULL);
-  }
-
-  virtual void term_test_pjsip()
-  {
-    //PJUtils::term();
-    //pjsip_tsx_layer_destroy();
-    pjsip_endpt_destroy(stack_data.endpt);
-    pj_pool_release(stack_data.pool);
-    pj_caching_pool_destroy(&stack_data.cp);
-    pj_shutdown();
-  }
-
-  virtual void Teardown()
-  {
-    delete mod_mock;
-    mod_mock = nullptr;
-    unregister_thread_dispatcher();
-    term_test_pjsip();
-  }
-
-  MockPJSipModule* mod_mock;
-  MockLoadMonitor load_monitor;
-  pjsip_process_rdata_param entry_point;
-};
+using ::testing::Return;
+using ::testing::_;
 
 TEST_F(ThreadDispatcherTest, NullTest)
 {
@@ -111,13 +29,17 @@ TEST_F(ThreadDispatcherTest, NullTest)
   msg._from = "alice";
   msg._to = "bob";
   msg._todomain = "awaydomain";
-  //inject_msg(msg.get_request());
+  msg._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+
+  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(*mod_mock, on_rx_request(_));
+  inject_msg_thread(msg.get_request());
 }
 
 class SipEventQueueTest : public ::testing::Test
 {
 public:
-  virtual void SetUp()
+  SipEventQueueTest()
   {
     // We can distinguish e1 and e2 by the value of en.event_data.rdata
     SipEventData event_data;
@@ -135,7 +57,7 @@ public:
     cwtest_completely_control_time();
   }
 
-  virtual void TearDown()
+  virtual ~SipEventQueueTest()
   {
     cwtest_reset_time();
 

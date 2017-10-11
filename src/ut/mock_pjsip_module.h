@@ -33,8 +33,6 @@ public:
   {
   }
 
-
-
   MOCK_METHOD1(on_rx_request, pj_bool_t(pjsip_rx_data *rdata));
   MOCK_METHOD1(on_rx_response, pj_bool_t(pjsip_rx_data *rdata));
   MOCK_METHOD1(on_tx_request, pj_status_t(pjsip_tx_data *tdata));
