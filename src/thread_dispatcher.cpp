@@ -119,6 +119,18 @@ static pjsip_module mod_thread_dispatcher =
   NULL,                                 /* on_tsx_state()       */
 };
 
+static void pause_stopwatch(Utils::StopWatch& s, const std::string& reason)
+{
+  TRC_DEBUG("Pausing stopwatch due to %s", reason.c_str());
+  s.stop();
+}
+
+static void resume_stopwatch(Utils::StopWatch& s, const std::string& reason)
+{
+  TRC_DEBUG("Resuming stopwatch after %s", reason.c_str());
+  s.start();
+}
+
 /// Worker threads handle most SIP message processing.
 static int worker_thread(void* p)
 {
@@ -139,6 +151,10 @@ static int worker_thread(void* p)
     {
       MessageEvent* me = qe.event.message;
       pjsip_rx_data* rdata = me->rdata;
+
+      // Create an IO hook that pauses the stopwatch while blocked on IO.
+      Utils::IOHook io_hook(std::bind(pause_stopwatch, me->stop_watch, std::placeholders::_1),
+                            std::bind(resume_stopwatch, me->stop_watch, std::placeholders::_1));
 
       if (rdata)
       {
