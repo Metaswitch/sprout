@@ -2006,7 +2006,14 @@ int main(int argc, char* argv[])
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
-  sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
+  if (opt.pcscf_enabled)
+  {
+    sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration, 0);
+  }
+  else
+  {
+    sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
+  }
 
   // Create a new quiescing manager instance and register our completion handler
   // with it.
