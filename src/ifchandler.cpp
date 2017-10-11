@@ -183,7 +183,7 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
 
   if (session_case.is_originating())  // (includes orig-cdiv)
   {
-    uri = PJUtils::orig_served_user(msg);
+    uri = PJUtils::orig_served_user(msg, pool, 0);
   }
   else
   {
