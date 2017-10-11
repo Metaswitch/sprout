@@ -12,13 +12,70 @@
 
 #include "gtest/gtest.h"
 #include "test_interposer.hpp"
-#include "thread_dispatcher_test.hpp"
 #include "testingcommon.h"
+#include "mock_load_monitor.h"
+#include "mock_pjsip_module.h"
+#include "siptest.hpp"
+#include "stack.h"
 
 #include "thread_dispatcher.h"
 
 using ::testing::Return;
 using ::testing::_;
+
+class ThreadDispatcherTest : public SipTest
+{
+public:
+
+  ThreadDispatcherTest()
+  {
+    mod_mock = new MockPJSipModule(stack_data.endpt,
+                                   "test-module",
+                                   PJSIP_MOD_PRIORITY_TRANSPORT_LAYER);
+    init_thread_dispatcher(0, NULL, NULL, &load_monitor, NULL, NULL);
+    mod_thread_dispatcher = get_mod_thread_dispatcher();
+
+    pjsip_process_rdata_param_default(&rp);
+    rp.start_mod = mod_thread_dispatcher;
+    rp.idx_after_start = 1;
+
+    cwtest_completely_control_time();
+  }
+
+  virtual void inject_msg_thread(TestingCommon::Message msg)
+  {
+    inject_msg_direct(msg.get_request(), mod_thread_dispatcher);
+  }
+
+  virtual bool process_msg_thread()
+  {
+    SipEvent qe;
+    qe.type = MESSAGE;
+    return _worker_thread_process(rp, qe, 0);
+  }
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
+
+  virtual ~ThreadDispatcherTest()
+  {
+    cwtest_reset_time();
+    unregister_thread_dispatcher();
+    delete mod_mock;
+  }
+
+  MockPJSipModule* mod_mock;
+  MockLoadMonitor load_monitor;
+  pjsip_module* mod_thread_dispatcher;
+  pjsip_process_rdata_param rp;
+};
 
 TEST_F(ThreadDispatcherTest, NullTest)
 {
@@ -32,8 +89,11 @@ TEST_F(ThreadDispatcherTest, NullTest)
   msg._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
 
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
-  EXPECT_CALL(*mod_mock, on_rx_request(_));
-  inject_msg_thread(msg.get_request());
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, request_complete(_));
+
+  inject_msg_thread(msg);
+  EXPECT_TRUE(process_msg_thread());
 }
 
 class SipEventQueueTest : public ::testing::Test

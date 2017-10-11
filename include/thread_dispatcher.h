@@ -99,6 +99,11 @@ struct SipEvent
   }
 };
 
+// Internal method exposed for testing purposes
+bool _worker_thread_process(pjsip_process_rdata_param rp,
+                            SipEvent& qe,
+                            int timeout = -1);
+
 // Add a Callback object to the queue, to be run on a worker thread.
 // This MUST be called from the main PJSIP transport thread.
 void add_callback_to_queue(PJUtils::Callback*);
