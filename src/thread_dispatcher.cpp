@@ -76,6 +76,8 @@ static ExceptionHandler* exception_handler = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
 
+static pjsip_process_rdata_param pjsip_entry_point;
+
 // Module to clone SIP requests and dispatch them to worker threads.
 
 // Priority of PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-1 causes this to run
@@ -102,20 +104,12 @@ static pjsip_module mod_thread_dispatcher =
   NULL,                                 /* on_tsx_state()       */
 };
 
-bool _worker_thread_process(pjsip_process_rdata_param rp,
-                            SipEvent& qe,
-                            int timeout)
+bool process_queue_element()
 {
   bool rc;
+  SipEvent qe;
 
-  if (timeout == -1)
-  {
-    rc = sip_event_queue.pop(qe);
-  }
-  else
-  {
-    rc = sip_event_queue.pop(qe, timeout);
-  }
+  rc = sip_event_queue.pop(qe);
 
   if (rc)
   {
@@ -129,7 +123,10 @@ bool _worker_thread_process(pjsip_process_rdata_param rp,
 
         CW_TRY
         {
-          pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
+          pjsip_endpt_process_rx_data(stack_data.endpt,
+                                      rdata,
+                                      &pjsip_entry_point,
+                                      NULL);
         }
         CW_EXCEPT(exception_handler)
         {
@@ -218,13 +215,10 @@ int worker_thread(void* p)
   rp.start_mod = &mod_thread_dispatcher;
   rp.idx_after_start = 1;
 
-  SipEvent qe;
-  qe.type = MESSAGE;
-
   bool rc = true;
 
   while (rc) {
-    rc = _worker_thread_process(rp, qe);
+    rc = process_queue_element();
   }
 
   TRC_DEBUG("Worker thread ended");
@@ -410,6 +404,10 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
 
   // Register the PJSIP module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_thread_dispatcher);
+
+  pjsip_process_rdata_param_default(&pjsip_entry_point);
+  pjsip_entry_point.start_mod = &mod_thread_dispatcher;
+  pjsip_entry_point.idx_after_start = 1;
 
   return PJ_SUCCESS;
 }

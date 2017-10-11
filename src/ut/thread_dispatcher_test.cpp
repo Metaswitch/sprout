@@ -35,23 +35,12 @@ public:
     init_thread_dispatcher(0, NULL, NULL, &load_monitor, NULL, NULL);
     mod_thread_dispatcher = get_mod_thread_dispatcher();
 
-    pjsip_process_rdata_param_default(&rp);
-    rp.start_mod = mod_thread_dispatcher;
-    rp.idx_after_start = 1;
-
     cwtest_completely_control_time();
   }
 
   virtual void inject_msg_thread(TestingCommon::Message msg)
   {
     inject_msg_direct(msg.get_request(), mod_thread_dispatcher);
-  }
-
-  virtual bool process_msg_thread()
-  {
-    SipEvent qe;
-    qe.type = MESSAGE;
-    return _worker_thread_process(rp, qe, 0);
   }
 
   static void SetUpTestCase()
@@ -93,7 +82,7 @@ TEST_F(ThreadDispatcherTest, NullTest)
   EXPECT_CALL(load_monitor, request_complete(_));
 
   inject_msg_thread(msg);
-  EXPECT_TRUE(process_msg_thread());
+  process_queue_element();
 }
 
 class SipEventQueueTest : public ::testing::Test

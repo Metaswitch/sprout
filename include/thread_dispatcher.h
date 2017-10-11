@@ -71,7 +71,7 @@ struct SipEvent
   // The event data itself
   SipEventData event_data;
 
-  SipEvent() : priority(0) {}
+  SipEvent() : type(MESSAGE), priority(0) {}
 
   // Compares two SipEvents. 'larger' SipEvents are returned sooner by the
   // priority queue.
@@ -99,10 +99,9 @@ struct SipEvent
   }
 };
 
-// Internal method exposed for testing purposes
-bool _worker_thread_process(pjsip_process_rdata_param rp,
-                            SipEvent& qe,
-                            int timeout = -1);
+// Internal method exposed for testing purposes. Pops a single element off the
+// event queue and processes it.
+bool process_queue_element();
 
 // Add a Callback object to the queue, to be run on a worker thread.
 // This MUST be called from the main PJSIP transport thread.
