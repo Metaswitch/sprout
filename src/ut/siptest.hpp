@@ -54,6 +54,8 @@ public:
   /// Call this to set up the test case.
   static void SetUpTestCase();
 
+  static void SIPResolverNoGraylist();
+
   static void SetScscfUri(const std::string& scscf_uri);
 
   static void TearDownTestCase();

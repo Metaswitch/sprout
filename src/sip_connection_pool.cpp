@@ -361,7 +361,7 @@ void SIPConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transp
                  (char*)&tp->key.rem_addr.ipv6.sin6_addr,
                  sizeof(struct in6_addr));
         }
-        PJUtils::blacklist_server(server);
+        PJUtils::blacklist(server);
       }
 
       // Don't listen for any more state changes on this connection (but note

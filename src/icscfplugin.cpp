@@ -87,7 +87,8 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           enum_service,
                                           _incoming_sip_transactions_tbl,
                                           _outgoing_sip_transactions_tbl,
-                                          opt.override_npdi);
+                                          opt.override_npdi,
+                                          opt.port_icscf);
     _icscf_sproutlet->init();
 
     sproutlets.push_back(_icscf_sproutlet);

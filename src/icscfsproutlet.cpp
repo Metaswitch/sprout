@@ -46,7 +46,8 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                EnumService* enum_service,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
-                               bool override_npdi) :
+                               bool override_npdi,
+                               int network_function_port) :
   Sproutlet(icscf_name,
             port,
             uri,
@@ -62,7 +63,8 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
   _acr_factory(acr_factory),
   _enum_service(enum_service),
   _override_npdi(override_npdi),
-  _bgcf_uri_str(bgcf_uri)
+  _bgcf_uri_str(bgcf_uri),
+  _network_function_port(network_function_port)
 {
   _session_establishment_tbl = SNMP::SuccessFailCountTable::create("icscf_session_establishment",
                                                                    "1.2.826.0.1.1578918.9.3.36");
@@ -268,7 +270,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
                                             _icscf->get_scscf_selector(),
                                             trail(),
                                             _acr,
-                                            _icscf->port(),
+                                            _icscf->network_function_port(),
                                             impi,
                                             impu,
                                             visited_network,
@@ -551,7 +553,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                             _icscf->get_scscf_selector(),
                                             trail(),
                                             _acr,
-                                            _icscf->port(),
+                                            _icscf->network_function_port(),
                                             impu,
                                             _originating);
 

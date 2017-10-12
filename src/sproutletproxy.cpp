@@ -593,6 +593,16 @@ bool SproutletProxy::timer_running(pj_timer_entry* tentry)
 }
 
 
+SproutletProxy::UASTsx::TimerCallback::TimerCallback(pj_timer_entry* timer) :
+  _timer_entry(timer)
+{
+}
+
+void SproutletProxy::UASTsx::TimerCallback::run()
+{
+  ((TimerCallbackData*)_timer_entry->user_data)->uas_tsx->process_timer_pop(_timer_entry);
+}
+
 SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   BasicProxy::UASTsx(proxy),
   _root(NULL),
@@ -614,7 +624,7 @@ SproutletProxy::UASTsx::~UASTsx()
        timer != _timers.end();
        ++timer)
   {
-    SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)(*timer)->user_data;
+    TimerCallbackData* tdata = (TimerCallbackData*)(*timer)->user_data;
     delete tdata;
     delete *timer;
   }
@@ -1003,7 +1013,7 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
                                             TimerID& id,
                                             int duration)
 {
-  SproutletTimerCallbackData* tdata = new SproutletTimerCallbackData;
+  TimerCallbackData* tdata = new TimerCallbackData;
   tdata->uas_tsx = this;
   tdata->sproutlet_wrapper = tsx;
   tdata->context = context;
@@ -1045,8 +1055,13 @@ bool SproutletProxy::UASTsx::timer_running(TimerID id)
 void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
                                           pj_timer_entry* tentry)
 {
-  TRC_DEBUG("Sproutlet timer popped, id = %ld", (TimerID)tentry);
-  ((SproutletTimerCallbackData*)tentry->user_data)->uas_tsx->process_timer_pop(tentry);
+
+  TimerCallback* callback = new TimerCallback(tentry);
+
+  // Timer pops happen on the main pjsip transport thread, but we want to handle
+  // them on a worker thread.
+  // We relinquish ownership of the TimerCallback
+  PJUtils::run_callback_on_worker_thread(callback);
 }
 
 
@@ -1055,7 +1070,7 @@ void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
   enter_context();
 
   _pending_timers.erase(tentry);
-  SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)tentry->user_data;
+  TimerCallbackData* tdata = (TimerCallbackData*)tentry->user_data;
   tdata->sproutlet_wrapper->on_timer_pop((TimerID)tentry, tdata->context);
   schedule_requests();
 
@@ -1986,7 +2001,7 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
 
 void SproutletWrapper::on_timer_pop(TimerID id, void* context)
 {
-  TRC_DEBUG("Timer has popped");
+  TRC_DEBUG("Processing timer pop, id = %ld", id);
   _pending_timers.erase(id);
   _sproutlet_tsx->on_timer_expiry(context);
   process_actions(false);

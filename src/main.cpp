@@ -1511,7 +1511,7 @@ int create_astaire_stores(struct options opt,
 
   if (local_data_store == NULL)
   {
-    TRC_ERROR("Failed to connect to data store");
+    TRC_ERROR("Failed to connect to data store. Aborting startup");
     return 1;
   }
 
@@ -2005,7 +2005,14 @@ int main(int argc, char* argv[])
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
-  sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
+  if (opt.pcscf_enabled)
+  {
+    sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration, 0);
+  }
+  else
+  {
+    sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
+  }
 
   // Create a new quiescing manager instance and register our completion handler
   // with it.
@@ -2169,7 +2176,7 @@ int main(int argc, char* argv[])
                                  opt.emerg_reg_accepted);
     if (status != PJ_SUCCESS)
     {
-      TRC_ERROR("Failed to enable P-CSCF edge proxy");
+      TRC_ERROR("Failed to enable P-CSCF edge proxy. Aborting startup");
       return 1;
     }
 
@@ -2263,7 +2270,7 @@ int main(int argc, char* argv[])
   if (!loader->load(sproutlets))
   {
     CL_SPROUT_PLUGIN_FAILURE.log();
-    TRC_ERROR("Failed to successfully load plug-ins");
+    TRC_ERROR("Failed to successfully load plug-ins. Aborting startup");
     return 1;
   }
 
@@ -2298,7 +2305,7 @@ int main(int argc, char* argv[])
                                          opt.max_sproutlet_depth);
     if (sproutlet_proxy == NULL)
     {
-      TRC_ERROR("Failed to create SproutletProxy");
+      TRC_ERROR("Failed to create SproutletProxy. Aborting startup");
       return 1;
     }
   }

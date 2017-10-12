@@ -18,6 +18,7 @@
 #include <list>
 
 #include "basicproxy.h"
+#include "pjutils.h"
 #include "sproutlet.h"
 #include "snmp_sip_request_types.h"
 #include "sproutlet_options.h"
@@ -116,14 +117,6 @@ protected:
                         Sproutlet* sproutlet,
                         SAS::TrailId trail);
 
-  /// Defintion of a timer set by an child sproutlet transaction.
-  struct SproutletTimerCallbackData
-  {
-    SproutletProxy::UASTsx* uas_tsx;
-    SproutletWrapper* sproutlet_wrapper;
-    void* context;
-  };
-
   // A struct to wrap tx_data and allowed_host_state in a convenient bundle
   // to pass over interfaces when sending a request.
   typedef struct
@@ -170,6 +163,24 @@ protected:
 
 
   private:
+    /// Defintion of a timer set by a sproutlet transaction.
+    struct TimerCallbackData
+    {
+      UASTsx* uas_tsx;
+      SproutletWrapper* sproutlet_wrapper;
+      void* context;
+    };
+
+    // The timer callback object, which is run on a worker thread
+    class TimerCallback : public PJUtils::Callback
+    {
+      pj_timer_entry* _timer_entry;
+
+    public:
+      TimerCallback(pj_timer_entry* timer);
+      void run() override;
+    };
+
     void tx_request(SproutletWrapper* sproutlet,
                     int fork_id,
                     SendRequest req);
