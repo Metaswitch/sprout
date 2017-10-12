@@ -532,10 +532,8 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
                                                       _cached_aors);
   if (local_aor_pair == NULL)
   {
-    // LCOV_EXCL_START - local store (used in testing) never fails
     status = Store::Status::ERROR;
     return status;
-    // LCOV_EXCL_STOP
   }
 
   // Write to the local store, handling any CAS error
@@ -551,7 +549,8 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
       local_aor_pair = read_and_cache_from_store(_subscription->_sdm, aor, _cached_aors);
       if (local_aor_pair == NULL)
       {
-        // LCOV_EXCL_START - local store (used in testing) never fails
+        // LCOV_EXCL_START We test behaviour on store error elsewhere,
+        // and UT-ing this case is more effort than it's worth
         status = Store::Status::ERROR;
         return status;
         // LCOV_EXCL_STOP
@@ -596,7 +595,8 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
         remote_aor_pair = read_and_cache_from_store(*sdm, aor, _cached_aors);
         if (remote_aor_pair == NULL)
         {
-          // LCOV_EXCL_START - local store (used in testing) never fails
+          // LCOV_EXCL_START We test behaviour on store error elsewhere,
+          // and UT-ing this case is more effort than it's worth
 
           // We've hit an error in reading from the remote store, but we don't
           // take any action on this. Bail out and try the next store.
@@ -635,11 +635,9 @@ AoRPair* SubscriptionSproutletTsx::read_and_cache_from_store(
   {
     // Failed to get data for the AoR because there is no connection
     // to the store.
-    // LCOV_EXCL_START - local store (used in testing) never fails
     TRC_ERROR("Failed to get AoR subscriptions for %s from store", aor.c_str());
     delete aor_pair;
     return NULL;
-    // LCOV_EXCL_STOP
   }
 
   TRC_DEBUG("Retrieved AoR data %p. Storing in local cache for SDM %p", aor_pair, sdm);

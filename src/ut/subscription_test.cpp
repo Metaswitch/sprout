@@ -104,9 +104,10 @@ public:
                                              sproutlets,
                                              std::set<std::string>());
 
+    std::string aor = "sip:6505550231@homedomain";
     // Get an initial empty AoR record and add a binding.
     int now = time(NULL);
-    AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+    AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
     AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
     b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
     b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
@@ -124,7 +125,6 @@ public:
     _contact_params = b1->_params;
 
     // Add the AoR record to the store.
-    std::string aor = "sip:6505550231@homedomain";
     AssociatedURIs associated_uris = {};
     associated_uris.add_uri(aor, false);
     _sdm->set_aor_data(aor, aor_pair, 0);
@@ -166,9 +166,10 @@ public:
 
   void add_tel_uri_binding_to_store()
   {
+    std::string aor = "tel:6505550231";
     // Get an initial empty AoR record and add a binding (with the Tel URI)
     int now = time(NULL);
-    AoRPair* aor_pair = _sdm->get_aor_data(std::string("tel:6505550231"), 0);
+    AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
     AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
     b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
     b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
@@ -182,7 +183,6 @@ public:
     b1->_emergency_registration = false;
 
     // Add the AoR record to the store.
-    std::string aor = "tel:6505550231";
     AssociatedURIs associated_uris = {};
     associated_uris.add_uri(aor, false);
     _sdm->set_aor_data(aor, aor_pair, 0);
@@ -441,6 +441,18 @@ TEST_F(SubscriptionTest, BadScheme)
   EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
 }
 
+TEST_F(SubscriptionTest, NoContact)
+{
+  SubscribeMessage msg;
+  msg._contact = "";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(400, out->line.status.code);
+  EXPECT_EQ("Bad Request", str_pj(out->line.status.reason));
+}
+
 TEST_F(SubscriptionTest, EmergencySubscription)
 {
   SubscribeMessage msg;
@@ -452,6 +464,65 @@ TEST_F(SubscriptionTest, EmergencySubscription)
   EXPECT_EQ(489, out->line.status.code);
   EXPECT_EQ("Bad Event", str_pj(out->line.status.reason));
   EXPECT_THAT(get_headers(out, "Allow-Events"), testing::MatchesRegex("Allow-Events: reg"));
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+// Check that the subscription fails if we are unable to get the AoR from the local Store
+TEST_F(SubscriptionTest, LocalStoreGetError)
+{
+  _local_data_store->force_get_error();
+
+  // We will still call analytics in this error case
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+  EXPECT_EQ("Internal Server Error", str_pj(out->line.status.reason));
+}
+
+// Check that a remote store failure doesn't fail the subscription
+TEST_F(SubscriptionTest, RemoteStoreGetError)
+{
+  _remote_data_store->force_get_error();
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
+
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+
+  // Actively expire the subscription - this generates a 200 OK and a
+  // final NOTIFY
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           0)).Times(1);
+  msg._to_tag = to_tag;
+  msg._unique += 1;
+  msg._expires = "0";
+  inject_msg(msg.get());
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus, true, "timeout");
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -472,6 +543,65 @@ TEST_F(SubscriptionTest, NotRegistered)
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(504, out->line.status.code);
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+// Check that the subscription fails if we are unable to set the AoR from the local Store
+TEST_F(SubscriptionTest, LocalStoreSetError)
+{
+  _local_data_store->force_error();
+
+  // We will still call analytics in this error case
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+  EXPECT_EQ("Internal Server Error", str_pj(out->line.status.reason));
+}
+
+// Check that a remote store failure doesn't fail the subscription
+TEST_F(SubscriptionTest, RemoteStoreSetError)
+{
+  _remote_data_store->force_error();
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
+
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+
+  // Actively expire the subscription - this generates a 200 OK and a
+  // final NOTIFY
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           0)).Times(1);
+  msg._to_tag = to_tag;
+  msg._unique += 1;
+  msg._expires = "0";
+  inject_msg(msg.get());
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus, true, "timeout");
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -663,6 +793,64 @@ TEST_F(SubscriptionTest, SubscriptionWithNoBindings)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
+// Check that if the local store AoR has no subscriptions, but a remote
+// store does, we copy the subscriptions over
+TEST_F(SubscriptionTest, LocalStoreNoSubscriptions)
+{
+  std::string aor = "sip:6505550231@homedomain";
+  // Add the main AoR to the remote store, including a subscription
+  int now = time(NULL);
+  AoRPair* aor_pair = _remote_sdm->get_aor_data(aor, 0);
+  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_params["+g.3gpp.smsip"] = "";
+  b1->_emergency_registration = false;
+
+  std::string s_id = "1234";
+  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription(s_id);
+  s1->_req_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:650555050231@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  _remote_sdm->set_aor_data(aor, aor_pair, 0);
+  delete aor_pair; aor_pair = NULL;
+  // Ensure the local store currently has no subscriptions at this point
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
+
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+
+  // The local AoR should have copied across the subscription added above, as well
+  // as creating this new subscription, so we should have two subscriptions now
+  check_subscriptions("sip:6505550231@homedomain", 2u);
+}
+
+
 /// Check that a subscription where there is data contention doesn't
 /// generate any duplicate NOTIFYs
 TEST_F(SubscriptionTest, SubscriptionWithDataContention)
@@ -687,6 +875,59 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
   // Check there's one subscription stored
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
+
+// Check data contention in a remote store 
+TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
+{
+  TRC_DEBUG("SETTING REMOTE STORE CONTENTION FLAG ON %p", _remote_sdm);
+  _remote_data_store->force_contention();
+  // Add the base AoR to the remote store
+  std::string aor = "sip:6505550231@homedomain";
+  int now = time(NULL);
+  TRC_DEBUG("ADDING AOR TO REMOTE STORE");
+  AoRPair* aor_pair = _remote_sdm->get_aor_data(aor, 0);
+  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_params["+g.3gpp.smsip"] = "";
+  b1->_emergency_registration = false;
+
+  // Add the AoR record to the store.
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  TRC_DEBUG("SETTING AOR TO REMOTE STORE %p", _remote_sdm);
+  _remote_sdm->set_aor_data(aor, aor_pair, 0);
+
+  TRC_DEBUG("SETTING REMOTE STORE CONTENTION FLAG ON %p", _remote_sdm);
+  _remote_data_store->force_contention();
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  SubscribeMessage msg;
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+
+  delete aor_pair; aor_pair = NULL;
+  // Check there's one subscription stored
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+}
+
 
 // Test the Event Header
 // Missing Event header should be rejected
