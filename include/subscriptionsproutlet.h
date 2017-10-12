@@ -112,13 +112,13 @@ protected:
 
   AoRPair* read_and_cache_from_store(SubscriberDataManager* sdm,
                                      std::string aor,
-                                     std::map<SubscriberDataManager*, AoRPair*> _cached_aors);
+                                     std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
 
   void update_subscriptions(SubscriptionSproutlet* _subscription,
                             AoR::Subscription* new_subscription,
                             std::string aor,
                             AoRPair* aor_pair,
-                            std::map<SubscriberDataManager*, AoRPair*> _cached_aors);
+                            std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
 
   void log_subscriptions(const std::string& aor_name,
                          AoR* aor_data);

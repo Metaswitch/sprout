@@ -431,6 +431,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     // Send the response.
     send_response(rsp);
   }
+  delete new_subscription;
 
   SAS::Event sub_accepted(trail_id, SASEvent::SUBSCRIBE_ACCEPTED, 0);
   SAS::report_event(sub_accepted);
@@ -531,8 +532,10 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
                                                       _cached_aors);
   if (local_aor_pair == NULL)
   {
+    // LCOV_EXCL_START - local store (used in testing) never fails
     status = Store::Status::ERROR;
     return status;
+    // LCOV_EXCL_STOP
   }
 
   // Write to the local store, handling any CAS error
@@ -544,12 +547,14 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
     status = _subscription->_sdm->set_aor_data(aor, local_aor_pair, trail());
     if (status == Store::DATA_CONTENTION)
     {
-      delete local_aor_pair;
+      TRC_DEBUG("Hit data contention attempting to write to local store");
       local_aor_pair = read_and_cache_from_store(_subscription->_sdm, aor, _cached_aors);
       if (local_aor_pair == NULL)
       {
+        // LCOV_EXCL_START - local store (used in testing) never fails
         status = Store::Status::ERROR;
         return status;
+        // LCOV_EXCL_STOP
       }
     }
   }
@@ -587,29 +592,38 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
       rc = (*sdm)->set_aor_data(aor, remote_aor_pair, trail());
       if (rc == Store::DATA_CONTENTION)
       {
-        delete remote_aor_pair;
+        TRC_DEBUG("Hit data contention attempting to write to remote store");
         remote_aor_pair = read_and_cache_from_store(*sdm, aor, _cached_aors);
         if (remote_aor_pair == NULL)
         {
+          // LCOV_EXCL_START - local store (used in testing) never fails
+
           // We've hit an error in reading from the remote store, but we don't
           // take any action on this. Bail out and try the next store.
           TRC_ERROR("Failed to read AoR from remote store");
           break;
+          // LCOV_EXCL_STOP
         }
       }
     }
     while (rc == Store::DATA_CONTENTION);
   }
 
-  delete local_aor_pair;
-  delete remote_aor_pair;
+  // Clear out the cached AoR data
+  for (std::map<SubscriberDataManager*, AoRPair*>::const_iterator it = _cached_aors.begin();
+      it != _cached_aors.end();
+      ++it)
+  {
+    delete it->second;
+  }
+
   return status;
 }
 
 AoRPair* SubscriptionSproutletTsx::read_and_cache_from_store(
                        SubscriberDataManager* sdm,
                        std::string aor,
-                       std::map<SubscriberDataManager*, AoRPair*> _cached_aors)
+                       std::map<SubscriberDataManager*, AoRPair*>& _cached_aors)
 {
   // Returns NULL if the SDM hits an error reading from the store
   // Adds the AoRPair to the _cached_aors if we succeed, and returns it
@@ -629,6 +643,11 @@ AoRPair* SubscriptionSproutletTsx::read_and_cache_from_store(
   }
 
   TRC_DEBUG("Retrieved AoR data %p. Storing in local cache for SDM %p", aor_pair, sdm);
+  // Make sure we clean up the old data before caching the new AoR
+  if (_cached_aors.find(sdm) != _cached_aors.end())
+  {
+    delete _cached_aors[sdm];
+  }
   _cached_aors[sdm] = aor_pair;
   return aor_pair;
 }
@@ -638,7 +657,7 @@ void SubscriptionSproutletTsx::update_subscriptions(
                   AoR::Subscription* new_subscription,
                   std::string aor,
                   AoRPair* aor_pair,
-                  std::map<SubscriberDataManager*, AoRPair*> _cached_aors)
+                  std::map<SubscriberDataManager*, AoRPair*>& _cached_aors)
 {
   if (aor_pair->get_current()->subscriptions().empty())
   {
