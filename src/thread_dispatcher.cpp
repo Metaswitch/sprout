@@ -107,6 +107,7 @@ static pjsip_module mod_thread_dispatcher =
 
 bool process_queue_element()
 {
+  TRC_DEBUG("Attempting to process queue element");
   bool rc;
   SipEvent qe;
 
@@ -129,7 +130,7 @@ bool process_queue_element()
         }
         else
         {
-          TRC_ERROR("Failed to get timestamp: %s", strerror(errno));
+          TRC_ERROR("Failed to get timestamp: %s", strerror(errno)); // LCOV_EXCL_LINE
         }
 
         if ((latency_us > (request_on_queue_timeout_us)) &&
@@ -175,6 +176,7 @@ bool process_queue_element()
                                         &pjsip_entry_point,
                                         NULL);
           }
+          // LCOV_EXCL_START
           CW_EXCEPT(exception_handler)
           {
             // Dump details about the exception.  Be defensive about reading these
@@ -217,6 +219,7 @@ bool process_queue_element()
             }
           }
           CW_END
+          // LCOV_EXCL_STOP
 
           TRC_DEBUG("Worker thread completed processing message %p", rdata);
           pjsip_rx_data_free_cloned(rdata);
@@ -227,13 +230,13 @@ bool process_queue_element()
             TRC_DEBUG("Request latency = %ldus", latency_us);
             if (latency_table)
             {
-              latency_table->accumulate(latency_us);
+              latency_table->accumulate(latency_us); // LCOV_EXCL_LINE
             }
             load_monitor->request_complete(latency_us);
           }
           else
           {
-            TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
+            TRC_ERROR("Failed to get done timestamp: %s", strerror(errno)); // LCOV_EXCL_LINE
           }
         }
       }
@@ -243,8 +246,13 @@ bool process_queue_element()
       // If this is a Callback, we just run it and then delete it.
       PJUtils::Callback* cb = qe.event_data.callback;
       cb->run();
-      delete cb; cb = NULL;
+      delete cb; cb = nullptr;
+      TRC_DEBUG("Ran callback %p", cb);
     }
+  }
+  else
+  {
+    TRC_DEBUG("Unable to process queue element: queue has been terminated");
   }
 
   return rc;
@@ -334,7 +342,7 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 
   if (overload_counter)
   {
-    overload_counter->increment();
+    overload_counter->increment(); // LCOV_EXCL_LINE
   }
 }
 
@@ -359,12 +367,14 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   // Check that the worker threads are not all deadlocked.
   if (sip_event_queue.is_deadlocked())
   {
+    // LCOV_EXCL_START
     // The queue has not been serviced for sufficiently long to imply that
     // all the worker threads are deadlock, so exit the process so it will be
     // restarted.
     CL_SPROUT_SIP_DEADLOCK.log();
     TRC_ERROR("Detected worker thread deadlock - exiting");
     abort();
+    // LCOV_EXCL_STOP
   }
 
   // Before we start, get a timestamp.  This will track the time from
@@ -378,10 +388,12 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 
   if (status != PJ_SUCCESS)
   {
+    // LCOV_EXCL_START
     // Failed to clone the message, so drop it.
     TRC_ERROR("Failed to clone incoming message (%s)",
               PJUtils::pj_status_to_string(status).c_str());
     return PJ_TRUE;
+    // LCOV_EXCL_STOP
   }
   else
   {
@@ -413,7 +425,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   // Track the current queue size
   if (queue_size_table)
   {
-    queue_size_table->accumulate(sip_event_queue.size());
+    queue_size_table->accumulate(sip_event_queue.size()); // LCOV_EXCL_LINE
   }
   sip_event_queue.push(qe);
 
@@ -478,6 +490,7 @@ pj_status_t start_worker_threads()
     worker_threads[ii] = thread;
   }
 
+  TRC_DEBUG("Worker threads started");
   return status;
 }
 
@@ -485,7 +498,25 @@ void stop_worker_threads()
 {
   // Now it is safe to signal the worker threads to exit via the queue and to
   // wait for them to terminate.
-  sip_event_queue.terminate();
+
+  // Terminate the queue and delete all elements remaining on it
+  std::vector<SipEvent> remaining_elts;
+  sip_event_queue.terminate(remaining_elts);
+  for (std::vector<SipEvent>::iterator qe = remaining_elts.begin();
+       qe != remaining_elts.end();
+       ++qe)
+  {
+    if (qe->type == MESSAGE)
+    {
+      pjsip_rx_data_free_cloned(qe->event_data.rdata);
+    }
+    else if (qe->type == CALLBACK)
+    {
+      delete qe->event_data.callback;
+    }
+  }
+
+  // Stop each worker thread
   for (std::vector<pj_thread_t*>::iterator i = worker_threads.begin();
        i != worker_threads.end();
        ++i)
@@ -493,12 +524,12 @@ void stop_worker_threads()
     pj_thread_join(*i);
   }
   worker_threads.clear();
+  TRC_DEBUG("Worker threads stopped");
 }
 
 void unregister_thread_dispatcher(void)
 {
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_thread_dispatcher);
-
 }
 
 void add_callback_to_queue(PJUtils::Callback* cb)
@@ -512,9 +543,12 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   // Track the current queue size
   if (queue_size_table)
   {
-    queue_size_table->accumulate(sip_event_queue.size());
+    queue_size_table->accumulate(sip_event_queue.size()); // LCOV_EXCL_LINE
   }
 
   // Add the SipEvent
+  TRC_DEBUG("Queuing callback %p for worker threads with priority %d",
+            cb,
+            qe.priority);
   sip_event_queue.push(qe);
 }
