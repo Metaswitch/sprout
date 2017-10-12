@@ -77,6 +77,8 @@ static unsigned long request_on_queue_timeout_us = 1;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
 
+static pjsip_process_rdata_param pjsip_entry_point;
+
 // Module to clone SIP requests and dispatch them to worker threads.
 
 // Priority of PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-1 causes this to run
@@ -103,22 +105,14 @@ static pjsip_module mod_thread_dispatcher =
   NULL,                                 /* on_tsx_state()       */
 };
 
-/// Worker threads handle most SIP message processing.
-static int worker_thread(void* p)
+bool process_queue_element()
 {
-  // Set up data to always process incoming messages at the first PJSIP
-  // module after our module.
-  pjsip_process_rdata_param rp;
-  pjsip_process_rdata_param_default(&rp);
-  rp.start_mod = &mod_thread_dispatcher;
-  rp.idx_after_start = 1;
-
-  TRC_DEBUG("Worker thread started");
-
+  bool rc;
   SipEvent qe;
-  qe.type = MESSAGE; // TODO: Why?
 
-  while (sip_event_queue.pop(qe))
+  rc = sip_event_queue.pop(qe);
+
+  if (rc)
   {
     if (qe.type == MESSAGE)
     {
@@ -224,17 +218,19 @@ static int worker_thread(void* p)
           TRC_DEBUG("Worker thread completed processing message %p", rdata);
           pjsip_rx_data_free_cloned(rdata);
 
-          unsigned long latency_us = 0;
-          if (qe.stop_watch.read(latency_us))
+        unsigned long latency_us = 0;
+        if (qe.stop_watch.read(latency_us))
+        {
+          TRC_DEBUG("Request latency = %ldus", latency_us);
+          if (latency_table)
           {
-            TRC_DEBUG("Request latency = %ldus", latency_us);
             latency_table->accumulate(latency_us);
-            load_monitor->request_complete(latency_us);
           }
-          else
-          {
-            TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
-          }
+          load_monitor->request_complete(latency_us);
+        }
+        else
+        {
+          TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
         }
       }
     }
@@ -247,6 +243,27 @@ static int worker_thread(void* p)
     }
   }
 
+  return rc;
+}
+
+/// Worker threads handle most SIP message processing.
+int worker_thread(void* p)
+{
+  TRC_DEBUG("Worker thread started");
+
+  // Set up data to always process incoming messages at the first PJSIP
+  // module after our module.
+  pjsip_process_rdata_param rp;
+  pjsip_process_rdata_param_default(&rp);
+  rp.start_mod = &mod_thread_dispatcher;
+  rp.idx_after_start = 1;
+
+  bool rc = true;
+
+  while (rc) {
+    rc = process_queue_element();
+  }
+
   TRC_DEBUG("Worker thread ended");
 
   return 0;
@@ -254,7 +271,7 @@ static int worker_thread(void* p)
 
 // Returns true if the SIP message should always be processed, regardless of
 // overload, and false otherwise.
-static bool ignore_overload(pjsip_rx_data* rdata)
+static bool ignore_load_monitor(pjsip_rx_data* rdata)
 {
   // The type of a message is either REQUEST or RESPONSE; we only check the load
   // monitor for REQUEST messages
@@ -318,11 +335,15 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
   // long to get feedback to the downstream node.  We expect downstream nodes
   // to rebalance load if possible triggered by receipt of the 503 responses.
 
-  overload_counter->increment();
+  if (overload_counter)
+  {
+    overload_counter->increment();
+  }
 }
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 {
+  TRC_DEBUG("Recieved message %p on worker thread", rdata);
   SAS::TrailId trail = get_trail(rdata);
 
   // SAS log the start of processing by this module
@@ -330,11 +351,13 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::report_event(event);
 
   // Check whether the request should be rejected due to overload
-  if (!ignore_overload(rdata) && !(load_monitor->admit_request(trail)))
+  if (!ignore_load_monitor(rdata) && !(load_monitor->admit_request(trail)))
   {
     reject_rx_msg_overload(rdata, trail);
     return PJ_TRUE;
   }
+
+  TRC_DEBUG("Admitted request %p on worker thread", rdata);
 
   // Check that the worker threads are not all deadlocked.
   if (sip_event_queue.is_deadlocked())
@@ -363,6 +386,10 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
               PJUtils::pj_status_to_string(status).c_str());
     return PJ_TRUE;
   }
+  else
+  {
+    TRC_DEBUG("Incoming message %p cloned to %p", rdata, clone_rdata);
+  }
 
   // Make sure the trail identifier is passed across.
   set_trail(clone_rdata, trail);
@@ -387,7 +414,10 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::report_event(priority_event);
 
   // Track the current queue size
-  queue_size_table->accumulate(sip_event_queue.size());
+  if (queue_size_table)
+  {
+    queue_size_table->accumulate(sip_event_queue.size());
+  }
   sip_event_queue.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
@@ -420,7 +450,16 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   // Register the PJSIP module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_thread_dispatcher);
 
+  pjsip_process_rdata_param_default(&pjsip_entry_point);
+  pjsip_entry_point.start_mod = &mod_thread_dispatcher;
+  pjsip_entry_point.idx_after_start = 1;
+
   return PJ_SUCCESS;
+}
+
+pjsip_module* get_mod_thread_dispatcher()
+{
+  return &mod_thread_dispatcher;
 }
 
 
@@ -474,7 +513,10 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   qe.priority = SipPriorityLevel::NORMAL_PRIORITY; // TODO: Check priority
 
   // Track the current queue size
-  queue_size_table->accumulate(sip_event_queue.size());
+  if (queue_size_table)
+  {
+    queue_size_table->accumulate(sip_event_queue.size());
+  }
 
   // Add the SipEvent
   sip_event_queue.push(qe);

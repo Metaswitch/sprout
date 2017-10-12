@@ -12,13 +12,83 @@
 
 #include "gtest/gtest.h"
 #include "test_interposer.hpp"
+#include "testingcommon.h"
+#include "mock_load_monitor.h"
+#include "mock_pjsip_module.h"
+#include "siptest.hpp"
+#include "stack.h"
 
 #include "thread_dispatcher.h"
+
+using ::testing::Return;
+using ::testing::_;
+
+class ThreadDispatcherTest : public SipTest
+{
+public:
+
+  ThreadDispatcherTest()
+  {
+    mod_mock = new MockPJSipModule(stack_data.endpt,
+                                   "test-module",
+                                   PJSIP_MOD_PRIORITY_TRANSPORT_LAYER);
+    init_thread_dispatcher(0, NULL, NULL, &load_monitor, NULL, NULL);
+    mod_thread_dispatcher = get_mod_thread_dispatcher();
+
+    cwtest_completely_control_time();
+  }
+
+  virtual void inject_msg_thread(TestingCommon::Message msg)
+  {
+    inject_msg_direct(msg.get_request(), mod_thread_dispatcher);
+  }
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
+
+  virtual ~ThreadDispatcherTest()
+  {
+    cwtest_reset_time();
+    unregister_thread_dispatcher();
+    delete mod_mock;
+  }
+
+  MockPJSipModule* mod_mock;
+  MockLoadMonitor load_monitor;
+  pjsip_module* mod_thread_dispatcher;
+  pjsip_process_rdata_param rp;
+};
+
+TEST_F(ThreadDispatcherTest, NullTest)
+{
+  TestingCommon::Message msg;
+  msg._first_hop = true;
+  msg._method = "INVITE";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+
+  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, request_complete(_));
+
+  inject_msg_thread(msg);
+  process_queue_element();
+}
 
 class SipEventQueueTest : public ::testing::Test
 {
 public:
-  virtual void SetUp()
+  SipEventQueueTest()
   {
     // We can distinguish e1 and e2 by the value of en.event_data.rdata
     SipEventData event_data;
@@ -36,7 +106,7 @@ public:
     cwtest_completely_control_time();
   }
 
-  virtual void TearDown()
+  virtual ~SipEventQueueTest()
   {
     cwtest_reset_time();
 

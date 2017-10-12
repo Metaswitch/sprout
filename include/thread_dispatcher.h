@@ -38,6 +38,8 @@ void unregister_thread_dispatcher(void);
 pj_status_t start_worker_threads();
 void stop_worker_threads(); // TODO: Should this return its status?
 
+pjsip_module* get_mod_thread_dispatcher();
+
 // A SipEvent on the queue is either a SIP message or a callback
 enum SipEventType { MESSAGE, CALLBACK };
 
@@ -70,7 +72,7 @@ struct SipEvent
   // The event data itself
   SipEventData event_data;
 
-  SipEvent() : priority(0) {}
+  SipEvent() : type(MESSAGE), priority(0) {}
 
   // Compares two SipEvents. 'larger' SipEvents are returned sooner by the
   // priority queue.
@@ -97,6 +99,14 @@ struct SipEvent
     }
   }
 };
+
+// Internal method exposed for testing purposes. Pops a single element off the
+// event queue and processes it. If the queue is empty, waits until either an
+// element is added to the queue or the queue is terminated.
+// Returns true if an element was processed, and false if the queue was
+// terminated.
+// TODO: Consider adding a non-blocking version for testing purposes.
+bool process_queue_element();
 
 // Add a Callback object to the queue, to be run on a worker thread.
 // This MUST be called from the main PJSIP transport thread.
