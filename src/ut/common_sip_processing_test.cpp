@@ -67,7 +67,7 @@ public:
 
     _health_checker = new HealthChecker();
 
-    init_common_sip_processing(_lm, _requests_counter, _health_checker);
+    init_common_sip_processing(_requests_counter, _health_checker);
   }
 
   ~CommonProcessingTest()
@@ -296,7 +296,7 @@ TEST_F(CommonProcessingTest, SupportedHeaderWithCommas)
   // Set up a new Load monitor with enough tokens for each test.
   delete(_lm);
   _lm = new LoadMonitor(0, headers.size(), 0, 0);
-  init_common_sip_processing(_lm, _requests_counter, _health_checker);
+  init_common_sip_processing(_requests_counter, _health_checker);
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
 

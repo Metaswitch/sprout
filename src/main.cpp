@@ -2320,8 +2320,7 @@ int main(int argc, char* argv[])
     }
   }
 
-  init_common_sip_processing(load_monitor,
-                             requests_counter,
+  init_common_sip_processing(requests_counter,
                              hc);
 
   init_thread_dispatcher(opt.worker_threads,

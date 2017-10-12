@@ -35,12 +35,10 @@ extern "C" {
 #include "utils.h"
 #include "custom_headers.h"
 #include "utils.h"
-#include "load_monitor.h"
 #include "health_checker.h"
 #include "uri_classifier.h"
 
 static SNMP::CounterByScopeTable* requests_counter = NULL;
-static LoadMonitor* load_monitor = NULL;
 static HealthChecker* health_checker = NULL;
 
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
@@ -382,8 +380,7 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 
 pj_status_t
-init_common_sip_processing(LoadMonitor* load_monitor_arg,
-                           SNMP::CounterByScopeTable* requests_counter_arg,
+init_common_sip_processing(SNMP::CounterByScopeTable* requests_counter_arg,
                            HealthChecker* health_checker_arg)
 {
   // Register the stack modules.
@@ -391,8 +388,6 @@ init_common_sip_processing(LoadMonitor* load_monitor_arg,
   stack_data.sas_logging_module_id = mod_common_processing.id;
 
   requests_counter = requests_counter_arg;
-
-  load_monitor = load_monitor_arg;
 
   health_checker = health_checker_arg;
 
