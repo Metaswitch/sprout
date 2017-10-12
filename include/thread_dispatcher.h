@@ -100,7 +100,11 @@ struct SipEvent
 };
 
 // Internal method exposed for testing purposes. Pops a single element off the
-// event queue and processes it.
+// event queue and processes it. If the queue is empty, waits until either an
+// element is added to the queue or the queue is terminated.
+// Returns true if an element was processed, and false if the queue was
+// terminated.
+// TODO: Consider adding a non-blocking version for testing purposes.
 bool process_queue_element();
 
 // Add a Callback object to the queue, to be run on a worker thread.
