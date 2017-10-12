@@ -32,7 +32,7 @@ public:
     mod_mock = new MockPJSipModule(stack_data.endpt,
                                    "test-module",
                                    PJSIP_MOD_PRIORITY_TRANSPORT_LAYER);
-    init_thread_dispatcher(0, NULL, NULL, &load_monitor, NULL, NULL);
+    init_thread_dispatcher(0, NULL, NULL, NULL, &load_monitor, NULL, 1000);
     mod_thread_dispatcher = get_mod_thread_dispatcher();
 
     cwtest_completely_control_time();

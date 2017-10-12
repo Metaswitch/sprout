@@ -170,7 +170,10 @@ bool process_queue_element()
         {
           CW_TRY
           {
-            pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
+            pjsip_endpt_process_rx_data(stack_data.endpt,
+                                        rdata,
+                                        &pjsip_entry_point,
+                                        NULL);
           }
           CW_EXCEPT(exception_handler)
           {
@@ -218,19 +221,20 @@ bool process_queue_element()
           TRC_DEBUG("Worker thread completed processing message %p", rdata);
           pjsip_rx_data_free_cloned(rdata);
 
-        unsigned long latency_us = 0;
-        if (qe.stop_watch.read(latency_us))
-        {
-          TRC_DEBUG("Request latency = %ldus", latency_us);
-          if (latency_table)
+          unsigned long latency_us = 0;
+          if (qe.stop_watch.read(latency_us))
           {
-            latency_table->accumulate(latency_us);
+            TRC_DEBUG("Request latency = %ldus", latency_us);
+            if (latency_table)
+            {
+              latency_table->accumulate(latency_us);
+            }
+            load_monitor->request_complete(latency_us);
           }
-          load_monitor->request_complete(latency_us);
-        }
-        else
-        {
-          TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
+          else
+          {
+            TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
+          }
         }
       }
     }
@@ -250,13 +254,6 @@ bool process_queue_element()
 int worker_thread(void* p)
 {
   TRC_DEBUG("Worker thread started");
-
-  // Set up data to always process incoming messages at the first PJSIP
-  // module after our module.
-  pjsip_process_rdata_param rp;
-  pjsip_process_rdata_param_default(&rp);
-  rp.start_mod = &mod_thread_dispatcher;
-  rp.idx_after_start = 1;
 
   bool rc = true;
 
