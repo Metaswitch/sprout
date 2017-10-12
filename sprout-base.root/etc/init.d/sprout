@@ -102,6 +102,16 @@ get_settings()
         authentication=Y
         . /etc/clearwater/config
 
+        if [ -n "$sprout_worker_threads" ];
+        then
+          num_worker_threads="$sprout_worker_threads"
+        fi
+
+        if [ -n "$sprout_http_threads" ];
+        then
+          num_http_threads="$sprout_http_threads"
+        fi
+
         # Calculate the correct homestead latency:
         #  - if we have sprout_homestead_timeout_ms set, use that
         #  - else:

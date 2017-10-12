@@ -339,9 +339,16 @@ include ../modules/cpp-common/makefiles/alarm-utils.mk
 ../usr/include/sprout_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
 	$< -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
 	mv sprout_alarmdefinition.h $@
-${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
-${sprout_scscf.so_OBJECT_DIR}/scscfplugin.o : ../usr/include/sprout_alarmdefinition.h
+
 CLEANS += ../usr/include/sprout_alarmdefinition.h
+
+# The following files all include the alarm defintion
+ALARM_DEFINITION_FILES := ${sprout_test_OBJECT_DIR}/hssconnection_test.o \
+                          ${sprout_test_OBJECT_DIR}/enumservice_test.o \
+                          ${sprout_OBJECT_DIR}/main.o \
+                          ${sprout_scscf.so_OBJECT_DIR}/scscfplugin.o
+
+${ALARM_DEFINITION_FILES} : ../usr/include/sprout_alarmdefinition.h
 
 ../usr/include/memento_as_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
 	$< -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
