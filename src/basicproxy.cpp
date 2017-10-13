@@ -1062,8 +1062,10 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       pj_status_t status = pjsip_tsx_send_msg(_tsx, tdata);
       if (status != PJ_SUCCESS)
       {
+        // LCOV_EXCL_START
         TRC_ERROR("Failed to forward 1xx response: %s",
                 PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
       }
     }
     else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 200))
@@ -1222,8 +1224,10 @@ void BasicProxy::UASTsx::on_final_response()
     pj_status_t status = pjsip_tsx_send_msg(_tsx, rsp);
     if (status != PJ_SUCCESS)
     {
+      // LCOV_EXCL_START
       TRC_ERROR("Failed to send final response: %s",
                 PJUtils::pj_status_to_string(status).c_str());
+      // LCOV_EXCL_STOP
     }
 
     if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
@@ -1262,8 +1266,10 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
         pj_status_t status = pjsip_tsx_send_msg(_tsx, prov_rsp);
         if (status != PJ_SUCCESS)
         {
+          // LCOV_EXCL_START
           TRC_ERROR("Failed to send final response: %s",
                     PJUtils::pj_status_to_string(status).c_str());
+          // LCOV_EXCL_STOP
         }
       }
     }
@@ -1737,8 +1743,10 @@ void BasicProxy::UACTsx::send_request()
 
       if (status != PJ_SUCCESS)
       {
+        // LCOV_EXCL_START
         TRC_ERROR("Failed to send stateful request: %s",
                   PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
       }
 
       // We do not want to take any action on a failure returned from
