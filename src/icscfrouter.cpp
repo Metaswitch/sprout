@@ -66,7 +66,6 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
   int status_code = PJSIP_SC_OK;
   std::string scscf;
   scscf_sip_uri = NULL;
-  bool scscf_blacklisted = false;
 
   if (!_queried_caps)
   {
@@ -88,11 +87,16 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
     {
       // The HSS returned a S-CSCF name that is one of the blacklisted
       // S-CSCFs. Behave as if the HSS failed to return a S-CSCF.
-      scscf_blacklisted = true;
-      scscf = "";
+      _attempted_scscfs.push_back(_hss_rsp.scscf);
+      status_code = hss_query();
       TRC_DEBUG("S-CSCF %s is blacklisted - not routing request to this S-CSCF", _hss_rsp.scscf.c_str());
+
+      SAS::Event event(_trail, SASEvent::SCSCF_BLACKLISTED, 0);
+      event.add_var_param(_hss_rsp.scscf);
+      SAS::report_event(event);
     }
-    else if ((!_hss_rsp.scscf.empty()) &&
+
+    if ((!_hss_rsp.scscf.empty()) &&
         (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
                    _hss_rsp.scscf) == _attempted_scscfs.end()))
     {
@@ -104,9 +108,14 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
     else if (_queried_caps)
     {
       // We queried capabilities from the HSS, so select a suitable S-CSCF.
+      // We pass both _blacklisted_scscfs and _attempted_scscfs to be rejected 
+      // since these are not suitable S-CSCFs.
+      std::vector<std::string> _reject_scscfs;
+      _reject_scscfs.insert(_reject_scscfs.end(), _attempted_scscfs.begin(), _attempted_scscfs.end());
+      _reject_scscfs.insert(_reject_scscfs.end(), _blacklisted_scscfs.begin(), _blacklisted_scscfs.end());
       scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
                                          _hss_rsp.optional_caps,
-                                         _attempted_scscfs,
+                                         _reject_scscfs,
                                          _trail);
       TRC_DEBUG("SCSCF selected: %s", scscf.c_str());
     }
@@ -179,10 +188,6 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
     event.add_var_param(scscf);
     event.add_var_param(_hss_rsp.scscf);
     SAS::report_event(event);
-  }
-  else if (scscf_blacklisted)
-  {
-    
   }
   else
   {

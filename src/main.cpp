@@ -448,6 +448,7 @@ static void usage(void)
        "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
        "                            to SAS\n"
        "     --homestead-timeout    The timeout in ms to use on HTTP requests to Homestead\n"
+       "     --blacklisted-scscfs   List of URIs of blacklisted S-CSCFs\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1014,6 +1015,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_BLACKLISTED_SCSCFS:
+      TRC_INFO("Hello");
       options->blacklisted_scscfs.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->blacklisted_scscfs, 0, false);
       TRC_INFO("%d blacklisted S-CSCFs passed on the command line",
@@ -1727,6 +1729,7 @@ int main(int argc, char* argv[])
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
+  opt.blacklisted_scscfs.push_back("");
 
   status = init_logging_options(argc, argv, &opt);
 
