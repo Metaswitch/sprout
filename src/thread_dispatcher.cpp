@@ -52,7 +52,7 @@ static std::vector<pj_thread_t*> worker_threads;
 
 // Queue for incoming events.
 static PriorityEventQueueBackend* sip_event_queue_backend =
-  new PriorityEventQueueBackend();
+  new PriorityEventQueueBackend(); // LCOV_EXCL_LINE
 static eventq<struct SipEvent> sip_event_queue(0,
                                                true,
                                                sip_event_queue_backend);
@@ -252,11 +252,14 @@ bool process_queue_element()
   }
   else
   {
-    TRC_DEBUG("Unable to process queue element: queue has been terminated");
+    TRC_DEBUG("Unable to process queue element: queue has been terminated"); // LCOV_EXCL_LINE
   }
 
   return rc;
 }
+
+// LCOV_EXCL_START
+// Difficult to verify threading in unit tests
 
 /// Worker threads handle most SIP message processing.
 int worker_thread(void* p)
@@ -273,6 +276,7 @@ int worker_thread(void* p)
 
   return 0;
 }
+// LCOV_EXCL_STOP
 
 // Returns true if the SIP message should always be processed, regardless of
 // overload, and false otherwise.
@@ -324,7 +328,6 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
-
   // LCOV_EXCL_STOP
 
   pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
@@ -471,7 +474,8 @@ pjsip_module* get_mod_thread_dispatcher()
   return &mod_thread_dispatcher;
 }
 
-
+// LCOV_EXCL_START
+// Difficult to verify threading in unit tests
 pj_status_t start_worker_threads()
 {
   pj_status_t status = PJ_SUCCESS;
@@ -493,7 +497,10 @@ pj_status_t start_worker_threads()
   TRC_DEBUG("Worker threads started");
   return status;
 }
+//LCOV_EXCL_STOP
 
+// LCOV_EXCL_START
+// Difficult to verify threading in unit tests
 void stop_worker_threads()
 {
   // Now it is safe to signal the worker threads to exit via the queue and to
@@ -526,6 +533,7 @@ void stop_worker_threads()
   worker_threads.clear();
   TRC_DEBUG("Worker threads stopped");
 }
+//LCOV_EXCL_STOP
 
 void unregister_thread_dispatcher(void)
 {

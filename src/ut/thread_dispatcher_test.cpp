@@ -27,6 +27,8 @@ using ::testing::_;
 class MockCallback : public PJUtils::Callback
 {
   MOCK_METHOD0(run, void());
+  MOCK_METHOD0(destruct, void());
+  virtual ~MockCallback() { destruct(); }
 };
 
 class ThreadDispatcherTest : public SipTest
@@ -38,20 +40,23 @@ public:
     mod_mock = new StrictMock<MockPJSipModule>(stack_data.endpt,
                                                "test-module",
                                                PJSIP_MOD_PRIORITY_TRANSPORT_LAYER);
+
     init_thread_dispatcher(1, NULL, NULL, NULL, &load_monitor, NULL, 2);
     mod_thread_dispatcher = get_mod_thread_dispatcher();
 
     cwtest_completely_control_time();
   }
 
-  virtual void inject_msg_thread(TestingCommon::Message msg)
-  {
-    inject_msg_direct(msg.get_request(), mod_thread_dispatcher);
-  }
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
+
+  }
+
+  virtual void inject_msg_thread(std::string msg)
+  {
+    TRC_DEBUG("Injecting message:\n%s", msg.c_str());
+    inject_msg_direct(msg, mod_thread_dispatcher);
   }
 
   static void TearDownTestCase()
@@ -62,54 +67,85 @@ public:
   virtual ~ThreadDispatcherTest()
   {
     cwtest_reset_time();
-    unregister_thread_dispatcher();
+
     delete mod_mock;
+    unregister_thread_dispatcher();
   }
 
   StrictMock<MockPJSipModule>* mod_mock;
   MockLoadMonitor load_monitor;
   pjsip_module* mod_thread_dispatcher;
   pjsip_process_rdata_param rp;
+
+  const std::string sip_invite =
+      "INVITE sip:a@homedomain SIP/2.0\n"
+      "Via: SIP/2.0/TCP 0.0.0.0:5060;rport;branch=z9hG4bK0\n"
+      "From: <sip:b@homedomain>;tag=0\n"
+      "To: <sip:a@homedomain>\n"
+      "Max-Forwards: 70\n"
+      "Call-ID: 0\n"
+      "CSeq: 1 INVITE\n"
+      "User-Agent: Accession 2.0.0.0\n"
+      "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\n"
+      "Content-Length: 0\n"
+      "";
+
+  const std::string sip_options =
+      "OPTIONS sip:a@homedomain SIP/2.0\n"
+      "Via: SIP/2.0/TCP 0.0.0.0:5060;rport;branch=z9hG4bK0\n"
+      "From: <sip:b@homedomain>;tag=0\n"
+      "To: <sip:a@homedomain>\n"
+      "Max-Forwards: 70\n"
+      "Call-ID: 0\n"
+      "CSeq: 1 OPTIONS\n"
+      "User-Agent: Accession 2.0.0.0\n"
+      "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\n"
+      "Content-Length: 0\n"
+      "";
+
+  const std::string sip_response =
+      "SIP/2.0 200 OK\n"
+      "Via: SIP/2.0/TCP 0.0.0.0:5060;rport;branch=z9hG4bK0\n"
+      "From: <sip:b@homedomain>;tag=0\n"
+      "To: <sip:a@homedomain>\n"
+      "Max-Forwards: 70\n"
+      "Call-ID: 0\n"
+      "CSeq: 1 INVITE\n"
+      "User-Agent: Accession 2.0.0.0\n"
+      "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\n"
+      "Content-Length: 0\n"
+      "";
 };
 
 TEST_F(ThreadDispatcherTest, StandardInviteTest)
 {
-  TestingCommon::Message msg;
-  msg._method = "INVITE";
-
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
   EXPECT_CALL(load_monitor, request_complete(_));
 
-  inject_msg_thread(msg);
+  inject_msg_thread(sip_invite);
   process_queue_element();
 }
 
 // Invites should be rejected with a 503 if the load monitor returns false.
 TEST_F(ThreadDispatcherTest, OverloadedInviteTest)
 {
-  TestingCommon::Message msg;
-  msg._method = "INVITE";
-
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(false));
   EXPECT_CALL(*mod_mock, on_tx_response(_));
   // TODO: Check that this is a 503
 
-  inject_msg_thread(msg);
+  inject_msg_thread(sip_invite);
 }
 
 // Invites older than the specified request_on_queue_timeout parameter should
 // be rejected.
 TEST_F(ThreadDispatcherTest, RejectOldInviteTest)
 {
-  TestingCommon::Message msg;
-  msg._method = "INVITE";
-
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
   EXPECT_CALL(*mod_mock, on_tx_response(_));
   // TODO: Check that this is a 503
 
-  inject_msg_thread(msg);
+  inject_msg_thread(sip_invite);
   cwtest_advance_time_ms(10);
   process_queue_element();
 }
@@ -118,13 +154,21 @@ TEST_F(ThreadDispatcherTest, RejectOldInviteTest)
 // the load monitor - it should process the request regardless of load.
 TEST_F(ThreadDispatcherTest, NeverRejectOptionsTest)
 {
-  TestingCommon::Message msg;
-  msg._method = "OPTIONS";
-
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
   EXPECT_CALL(load_monitor, request_complete(_));
 
-  inject_msg_thread(msg);
+  inject_msg_thread(sip_options);
+  process_queue_element();
+}
+
+// On recieving a SIP response, the thread dispatcher should not call into the
+// load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
+{
+  EXPECT_CALL(*mod_mock, on_rx_response(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, request_complete(_));
+
+  inject_msg_thread(sip_response);
   process_queue_element();
 }
 
@@ -133,27 +177,11 @@ TEST_F(ThreadDispatcherTest, CallbackTest)
   StrictMock<MockCallback>* cb = new StrictMock<MockCallback>();
   add_callback_to_queue(cb);
 
+  // The callback should be run then destroyed
   EXPECT_CALL(*cb, run());
+  EXPECT_CALL(*cb, destruct());
+
   process_queue_element();
-  // cb is deleted after being run
-}
-
-// TODO: At the moment this test must be called last, as it results in the
-// termination of the queue. This is clearly not ideal, and the tests should
-// be restructured to recreate the queue at the start of each test.
-TEST_F(ThreadDispatcherTest, WorkerThreadsTest)
-{
-  TestingCommon::Message msg;
-  msg._method = "INVITE";
-
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, request_complete(_));
-
-  inject_msg_thread(msg);
-  start_worker_threads();
-  sleep(1);
-  stop_worker_threads();
 }
 
 class SipEventQueueTest : public ::testing::Test
