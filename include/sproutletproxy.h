@@ -256,6 +256,10 @@ protected:
     /// The UASTsx will persist while there are pending timers.
     std::set<pj_timer_entry*> _pending_timers;
 
+    /// Count of the number of UASTsx objects currently active. Used for
+    /// debugging purposes.
+    static std::atomic_int _num_instances;
+
     friend class SproutletWrapper;
   };
 

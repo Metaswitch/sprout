@@ -593,6 +593,8 @@ bool SproutletProxy::timer_running(pj_timer_entry* tentry)
 }
 
 
+std::atomic_int SproutletProxy::UASTsx::_num_instances(0);
+
 SproutletProxy::UASTsx::TimerCallback::TimerCallback(pj_timer_entry* timer) :
   _timer_entry(timer)
 {
@@ -614,7 +616,9 @@ SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   _timers(),
   _pending_timers()
 {
-  TRC_VERBOSE("Sproutlet Proxy transaction (%p) created", this);
+  int instances = ++_num_instances;
+  TRC_ERROR("Sproutlet Proxy transaction (%p) created. There are now %d instances",
+            this, instances);
 }
 
 
@@ -645,7 +649,9 @@ SproutletProxy::UASTsx::~UASTsx()
     SAS::report_marker(flush);
   }
 
-  TRC_VERBOSE("Sproutlet Proxy transaction (%p) destroyed", this);
+  int instances = --_num_instances;
+  TRC_ERROR("Sproutlet Proxy transaction (%p) destroyed. There are now %d instances",
+            this, instances);
 }
 
 
