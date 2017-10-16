@@ -672,15 +672,13 @@ void SubscriptionSproutletTsx::update_subscription(
     // stores so that we can check them for any subscriptions. We only want to
     // perform the remote reads once, to avoid added latency.
     // The local AoR is added to the cache in the main function logic
-    for (std::vector<SubscriberDataManager*>::iterator sdm = _subscription->_remote_sdms.begin();
-         sdm != _subscription->_remote_sdms.end();
-         ++sdm)
+    for (SubscriberDataManager* sdm : _subscription->_remote_sdms)
     {
       // We want to read the remote AoR only once at this stage, so we check
       // if there's already an entry in the cache for it.
-      if ((_cached_aors.find(*sdm) == _cached_aors.end()) &&  ((*sdm)->has_servers()))
+      if ((_cached_aors.find(sdm) == _cached_aors.end()) &&  (sdm->has_servers()))
       {
-        read_and_cache_from_store(*sdm, aor, _cached_aors);
+        read_and_cache_from_store(sdm, aor, _cached_aors);
       }
     }
 
