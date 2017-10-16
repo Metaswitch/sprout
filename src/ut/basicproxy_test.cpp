@@ -4102,6 +4102,96 @@ TEST_F(BasicProxyTest, FailedProbeDoesNotUngraylist)
   delete tp;
 }
 
+// Test that an ACK does not blacklist a target (due to not getting a response).
+TEST_F(BasicProxyTest, AckDoesNotBlacklist)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up SRV records so that proxy-x has a higher priority than proxy-y.
+  std::vector<DnsRRecord*> srv_records;
+  srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
+                                         36000000,
+                                         1,
+                                         100,
+                                         5060,
+                                         "proxy-x.awaydomain"));
+  srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
+                                         36000000,
+                                         2,
+                                         100,
+                                         5060,
+                                         "proxy-y.awaydomain"));
+  _dnsresolver.add_to_cache("_sip._tcp.proxy.awaydomain", ns_t_srv, srv_records);
+
+  add_host_mapping("proxy-x.awaydomain", "10.10.10.100");
+  add_host_mapping("proxy-y.awaydomain", "10.10.10.101");
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "ACK";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+
+  // Check that it was sent to the first server.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+  free_txdata();
+
+  // Now inject an INVITE.
+  msg1._unique++;
+  msg1._method = "INVITE";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that it was sent to the first server, which should not have been
+  // graylisted by being sent an ACK.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+
+  // Send a 200 OK response for the request.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  delete tp;
+}
+
 
 // Check that a stateless proxy is NOT blacklisted if a transaction to it times
 // out.
