@@ -313,10 +313,13 @@ pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg,
       uri = PJUtils::translate_sip_uri_to_tel_uri(sip_uri, pool);
       std::string new_uri_str = uri_to_string(PJSIP_URI_IN_OTHER, uri);
 
-      SAS::Event event(trail, SASEvent::ORIG_SIP_TO_TEL, 0);
-      event.add_var_param(old_uri_str);
-      event.add_var_param(new_uri_str);
-      SAS::report_event(event);
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::ORIG_SIP_TO_TEL, 0);
+        event.add_var_param(old_uri_str);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+      }
     }
   }
 
