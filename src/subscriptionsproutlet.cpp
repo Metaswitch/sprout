@@ -307,7 +307,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   const HSSConnection::hss_query_param_t hss_query_param(public_id);
   HSSConnection::hss_query_return_t hss_query_return;
 
-  HTTPCode http_code = _subscription->_hss->get_registration_data(hss_query_parameter,
+  HTTPCode http_code = _subscription->_hss->get_registration_data(hss_query_param,
                                                                   hss_query_return,
                                                                   trail_id);
   st_code = determine_hss_sip_response(http_code, hss_query_return.regstate, "SUBSCRIBE");

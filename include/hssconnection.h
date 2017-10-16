@@ -41,28 +41,39 @@ public:
     std::string wildcard;
     bool cache_allowed;
 
-    hss_query_param_t(const std::string aor_id) : public_user_identity(aor_id),
+    hss_query_param_t()
     {
     }
 
-    hss_query_param_t(const std::string impi,
-                      const std::string impu,
-                      const std::string type,
-                      const std::string server_name,
-                      const std::string wildcard,
-                      const bool cache_allowed
-                      ) : public_user_identity(impi),
-                          private_user_identity(impu),
+    hss_query_param_t(std::string aor_id) : public_user_identity(aor_id)
+    {
+    }
+
+    hss_query_param_t(std::string impu,
+                      std::string impi,
+                      std::string type,
+                      std::string server_name,
+                      std::string wildcard,
+                      bool cache_allowed
+                      ) : public_user_identity(impu),
+                          private_user_identity(impi),
                           type(type),
                           server_name(server_name),
                           wildcard(wildcard),
                           cache_allowed(cache_allowed)
     {
     }
+
   } hss_query_param_t;
 
   typedef struct hss_query_return_t
   {
+    bool _hss_data_cached;
+    bool _registered;
+    bool _barred;
+    std::string _default_uri;
+    std::vector<std::string> _uris;
+    Ifcs _ifcs;
     std::string regstate;
     std::map<std::string, Ifcs> service_profiles;
     AssociatedURIs associated_uris;
@@ -70,13 +81,10 @@ public:
     std::deque<std::string> ccfs;
     std::deque<std::string> ecfs;
 
-    hss_query_return_t() : service_profiles(),
-                           associated_uris({}),
-                           aliases(),
-                           ccfs(),
-                           ecfs()
+    hss_query_return_t()
     {
     }
+
   } hss_query_return_t;
 
   HSSConnection(const std::string& server,
@@ -114,8 +122,8 @@ public:
                              SAS::TrailId trail);
 
   virtual HTTPCode update_registration_state(const hss_query_param_t& hss_query_parameter,
-                                     hss_query_return_t& hss_query_return,
-                                     SAS::TrailId trail);
+                                             hss_query_return_t& hss_query_return,
+                                             SAS::TrailId trail);
 
   virtual HTTPCode get_registration_data(const hss_query_param_t& hss_query_parameter,
                                          hss_query_return_t& hss_query_return,

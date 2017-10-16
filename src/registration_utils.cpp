@@ -686,8 +686,8 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   // Determine the set of IMPUs in the Implicit Registration Set
   std::vector<std::string> unbarred_irs_impus;
-  const HSSConnection::hss_query_param_t hss_query_param(aor);
-  //hss_query_param.type = dereg_type.c_str();
+  HSSConnection::hss_query_param_t hss_query_param(aor);
+  hss_query_param.type = dereg_type;
   HSSConnection::hss_query_return_t hss_query_return;
 
   HTTPCode http_code = hss->get_registration_data(hss_query_param,
@@ -719,7 +719,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     TRC_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
     all_bindings_expired = true;
 
-    //hss_query_param.server_name(scscf_uri);
+    hss_query_param.server_name = scscf_uri;
 
     HTTPCode http_code = hss->update_registration_state(hss_query_param,
                                                         hss_query_return,

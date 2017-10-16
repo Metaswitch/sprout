@@ -198,8 +198,8 @@ static void update_hss_on_aor_expiry(std::string aor_id,
   // Get the S-CSCF URI off the AoR to put on the SAR.
   AoR* aor = aor_pair.get_current();
 
-  const HSSConnection::hss_query_param_t hss_query_param(aor_id);
-  //hss_query_param.type = HSSConnection::DEREG_TIMEOUT;
+  HSSConnection::hss_query_param_t hss_query_param(aor_id);
+  hss_query_param.type = HSSConnection::DEREG_TIMEOUT;
   
   HSSConnection::hss_query_return_t hss_query_return;
   hss_query_param.server_name = aor->_scscf_uri;
@@ -216,7 +216,7 @@ static bool get_reg_data(HSSConnection* hss,
                          SAS::TrailId trail)
 {
   std::vector<std::string> unbarred_irs_impus;
-  const HSSConnection::hss_query_param_t hss_query_param(aor_id);
+  HSSConnection::hss_query_param_t hss_query_param(aor_id);
   HSSConnection::hss_query_return_t hss_query_return;
   hss_query_return.service_profiles = ifc_map;
   hss_query_return.associated_uris = associated_uris;
@@ -657,7 +657,17 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
       // If either of these operations fail, we return a 500 Internal
       // Server Error - this will trigger the timer service to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
-      HTTPCode hss_query = _cfg->_hss->update_registration_state(impu, impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->get_scscf_uri(), trail());
+      HSSConnection::hss_query_param_t hss_query_param(impu, 
+                                                       impi, 
+                                                       HSSConnection::AUTH_TIMEOUT,
+                                                       auth_challenge->get_scscf_uri(),
+                                                       "",
+                                                       true);
+      HSSConnection::hss_query_return_t hss_query_return;
+
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(hss_query_param, 
+                                                                 hss_query_return,
+                                                                 trail());
 
       if (hss_query == HTTP_OK)
       {
