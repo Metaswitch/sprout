@@ -361,25 +361,25 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
   // Create a subscription object from the request that we can pass down to
   // be set into/updated in the different stores
-  AoR::Subscription* new_subscription = create_subscription(req, expiry);
+  AoR::Subscription new_subscription = create_subscription(req, expiry);
 
   // Update the local and remote stores with the new subscription
-  Store::Status status = update_subscriptions_in_stores(_subscription,
-                                                        new_subscription,
-                                                        aor,
-                                                        &associated_uris,
-                                                        req,
-                                                        public_id,
-                                                        acr,
-                                                        ccfs,
-                                                        ecfs);
+  Store::Status status = update_subscription_in_stores(_subscription,
+                                                       new_subscription,
+                                                       aor,
+                                                       &associated_uris,
+                                                       req,
+                                                       public_id,
+                                                       acr,
+                                                       ccfs,
+                                                       ecfs);
 
   if (_subscription->_analytics != NULL)
   {
     // Generate an analytics log for this subscription update.
     _subscription->_analytics->subscription(aor,
-                                            new_subscription->_to_tag,
-                                            new_subscription->_req_uri,
+                                            new_subscription._to_tag,
+                                            new_subscription._req_uri,
                                             expiry);
   }
 
@@ -394,7 +394,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(rsp,
                                                           PJSIP_H_TO,
                                                           NULL);
-    pj_strdup2(get_pool(rsp), &to->tag, new_subscription->_to_tag.c_str());
+    pj_strdup2(get_pool(rsp), &to->tag, new_subscription._to_tag.c_str());
 
     // Add a P-Charging-Function-Addresses header to the successful SUBSCRIBE
     // response containing the charging addresses returned by the HSS.
@@ -423,7 +423,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                           PJSIP_H_TO,
                                                           NULL);
 
-    pj_strdup2(get_pool(rsp), &to->tag, new_subscription->_to_tag.c_str());
+    pj_strdup2(get_pool(rsp), &to->tag, new_subscription._to_tag.c_str());
 
     // Pass the response to the ACR.
     acr->tx_response(req);
@@ -431,7 +431,6 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     // Send the response.
     send_response(rsp);
   }
-  delete new_subscription;
 
   SAS::Event sub_accepted(trail_id, SASEvent::SUBSCRIBE_ACCEPTED, 0);
   SAS::report_event(sub_accepted);
@@ -447,15 +446,15 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   free_msg(req);
 }
 
-AoR::Subscription* SubscriptionSproutletTsx::create_subscription(pjsip_msg* req, int expiry)
+// Utility function to take a SUBSCRIBE request, and generate a new subscription object from it
+// This saves us from doing this parsing numerous times when getting subscriptions out of the aors
+AoR::Subscription SubscriptionSproutletTsx::create_subscription(pjsip_msg* req, int expiry)
 {
-  AoR::Subscription* subscription = NULL;
   int now = time(NULL);
   std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id);
   pjsip_fromto_hdr* from = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_FROM, NULL);
   pjsip_fromto_hdr* to = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_TO, NULL);
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
-  std::string subscription_id;
 
   std::string contact_uri;
   pjsip_uri* uri = (contact->uri != NULL) ?
@@ -468,8 +467,7 @@ AoR::Subscription* SubscriptionSproutletTsx::create_subscription(pjsip_msg* req,
     contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
   }
 
-  subscription_id = PJUtils::pj_str_to_string(&to->tag);
-
+  std::string subscription_id = PJUtils::pj_str_to_string(&to->tag);
   if (subscription_id == "")
   {
     // If there's no to tag, generate an unique one
@@ -478,11 +476,9 @@ AoR::Subscription* SubscriptionSproutletTsx::create_subscription(pjsip_msg* req,
   }
 
   // Create a subscription, and fill it with the new data
-  subscription = new AoR::Subscription;
+  AoR::Subscription subscription;
   TRC_DEBUG("Subscription identifier = %s", subscription_id.c_str());
-  subscription->_to_tag = subscription_id;
 
-  subscription->_req_uri = contact_uri;
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
                                                                     PJSIP_H_RECORD_ROUTE,
                                                                     NULL);
@@ -490,30 +486,33 @@ AoR::Subscription* SubscriptionSproutletTsx::create_subscription(pjsip_msg* req,
   {
     std::string route = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                                route_hdr->name_addr.uri);
-    TRC_DEBUG("Route header %s", route.c_str());
+    TRC_DEBUG("Adding route header %s to subscription %s",
+                route.c_str(), subscription_id.c_str());
     // Add the route.
-    subscription->_route_uris.push_back(route);
+    subscription._route_uris.push_back(route);
     // Look for the next header.
     route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
                                                      PJSIP_H_RECORD_ROUTE,
                                                      route_hdr->next);
   }
 
-  subscription->_cid = cid;
-  subscription->_to_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to->uri);
-  subscription->_from_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from->uri);
-  subscription->_from_tag = PJUtils::pj_str_to_string(&from->tag);
-  subscription->_refreshed = true;
-  subscription->_expires = now + expiry;
+  subscription._to_tag = subscription_id;
+  subscription._req_uri = contact_uri;
+  subscription._cid = cid;
+  subscription._to_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to->uri);
+  subscription._from_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from->uri);
+  subscription._from_tag = PJUtils::pj_str_to_string(&from->tag);
+  subscription._refreshed = true;
+  subscription._expires = now + expiry;
 
   return subscription;
 }
 
 // Handles the necessary logic for getting, updating, and setting AoRs from
 // local and remote sites with the new subscription data
-Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
+Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
                                              SubscriptionSproutlet* _subscription,
-                                             AoR::Subscription* new_subscription,
+                                             AoR::Subscription new_subscription,
                                              std::string aor,
                                              AssociatedURIs* associated_uris,
                                              pjsip_msg* req,
@@ -523,6 +522,7 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
                                              std::deque<std::string> ecfs)
 {
   Store::Status status;
+
   // We cache AoRPairs from the local and remote SDMs to avoid having
   // to do repeated remote reads, saving thread time
   std::map<SubscriberDataManager*, AoRPair*> _cached_aors;
@@ -532,6 +532,8 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
                                                       _cached_aors);
   if (local_aor_pair == NULL)
   {
+    TRC_DEBUG("Hit an error reading AoR %s from the local store, unable to update subscription %s",
+                aor.c_str(), new_subscription._to_tag.c_str());
     status = Store::Status::ERROR;
     return status;
   }
@@ -539,18 +541,21 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
   // Write to the local store, handling any CAS error
   do
   {
-    update_subscriptions(_subscription, new_subscription, aor, local_aor_pair, _cached_aors);
+    update_subscription(_subscription, new_subscription, aor, local_aor_pair, _cached_aors);
     local_aor_pair->get_current()->_associated_uris = *associated_uris;
 
     status = _subscription->_sdm->set_aor_data(aor, local_aor_pair, trail());
     if (status == Store::DATA_CONTENTION)
     {
-      TRC_DEBUG("Hit data contention attempting to write to local store");
+      TRC_DEBUG("Hit data contention attempting to write to local store for AoR %s, subscription %s",
+                  aor.c_str(), new_subscription._to_tag.c_str());
       local_aor_pair = read_and_cache_from_store(_subscription->_sdm, aor, _cached_aors);
       if (local_aor_pair == NULL)
       {
         // LCOV_EXCL_START We test behaviour on store error elsewhere,
         // and UT-ing this case is more effort than it's worth
+        TRC_DEBUG("Hit an error reading AoR %s from the local store, unable to update subscription %s",
+                    aor.c_str(), new_subscription._to_tag.c_str());
         status = Store::Status::ERROR;
         return status;
         // LCOV_EXCL_STOP
@@ -561,38 +566,39 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
 
   log_subscriptions(aor, local_aor_pair->get_current());
 
-  // Using a different rc for the remote stores, as their success/failure does
-  // not impact whether we determine the overall process a success
-  Store::Status rc;
-  AoRPair* remote_aor_pair = NULL;
 
-  for (std::vector<SubscriberDataManager*>::iterator sdm = _subscription->_remote_sdms.begin();
-       sdm != _subscription->_remote_sdms.end();
-       ++sdm)
+  for (SubscriberDataManager* sdm: _subscription->_remote_sdms)
   {
+    // Using a different rc for the remote stores, as their success/failure does
+    // not impact whether we determine the overall process a success
+    Store::Status rc;
+
+    AoRPair* remote_aor_pair = NULL;
     // Check if we have done the remote read for this SDM yet, and do it if not
     // Saves us from doing a re-read if we had to get the AoRs previously
-    if ((_cached_aors.find(*sdm) == _cached_aors.end()) &&  ((*sdm)->has_servers()))
+    if ((_cached_aors.find(sdm) == _cached_aors.end()) &&  (sdm->has_servers()))
     {
-      TRC_DEBUG("No cached AoR data found for remote site");
-      remote_aor_pair = read_and_cache_from_store(*sdm, aor, _cached_aors);
+      TRC_DEBUG("No cached AoR data found for AoR %s from remote sdm %p",
+                  aor.c_str(), sdm);
+      remote_aor_pair = read_and_cache_from_store(sdm, aor, _cached_aors);
     }
     else
     {
-      TRC_DEBUG("Reading cached AoR data for remote site");
-      remote_aor_pair = _cached_aors[*sdm];
+      TRC_DEBUG("Reading cached AoR data for AoR %s, cached from remote sdm %p",
+                  aor.c_str(), sdm);
+      remote_aor_pair = _cached_aors[sdm];
     }
 
     do
     {
-      update_subscriptions(_subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
+      update_subscription(_subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
       remote_aor_pair->get_current()->_associated_uris = *associated_uris;
 
-      rc = (*sdm)->set_aor_data(aor, remote_aor_pair, trail());
+      rc = sdm->set_aor_data(aor, remote_aor_pair, trail());
       if (rc == Store::DATA_CONTENTION)
       {
-        TRC_DEBUG("Hit data contention attempting to write to remote store");
-        remote_aor_pair = read_and_cache_from_store(*sdm, aor, _cached_aors);
+        TRC_DEBUG("Hit data contention attempting to write AoR %s to remote store", aor.c_str());
+        remote_aor_pair = read_and_cache_from_store(sdm, aor, _cached_aors);
         if (remote_aor_pair == NULL)
         {
           // LCOV_EXCL_START We test behaviour on store error elsewhere,
@@ -610,24 +616,24 @@ Store::Status SubscriptionSproutletTsx::update_subscriptions_in_stores(
   }
 
   // Clear out the cached AoR data
-  for (std::map<SubscriberDataManager*, AoRPair*>::const_iterator it = _cached_aors.begin();
-      it != _cached_aors.end();
-      ++it)
+  for (std::pair<SubscriberDataManager*, AoRPair*> cached_aor: _cached_aors)
   {
-    delete it->second;
+    delete cached_aor.second;
   }
 
-  return status;
+ return status;
 }
 
+// Reads AoR data from the specified SDM, and stores the returned AoRPair in the
+// _cached_aors map. Returns a pointer to the AoRPair if successful, or NULL if
+// we failed the read.
+// NOTE: Ownership of the AoRPair remains with the _cached_aors map; it does not
+// pass over to the caller.
 AoRPair* SubscriptionSproutletTsx::read_and_cache_from_store(
                        SubscriberDataManager* sdm,
                        std::string aor,
                        std::map<SubscriberDataManager*, AoRPair*>& _cached_aors)
 {
-  // Returns NULL if the SDM hits an error reading from the store
-  // Adds the AoRPair to the _cached_aors if we succeed, and returns it
-
   AoRPair* aor_pair = sdm->get_aor_data(aor, trail());
 
   if ((aor_pair == NULL) ||
@@ -650,9 +656,12 @@ AoRPair* SubscriptionSproutletTsx::read_and_cache_from_store(
   return aor_pair;
 }
 
-void SubscriptionSproutletTsx::update_subscriptions(
+// Updates the AoRPair with the details of the new_subscription
+// If the AoRPair doesn't contain any subscriptions, checks to see if any remote
+// AoRs have subscription information we want to copy over
+void SubscriptionSproutletTsx::update_subscription(
                   SubscriptionSproutlet* _subscription,
-                  AoR::Subscription* new_subscription,
+                  AoR::Subscription new_subscription,
                   std::string aor,
                   AoRPair* aor_pair,
                   std::map<SubscriberDataManager*, AoRPair*>& _cached_aors)
@@ -676,16 +685,14 @@ void SubscriptionSproutletTsx::update_subscriptions(
     }
 
     // Now copy over any details from the first cached aor we have with any subscriptions
-    for (std::map<SubscriberDataManager*, AoRPair*>::const_iterator it = _cached_aors.begin();
-        it != _cached_aors.end();
-        ++it)
+    for (std::pair<SubscriberDataManager*, AoRPair*> cached_aor: _cached_aors)
     {
-      if (it->second != aor_pair)
+      if (cached_aor.second != aor_pair)
       {
-        if (! it->second->get_current()->subscriptions().empty())
+        if (! cached_aor.second->get_current()->subscriptions().empty())
         {
           TRC_DEBUG("AoR contained no subscriptions, but a remote copy did; copying data across");
-          aor_pair->get_current()->copy_aor(it->second->get_current());
+          aor_pair->get_current()->copy_aor(cached_aor.second->get_current());
           break;
         }
       }
@@ -693,23 +700,20 @@ void SubscriptionSproutletTsx::update_subscriptions(
   }
 
   // Find the appropriate subscription in the subscription list for this AoR. If it can't
-  // be found a new empty subscription is created.
+  // be found a new empty subscription will be created for us by get_subscription.
   AoR::Subscription* subscription =
-                aor_pair->get_current()->get_subscription(new_subscription->_to_tag);
+                aor_pair->get_current()->get_subscription(new_subscription._to_tag);
 
   // Update/create the subscription with the new details.
-  subscription->_req_uri = new_subscription->_req_uri;
-
-  subscription->_route_uris.clear();
-  subscription->_route_uris = new_subscription->_route_uris;
-
-  subscription->_cid = new_subscription->_cid;
-  subscription->_to_uri = new_subscription->_to_uri;
-  subscription->_to_tag = new_subscription->_to_tag;
-  subscription->_from_uri = new_subscription->_from_uri;
-  subscription->_from_tag = new_subscription->_from_tag;
+  subscription->_req_uri = new_subscription._req_uri;
+  subscription->_route_uris = new_subscription._route_uris;
+  subscription->_cid = new_subscription._cid;
+  subscription->_to_uri = new_subscription._to_uri;
+  subscription->_to_tag = new_subscription._to_tag;
+  subscription->_from_uri = new_subscription._from_uri;
+  subscription->_from_tag = new_subscription._from_tag;
   subscription->_refreshed = true;
-  subscription->_expires = new_subscription->_expires;
+  subscription->_expires = new_subscription._expires;
 }
 
 void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,

@@ -435,8 +435,7 @@ TEST_F(SubscriptionTest, BadScheme)
   msg._scheme = "sips";
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  out = pop_txdata()->msg;
+  pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(404, out->line.status.code);
   EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
 }
@@ -447,8 +446,7 @@ TEST_F(SubscriptionTest, NoContact)
   msg._contact = "";
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  out = pop_txdata()->msg;
+  pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(400, out->line.status.code);
   EXPECT_EQ("Bad Request", str_pj(out->line.status.reason));
 }
@@ -483,8 +481,7 @@ TEST_F(SubscriptionTest, LocalStoreGetError)
   SubscribeMessage msg;
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  out = pop_txdata()->msg;
+  pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(500, out->line.status.code);
   EXPECT_EQ("Internal Server Error", str_pj(out->line.status.reason));
 }
@@ -562,8 +559,7 @@ TEST_F(SubscriptionTest, LocalStoreSetError)
   SubscribeMessage msg;
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  out = pop_txdata()->msg;
+  pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(500, out->line.status.code);
   EXPECT_EQ("Internal Server Error", str_pj(out->line.status.reason));
 }
@@ -850,7 +846,6 @@ TEST_F(SubscriptionTest, LocalStoreNoSubscriptions)
   check_subscriptions("sip:6505550231@homedomain", 2u);
 }
 
-
 /// Check that a subscription where there is data contention doesn't
 /// generate any duplicate NOTIFYs
 TEST_F(SubscriptionTest, SubscriptionWithDataContention)
@@ -879,12 +874,9 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
 // Check data contention in a remote store 
 TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
 {
-  TRC_DEBUG("SETTING REMOTE STORE CONTENTION FLAG ON %p", _remote_sdm);
-  _remote_data_store->force_contention();
   // Add the base AoR to the remote store
   std::string aor = "sip:6505550231@homedomain";
   int now = time(NULL);
-  TRC_DEBUG("ADDING AOR TO REMOTE STORE");
   AoRPair* aor_pair = _remote_sdm->get_aor_data(aor, 0);
   AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
@@ -902,10 +894,8 @@ TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
   // Add the AoR record to the store.
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
-  TRC_DEBUG("SETTING AOR TO REMOTE STORE %p", _remote_sdm);
   _remote_sdm->set_aor_data(aor, aor_pair, 0);
 
-  TRC_DEBUG("SETTING REMOTE STORE CONTENTION FLAG ON %p", _remote_sdm);
   _remote_data_store->force_contention();
 
   // Set up a single subscription - this should generate a 200 OK then
@@ -923,11 +913,10 @@ TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
 
-  delete aor_pair; aor_pair = NULL;
+  delete aor_pair;
   // Check there's one subscription stored
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
-
 
 // Test the Event Header
 // Missing Event header should be rejected

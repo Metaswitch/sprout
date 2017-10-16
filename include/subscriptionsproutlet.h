@@ -98,27 +98,27 @@ protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
 
-  AoR::Subscription* create_subscription(pjsip_msg* req, int expiry);
+  AoR::Subscription create_subscription(pjsip_msg* req, int expiry);
 
-  Store::Status update_subscriptions_in_stores(SubscriptionSproutlet* _subscription,
-                                               AoR::Subscription* new_subscription,
-                                               std::string aor,
-                                               AssociatedURIs* associated_uris,
-                                               pjsip_msg* req,
-                                               std::string public_id,
-                                               ACR* acr,
-                                               std::deque<std::string> ccfs,
-                                               std::deque<std::string> ecfs);
+  Store::Status update_subscription_in_stores(SubscriptionSproutlet* _subscription,
+                                              AoR::Subscription new_subscription,
+                                              std::string aor,
+                                              AssociatedURIs* associated_uris,
+                                              pjsip_msg* req,
+                                              std::string public_id,
+                                              ACR* acr,
+                                              std::deque<std::string> ccfs,
+                                              std::deque<std::string> ecfs);
 
   AoRPair* read_and_cache_from_store(SubscriberDataManager* sdm,
                                      std::string aor,
                                      std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
 
-  void update_subscriptions(SubscriptionSproutlet* _subscription,
-                            AoR::Subscription* new_subscription,
-                            std::string aor,
-                            AoRPair* aor_pair,
-                            std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
+  void update_subscription(SubscriptionSproutlet* _subscription,
+                           AoR::Subscription new_subscription,
+                           std::string aor,
+                           AoRPair* aor_pair,
+                           std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
 
   void log_subscriptions(const std::string& aor_name,
                          AoR* aor_data);
