@@ -606,7 +606,7 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
 
           // We've hit an error in reading from the remote store, but we don't
           // take any action on this. Bail out and try the next store.
-          TRC_ERROR("Failed to read AoR from remote store");
+          TRC_DEBUG("Failed to read AoR from remote store");
           break;
           // LCOV_EXCL_STOP
         }
@@ -640,8 +640,8 @@ AoRPair* SubscriptionSproutletTsx::read_and_cache_from_store(
       (aor_pair->get_current() == NULL))
   {
     // Failed to get data for the AoR because there is no connection
-    // to the store.
-    TRC_ERROR("Failed to get AoR subscriptions for %s from store", aor.c_str());
+    // to the store. SAS logging is left to the SDM
+    TRC_DEBUG("Failed to get AoR data for %s from store", aor.c_str());
     delete aor_pair;
     return NULL;
   }
