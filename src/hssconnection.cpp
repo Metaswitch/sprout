@@ -312,12 +312,13 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
 
 bool decode_homestead_xml(const std::string public_user_identity,
                           std::shared_ptr<rapidxml::xml_document<> > root,
-                          std::string& regstate,
+                          /*std::string& regstate,
                           std::map<std::string, Ifcs >& ifcs_map,
                           AssociatedURIs& associated_uris,
                           std::vector<std::string>& aliases,
                           std::deque<std::string>& ccfs,
-                          std::deque<std::string>& ecfs,
+                          std::deque<std::string>& ecfs,*/
+                          HSSConnection::hss_query_return_t& hss_query_return,
                           SIFCService* sifc_service,
                           bool allowNoIMS,
                           SAS::TrailId trail)
@@ -354,9 +355,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
     return false;
   }
 
-  regstate = reg->value();
+  hss_query_return.regstate = reg->value();
 
-  if ((regstate == RegDataXMLUtils::STATE_NOT_REGISTERED) && (allowNoIMS))
+  if ((hss_query_return.regstate == RegDataXMLUtils::STATE_NOT_REGISTERED) && (allowNoIMS))
   {
     TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
@@ -377,9 +378,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
   if (!SproutXmlUtils::parse_ims_subscription(public_user_identity,
                                               root,
                                               imss,
-                                              ifcs_map,
-                                              associated_uris,
-                                              aliases,
+                                              hss_query_return.service_profiles,
+                                              hss_query_return.associated_uris,
+                                              hss_query_return.aliases,
                                               sifc_service,
                                               trail))
   {
@@ -395,7 +396,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (charging_addrs_node)
   {
-    parse_charging_addrs_node(charging_addrs_node, ccfs, ecfs);
+    parse_charging_addrs_node(charging_addrs_node, hss_query_return.ccfs, hss_query_return.ecfs);
   }
   return true;
 }
@@ -585,7 +586,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
     return http_code;
   }
 
-  return decode_homestead_xml(public_user_identity,
+  /*return decode_homestead_xml(public_user_identity,
                               root,
                               regstate,
                               ifcs_map,
@@ -596,41 +597,23 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                               _sifc_service,
                               false,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
+                              */
+  return HTTP_OK;
 }
 
-HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
-                                              std::string& regstate,
-                                              std::map<std::string, Ifcs >& ifcs_map,
-                                              AssociatedURIs& associated_uris,
-                                              SAS::TrailId trail)
-{
-  std::deque<std::string> unused_ccfs;
-  std::deque<std::string> unused_ecfs;
-  return get_registration_data(public_user_identity,
-                               regstate,
-                               ifcs_map,
-                               associated_uris,
-                               unused_ccfs,
-                               unused_ecfs,
-                               trail);
-}
 
-HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
-                                              std::string& regstate,
-                                              std::map<std::string, Ifcs >& ifcs_map,
-                                              AssociatedURIs& associated_uris,
-                                              std::deque<std::string>& ccfs,
-                                              std::deque<std::string>& ecfs,
+HTTPCode HSSConnection::get_registration_data(const hss_query_parameter_t& hss_query_parameter,
+                                              hss_query_return_t& hss_query_return,
                                               SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_GET_REG, 0);
-  event.add_var_param(public_user_identity);
+  event.add_var_param(hss_query_parameter.public_user_identity);
   SAS::report_event(event);
 
-  std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
+  std::string path = "/impu/" + Utils::url_escape(hss_query_parameter.public_user_identity) + "/reg-data";
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
@@ -665,14 +648,9 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   // not return any iFCs (when the subscriber isn't registered), so a successful
   // response shouldn't be taken as a guarantee of iFCs.
   std::vector<std::string> unused_aliases;
-  return decode_homestead_xml(public_user_identity,
+  return decode_homestead_xml(hss_query_parameter.public_user_identity,
                               root,
-                              regstate,
-                              ifcs_map,
-                              associated_uris,
-                              unused_aliases,
-                              ccfs,
-                              ecfs,
+                              hss_query_return,
                               _sifc_service,
                               true,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;

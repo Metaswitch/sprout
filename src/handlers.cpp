@@ -206,20 +206,22 @@ static void update_hss_on_aor_expiry(std::string aor_id,
 }
 
 static bool get_reg_data(HSSConnection* hss,
-                         std::string aor_id,
+                         const std::string aor_id,
                          AssociatedURIs& associated_uris,
                          std::map<std::string, Ifcs>& ifc_map,
                          SAS::TrailId trail)
 {
-  std::string state;
   std::vector<std::string> unbarred_irs_impus;
-  HTTPCode http_code = hss->get_registration_data(aor_id,
-                                                  state,
-                                                  ifc_map,
-                                                  associated_uris,
+  const HSSConnection::hss_query_parameter_t hss_query_parameter(aor_id);
+  HSSConnection::hss_query_return_t hss_query_return;
+  hss_query_return.service_profiles = ifc_map;
+  hss_query_return.associated_uris = associated_uris;
+
+  HTTPCode http_code = hss->get_registration_data(hss_query_parameter,
+                                                  hss_query_return,
                                                   trail);
 
-  unbarred_irs_impus = associated_uris.get_unbarred_uris();
+  unbarred_irs_impus = hss_query_return.associated_uris.get_unbarred_uris();
 
   if ((http_code != HTTP_OK) || unbarred_irs_impus.empty())
   {
@@ -227,10 +229,10 @@ static bool get_reg_data(HSSConnection* hss,
     // we have into the Associated URIs list so that we have at least one IMPU
     // we can issue NOTIFYs for. We should only do this if that IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor_id.c_str(), http_code);
-    if (!associated_uris.is_impu_barred(aor_id))
+    if (!hss_query_return.associated_uris.is_impu_barred(aor_id))
     {
-      associated_uris.clear_uris();
-      associated_uris.add_uri(aor_id, false);
+      hss_query_return.associated_uris.clear_uris();
+      hss_query_return.associated_uris.add_uri(aor_id, false);
     }
   }
 

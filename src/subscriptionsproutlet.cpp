@@ -304,22 +304,12 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SAS::Marker start_marker(trail_id, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  // Query the HSS for the associated URIs.
-  AssociatedURIs associated_uris = {};
-  std::map<std::string, Ifcs> ifc_map;
-
-  // Subscriber must have already registered to be making a subscribe
-  std::string state;
-  std::deque<std::string> ccfs;
-  std::deque<std::string> ecfs;
-  HTTPCode http_code = _subscription->_hss->get_registration_data(public_id,
-                                                               state,
-                                                               ifc_map,
-                                                               associated_uris,
-                                                               ccfs,
-                                                               ecfs,
-                                                               trail_id);
-  st_code = determine_hss_sip_response(http_code, state, "SUBSCRIBE");
+  const HSSConnection::hss_query_parameter_t hss_query_parameter(public_id);
+  HSSConnection::hss_query_return_t hss_query_return;
+  HTTPCode http_code = _subscription->_hss->get_registration_data(hss_query_parameter,
+                                                                  hss_query_return,
+                                                                  trail_id);
+  st_code = determine_hss_sip_response(http_code, hss_query_return.regstate, "SUBSCRIBE");
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -334,7 +324,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // should already have been rejected for the subscriber being unregistered,
   // but we handle the error case where it isn't.
   std::string aor;
-  if (!associated_uris.get_default_impu(aor, false))
+  if (!hss_query_return.associated_uris.get_default_impu(aor, false))
   {
     pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
     send_response(rsp);
@@ -353,7 +343,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // If the write to the local store succeeds, then write to the remote stores.
   AoRPair* aor_pair = write_subscriptions_to_store(_subscription->_sdm,
                                                    aor,
-                                                   &associated_uris,
+                                                   &(hss_query_return.associated_uris),
                                                    req,
                                                    now,
                                                    NULL,
@@ -361,8 +351,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                    public_id,
                                                    true,
                                                    acr,
-                                                   ccfs,
-                                                   ecfs);
+                                                   hss_query_return.ccfs,
+                                                   hss_query_return.ecfs);
 
   if (aor_pair != NULL)
   {
@@ -379,7 +369,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
       {
         AoRPair* remote_aor_pair = write_subscriptions_to_store(*it,
                                                                 aor,
-                                                                &associated_uris,
+                                                                &(hss_query_return.associated_uris),
                                                                 req,
                                                                 now,
                                                                 aor_pair,
@@ -387,8 +377,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                                 public_id,
                                                                 false,
                                                                 acr,
-                                                                ccfs,
-                                                                ecfs);
+                                                                hss_query_return.ccfs,
+                                                                hss_query_return.ecfs);
         delete remote_aor_pair;
       }
     }

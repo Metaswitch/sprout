@@ -32,6 +32,34 @@
 class HSSConnection
 {
 public:
+  typedef struct hss_query_parameter_t
+  {
+    const std::string public_user_identity;
+
+    hss_query_parameter_t(const std::string aor_id) : public_user_identity(aor_id) 
+    {
+    }
+  } hss_query_parameter_t;
+
+  typedef struct hss_query_return_t
+  {
+    std::string private_user_identity;
+    std::string regstate;
+    std::map<std::string, Ifcs> service_profiles;
+    AssociatedURIs associated_uris;
+    std::vector<std::string> aliases;
+    std::deque<std::string> ccfs;
+    std::deque<std::string> ecfs;
+
+    hss_query_return_t() : service_profiles(),
+                           associated_uris({}),
+                           aliases(),
+                           ccfs(),
+                           ecfs()
+    {
+    }
+  } hss_query_return_t;
+
   HSSConnection(const std::string& server,
                 HttpResolver* resolver,
                 LoadMonitor* load_monitor,
@@ -110,17 +138,8 @@ public:
                                              AssociatedURIs& associated_uris,
                                              SAS::TrailId trail);
 
-  HTTPCode get_registration_data(const std::string& public_user_identity,
-                                 std::string& regstate,
-                                 std::map<std::string, Ifcs >& service_profiles,
-                                 AssociatedURIs& associated_uris,
-                                 std::deque<std::string>& ccfs,
-                                 std::deque<std::string>& ecfs,
-                                 SAS::TrailId trail);
-  virtual HTTPCode get_registration_data(const std::string& public_user_identity,
-                                         std::string& regstate,
-                                         std::map<std::string, Ifcs >& service_profiles,
-                                         AssociatedURIs& associated_uris,
+  virtual HTTPCode get_registration_data(const hss_query_parameter_t& hss_query_parameter,
+                                         hss_query_return_t& hss_query_return,
                                          SAS::TrailId trail);
   rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
 

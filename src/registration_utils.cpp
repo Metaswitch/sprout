@@ -29,6 +29,7 @@ extern "C" {
 #include <boost/lexical_cast.hpp>
 #include "sproutsasevent.h"
 #include "snmp_success_fail_count_table.h"
+#include "hssconnection.h"
 
 #define MAX_SIP_MSG_SIZE 65535
 
@@ -685,17 +686,16 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   // Determine the set of IMPUs in the Implicit Registration Set
   std::vector<std::string> unbarred_irs_impus;
-  AssociatedURIs associated_uris = {};
-  std::string state;
-  std::map<std::string, Ifcs> ifc_map;
-  HTTPCode http_code = hss->get_registration_data(aor,
-                                                  state,
-                                                  ifc_map,
-                                                  associated_uris,
+  const HSSConnection::hss_query_parameter_t hss_query_parameter(aor);
+  //hss_query_parameter.public_user_identity(aor);
+  HSSConnection::hss_query_return_t hss_query_return;
+
+  HTTPCode http_code = hss->get_registration_data(hss_query_parameter,
+                                                  hss_query_return,
                                                   trail);
 
   // We only want to send NOTIFYs for unbarred IMPUs.
-  unbarred_irs_impus = associated_uris.get_unbarred_uris();
+  unbarred_irs_impus = hss_query_return.associated_uris.get_unbarred_uris();
 
   if ((http_code != HTTP_OK) || unbarred_irs_impus.empty())
   {
@@ -703,16 +703,16 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     // we have into the Associated URIs list so that we have at least one IMPU
     // we can issue NOTIFYs for. We should only do this if that IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor.c_str(), http_code);
-    if (!associated_uris.is_impu_barred(aor))
+    if (!hss_query_return.associated_uris.is_impu_barred(aor))
     {
-      associated_uris.clear_uris();
-      associated_uris.add_uri(aor, false);
+      hss_query_return.associated_uris.clear_uris();
+      hss_query_return.associated_uris.add_uri(aor, false);
     }
   }
 
   std::string scscf_uri;
 
-  if (expire_bindings(sdm, aor, &associated_uris, binding_id, scscf_uri, trail))
+  if (expire_bindings(sdm, aor, &(hss_query_return.associated_uris), binding_id, scscf_uri, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -727,7 +727,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                                         dereg_type,
                                                         scscf_uri,
                                                         ifc_map,
-                                                        associated_uris,
+                                                        hss_query_return.associated_uris,
                                                         trail);
 
     if (http_code == HTTP_OK)
@@ -760,7 +760,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, &associated_uris, binding_id, scscf_uri, trail);
+    (void) expire_bindings(*remote_sdm, aor, &(hss_query_return.associated_uris), binding_id, scscf_uri, trail);
   }
 
   return all_bindings_expired;

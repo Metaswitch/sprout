@@ -20,6 +20,7 @@
 #include "rapidjson/document.h"
 #include "handlers_test.h"
 #include "chronoshandlers.h"
+#include "hssconnection.h"
 
 using namespace std;
 using ::testing::_;
@@ -78,7 +79,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _))
            .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
@@ -164,7 +165,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _)).WillOnce(Return(HTTP_OK));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _)).WillOnce(Return(HTTP_OK));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
       EXPECT_CALL(*store, set_aor_data(aor_id, aor, _, _)).WillOnce(Return(Store::OK));
 
@@ -208,7 +209,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, LocalAoRNoBindingsTest)
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _))
            .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
@@ -266,7 +267,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _))
            .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
@@ -312,7 +313,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NullAoRTest)
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _))
            .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));

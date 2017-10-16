@@ -367,24 +367,26 @@ class HssConnectionTest : public BaseTest
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
-  AssociatedURIs uris;
-  std::map<std::string, Ifcs> ifcs_map;
-  std::string regstate;
-  _hss.get_registration_data("pubid42", regstate, ifcs_map, uris, 0);
-  EXPECT_EQ("REGISTERED", regstate);
-  ASSERT_EQ(2u, uris.get_unbarred_uris().size());
-  EXPECT_EQ("sip:123@example.com", uris.get_unbarred_uris()[0]);
-  EXPECT_EQ("sip:456@example.com", uris.get_unbarred_uris()[1]);
+  const HSSConnection::hss_query_parameter_t hss_query_parameter("pubid42");
+  HSSConnection::hss_query_return_t hss_query_return;
+  _hss.get_registration_data(hss_query_parameter,
+                             hss_query_return,
+                             0);
+  EXPECT_EQ("REGISTERED", hss_query_return.regstate);
+  ASSERT_EQ(2u, hss_query_return.associated_uris.get_unbarred_uris().size());
+  EXPECT_EQ("sip:123@example.com", hss_query_return.associated_uris.get_unbarred_uris()[0]);
+  EXPECT_EQ("sip:456@example.com", hss_query_return.associated_uris.get_unbarred_uris()[1]);
 }
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
 {
-  AssociatedURIs uris;
-  std::map<std::string, Ifcs> ifcs_map;
-  std::string regstate;
-  _hss.get_registration_data("pubid43", regstate, ifcs_map, uris, 0);
-  EXPECT_EQ("NOT_REGISTERED", regstate);
-  EXPECT_EQ(0u, uris.get_unbarred_uris().size());
+  const HSSConnection::hss_query_parameter_t hss_query_parameter("pubid43");
+  HSSConnection::hss_query_return_t hss_query_return;
+  _hss.get_registration_data(hss_query_parameter,
+                             hss_query_return,
+                             0);
+  EXPECT_EQ("NOT_REGISTERED", hss_query_return.regstate);
+  EXPECT_EQ(0u, hss_query_return.associated_uris.get_unbarred_uris().size());
 }
 
 TEST_F(HssConnectionTest, SimpleUnregistered)

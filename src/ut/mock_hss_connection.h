@@ -49,11 +49,9 @@ public:
                          std::deque<std::string>& ecfs,
                          SAS::TrailId trail));
 
-  MOCK_METHOD5(get_registration_data,
-               HTTPCode(const std::string& public_user_identity,
-                        std::string& regstate,
-                        std::map<std::string, Ifcs >& ifcs_map,
-                        AssociatedURIs& associated_uris,
+  MOCK_METHOD3(get_registration_data,
+               HTTPCode(const HSSConnection::hss_query_parameter_t& hss_query_parameter,
+                        HSSConnection::hss_query_return_t& hss_query_return,
                         SAS::TrailId trail));
 
 };
