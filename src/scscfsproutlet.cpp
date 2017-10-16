@@ -295,51 +295,28 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 
 
 /// Read data for a public user identity from the HSS.
-long SCSCFSproutlet::read_hss_data(const std::string& public_id,
-                                   const std::string& private_id,
-                                   const std::string& req_type,
-                                   const std::string& scscf_uri,
-                                   bool cache_allowed,
+long SCSCFSproutlet::read_hss_data(const HSSConnection::hss_query_param_t& hss_query_param,
+                                   HSSConnection::hss_query_return_t& hss_query_return,
                                    bool& registered,
                                    bool& barred,
                                    std::string& default_uri,
-                                   std::vector<std::string>& uris,
-                                   std::vector<std::string>& aliases,
-                                   Ifcs& ifcs,
-                                   std::deque<std::string>& ccfs,
-                                   std::deque<std::string>& ecfs,
-                                   const std::string& wildcard,
                                    SAS::TrailId trail)
 {
-  AssociatedURIs associated_uris = {};
-  std::string regstate;
-  std::map<std::string, Ifcs> ifc_map;
-
-  long http_code = _hss->update_registration_state(public_id,
-                                                   private_id,
-                                                   req_type,
-                                                   regstate,
-                                                   scscf_uri,
-                                                   ifc_map,
-                                                   associated_uris,
-                                                   aliases,
-                                                   ccfs,
-                                                   ecfs,
-                                                   cache_allowed,
-                                                   wildcard,
+  long http_code = _hss->update_registration_state(hss_query_param,
+                                                   hss_query_return,
                                                    trail);
   if (http_code == HTTP_OK)
   {
-    ifcs = ifc_map[public_id];
+    ifcs = hss_query_return.service_profiles[hss_query_param.public_user_identity];
 
     // Get the default URI. This should always succeed.
-    associated_uris.get_default_impu(default_uri, true);
+    hss_query_return.associated_uris.get_default_impu(default_uri, true);
 
     // We may want to route to bindings that are barred (in case of an
     // emergency), so get all the URIs.
-    uris = associated_uris.get_all_uris();
-    registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
-    barred = associated_uris.is_impu_barred(public_id);
+    uris = hss_query_return.associated_uris.get_all_uris();
+    registered = (hss_query_return.regstate == RegDataXMLUtils::STATE_REGISTERED);
+    barred = hss_query_return.associated_uris.is_impu_barred(hss_query_return.public_user_identity);
   }
 
   return http_code;
@@ -1897,14 +1874,17 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
   if (!_hss_data_cached)
   {
     std::string req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
-    bool cache_allowed = !_auto_reg;
+    const bool cache_allowed = !_auto_reg;
+
+    HSSConnection::hss_query_param_t hss_query_param(public_id, 
+                                                     _impi, 
+                                                     req_type, 
+                                                     _scscf_uri,
+                                                     _wildcard, 
+                                                     cache_allowed);
 
     // We haven't previous read data from the HSS, so read it now.
-    http_code = _scscf->read_hss_data(public_id,
-                                      _impi,
-                                      req_type,
-                                      _scscf_uri,
-                                      cache_allowed,
+    http_code = _scscf->read_hss_data(hss_query_param,
                                       _registered,
                                       _barred,
                                       _default_uri,
@@ -1913,7 +1893,6 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
                                       _ifcs,
                                       _ccfs,
                                       _ecfs,
-                                      _wildcard,
                                       trail());
 
     if (http_code == HTTP_OK)

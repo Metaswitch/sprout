@@ -686,11 +686,11 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   // Determine the set of IMPUs in the Implicit Registration Set
   std::vector<std::string> unbarred_irs_impus;
-  const HSSConnection::hss_query_parameter_t hss_query_parameter(aor);
-  //hss_query_parameter.public_user_identity(aor);
+  const HSSConnection::hss_query_param_t hss_query_param(aor);
+  //hss_query_param.type = dereg_type.c_str();
   HSSConnection::hss_query_return_t hss_query_return;
 
-  HTTPCode http_code = hss->get_registration_data(hss_query_parameter,
+  HTTPCode http_code = hss->get_registration_data(hss_query_param,
                                                   hss_query_return,
                                                   trail);
 
@@ -719,22 +719,17 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     TRC_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
     all_bindings_expired = true;
 
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
+    //hss_query_param.server_name(scscf_uri);
 
-    HTTPCode http_code = hss->update_registration_state(aor,
-                                                        "",
-                                                        dereg_type,
-                                                        scscf_uri,
-                                                        ifc_map,
-                                                        hss_query_return.associated_uris,
+    HTTPCode http_code = hss->update_registration_state(hss_query_param,
+                                                        hss_query_return,
                                                         trail);
 
     if (http_code == HTTP_OK)
     {
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
-      deregister_with_application_servers(ifc_map[aor],
+      deregister_with_application_servers(hss_query_return.service_profiles[aor],
                                           fifc_service,
                                           ifc_configuration,
                                           sdm,

@@ -198,10 +198,14 @@ static void update_hss_on_aor_expiry(std::string aor_id,
   // Get the S-CSCF URI off the AoR to put on the SAR.
   AoR* aor = aor_pair.get_current();
 
-  hss->update_registration_state(aor_id,
-                                 "",
-                                 HSSConnection::DEREG_TIMEOUT,
-                                 aor->_scscf_uri,
+  const HSSConnection::hss_query_param_t hss_query_param(aor_id);
+  //hss_query_param.type = HSSConnection::DEREG_TIMEOUT;
+  
+  HSSConnection::hss_query_return_t hss_query_return;
+  hss_query_param.server_name = aor->_scscf_uri;
+
+  hss->update_registration_state(hss_query_param,
+                                 hss_query_return,
                                  trail);
 }
 
@@ -212,12 +216,12 @@ static bool get_reg_data(HSSConnection* hss,
                          SAS::TrailId trail)
 {
   std::vector<std::string> unbarred_irs_impus;
-  const HSSConnection::hss_query_parameter_t hss_query_parameter(aor_id);
+  const HSSConnection::hss_query_param_t hss_query_param(aor_id);
   HSSConnection::hss_query_return_t hss_query_return;
   hss_query_return.service_profiles = ifc_map;
   hss_query_return.associated_uris = associated_uris;
 
-  HTTPCode http_code = hss->get_registration_data(hss_query_parameter,
+  HTTPCode http_code = hss->get_registration_data(hss_query_param,
                                                   hss_query_return,
                                                   trail);
 

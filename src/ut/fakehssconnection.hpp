@@ -46,21 +46,8 @@ public:
   void delete_rc(const std::string& url);
   bool url_was_requested(const std::string& url, const std::string& body);
 
-  HTTPCode update_registration_state(const std::string&,
-                                     const std::string&,
-                                     const std::string&,
-                                     std::string,
-                                     SAS::TrailId);
-
-  HTTPCode update_registration_state(const std::string& public_user_identity,
-                                     const std::string& private_user_identity,
-                                     const std::string& type,
-                                     std::string& regstate,
-                                     std::string server_name,
-                                     std::map<std::string, Ifcs >& service_profiles,
-                                     AssociatedURIs& associated_uris,
-                                     std::deque<std::string>& ccfs,
-                                     std::deque<std::string>& ecfs,
+  HTTPCode update_registration_state(const HSSConnection::hss_query_param_t& hss_query_param,
+                                     HSSConnection::hss_query_return_t& hss_query_return,
                                      SAS::TrailId trail);
 
 private:

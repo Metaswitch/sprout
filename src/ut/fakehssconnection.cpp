@@ -94,7 +94,7 @@ void FakeHSSConnection::delete_result(const std::string& url)
   _results.erase(url);
 }
 
-long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, bool cache_allowed, rapidxml::xml_document<>*& root, SAS::TrailId trail)
+long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, const bool cache_allowed, rapidxml::xml_document<>*& root, SAS::TrailId trail)
 {
   return FakeHSSConnection::get_xml_object(path,
                                            body,
@@ -226,6 +226,7 @@ HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_
                                                       const std::string& private_user_identity,
                                                       const std::string& type,
                                                       std::string server_name,
+                                                      HSSConnection::hss_query_return_t& hss_query_return,
                                                       SAS::TrailId trail)
 {
   if (_hss_connection_observer != NULL)
@@ -234,50 +235,14 @@ HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_
                                                         private_user_identity,
                                                         type,
                                                         server_name,
+                                                        hss_query_return,
                                                         trail);
   }
 
   return HSSConnection::update_registration_state(public_user_identity,
                                                   private_user_identity,
                                                   type,
-                                                  server_name,
-                                                  trail);
-}
-
-HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_user_identity,
-                                                      const std::string& private_user_identity,
-                                                      const std::string& type,
-                                                      std::string& regstate,
-                                                      std::string server_name,
-                                                      std::map<std::string, Ifcs >& ifcs_map,
-                                                      AssociatedURIs& associated_uris,
-                                                      std::deque<std::string>& ccfs,
-                                                      std::deque<std::string>& ecfs,
-                                                      SAS::TrailId trail)
-{
-  if (_hss_connection_observer != NULL)
-  {
-    _hss_connection_observer->update_registration_state(public_user_identity,
-                                                        private_user_identity,
-                                                        type,
-                                                        regstate,
-                                                        server_name,
-                                                        ifcs_map,
-                                                        associated_uris,
-                                                        ccfs,
-                                                        ecfs,
-                                                        trail);
-  }
-
-  return HSSConnection::update_registration_state(public_user_identity,
-                                                  private_user_identity,
-                                                  type,
-                                                  regstate,
-                                                  server_name,
-                                                  ifcs_map,
-                                                  associated_uris,
-                                                  ccfs,
-                                                  ecfs,
+                                                  hss_query_return,
                                                   trail);
 }
 

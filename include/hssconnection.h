@@ -32,18 +32,37 @@
 class HSSConnection
 {
 public:
-  typedef struct hss_query_parameter_t
+  typedef struct hss_query_param_t
   {
-    const std::string public_user_identity;
+    std::string public_user_identity;
+    std::string private_user_identity;
+    std::string type;
+    std::string server_name;
+    std::string wildcard;
+    bool cache_allowed;
 
-    hss_query_parameter_t(const std::string aor_id) : public_user_identity(aor_id) 
+    hss_query_param_t(const std::string aor_id) : public_user_identity(aor_id),
     {
     }
-  } hss_query_parameter_t;
+
+    hss_query_param_t(const std::string impi,
+                      const std::string impu,
+                      const std::string type,
+                      const std::string server_name,
+                      const std::string wildcard,
+                      const bool cache_allowed
+                      ) : public_user_identity(impi),
+                          private_user_identity(impu),
+                          type(type),
+                          server_name(server_name),
+                          wildcard(wildcard),
+                          cache_allowed(cache_allowed)
+    {
+    }
+  } hss_query_param_t;
 
   typedef struct hss_query_return_t
   {
-    std::string private_user_identity;
     std::string regstate;
     std::map<std::string, Ifcs> service_profiles;
     AssociatedURIs associated_uris;
@@ -94,51 +113,11 @@ public:
                              rapidjson::Document*& object,
                              SAS::TrailId trail);
 
-  HTTPCode update_registration_state(const std::string& public_user_identity,
-                                     const std::string& private_user_identity,
-                                     const std::string& type,
-                                     std::string& regstate,
-                                     std::string server_name,
-                                     std::map<std::string, Ifcs >& service_profiles,
-                                     AssociatedURIs& associated_uris,
-                                     std::vector<std::string>& aliases,
-                                     std::deque<std::string>& ccfs,
-                                     std::deque<std::string>& ecfs,
-                                     bool cache_allowed,
-                                     const std::string& wildcard,
+  virtual HTTPCode update_registration_state(const hss_query_param_t& hss_query_parameter,
+                                     hss_query_return_t& hss_query_return,
                                      SAS::TrailId trail);
-  virtual HTTPCode update_registration_state(const std::string& public_user_identity,
-                                             const std::string& private_user_identity,
-                                             const std::string& type,
-                                             std::string& regstate,
-                                             std::string server_name,
-                                             std::map<std::string, Ifcs >& service_profiles,
-                                             AssociatedURIs& associated_uris,
-                                             std::deque<std::string>& ccfs,
-                                             std::deque<std::string>& ecfs,
-                                             SAS::TrailId trail);
-  HTTPCode update_registration_state(const std::string& public_user_identity,
-                                     const std::string& private_user_identity,
-                                     const std::string& type,
-                                     std::string& regstate,
-                                     std::string server_name,
-                                     std::map<std::string, Ifcs >& service_profiles,
-                                     AssociatedURIs& associated_uris,
-                                     SAS::TrailId trail);
-  virtual HTTPCode update_registration_state(const std::string& public_user_identity,
-                                             const std::string& private_user_identity,
-                                             const std::string& type,
-                                             std::string server_name,
-                                             SAS::TrailId trail);
-  virtual HTTPCode update_registration_state(const std::string& public_user_identity,
-                                             const std::string& private_user_identity,
-                                             const std::string& type,
-                                             std::string server_name,
-                                             std::map<std::string, Ifcs >& service_profiles,
-                                             AssociatedURIs& associated_uris,
-                                             SAS::TrailId trail);
 
-  virtual HTTPCode get_registration_data(const hss_query_parameter_t& hss_query_parameter,
+  virtual HTTPCode get_registration_data(const hss_query_param_t& hss_query_parameter,
                                          hss_query_return_t& hss_query_return,
                                          SAS::TrailId trail);
   rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);

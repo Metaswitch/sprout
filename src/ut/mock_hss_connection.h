@@ -23,34 +23,13 @@ public:
   MockHSSConnection();
   virtual ~MockHSSConnection();
 
-  MOCK_METHOD5(update_registration_state,
-               HTTPCode(const std::string& public_user_identity,
-                        const std::string& private_user_identity,
-                        const std::string& type,
-                        std::string server_name,
+  MOCK_METHOD3(update_registration_state,
+               HTTPCode(const HSSConnection::hss_query_param_t& hss_query_param,
+                        HSSConnection::hss_query_return_t& hss_query_return,
                         SAS::TrailId trail));
-  MOCK_METHOD7(update_registration_state,
-               HTTPCode(const std::string& public_user_identity,
-                        const std::string& private_user_identity,
-                        const std::string& type,
-                        std::string server_name,
-                        std::map<std::string, Ifcs >& service_profiles,
-                        AssociatedURIs& associated_uris,
-                        SAS::TrailId trail));
-  MOCK_METHOD10(update_registration_state,
-                HTTPCode(const std::string& public_user_identity,
-                         const std::string& private_user_identity,
-                         const std::string& type,
-                         std::string& regstate,
-                         std::string server_name,
-                         std::map<std::string, Ifcs >& ifcs_map,
-                         AssociatedURIs& associated_uris,
-                         std::deque<std::string>& ccfs,
-                         std::deque<std::string>& ecfs,
-                         SAS::TrailId trail));
 
   MOCK_METHOD3(get_registration_data,
-               HTTPCode(const HSSConnection::hss_query_parameter_t& hss_query_parameter,
+               HTTPCode(const HSSConnection::hss_query_param& hss_query_param,
                         HSSConnection::hss_query_return_t& hss_query_return,
                         SAS::TrailId trail));
 

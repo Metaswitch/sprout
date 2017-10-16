@@ -367,9 +367,9 @@ class HssConnectionTest : public BaseTest
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
-  const HSSConnection::hss_query_parameter_t hss_query_parameter("pubid42");
+  const HSSConnection::hss_query_param_t hss_query_param("pubid42");
   HSSConnection::hss_query_return_t hss_query_return;
-  _hss.get_registration_data(hss_query_parameter,
+  _hss.get_registration_data(hss_query_param,
                              hss_query_return,
                              0);
   EXPECT_EQ("REGISTERED", hss_query_return.regstate);
@@ -380,9 +380,9 @@ TEST_F(HssConnectionTest, SimpleAssociatedUris)
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
 {
-  const HSSConnection::hss_query_parameter_t hss_query_parameter("pubid43");
+  const HSSConnection::hss_query_param_t hss_query_param("pubid43");
   HSSConnection::hss_query_return_t hss_query_return;
-  _hss.get_registration_data(hss_query_parameter,
+  _hss.get_registration_data(hss_query_param,
                              hss_query_return,
                              0);
   EXPECT_EQ("NOT_REGISTERED", hss_query_return.regstate);

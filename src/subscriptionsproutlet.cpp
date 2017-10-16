@@ -304,8 +304,9 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SAS::Marker start_marker(trail_id, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  const HSSConnection::hss_query_parameter_t hss_query_parameter(public_id);
+  const HSSConnection::hss_query_param_t hss_query_param(public_id);
   HSSConnection::hss_query_return_t hss_query_return;
+
   HTTPCode http_code = _subscription->_hss->get_registration_data(hss_query_parameter,
                                                                   hss_query_return,
                                                                   trail_id);
