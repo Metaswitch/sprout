@@ -512,7 +512,7 @@ AoR::Subscription SubscriptionSproutletTsx::create_subscription(pjsip_msg* req, 
 // local and remote sites with the new subscription data
 Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
                                              SubscriptionSproutlet* _subscription,
-                                             AoR::Subscription new_subscription,
+                                             AoR::Subscription& new_subscription,
                                              std::string aor,
                                              AssociatedURIs* associated_uris,
                                              pjsip_msg* req,
@@ -661,7 +661,7 @@ AoRPair* SubscriptionSproutletTsx::read_and_cache_from_store(
 // AoRs have subscription information we want to copy over
 void SubscriptionSproutletTsx::update_subscription(
                   SubscriptionSproutlet* _subscription,
-                  AoR::Subscription new_subscription,
+                  AoR::Subscription& new_subscription,
                   std::string aor,
                   AoRPair* aor_pair,
                   std::map<SubscriberDataManager*, AoRPair*>& _cached_aors)
