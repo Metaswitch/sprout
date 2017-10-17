@@ -150,8 +150,8 @@ bool process_queue_element()
             SAS::report_marker(start_marker);
 
             SAS::Event event(trail, SASEvent::SIP_TOO_LONG_IN_QUEUE, 0);
-            event.add_static_param(latency_us);
-            event.add_static_param(request_on_queue_timeout_us);
+            event.add_static_param(latency_us/1000);
+            event.add_static_param(request_on_queue_timeout_us/1000);
             SAS::report_event(event);
 
             SAS::Marker end_marker(trail, MARKER_ID_END, 2u);
@@ -295,7 +295,10 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata)
   pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
   if ((to_hdr != NULL) && (to_hdr->tag.slen != 0))
   {
+    // TODO
+    // LCOV_EXCL_START
     return true;
+    // LCOV_EXCL_STOP
   }
 
   // Always accept ACK and OPTIONS requests. Monit probes Sprout using OPTIONS

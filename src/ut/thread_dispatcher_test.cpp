@@ -121,7 +121,7 @@ TEST_F(ThreadDispatcherTest, StandardInviteTest)
 
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, request_complete(_));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
   process_queue_element();
@@ -162,7 +162,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectOptionsTest)
   msg._method = "OPTIONS";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, request_complete(_));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
   process_queue_element();
@@ -177,7 +177,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
   msg._status = "200 OK";
 
   EXPECT_CALL(*mod_mock, on_rx_response(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, request_complete(_));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_response());
   process_queue_element();
@@ -218,7 +218,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOptionsTest)
     .After(options_exp)
     .WillOnce(Return(PJ_TRUE));
 
-  EXPECT_CALL(load_monitor, request_complete(_)).Times(2);
+  EXPECT_CALL(load_monitor, request_complete(_, _)).Times(2);
 
   inject_msg_thread(invite_msg.get_request());
   inject_msg_thread(options_msg.get_request());
@@ -249,7 +249,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOlderTest)
     .After(older_exp)
     .WillOnce(Return(PJ_TRUE));
 
-  EXPECT_CALL(load_monitor, request_complete(_)).Times(2);
+  EXPECT_CALL(load_monitor, request_complete(_, _)).Times(2);
 
   inject_msg_thread(older_msg.get_request());
   cwtest_advance_time_ms(1);
@@ -283,7 +283,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOptionsOverOlderTest)
     .After(options_exp)
     .WillOnce(Return(PJ_TRUE));
 
-  EXPECT_CALL(load_monitor, request_complete(_)).Times(2);
+  EXPECT_CALL(load_monitor, request_complete(_, _)).Times(2);
 
   inject_msg_thread(invite_msg.get_request());
   cwtest_advance_time_ms(1);
