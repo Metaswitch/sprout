@@ -67,6 +67,15 @@ public:
                         pj_pool_t* pool,
                         SAS::TrailId trail);
 
+<<<<<<< HEAD
+||||||| parent of 431fe24... scscf blacklist passed by value now & UT update
+  void set_blacklisted_scscfs(std::vector<std::string> blacklisted_scscfs);
+  std::vector<std::string> get_blacklisted_scscfs(void);
+
+=======
+  void set_blacklisted_scscfs(std::vector<std::string> blacklisted_scscfs);
+
+>>>>>>> 431fe24... scscf blacklist passed by value now & UT update
 private:
 
   /// Returns the configured BGCF URI for this system.

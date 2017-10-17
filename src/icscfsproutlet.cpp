@@ -101,6 +101,11 @@ bool ICSCFSproutlet::init()
   return init_success;
 }
 
+/// Set method for _blacklisted_scscfs (used with UTs)
+void ICSCFSproutlet::set_blacklisted_scscfs(std::vector<std::string> blacklisted_scscfs)
+{
+  _blacklisted_scscfs = blacklisted_scscfs;
+}
 
 /// Creates a ICSCFSproutletTsx instance for performing I-CSCF service processing
 /// on a request.
