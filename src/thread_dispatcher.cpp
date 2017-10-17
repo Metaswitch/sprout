@@ -551,7 +551,10 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   SipEvent qe;
   qe.type = CALLBACK;
   qe.event_data.callback = cb;
-  qe.priority = SipEventPriorityLevel::NORMAL_PRIORITY; // TODO: Check priority
+
+  // This maintains the previous behaviour with respect to callbacks, but in
+  // future we may want to look at prioritizing them
+  qe.priority = SipEventPriorityLevel::NORMAL_PRIORITY;
 
   // Track the current queue size
   if (queue_size_table)

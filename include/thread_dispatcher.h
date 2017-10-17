@@ -92,8 +92,10 @@ struct SipEvent
 
       if (!lhs.stop_watch.read(lhs_us) || !rhs.stop_watch.read(rhs_us))
       {
+        // We're extremely unlikely to end up in this case, but we try to cope
+        // with it as well as possible
         TRC_ERROR("Failed to read stopwatch.");
-        return false; // TODO: Check this behaviour
+        return false;
       }
 
       return lhs_us < rhs_us;
