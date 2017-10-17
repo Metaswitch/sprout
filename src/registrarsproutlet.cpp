@@ -337,9 +337,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   HSSConnection::hss_query_param_t hss_query_param(public_id,
                                                    private_id,
                                                    HSSConnection::REG,
-                                                   _scscf_uri,
-                                                   "",
-                                                   true);
+                                                   _scscf_uri);
+  hss_query_param.cache_allowed = true;
+
   HSSConnection::hss_query_return_t hss_query_return;
   HTTPCode http_code = _registrar->_hss->update_registration_state(hss_query_param,
                                                                    hss_query_return,

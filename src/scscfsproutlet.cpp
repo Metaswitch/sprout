@@ -315,7 +315,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
   std::string regstate;
   std::map<std::string, Ifcs> ifc_map;
 
-  long http_code = _hss->update_registration_state(public_id,
+  long http_code = HTTP_OK;/* = _hss->update_registration_state(public_id,
                                                    private_id,
                                                    req_type,
                                                    regstate,
@@ -328,6 +328,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    cache_allowed,
                                                    wildcard,
                                                    trail);
+  */
   if (http_code == HTTP_OK)
   {
     ifcs = ifc_map[public_id];

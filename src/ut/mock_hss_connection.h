@@ -29,7 +29,7 @@ public:
                         SAS::TrailId trail));
 
   MOCK_METHOD3(get_registration_data,
-               HTTPCode(const HSSConnection::hss_query_param& hss_query_param,
+               HTTPCode(const HSSConnection::hss_query_param_t& hss_query_param,
                         HSSConnection::hss_query_return_t& hss_query_return,
                         SAS::TrailId trail));
 

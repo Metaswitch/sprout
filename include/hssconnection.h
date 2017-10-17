@@ -52,15 +52,11 @@ public:
     hss_query_param_t(std::string impu,
                       std::string impi,
                       std::string type,
-                      std::string server_name,
-                      std::string wildcard,
-                      bool cache_allowed
+                      std::string server_name
                       ) : public_user_identity(impu),
                           private_user_identity(impi),
                           type(type),
-                          server_name(server_name),
-                          wildcard(wildcard),
-                          cache_allowed(cache_allowed)
+                          server_name(server_name)
     {
     }
 

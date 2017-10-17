@@ -660,9 +660,8 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
       HSSConnection::hss_query_param_t hss_query_param(impu, 
                                                        impi, 
                                                        HSSConnection::AUTH_TIMEOUT,
-                                                       auth_challenge->get_scscf_uri(),
-                                                       "",
-                                                       true);
+                                                       auth_challenge->get_scscf_uri());
+      hss_query_param.cache_allowed = true;
       HSSConnection::hss_query_return_t hss_query_return;
 
       HTTPCode hss_query = _cfg->_hss->update_registration_state(hss_query_param, 

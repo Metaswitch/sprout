@@ -12,6 +12,7 @@
 #include <cstdio>
 #include "fakehssconnection.hpp"
 #include "gtest/gtest.h"
+#include "hssconnection.h"
 
 #include "fakesnmp.hpp"
 
@@ -222,26 +223,18 @@ bool FakeHSSConnection::url_was_requested(const std::string& url, const std::str
   return (_calls.find(UrlBody(url, body)) != _calls.end());
 }
 
-HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_user_identity,
-                                                      const std::string& private_user_identity,
-                                                      const std::string& type,
-                                                      std::string server_name,
+HTTPCode FakeHSSConnection::update_registration_state(const HSSConnection::hss_query_param_t& hss_query_param,
                                                       HSSConnection::hss_query_return_t& hss_query_return,
                                                       SAS::TrailId trail)
 {
   if (_hss_connection_observer != NULL)
   {
-    _hss_connection_observer->update_registration_state(public_user_identity,
-                                                        private_user_identity,
-                                                        type,
-                                                        server_name,
+    _hss_connection_observer->update_registration_state(hss_query_param,
                                                         hss_query_return,
                                                         trail);
   }
 
-  return HSSConnection::update_registration_state(public_user_identity,
-                                                  private_user_identity,
-                                                  type,
+  return HSSConnection::update_registration_state(hss_query_param,
                                                   hss_query_return,
                                                   trail);
 }

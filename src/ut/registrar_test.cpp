@@ -27,10 +27,13 @@
 #include "fakesnmp.hpp"
 #include "rapidxml/rapidxml.hpp"
 #include "mock_hss_connection.h"
+#include "hssconnection.h"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
 using ::testing::Return;
+using ::testing::NiceMock;
+using ::testing::Ref;
 
 class Message
 {
@@ -367,7 +370,7 @@ public:
   static void SetUpTestCase()
   {
     RegistrarTest::SetUpTestCase();
-    _hss_connection_observer = new MockHSSConnection();
+    _hss_connection_observer = new NiceMock<MockHSSConnection>();
     _observed_hss_connection = new FakeHSSConnection(_hss_connection_observer);
   }
 
@@ -405,9 +408,11 @@ private:
   {
     // First registration OK.
     Message msg;
+    HSSConnection::hss_query_param_t hss_query_param("sip:6505550231@homedomain");
+    hss_query_param.type = HSSConnection::REG;
 
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     pjsip_msg* out = current_txdata()->msg;
@@ -423,7 +428,7 @@ private:
     msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
     msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -448,7 +453,7 @@ private:
     msg0._unique += 1;
     msg = msg0;
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -471,7 +476,7 @@ private:
     msg = msg0;
     msg._contact_instance = "";
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -494,7 +499,7 @@ private:
     // Reregistering that yields no change.
     msg._unique += 1;
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -518,7 +523,7 @@ private:
     msg._unique += 1;
     msg._contact = "";
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -542,7 +547,7 @@ private:
     msg._unique += 1;
     msg._cseq = "16568";
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -568,7 +573,7 @@ private:
     msg._contact_instance = "";
     msg._contact_params = "";
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -586,9 +591,10 @@ private:
     msg._contact_instance = "";
     msg._contact_params = "";
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
+    hss_query_param.type = HSSConnection:: DEREG_USER;
     EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::DEREG_USER, _, _)).WillOnce(Return(HTTP_OK));
+                update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
