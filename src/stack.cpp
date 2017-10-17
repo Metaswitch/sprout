@@ -518,6 +518,17 @@ pj_status_t init_pjsip()
   status = pjsip_endpt_create(&stack_data.cp.factory, NULL, &stack_data.endpt);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
+  // Increase the limit on the number of timers that PJSIP processes each time
+  // it polls the timer heap.
+  //
+  // By default PJSIP will process up to 64 timers and 16 epoll events per call
+  // to pjsip_endpt_handle_events. This ratio means that if inbound messages
+  // spawn more than a handlful of timers we can set timers faster than they can
+  // be expired.
+  pj_timer_heap_set_max_timed_out_per_poll(
+                                   pjsip_endpt_get_timer_heap(stack_data.endpt),
+                                   4096);
+
   // Init transaction layer.
   status = pjsip_tsx_layer_init_module(stack_data.endpt);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
