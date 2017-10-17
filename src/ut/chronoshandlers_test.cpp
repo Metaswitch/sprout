@@ -32,6 +32,7 @@ using ::testing::SaveArgPointee;
 using ::testing::InSequence;
 using ::testing::ByRef;
 using ::testing::NiceMock;
+using ::testing::Ref;
 
 class ChronosAoRTimeoutTasksTest : public TestWithMockSdms
 {
@@ -264,6 +265,10 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
 
+  HSSConnection::hss_query_param_t hss_query_param(aor_id);
+  hss_query_param.type = HSSConnection::DEREG_TIMEOUT; 
+  hss_query_param.server_name = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
@@ -285,7 +290,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair2));
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair2, _, _)).WillOnce(DoAll(SetArgReferee<3>(true),
 		                                                                                Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, "sip:scscf.sprout.homedomain:5058;transport=TCP", 0));
+      EXPECT_CALL(*mock_hss, update_registration_state(Ref(hss_query_param), _, 0));
   }
 
   handler->run();
