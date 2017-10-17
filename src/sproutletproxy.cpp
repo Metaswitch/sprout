@@ -1096,7 +1096,16 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
       int st_code = rsp->msg->line.status.code;
       set_trail(rsp, trail());
       on_tx_response(rsp);
-      pjsip_tsx_send_msg(_tsx, rsp);
+
+      pj_status_t status = pjsip_tsx_send_msg(_tsx, rsp);
+
+      if (status != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("Failed to send tx response: %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
+      }
 
       if (st_code >= PJSIP_SC_OK)
       {

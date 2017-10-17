@@ -87,8 +87,8 @@ struct SipEvent
     else
     {
       // At the same priority level, older SipEvents are 'larger'
-      unsigned long lhs_us;
-      unsigned long rhs_us;
+      unsigned long lhs_us = 0;
+      unsigned long rhs_us = 0;
 
       if (!lhs.stop_watch.read(lhs_us) || !rhs.stop_watch.read(rhs_us))
       {

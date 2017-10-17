@@ -133,6 +133,8 @@ bool process_queue_element()
           TRC_ERROR("Failed to get timestamp: %s", strerror(errno)); // LCOV_EXCL_LINE
         }
 
+        SAS::TrailId trail = get_trail(rdata);
+
         if ((latency_us > (request_on_queue_timeout_us)) &&
             (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG))
         {
@@ -144,7 +146,6 @@ bool process_queue_element()
             // Retry-After header with a zero length timeout.
             TRC_DEBUG("Request has been on the queue too long (%dus, max is %dus)");
 
-            SAS::TrailId trail = get_trail(rdata);
             SAS::Marker start_marker(trail, MARKER_ID_START, 2u);
             SAS::report_marker(start_marker);
 
@@ -232,7 +233,7 @@ bool process_queue_element()
             {
               latency_table->accumulate(latency_us); // LCOV_EXCL_LINE
             }
-            load_monitor->request_complete(latency_us);
+            load_monitor->request_complete(latency_us, trail);
           }
           else
           {
@@ -289,6 +290,14 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata)
     return true;
   }
 
+  // Ignore in-dialog requests; we've already put in a fair amount of resource
+  // to this request.
+  pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
+  if ((to_hdr != NULL) && (to_hdr->tag.slen != 0))
+  {
+    return true;
+  }
+
   // Always accept ACK and OPTIONS requests. Monit probes Sprout using OPTIONS
   // polls, so these are allowed through the load monitor to prevent Monit
   // killing Sprout during overload.
@@ -311,6 +320,7 @@ static int get_rx_msg_priority(pjsip_rx_data* rdata)
   {
     return SipEventPriorityLevel::HIGH_PRIORITY;
   }
+
   return SipEventPriorityLevel::NORMAL_PRIORITY;
 }
 
@@ -321,7 +331,6 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
   // Retry-After header with a zero length timeout.
   TRC_DEBUG("Rejected request due to overload");
 
-  // LCOV_EXCL_START - can't meaningfully verify SAS in UT
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
@@ -333,15 +342,23 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
-  // LCOV_EXCL_STOP
 
   pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
-  PJUtils::respond_stateless(stack_data.endpt,
-                             rdata,
-                             PJSIP_SC_SERVICE_UNAVAILABLE,
-                             NULL,
-                             (pjsip_hdr*)retry_after,
-                             NULL);
+  pj_status_t status = PJUtils::respond_stateless(stack_data.endpt,
+                                                  rdata,
+                                                  PJSIP_SC_SERVICE_UNAVAILABLE,
+                                                  NULL,
+                                                  (pjsip_hdr*)retry_after,
+                                                  NULL);
+
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START
+    TRC_ERROR("Failed to send 503 response: %s",
+            PJUtils::pj_status_to_string(status).c_str());
+    // LCOV_EXCL_STOP
+  }
+
 
   // We no longer terminate TCP connections on overload as the shutdown has
   // to wait for existing transactions to end and therefore it takes too
@@ -364,7 +381,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::report_event(event);
 
   // Check whether the request should be rejected due to overload
-  if (!ignore_load_monitor(rdata) && !(load_monitor->admit_request(trail)))
+  if (!(ignore_load_monitor(rdata)) &&
+      !(load_monitor->admit_request(trail)))
   {
     reject_rx_msg_overload(rdata, trail);
     return PJ_TRUE;
@@ -551,7 +569,6 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   SipEvent qe;
   qe.type = CALLBACK;
   qe.event_data.callback = cb;
-
   // This maintains the previous behaviour with respect to callbacks, but in
   // future we may want to look at prioritizing them
   qe.priority = SipEventPriorityLevel::NORMAL_PRIORITY;
