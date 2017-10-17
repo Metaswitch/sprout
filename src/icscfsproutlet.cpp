@@ -509,7 +509,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // Originating request.
     TRC_DEBUG("Originating request");
     _originating = true;
-    impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(req));
+    impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(req, pool, trail()));
 
     SAS::Event event(trail(), SASEvent::ICSCF_RCVD_ORIG_NON_REG, 0);
     event.add_var_param(impu);

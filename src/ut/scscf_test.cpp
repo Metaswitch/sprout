@@ -6503,16 +6503,18 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 }
 
 
-// Test originating AS handling for request to external URI.
+// Test originating AS handling for request to external URI.  Check that 
+// originating "user=phone" SIP URIs are looked up using the equivalent Tel URI
 TEST_F(SCSCFTest, OriginatingExternal)
 {
+  stack_data.enable_orig_sip_to_tel_conv = true;
   register_uri(_sdm, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551000")
     .addIfc(1, {"<Method>INVITE</Method>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
   SubscriptionBuilder subscription = SubscriptionBuilder()
     .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
+  _hss_connection->set_impu_result("tel:6505551000", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
@@ -6525,6 +6527,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   msg._to = "6505501234@ut.cw-ngv.com";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain;user=phone>";
   msg._todomain = "";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._requri = "sip:6505501234@ut.cw-ngv.com";
@@ -6551,7 +6554,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig;service=scscf>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=reg"));
+              testing::MatchesRegex("P-Served-User: <tel:6505551000>;sescase=orig;regstate=reg"));
 
   // ---------- AS1 sends a 100 Trying to indicate it has received the request.
   string fresp1 = respond_to_txdata(current_txdata(), 100);
@@ -6626,8 +6629,10 @@ TEST_F(SCSCFTest, OriginatingExternal)
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-}
 
+  // Reset originating SIP URI to Tel conversion
+  stack_data.enable_orig_sip_to_tel_conv = false;
+}
 
 // Test local call with both originating and terminating ASs.
 TEST_F(SCSCFTest, OriginatingTerminatingAS)

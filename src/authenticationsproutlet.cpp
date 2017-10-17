@@ -591,7 +591,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // This is either a REGISTER, or a request that Sprout should authenticate
     // by treating it like a REGISTER. Get the Authentication Vector from the
     // HSS.
-    PJUtils::get_impi_and_impu(req, impi, impu_for_hss);
+    PJUtils::get_impi_and_impu(req, impi, impu_for_hss, get_pool(req), trail());
     TRC_DEBUG("Get AV from HSS for impi=%s impu=%s",
               impi.c_str(), impu_for_hss.c_str());
 
@@ -1237,6 +1237,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       // Notify Homestead and the HSS that this authentication attempt
       // has definitively failed.
+
       HSSConnection::irs_query irs_query;
       irs_query._req_type = HSSConnection::AUTH_FAIL;
       irs_query._server_name = _scscf_uri;
@@ -1244,7 +1245,9 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
       PJUtils::get_impi_and_impu(req,
                                  irs_query._private_id,
-                                 irs_query._public_id);
+                                 irs_query._public_id,
+                                 get_pool(req), 
+                                 trail());
       _authentication->_hss->update_registration_state(irs_query,
                                                        unused_irs_info,
                                                        trail());

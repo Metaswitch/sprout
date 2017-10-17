@@ -90,6 +90,10 @@ get_settings()
         # Enable no-ENUM TEL URI translation fallback by default for backwards compatibility
         default_tel_uri_translation="Y"
 
+        # Enable the conversion of originating SIP URIs (that corresponding to global 
+        # phone numbers) to Tel URIs for Identity purposes by default.
+        enable_orig_sip_to_tel_conv="Y"
+
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 250))
@@ -170,6 +174,7 @@ get_daemon_args()
         [ "$apply_fallback_ifcs" != "Y" ] || apply_fallback_ifcs_arg="--apply-fallback-ifcs"
         [ "$reject_if_no_matching_ifcs" != "Y" ] || reject_if_no_matching_ifcs_arg="--reject-if-no-matching-ifcs"
         [ "$http_acr_logging" != "Y" ] || http_acr_logging_arg="--http-acr-logging"
+        [ "$enable_orig_sip_to_tel_conv" != "Y" ] || enable_orig_sip_to_tel_conv_arg="--enable-orig-sip-to-tel-conv"
 
         [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
         [ -z "$cass_target_latency_us" ] || cass_target_latency_us_arg="--cass-target-latency-us=$cass_target_latency_us"
@@ -226,6 +231,7 @@ get_daemon_args()
                      $override_npdi_arg
                      $exception_max_ttl_arg
                      $force_3pr_body_arg
+                     $enable_orig_sip_to_tel_conv_arg
                      --http-address=$local_ip
                      --http-port=9888
                      --analytics=$log_directory

@@ -141,7 +141,8 @@ enum OptionTypes
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
   OPT_HOMESTEAD_TIMEOUT,
-  OPT_BLACKLISTED_SCSCFS
+  OPT_BLACKLISTED_SCSCFS,
+  OPT_ORIG_SIP_TO_TEL_CONV
 };
 
 
@@ -232,6 +233,7 @@ const static struct pj_getopt_option long_opt[] =
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
   { "blacklisted-scscfs",           required_argument, 0, OPT_BLACKLISTED_SCSCFS},
+  { "enable-orig-sip-to-tel-conv",  no_argument,       0, OPT_ORIG_SIP_TO_TEL_CONV},
   { NULL,                           0,                 0, 0}
 };
 
@@ -384,6 +386,9 @@ static void usage(void)
        "     --sip-tcp-send-timeout <milliseconds>\n"
        "                            The amount of time to wait for data sent on a SIP TCP connection to be\n"
        "                            acknowledged by the peer.\n"
+       "     --enable-orig-sip-to-tel-conv\n"
+       "                            Whether to treat originating SIP URIs that correspond to global phone\n"
+       "                            numbers as Tel URIs.\n"
        "     --dns-timeout <milliseconds>\n"
        "                            The amount of time to wait for a DNS response (default: 200)n"
        "     --session-continued-timeout <milliseconds>\n"
@@ -1205,6 +1210,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Switching to TCP is disabled");
       break;
 
+    case OPT_ORIG_SIP_TO_TEL_CONV:
+      options->enable_orig_sip_to_tel_conv = true;
+      TRC_INFO("SIP to Tel conversion of orig URLs enabled");
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1732,6 +1742,7 @@ int main(int argc, char* argv[])
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
+  opt.enable_orig_sip_to_tel_conv = false;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -2056,7 +2067,8 @@ int main(int argc, char* argv[])
                       opt.sip_tcp_send_timeout,
                       quiescing_mgr,
                       opt.billing_cdf,
-                      sproutlet_uris);
+                      sproutlet_uris,
+                      opt.enable_orig_sip_to_tel_conv);
 
   if (status != PJ_SUCCESS)
   {
