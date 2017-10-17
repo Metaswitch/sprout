@@ -36,7 +36,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
 void unregister_thread_dispatcher(void);
 
 pj_status_t start_worker_threads();
-void stop_worker_threads(); // TODO: Should this return its status?
+void stop_worker_threads();
 
 pjsip_module* get_mod_thread_dispatcher();
 
@@ -45,7 +45,7 @@ enum SipEventType { MESSAGE, CALLBACK };
 
 // Allowable priority levels for SIP events. Levels with lower values correspond
 // to higher priorities.
-namespace SipPriorityLevel
+namespace SipEventPriorityLevel
 {
   const int NORMAL_PRIORITY = 1;
   const int HIGH_PRIORITY = 0;
@@ -74,13 +74,14 @@ struct SipEvent
 
   SipEvent() : type(MESSAGE), priority(0) {}
 
-  // Compares two SipEvents. 'larger' SipEvents are returned sooner by the
-  // priority queue.
-  bool operator()(SipEvent lhs, SipEvent rhs)
+  // Compares two SipEvents. Returns true if rhs is 'larger' than lhs, where
+  // 'larger' SipEvents are those that should be processed earlier.
+  static bool compare(SipEvent lhs, SipEvent rhs)
   {
     if (lhs.priority != rhs.priority)
     {
-      // SipEvents with a lower priority level are 'larger'
+      // Higher priority SipEvents, that is, SipEvents with a lower priority
+      // level, are 'larger'
       return lhs.priority > rhs.priority;
     }
     else
@@ -105,7 +106,6 @@ struct SipEvent
 // element is added to the queue or the queue is terminated.
 // Returns true if an element was processed, and false if the queue was
 // terminated.
-// TODO: Consider adding a non-blocking version for testing purposes.
 bool process_queue_element();
 
 // Add a Callback object to the queue, to be run on a worker thread.
@@ -117,7 +117,7 @@ class PriorityEventQueueBackend : public eventq<SipEvent>::Backend
 {
 public:
 
-  PriorityEventQueueBackend() : _queue() {}
+  PriorityEventQueueBackend() : _queue(SipEvent::compare) {}
   virtual ~PriorityEventQueueBackend() {}
 
   virtual const SipEvent& front()
@@ -146,7 +146,9 @@ public:
   }
 
   // SipEvents are compared using operator()
-  std::priority_queue<SipEvent, std::deque<SipEvent>, SipEvent> _queue;
+  std::priority_queue<SipEvent,
+                      std::deque<SipEvent>,
+                      std::function<bool(SipEvent, SipEvent)> > _queue;
 };
 
 #endif

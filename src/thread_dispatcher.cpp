@@ -289,7 +289,9 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata)
     return true;
   }
 
-  // Always accept ACK and OPTIONS requests
+  // Always accept ACK and OPTIONS requests. Monit probes Sprout using OPTIONS
+  // polls, so these are allowed through the load monitor to prevent Monit
+  // killing Sprout during overload.
   pjsip_method_e method_id = rdata->msg_info.msg->line.req.method.id;
   if (method_id == PJSIP_ACK_METHOD || method_id == PJSIP_OPTIONS_METHOD)
   {
@@ -299,14 +301,17 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata)
   return false;
 }
 
+// Determines the priority value of a SIP message based on its method.
 static int get_rx_msg_priority(pjsip_rx_data* rdata)
 {
+  // Monit probes Sprout using OPTIONS polls, so these are prioritised to
+  // prevent Monit killing Sprout during overload.
   if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG &&
       rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD)
   {
-    return SipPriorityLevel::HIGH_PRIORITY;
+    return SipEventPriorityLevel::HIGH_PRIORITY;
   }
-  return SipPriorityLevel::NORMAL_PRIORITY;
+  return SipEventPriorityLevel::NORMAL_PRIORITY;
 }
 
 // Reject a SIP message with a 503 Service Unavailable
@@ -546,7 +551,7 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   SipEvent qe;
   qe.type = CALLBACK;
   qe.event_data.callback = cb;
-  qe.priority = SipPriorityLevel::NORMAL_PRIORITY; // TODO: Check priority
+  qe.priority = SipEventPriorityLevel::NORMAL_PRIORITY; // TODO: Check priority
 
   // Track the current queue size
   if (queue_size_table)
