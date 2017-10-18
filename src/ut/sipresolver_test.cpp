@@ -38,6 +38,7 @@ class SIPResolverTest : public ::testing::Test
 
   virtual ~SIPResolverTest()
   {
+    cwtest_reset_time();
   }
 
   DnsRRecord* a(const std::string& name,
@@ -81,15 +82,36 @@ class SIPResolverTest : public ::testing::Test
                                            service, regex, replacement);
   }
 
-  void add_ip_to_blacklist(const std::string address,
-                           const int port=5060)
+  AddrInfo ip_port_to_addrinfo(const std::string address,
+                               const int port=5060)
   {
     AddrInfo ai;
     ai.port = port;
     ai.transport = IPPROTO_TCP;
-
     EXPECT_TRUE(Utils::parse_ip_target(address, ai.address));
-    _sipresolver.blacklist(ai);
+
+    return ai;
+  }
+
+  void add_ip_to_blacklist(const std::string address,
+                           const int port)
+  {
+    _sipresolver.blacklist(ip_port_to_addrinfo(address, port));
+  }
+
+  bool resolve_ip_port(const std::string address,
+                       const int port,
+                       int allowed_host_state)
+  {
+    std::vector<AddrInfo> targets;
+    _sipresolver.resolve(address,
+                         AF_INET,
+                         port,
+                         IPPROTO_TCP,
+                         5,
+                         targets,
+                         allowed_host_state);
+    return !(targets.empty());
   }
 };
 
@@ -657,43 +679,71 @@ TEST_F(SIPResolverTest, NoMatchingNAPTR)
 // verification
 TEST_F(SIPResolverTest, AllowedHostStateForIPAddr)
 {
-  std::vector<AddrInfo> targets;
   add_ip_to_blacklist("192.0.2.11", 80);
   add_ip_to_blacklist("192.0.2.12", 1234);
   add_ip_to_blacklist("[2001:db8::1]", 9001);
 
   // Test that ALL_LISTS behaves correctly.
-  _sipresolver.resolve(
-    "192.0.2.1", AF_INET, 80, IPPROTO_TCP, 5, targets, BaseResolver::ALL_LISTS);
-  EXPECT_EQ(1, targets.size());
-  targets.pop_back();
-
-  _sipresolver.resolve(
-    "192.0.2.11", AF_INET, 80, IPPROTO_TCP, 5, targets, BaseResolver::ALL_LISTS);
-  EXPECT_EQ(1, targets.size());
-  targets.pop_back();
+  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 80, BaseResolver::ALL_LISTS));
+  EXPECT_TRUE(resolve_ip_port("192.0.2.11", 80, BaseResolver::ALL_LISTS));
 
   // Allow whitelisted addresses only, and ensure that blacklisted addresses
   // are not returned.
-  _sipresolver.resolve(
-    "192.0.2.2", AF_INET, 1234, IPPROTO_TCP, 5, targets, BaseResolver::WHITELISTED);
-  EXPECT_EQ(1, targets.size());
-  targets.pop_back();
-
-  _sipresolver.resolve(
-    "192.0.2.12", AF_INET, 1234, IPPROTO_TCP, 5, targets, BaseResolver::WHITELISTED);
-  EXPECT_EQ(0, targets.size()); // Blocked from being added to targets
+  EXPECT_TRUE(resolve_ip_port("192.0.2.2", 1234, BaseResolver::WHITELISTED));
+  EXPECT_FALSE(resolve_ip_port("192.0.2.12", 1234, BaseResolver::WHITELISTED));
 
   // Allow blacklisted addresses only, and ensure that whitelisted addresses
   // are not returned. Throw in IPv6 for flavour.
-  _sipresolver.resolve(
-    "[2001:db8::]", AF_INET6, 9001, IPPROTO_TCP, 5, targets, BaseResolver::BLACKLISTED);
-  EXPECT_EQ(0, targets.size()); // Blocked from being added to targets
+  EXPECT_FALSE(resolve_ip_port("[2001:db8::]", 9001, BaseResolver::BLACKLISTED));
+  EXPECT_TRUE(resolve_ip_port("[2001:db8::1]", 9001, BaseResolver::BLACKLISTED));
+}
 
-  _sipresolver.resolve(
-    "[2001:db8::1]", AF_INET6, 9001, IPPROTO_TCP, 5, targets, BaseResolver::BLACKLISTED);
-  EXPECT_EQ(1, targets.size());
-  targets.pop_back();
+// Test the behaviour of SIPResolver's IP address allowed host state
+// verification for graylisted hosts.
+TEST_F(SIPResolverTest, AllowedHostStateForGraylistedIPAddr)
+{
+  // Create 3 blacklisted addresses.
+  add_ip_to_blacklist("192.0.2.1", 5060); // Only resolve this using ALL_LISTS
+  add_ip_to_blacklist("192.0.2.2", 5060); // Only resolve this using WHITELISTED
+  add_ip_to_blacklist("192.0.2.3", 5060); // Only resolve this using BLACKLISTED
+
+  // Resolving the address with different allowed host states does what you
+  // would expect, and is also repeatable (gives the same answer each time).
+  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
+  EXPECT_FALSE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
+  EXPECT_TRUE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
+
+  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
+  EXPECT_FALSE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
+  EXPECT_TRUE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
+
+  // Advance time so the addresses become graylisted.
+  cwtest_advance_time_ms(32000);
+
+  // Now, an address is treated as whitelisted until it is selected, at which
+  // point is starts to behave as though it's been blacklisted.
+  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
+  EXPECT_TRUE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
+  EXPECT_FALSE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
+
+  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
+  EXPECT_FALSE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
+  EXPECT_FALSE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
+
+  // Make the addresses whitelisted again.
+  _sipresolver.success(ip_port_to_addrinfo("192.0.2.1", 5060));
+  _sipresolver.success(ip_port_to_addrinfo("192.0.2.2", 5060));
+  _sipresolver.success(ip_port_to_addrinfo("192.0.2.3", 5060));
+
+  // Resolving the address with different allowed host states does what you
+  // would expect, and is also repeatable.
+  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
+  EXPECT_TRUE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
+  EXPECT_FALSE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
+
+  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
+  EXPECT_TRUE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
+  EXPECT_FALSE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
 }
 
 // Simple test to verify that the resolve wrapper around resolve_iter for the
