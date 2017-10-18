@@ -266,7 +266,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   associated_uris.add_uri(aor_id, false);
 
   HSSConnection::hss_query_param_t hss_query_param(aor_id);
-  hss_query_param.type = HSSConnection::DEREG_TIMEOUT; 
+  hss_query_param.req_type = HSSConnection::DEREG_TIMEOUT; 
   hss_query_param.server_name = "sip:scscf.sprout.homedomain:5058;transport=TCP";
 
   {

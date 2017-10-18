@@ -34,9 +34,9 @@ class HSSConnection
 public:
   typedef struct hss_query_param_t
   {
-    std::string public_user_identity;
-    std::string private_user_identity;
-    std::string type;
+    std::string public_id;
+    std::string private_id;
+    std::string req_type;
     std::string server_name;
     std::string wildcard;
     bool cache_allowed;
@@ -45,17 +45,17 @@ public:
     {
     }
 
-    hss_query_param_t(std::string aor_id) : public_user_identity(aor_id)
+    hss_query_param_t(std::string public_id) : public_id(public_id)
     {
     }
 
-    hss_query_param_t(std::string impu,
-                      std::string impi,
-                      std::string type,
+    hss_query_param_t(std::string public_id,
+                      std::string private_id,
+                      std::string req_type,
                       std::string server_name
-                      ) : public_user_identity(impu),
-                          private_user_identity(impi),
-                          type(type),
+                      ) : public_id(public_id),
+                          private_id(private_id),
+                          req_type(req_type),
                           server_name(server_name)
     {
     }
@@ -64,12 +64,6 @@ public:
 
   typedef struct hss_query_return_t
   {
-    bool _hss_data_cached;
-    bool _registered;
-    bool _barred;
-    std::string _default_uri;
-    std::vector<std::string> _uris;
-    Ifcs _ifcs;
     std::string regstate;
     std::map<std::string, Ifcs> service_profiles;
     AssociatedURIs associated_uris;

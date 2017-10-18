@@ -199,7 +199,7 @@ static void update_hss_on_aor_expiry(std::string aor_id,
   AoR* aor = aor_pair.get_current();
 
   HSSConnection::hss_query_param_t hss_query_param(aor_id);
-  hss_query_param.type = HSSConnection::DEREG_TIMEOUT;
+  hss_query_param.req_type = HSSConnection::DEREG_TIMEOUT;
   
   HSSConnection::hss_query_return_t hss_query_return;
   hss_query_param.server_name = aor->_scscf_uri;

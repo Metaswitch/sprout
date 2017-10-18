@@ -327,7 +327,7 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
     TRC_WARNING("Malformed HSS XML for %s - document couldn't be parsed",
-                hss_query_param.public_user_identity.c_str());
+                hss_query_param.public_id.c_str());
     return false;
   }
 
@@ -338,7 +338,7 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed Homestead XML for %s - no ClearwaterRegData element:\n%s",
-                hss_query_param.public_user_identity.c_str(),
+                hss_query_param.public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
@@ -350,7 +350,7 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed Homestead XML for %s - no RegistrationState element:\n%s",
-                hss_query_param.public_user_identity.c_str(),
+                hss_query_param.public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
@@ -370,12 +370,12 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
-                hss_query_param.public_user_identity.c_str(),
+                hss_query_param.public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
 
-  if (!SproutXmlUtils::parse_ims_subscription(hss_query_param.public_user_identity,
+  if (!SproutXmlUtils::parse_ims_subscription(hss_query_param.public_id,
                                               root,
                                               imss,
                                               hss_query_return.service_profiles,
@@ -387,7 +387,7 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed HSS XML for %s:\n%s",
-                hss_query_param.public_user_identity.c_str(),
+                hss_query_param.public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
@@ -417,15 +417,15 @@ HTTPCode HSSConnection::update_registration_state(const hss_query_param_t& hss_q
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_CHECK_STATE, 0);
-  event.add_var_param(hss_query_param.public_user_identity);
-  event.add_var_param(hss_query_param.private_user_identity);
-  event.add_var_param(hss_query_param.type);
+  event.add_var_param(hss_query_param.public_id);
+  event.add_var_param(hss_query_param.private_id);
+  event.add_var_param(hss_query_param.req_type);
   SAS::report_event(event);
 
-  std::string path = "/impu/" + Utils::url_escape(hss_query_param.public_user_identity) + "/reg-data";
-  if (!hss_query_param.private_user_identity.empty())
+  std::string path = "/impu/" + Utils::url_escape(hss_query_param.public_id) + "/reg-data";
+  if (!hss_query_param.private_id.empty())
   {
-    path += "?private_id=" + Utils::url_escape(hss_query_param.private_user_identity);
+    path += "?private_id=" + Utils::url_escape(hss_query_param.private_id);
   }
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
@@ -436,7 +436,7 @@ HTTPCode HSSConnection::update_registration_state(const hss_query_param_t& hss_q
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
   std::string json_wildcard =
         (hss_query_param.wildcard != "") ? ", \"wildcard_identity\": \"" + hss_query_param.wildcard + "\"" : "";
-  std::string req_body = "{\"reqtype\": \"" + hss_query_param.type + "\"" +
+  std::string req_body = "{\"reqtype\": \"" + hss_query_param.req_type + "\"" +
                           ", \"server_name\": \"" + hss_query_param.server_name + "\"" +
                           json_wildcard +
                           "}";
@@ -484,10 +484,10 @@ HTTPCode HSSConnection::get_registration_data(const hss_query_param_t& hss_query
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_GET_REG, 0);
-  event.add_var_param(hss_query_param.public_user_identity);
+  event.add_var_param(hss_query_param.public_id);
   SAS::report_event(event);
 
-  std::string path = "/impu/" + Utils::url_escape(hss_query_param.public_user_identity) + "/reg-data";
+  std::string path = "/impu/" + Utils::url_escape(hss_query_param.public_id) + "/reg-data";
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
@@ -532,8 +532,8 @@ HTTPCode HSSConnection::get_registration_data(const hss_query_param_t& hss_query
 
 
 // Makes a user authorization request, and returns the data as a JSON object.
-HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_identity,
-                                             const std::string& public_user_identity,
+HTTPCode HSSConnection::get_user_auth_status(const std::string& private_id,
+                                             const std::string& public_id,
                                              const std::string& visited_network,
                                              const std::string& auth_type,
                                              const bool& emergency,
@@ -544,15 +544,15 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_AUTH_STATUS, 0);
-  event.add_var_param(private_user_identity);
-  event.add_var_param(public_user_identity);
+  event.add_var_param(private_id);
+  event.add_var_param(public_id);
   SAS::report_event(event);
 
   std::string path = "/impi/" +
-                     Utils::url_escape(private_user_identity) +
+                     Utils::url_escape(private_id) +
                      "/registration-status" +
                      "?impu=" +
-                     Utils::url_escape(public_user_identity);
+                     Utils::url_escape(public_id);
 
   if (!visited_network.empty())
   {

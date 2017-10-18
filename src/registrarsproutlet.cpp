@@ -460,7 +460,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     HSSConnection::hss_query_param_t hss_query_param(aor);
     HSSConnection::hss_query_return_t hss_query_return;
-    hss_query_param.type = HSSConnection::REG;
+    hss_query_param.req_type = HSSConnection::REG;
     hss_query_param.server_name = _scscf_uri;
     _registrar->_hss->update_registration_state(hss_query_param,
                                                 hss_query_return,

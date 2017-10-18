@@ -294,53 +294,28 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 }
 
 
-/// Read data for a public user identity from the HSS.
-long SCSCFSproutlet::read_hss_data(const std::string& public_id,
-                                   const std::string& private_id,
-                                   const std::string& req_type,
-                                   const std::string& scscf_uri,
-                                   bool cache_allowed,
-                                   bool& registered,
-                                   bool& barred,
-                                   std::string& default_uri,
-                                   std::vector<std::string>& uris,
-                                   std::vector<std::string>& aliases,
-                                   Ifcs& ifcs,
-                                   std::deque<std::string>& ccfs,
-                                   std::deque<std::string>& ecfs,
-                                   const std::string& wildcard,
+/// Read data from the HSS and store in member fields for sproutlet.
+long SCSCFSproutletTsx::read_hss_data(const HSSConnection::hss_query_param_t& hss_query_param,
+                                   HSSConnection::hss_query_return_t& hss_query_return,
                                    SAS::TrailId trail)
 {
-  AssociatedURIs associated_uris = {};
-  std::string regstate;
-  std::map<std::string, Ifcs> ifc_map;
 
-  long http_code = HTTP_OK;/* = _hss->update_registration_state(public_id,
-                                                   private_id,
-                                                   req_type,
-                                                   regstate,
-                                                   scscf_uri,
-                                                   ifc_map,
-                                                   associated_uris,
-                                                   aliases,
-                                                   ccfs,
-                                                   ecfs,
-                                                   cache_allowed,
-                                                   wildcard,
+  long http_code = _scscf->_hss->update_registration_state(hss_query_param,
+                                                   hss_query_return,
                                                    trail);
-  */
+
   if (http_code == HTTP_OK)
   {
-    ifcs = ifc_map[public_id];
+    _ifcs = hss_query_return.service_profiles[hss_query_param.public_id];
 
     // Get the default URI. This should always succeed.
-    associated_uris.get_default_impu(default_uri, true);
+    hss_query_return.associated_uris.get_default_impu(_default_uri, true);
 
     // We may want to route to bindings that are barred (in case of an
     // emergency), so get all the URIs.
-    uris = associated_uris.get_all_uris();
-    registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
-    barred = associated_uris.is_impu_barred(public_id);
+    _uris = hss_query_return.associated_uris.get_all_uris();
+    _registered = (hss_query_return.regstate == RegDataXMLUtils::STATE_REGISTERED);
+    _barred = hss_query_return.associated_uris.is_impu_barred(hss_query_param.public_id);
   }
 
   return http_code;
@@ -645,7 +620,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // Add a P-Charging-Function-Addresses header if one is not already present
     // for some reason. We only do this if we have the charging addresses cached
     // (which we should do).
-    PJUtils::add_pcfa_header(req, get_pool(req), _ccfs, _ecfs, false);
+    PJUtils::add_pcfa_header(req, get_pool(req), _irs_info.ccfs, _irs_info.ecfs, false);
 
     // Add a second P-Asserted-Identity header if required on originating calls.
     // See 3GPP TS24.229, 5.4.3.2.
@@ -784,7 +759,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // Final response. Add a P-Charging-Function-Addresses header if one is
     // not already present for some reason. We only do this if we have
     // the charging addresses cached (which we should do).
-    PJUtils::add_pcfa_header(rsp, get_pool(rsp), _ccfs, _ecfs, false);
+    PJUtils::add_pcfa_header(rsp, get_pool(rsp), _irs_info.ccfs, _irs_info.ecfs, false);
   }
 
   if ((st_code < 300) && (_session_case->is_terminating()))
@@ -1895,26 +1870,21 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 {
   long http_code = HTTP_OK;
+
+  // Read IRS information from HSS if not previously cached.
   if (!_hss_data_cached)
   {
-    std::string req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
-    bool cache_allowed = !_auto_reg;
+    const std::string req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
 
-    // We haven't previous read data from the HSS, so read it now.
-    http_code = _scscf->read_hss_data(public_id,
-                                      _impi,
-                                      req_type,
-                                      _scscf_uri,
-                                      cache_allowed,
-                                      _registered,
-                                      _barred,
-                                      _default_uri,
-                                      _uris,
-                                      _aliases,
-                                      _ifcs,
-                                      _ccfs,
-                                      _ecfs,
-                                      _wildcard,
+    HSSConnection::hss_query_param_t hss_query_param(public_id,
+                                                     _impi,
+                                                     req_type,
+                                                     _scscf_uri);
+    hss_query_param.wildcard = _wildcard;
+    hss_query_param.cache_allowed = !_auto_reg;
+
+    http_code = read_hss_data(hss_query_param,
+                                      _irs_info,
                                       trail());
 
     if (http_code == HTTP_OK)
@@ -1960,7 +1930,7 @@ bool SCSCFSproutletTsx::get_aliases(std::string public_id,
   long http_code = get_data_from_hss(public_id);
   if (http_code == HTTP_OK)
   {
-    aliases = _aliases;
+    aliases = _irs_info.aliases;
   }
   return (http_code == HTTP_OK);
 }
@@ -2247,9 +2217,9 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       // If the SIP URI has a alias tel URI with the same username we add this
       // tel URI to the P-Asserted-Identity header. If not we select the first
       // tel URI in the alias list to add to the P-Asserted-Identity header.
-      if (find(_aliases.begin(),
-               _aliases.end(),
-               new_p_a_i_str) != _aliases.end())
+      if (find(_irs_info.aliases.begin(),
+               _irs_info.aliases.end(),
+               new_p_a_i_str) != _irs_info.aliases.end())
       {
         TRC_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
         PJUtils::add_asserted_identity(msg,
@@ -2259,8 +2229,8 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       }
       else
       {
-        for (std::vector<std::string>::iterator alias = _aliases.begin();
-             alias != _aliases.end();
+        for (std::vector<std::string>::iterator alias = _irs_info.aliases.begin();
+             alias != _irs_info.aliases.end();
              ++alias)
         {
           std::string tel_URI_prefix = "tel:";

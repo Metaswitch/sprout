@@ -24,6 +24,9 @@
 #include "mock_subscriber_data_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
+#include "gtest/gtest.h"
+
+using ::testing::NiceMock;
 
 // Base class used for testing handlers with Mock SDMs.
 class TestWithMockSdms : public SipTest
@@ -36,11 +39,11 @@ class TestWithMockSdms : public SipTest
 
   virtual void SetUp()
   {
-    store = new MockSubscriberDataManager();
-    remote_store1 = new MockSubscriberDataManager();
-    remote_store2 = new MockSubscriberDataManager();
-    mock_hss = new MockHSSConnection();
-    stack = new MockHttpStack();
+    store = new NiceMock<MockSubscriberDataManager>();
+    remote_store1 = new NiceMock<MockSubscriberDataManager>();
+    remote_store2 = new NiceMock<MockSubscriberDataManager>();
+    mock_hss = new NiceMock<MockHSSConnection>();
+    stack = new NiceMock<MockHttpStack>();
   }
 
   virtual void TearDown()

@@ -687,7 +687,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   // Determine the set of IMPUs in the Implicit Registration Set
   std::vector<std::string> unbarred_irs_impus;
   HSSConnection::hss_query_param_t hss_query_param(aor);
-  hss_query_param.type = dereg_type;
+  hss_query_param.req_type = dereg_type;
   HSSConnection::hss_query_return_t hss_query_return;
 
   HTTPCode http_code = hss->get_registration_data(hss_query_param,

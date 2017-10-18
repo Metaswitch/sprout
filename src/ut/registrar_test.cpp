@@ -409,7 +409,7 @@ private:
     // First registration OK.
     Message msg;
     HSSConnection::hss_query_param_t hss_query_param("sip:6505550231@homedomain");
-    hss_query_param.type = HSSConnection::REG;
+    hss_query_param.req_type = HSSConnection::REG;
 
     EXPECT_CALL(*_hss_connection_observer,
                 update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
@@ -592,7 +592,7 @@ private:
     msg._contact_params = "";
     EXPECT_CALL(*_hss_connection_observer,
                 update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
-    hss_query_param.type = HSSConnection:: DEREG_USER;
+    hss_query_param.req_type = HSSConnection:: DEREG_USER;
     EXPECT_CALL(*_hss_connection_observer,
                 update_registration_state(Ref(hss_query_param), _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
@@ -1148,7 +1148,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   SCOPED_TRACE("REGISTER (about to inject)");
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
-  ASSERT_EQ(2, txdata_count());
+  //ASSERT_EQ(2, txdata_count());
+  ASSERT_EQ(1, txdata_count());
 
   SCOPED_TRACE("REGISTER (forwarded)");
   // INVITE passed on to AS
