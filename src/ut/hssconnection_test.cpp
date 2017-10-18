@@ -601,7 +601,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
 TEST_F(HssConnectionTest, ServerFailure)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("publicid44",
+  HSSConnection::hss_query_param_t hss_query_param("pubid44",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
@@ -613,7 +613,7 @@ TEST_F(HssConnectionTest, ServerFailure)
   EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
 }
-/*
+
 TEST_F(HssConnectionTest, SimpleUserAuth)
 {
   rapidjson::Document* actual;
@@ -693,50 +693,33 @@ TEST_F(HssConnectionTest, LocationNotFound)
 
 TEST_F(HssConnectionTest, SimpleAliases)
 {
-  std::vector<std::string> aliases;
-  std::map<std::string, Ifcs> ifcs_map;
-  std::string regstate;
-  AssociatedURIs unused_uris;
-  std::deque<std::string> unused_deque;
-  _hss.update_registration_state("pubid46",
-                                 "",
-                                 HSSConnection::CALL,
-                                 regstate,
-                                 "server_name",
-                                 ifcs_map,
-                                 unused_uris,
-                                 aliases,
-                                 unused_deque,
-                                 unused_deque,
-                                 true,
-                                 "",
-                                 0);
-  ASSERT_EQ(3u, aliases.size());
-  EXPECT_EQ("sip:321@example.com", aliases[0]);
-  EXPECT_EQ("pubid46", aliases[1]);
-  EXPECT_EQ("tel:321", aliases[2]);
+  HSSConnection::hss_query_param_t hss_query_param("pubid46",
+                                                   "",
+                                                   HSSConnection::CALL,
+                                                   "server_name");
+  hss_query_param.cache_allowed = true;
+  HSSConnection::hss_query_return_t hss_query_return;
+
+  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+
+  ASSERT_EQ(3u, hss_query_return.aliases.size());
+  EXPECT_EQ("sip:321@example.com", hss_query_return.aliases[0]);
+  EXPECT_EQ("pubid46", hss_query_return.aliases[1]);
+  EXPECT_EQ("tel:321", hss_query_return.aliases[2]);
+
 }
 
 TEST_F(HssConnectionTest, CacheNotAllowed)
 {
-  std::vector<std::string> aliases;
-  std::map<std::string, Ifcs> ifcs_map;
-  std::string regstate;
-  AssociatedURIs unused_uris;
-  std::deque<std::string> unused_deque;
-  HTTPCode rc = _hss.update_registration_state("public-needs-private",
-                                               "a-private-id",
-                                               HSSConnection::REG,
-                                               regstate,
-                                               "server_name",
-                                               ifcs_map,
-                                               unused_uris,
-                                               aliases,
-                                               unused_deque,
-                                               unused_deque,
-                                               false, // Do not allow cached answers.
-                                               "",
-                                               0);
+  HSSConnection::hss_query_param_t hss_query_param("public-needs-private",
+                                                   "a-private-id",
+                                                   HSSConnection::REG,
+                                                   "server_name");
+  hss_query_param.cache_allowed = false;
+  HSSConnection::hss_query_return_t hss_query_return;
+
+  HTTPCode rc = _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+
   // The request has a cache control header on it to prevent cached responses.
   Request& request = fakecurl_requests[
     "http://narcissus:80/impu/public-needs-private/reg-data?private_id=a-private-id"];
@@ -1083,11 +1066,14 @@ class HssWithSifcTest : public BaseTest
 // this functionality is mocked out.
 
 // Check that some iFCs are returned when a shared iFC set is encountered.
+
 TEST_F(HssWithSifcTest, SimpleSiFC)
 {
-  AssociatedURIs uris;
-  std::map<std::string, Ifcs> ifcs_map;
-  std::string regstate;
+  HSSConnection::hss_query_param_t hss_query_param("onesifc",
+                                                   "",
+                                                   HSSConnection::REG,
+                                                   "server_name");
+  HSSConnection::hss_query_return_t hss_query_return;
 
   std::multimap<int32_t, Ifc> ifcs_from_id;
   ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
@@ -1098,16 +1084,19 @@ TEST_F(HssWithSifcTest, SimpleSiFC)
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that two iFCs are now present in the map.
-  _sifc_hss.update_registration_state("onesifc", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
-  EXPECT_TRUE(ifcs_map.begin()->second.size() == 2);
+  _sifc_hss.update_registration_state(hss_query_param, hss_query_return, 0);
+
+  EXPECT_TRUE(hss_query_return.service_profiles.begin()->second.size() == 2);
 }
 
 // Check that SiFCs are compatible with iFCs.
 TEST_F(HssWithSifcTest, SifcWithIfc)
 {
-  AssociatedURIs uris;
-  std::map<std::string, Ifcs> ifcs_map;
-  std::string regstate;
+  HSSConnection::hss_query_param_t hss_query_param("sifcandifc",
+                                                   "",
+                                                   HSSConnection::REG,
+                                                   "server_name");
+  HSSConnection::hss_query_return_t hss_query_return;
 
   std::multimap<int32_t, Ifc> ifcs_from_id;
   ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
@@ -1119,28 +1108,34 @@ TEST_F(HssWithSifcTest, SifcWithIfc)
 
   // Send in a message, and check that three iFCs are now present in the map,
   // two from the SiFC set, and one regular iFC.
-  _sifc_hss.update_registration_state("sifcandifc", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
-  EXPECT_TRUE(ifcs_map.begin()->second.size() == 3);
+  _sifc_hss.update_registration_state(hss_query_param, hss_query_return, 0);
+
+  EXPECT_TRUE(hss_query_return.service_profiles.begin()->second.size() == 3);
 }
 
 // Check that an invalid SiFC, that is not an integer, is not accepted.
 TEST_F(HssWithSifcTest, NonIntegerSifc)
 {
-  AssociatedURIs uris;
-  std::map<std::string, Ifcs> ifcs_map;
-  std::string regstate;
+  HSSConnection::hss_query_param_t hss_query_param("invalidsifc",
+                                                   "",
+                                                   HSSConnection::REG,
+                                                   "server_name");
+  HSSConnection::hss_query_return_t hss_query_return;
 
   // Send in a message, and check that the iFC map is still empty.
-  _sifc_hss.update_registration_state("invalidsifc", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
-  EXPECT_TRUE(ifcs_map.begin()->second.size() == 0);
+  _sifc_hss.update_registration_state(hss_query_param, hss_query_return, 0);
+
+  EXPECT_TRUE(hss_query_return.service_profiles.begin()->second.size() == 0);
 }
 
 // Check that shared iFCs are read out from all Extensions present in the XML.
 TEST_F(HssWithSifcTest, MultipleExtensions)
 {
-  AssociatedURIs uris;
-  std::map<std::string, Ifcs> ifcs_map;
-  std::string regstate;
+  HSSConnection::hss_query_param_t hss_query_param("multipleextensions",
+                                                   "",
+                                                   HSSConnection::REG,
+                                                   "server_name");
+  HSSConnection::hss_query_return_t hss_query_return;
 
   // The list returned here will be passed back into the function when the
   // second Extension is encountered. For this reason, don't bother returning
@@ -1162,10 +1157,11 @@ TEST_F(HssWithSifcTest, MultipleExtensions)
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_two)));
 
   // Send in a message, and check that three iFCs are now in the iFC map.
-  _sifc_hss.update_registration_state("multipleextensions", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
-  EXPECT_TRUE(ifcs_map.begin()->second.size() == 3);
-}
+  _sifc_hss.update_registration_state(hss_query_param, hss_query_return, 0);
 
+  EXPECT_TRUE(hss_query_return.service_profiles.begin()->second.size() == 3);
+}
+/*
 // Check that multiple shared iFCs are parsed correctly.
 TEST_F(HssWithSifcTest, MultipleSifcs)
 {
@@ -1240,6 +1236,13 @@ TEST_F(HssWithSifcTest, ComplexSifcIfcMix)
   // 6 distinct iFCs with priorities 1, 1, 2, 3, 3 and 4 should be returned.
   // Additionally 3 iFCs from shared iFCs with priorities 1, 2 and 2 should be
   // returned.
+  HSSConnection::hss_query_param_t hss_query_param("pubid50",
+                                                   "",
+                                                   HSSConnection::CALL,
+                                                   "server_name");
+  HSSConnection::hss_query_return_t hss_query_return;
+
+  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
   _sifc_hss.update_registration_state("sifcifcmix", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   int32_t map_size = ifcs_map.begin()->second.size();
   EXPECT_TRUE(map_size == 9);

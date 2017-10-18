@@ -26,13 +26,9 @@ using namespace std;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::SetArgReferee;
-using ::testing::SetArgPointee;
 using ::testing::SaveArg;
-using ::testing::SaveArgPointee;
 using ::testing::InSequence;
-using ::testing::ByRef;
 using ::testing::NiceMock;
-using ::testing::Ref;
 
 class ChronosAoRTimeoutTasksTest : public TestWithMockSdms
 {
@@ -265,9 +261,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
 
-  HSSConnection::hss_query_param_t hss_query_param(aor_id);
-  hss_query_param.req_type = HSSConnection::DEREG_TIMEOUT; 
-  hss_query_param.server_name = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+  HSSConnection::hss_query_param_t hss_query_param;
 
   {
     InSequence s;
@@ -277,23 +271,41 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
                            //Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair1));
-      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, aor_pair, _, _)).WillOnce(DoAll(SetArgReferee<3>(true),
-                                                                               Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _))
+        .WillOnce(Return(remote1_aor_pair1));
+      EXPECT_CALL(*remote_store2, has_servers())
+        .WillOnce(Return(true));
+      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _))
+        .WillOnce(Return(remote2_aor_pair1));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor_pair, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true),
+                        Return(Store::OK)));
+
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor_pair2, _, _)).WillOnce(DoAll(SetArgReferee<3>(true),
-		                                                                                Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _))
+        .WillOnce(Return(remote1_aor_pair2));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor_pair2, _, _))
+                  .WillOnce(DoAll(SetArgReferee<3>(true),
+                                  Return(Store::OK)));
+
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
-      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair2, _, _)).WillOnce(DoAll(SetArgReferee<3>(true),
-		                                                                                Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(Ref(hss_query_param), _, 0));
+      EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _))
+        .WillOnce(Return(remote2_aor_pair2));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair2, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true),
+                        Return(Store::OK)));
+
+      EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
+        .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+                        Return(200)));
   }
 
   handler->run();
+
+  //ASSERT_EQ(hss_query_param.public_id, aor_id);
+  //ASSERT_EQ(hss_query_param.req_type, HSSConnection::DEREG_TIMEOUT); 
+  //ASSERT_EQ(hss_query_param.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+
 }
 
 // Test with NULL AoRs
