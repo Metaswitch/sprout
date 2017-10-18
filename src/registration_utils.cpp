@@ -686,16 +686,17 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   // Determine the set of IMPUs in the Implicit Registration Set
   std::vector<std::string> unbarred_irs_impus;
-  HSSConnection::hss_query_param_t hss_query_param(aor);
-  hss_query_param.req_type = dereg_type;
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = aor;
+  irs_query._req_type = dereg_type;
+  HSSConnection::irs_info irs_info;
 
-  HTTPCode http_code = hss->get_registration_data(hss_query_param,
-                                                  hss_query_return,
+  HTTPCode http_code = hss->get_registration_data(aor,
+                                                  irs_info,
                                                   trail);
 
   // We only want to send NOTIFYs for unbarred IMPUs.
-  unbarred_irs_impus = hss_query_return.associated_uris.get_unbarred_uris();
+  unbarred_irs_impus = irs_info._associated_uris.get_unbarred_uris();
 
   if ((http_code != HTTP_OK) || unbarred_irs_impus.empty())
   {
@@ -703,33 +704,33 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     // we have into the Associated URIs list so that we have at least one IMPU
     // we can issue NOTIFYs for. We should only do this if that IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor.c_str(), http_code);
-    if (!hss_query_return.associated_uris.is_impu_barred(aor))
+    if (!irs_info._associated_uris.is_impu_barred(aor))
     {
-      hss_query_return.associated_uris.clear_uris();
-      hss_query_return.associated_uris.add_uri(aor, false);
+      irs_info._associated_uris.clear_uris();
+      irs_info._associated_uris.add_uri(aor, false);
     }
   }
 
   std::string scscf_uri;
 
-  if (expire_bindings(sdm, aor, &(hss_query_return.associated_uris), binding_id, scscf_uri, trail))
+  if (expire_bindings(sdm, aor, &(irs_info._associated_uris), binding_id, scscf_uri, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
     TRC_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
     all_bindings_expired = true;
 
-    hss_query_param.server_name = scscf_uri;
+    irs_query._server_name = scscf_uri;
 
-    HTTPCode http_code = hss->update_registration_state(hss_query_param,
-                                                        hss_query_return,
+    HTTPCode http_code = hss->update_registration_state(irs_query,
+                                                        irs_info,
                                                         trail);
 
     if (http_code == HTTP_OK)
     {
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
-      deregister_with_application_servers(hss_query_return.service_profiles[aor],
+      deregister_with_application_servers(irs_info._service_profiles[aor],
                                           fifc_service,
                                           ifc_configuration,
                                           sdm,
@@ -755,7 +756,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, &(hss_query_return.associated_uris), binding_id, scscf_uri, trail);
+    (void) expire_bindings(*remote_sdm, aor, &(irs_info._associated_uris), binding_id, scscf_uri, trail);
   }
 
   return all_bindings_expired;

@@ -292,8 +292,8 @@ private:
 
   /// Read data for a public user identity from the HSS. Returns the HTTP result
   /// code obtained from homestead.
-  long read_hss_data(const HSSConnection::hss_query_param_t& hss_query_param,
-                     HSSConnection::hss_query_return_t& hss_query_return,
+  long read_hss_data(const HSSConnection::irs_query& irs_query,
+                     struct HSSConnection::irs_info& irs_info,
                      SAS::TrailId trail);
 
   /// Look up the registration state for the given public ID, using the
@@ -375,7 +375,7 @@ private:
   std::string _default_uri;
   std::vector<std::string> _uris;
   Ifcs _ifcs;
-  HSSConnection::hss_query_return_t _irs_info;
+  HSSConnection::irs_info _irs_info;
 
   /// ACRs used where the S-CSCF will only process a single transaction (no
   /// AsChain is created).  There are two cases where this might be true:

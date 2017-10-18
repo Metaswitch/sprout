@@ -367,65 +367,65 @@ class HssConnectionTest : public BaseTest
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
-  HSSConnection::hss_query_param_t hss_query_param("pubid42");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_query_t irs_query("pubid42");
+  HSSConnection::irs_info_t irs_info;
   
-  _hss.get_registration_data(hss_query_param, hss_query_return, 0);
+  _hss.get_registration_data(irs_query, irs_info, 0);
 
-  EXPECT_EQ("REGISTERED", hss_query_return.regstate);
-  ASSERT_EQ(2u, hss_query_return.associated_uris.get_unbarred_uris().size());
-  EXPECT_EQ("sip:123@example.com", hss_query_return.associated_uris.get_unbarred_uris()[0]);
-  EXPECT_EQ("sip:456@example.com", hss_query_return.associated_uris.get_unbarred_uris()[1]);
+  EXPECT_EQ("REGISTERED", irs_info.regstate);
+  ASSERT_EQ(2u, irs_info.associated_uris.get_unbarred_uris().size());
+  EXPECT_EQ("sip:123@example.com", irs_info.associated_uris.get_unbarred_uris()[0]);
+  EXPECT_EQ("sip:456@example.com", irs_info.associated_uris.get_unbarred_uris()[1]);
 }
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
 {
-  HSSConnection::hss_query_param_t hss_query_param("pubid43");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_query_t irs_query("pubid43");
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.get_registration_data(hss_query_param, hss_query_return, 0);
+  _hss.get_registration_data(irs_query, irs_info, 0);
 
-  EXPECT_EQ("NOT_REGISTERED", hss_query_return.regstate);
-  EXPECT_EQ(0u, hss_query_return.associated_uris.get_unbarred_uris().size());
+  EXPECT_EQ("NOT_REGISTERED", irs_info.regstate);
+  EXPECT_EQ(0u, irs_info.associated_uris.get_unbarred_uris().size());
 }
 
 TEST_F(HssConnectionTest, SimpleUnregistered)
 {
-  HSSConnection::hss_query_param_t hss_query_param("pubid50",
+  HSSConnection::irs_query_t irs_query("pubid50",
                                                    "",
                                                    HSSConnection::CALL,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_EQ("UNREGISTERED", hss_query_return.regstate);
+  EXPECT_EQ("UNREGISTERED", irs_info.regstate);
 }
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
 {
-  HSSConnection::hss_query_param_t hss_query_param("pubid50",
+  HSSConnection::irs_query_t irs_query("pubid50",
                                                    "",
                                                    HSSConnection::DEREG_ADMIN,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_EQ("NOT_REGISTERED", hss_query_return.regstate);
+  EXPECT_EQ("NOT_REGISTERED", irs_info.regstate);
 }
 
 TEST_F(HssConnectionTest, SimpleIfc)
 {
-  HSSConnection::hss_query_param_t hss_query_param("pubid42",
+  HSSConnection::irs_query_t irs_query("pubid42",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_FALSE(hss_query_return.service_profiles.empty());
+  EXPECT_FALSE(irs_info.service_profiles.empty());
 }
 
 TEST_F(HssConnectionTest, SimpleChargingAddrs)
@@ -433,61 +433,61 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
   std::deque<std::string> actual_ccfs = {"ccf1", "ccf2"};
   std::deque<std::string> actual_ecfs = {"ecf1", "ecf2"};
 
-  HSSConnection::hss_query_param_t hss_query_param("pubid42",
+  HSSConnection::irs_query_t irs_query("pubid42",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_EQ(actual_ccfs, hss_query_return.ccfs);
-  EXPECT_EQ(actual_ecfs, hss_query_return.ecfs);
+  EXPECT_EQ(actual_ccfs, irs_info.ccfs);
+  EXPECT_EQ(actual_ecfs, irs_info.ecfs);
 }
 
 TEST_F(HssConnectionTest, ServerName)
 {
   // Checks that we can request a different server name.
-  HSSConnection::hss_query_param_t hss_query_param("pubid51",
+  HSSConnection::irs_query_t irs_query("pubid51",
                                                    "",
                                                    HSSConnection::CALL,
                                                    "sip:scscf.sprout.homedomain;transport=TCP");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_EQ("REGISTERED", hss_query_return.regstate);
+  EXPECT_EQ("REGISTERED", irs_info.regstate);
 }
 
 TEST_F(HssConnectionTest, Barring)
 {
   // Checks that the BarringIndication field from the HSS is parsed correctly.
-  HSSConnection::hss_query_param_t hss_query_param("pubid47",
+  HSSConnection::irs_query_t irs_query("pubid47",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_EQ("REGISTERED", hss_query_return.regstate);
-  ASSERT_EQ(1u, hss_query_return.associated_uris.get_unbarred_uris().size());
-  EXPECT_FALSE(hss_query_return.associated_uris.is_impu_barred("sip:123@example.com"));
-  EXPECT_TRUE(hss_query_return.associated_uris.is_impu_barred("sip:456@example.com"));
+  EXPECT_EQ("REGISTERED", irs_info.regstate);
+  ASSERT_EQ(1u, irs_info.associated_uris.get_unbarred_uris().size());
+  EXPECT_FALSE(irs_info.associated_uris.is_impu_barred("sip:123@example.com"));
+  EXPECT_TRUE(irs_info.associated_uris.is_impu_barred("sip:456@example.com"));
 }
 
 TEST_F(HssConnectionTest, BadXML)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("pubid42_malformed",
+  HSSConnection::irs_query_t irs_query("pubid42_malformed",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
 }
 
@@ -495,105 +495,105 @@ TEST_F(HssConnectionTest, BadXML)
 TEST_F(HssConnectionTest, BadXML2)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("pubid43_malformed",
+  HSSConnection::irs_query_t irs_query("pubid43_malformed",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingServiceProfile)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("missingelement4",
+  HSSConnection::irs_query_t irs_query("missingelement4",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingPublicIdentity)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("missingelement5",
+  HSSConnection::irs_query_t irs_query("missingelement5",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed ServiceProfile XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIdentity)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("missingelement6",
+  HSSConnection::irs_query_t irs_query("missingelement6",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed PublicIdentity XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("missingelement1",
+  HSSConnection::irs_query_t irs_query("missingelement1",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("missingelement3",
+  HSSConnection::irs_query_t irs_query("missingelement3",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("missingelement2",
+  HSSConnection::irs_query_t irs_query("missingelement2",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -601,16 +601,16 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
 TEST_F(HssConnectionTest, ServerFailure)
 {
   CapturingTestLogger log;
-  HSSConnection::hss_query_param_t hss_query_param("pubid44",
+  HSSConnection::irs_query_t irs_query("pubid44",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_EQ("", hss_query_return.regstate);
-  EXPECT_TRUE(hss_query_return.associated_uris.get_unbarred_uris().empty());
+  EXPECT_EQ("", irs_info.regstate);
+  EXPECT_TRUE(irs_info.associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
 }
 
@@ -693,32 +693,32 @@ TEST_F(HssConnectionTest, LocationNotFound)
 
 TEST_F(HssConnectionTest, SimpleAliases)
 {
-  HSSConnection::hss_query_param_t hss_query_param("pubid46",
+  HSSConnection::irs_query_t irs_query("pubid46",
                                                    "",
                                                    HSSConnection::CALL,
                                                    "server_name");
-  hss_query_param.cache_allowed = true;
-  HSSConnection::hss_query_return_t hss_query_return;
+  irs_query.cache_allowed = true;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
 
-  ASSERT_EQ(3u, hss_query_return.aliases.size());
-  EXPECT_EQ("sip:321@example.com", hss_query_return.aliases[0]);
-  EXPECT_EQ("pubid46", hss_query_return.aliases[1]);
-  EXPECT_EQ("tel:321", hss_query_return.aliases[2]);
+  ASSERT_EQ(3u, irs_info.aliases.size());
+  EXPECT_EQ("sip:321@example.com", irs_info.aliases[0]);
+  EXPECT_EQ("pubid46", irs_info.aliases[1]);
+  EXPECT_EQ("tel:321", irs_info.aliases[2]);
 
 }
 
 TEST_F(HssConnectionTest, CacheNotAllowed)
 {
-  HSSConnection::hss_query_param_t hss_query_param("public-needs-private",
+  HSSConnection::irs_query_t irs_query("public-needs-private",
                                                    "a-private-id",
                                                    HSSConnection::REG,
                                                    "server_name");
-  hss_query_param.cache_allowed = false;
-  HSSConnection::hss_query_return_t hss_query_return;
+  irs_query.cache_allowed = false;
+  HSSConnection::irs_info_t irs_info;
 
-  HTTPCode rc = _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  HTTPCode rc = _hss.update_registration_state(irs_query, irs_info, 0);
 
   // The request has a cache control header on it to prevent cached responses.
   Request& request = fakecurl_requests[
@@ -1069,11 +1069,11 @@ class HssWithSifcTest : public BaseTest
 
 TEST_F(HssWithSifcTest, SimpleSiFC)
 {
-  HSSConnection::hss_query_param_t hss_query_param("onesifc",
+  HSSConnection::irs_query_t irs_query("onesifc",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
   std::multimap<int32_t, Ifc> ifcs_from_id;
   ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
@@ -1084,19 +1084,19 @@ TEST_F(HssWithSifcTest, SimpleSiFC)
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that two iFCs are now present in the map.
-  _sifc_hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _sifc_hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.service_profiles.begin()->second.size() == 2);
+  EXPECT_TRUE(irs_info.service_profiles.begin()->second.size() == 2);
 }
 
 // Check that SiFCs are compatible with iFCs.
 TEST_F(HssWithSifcTest, SifcWithIfc)
 {
-  HSSConnection::hss_query_param_t hss_query_param("sifcandifc",
+  HSSConnection::irs_query_t irs_query("sifcandifc",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
   std::multimap<int32_t, Ifc> ifcs_from_id;
   ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
@@ -1108,34 +1108,34 @@ TEST_F(HssWithSifcTest, SifcWithIfc)
 
   // Send in a message, and check that three iFCs are now present in the map,
   // two from the SiFC set, and one regular iFC.
-  _sifc_hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _sifc_hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.service_profiles.begin()->second.size() == 3);
+  EXPECT_TRUE(irs_info.service_profiles.begin()->second.size() == 3);
 }
 
 // Check that an invalid SiFC, that is not an integer, is not accepted.
 TEST_F(HssWithSifcTest, NonIntegerSifc)
 {
-  HSSConnection::hss_query_param_t hss_query_param("invalidsifc",
+  HSSConnection::irs_query_t irs_query("invalidsifc",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
   // Send in a message, and check that the iFC map is still empty.
-  _sifc_hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _sifc_hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.service_profiles.begin()->second.size() == 0);
+  EXPECT_TRUE(irs_info.service_profiles.begin()->second.size() == 0);
 }
 
 // Check that shared iFCs are read out from all Extensions present in the XML.
 TEST_F(HssWithSifcTest, MultipleExtensions)
 {
-  HSSConnection::hss_query_param_t hss_query_param("multipleextensions",
+  HSSConnection::irs_query_t irs_query("multipleextensions",
                                                    "",
                                                    HSSConnection::REG,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
   // The list returned here will be passed back into the function when the
   // second Extension is encountered. For this reason, don't bother returning
@@ -1157,9 +1157,9 @@ TEST_F(HssWithSifcTest, MultipleExtensions)
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_two)));
 
   // Send in a message, and check that three iFCs are now in the iFC map.
-  _sifc_hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _sifc_hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(hss_query_return.service_profiles.begin()->second.size() == 3);
+  EXPECT_TRUE(irs_info.service_profiles.begin()->second.size() == 3);
 }
 /*
 // Check that multiple shared iFCs are parsed correctly.
@@ -1236,13 +1236,13 @@ TEST_F(HssWithSifcTest, ComplexSifcIfcMix)
   // 6 distinct iFCs with priorities 1, 1, 2, 3, 3 and 4 should be returned.
   // Additionally 3 iFCs from shared iFCs with priorities 1, 2 and 2 should be
   // returned.
-  HSSConnection::hss_query_param_t hss_query_param("pubid50",
+  HSSConnection::irs_query_t irs_query("pubid50",
                                                    "",
                                                    HSSConnection::CALL,
                                                    "server_name");
-  HSSConnection::hss_query_return_t hss_query_return;
+  HSSConnection::irs_info_t irs_info;
 
-  _hss.update_registration_state(hss_query_param, hss_query_return, 0);
+  _hss.update_registration_state(irs_query, irs_info, 0);
   _sifc_hss.update_registration_state("sifcifcmix", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   int32_t map_size = ifcs_map.begin()->second.size();
   EXPECT_TRUE(map_size == 9);

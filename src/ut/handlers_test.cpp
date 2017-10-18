@@ -984,7 +984,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
   AoRPair* aor = build_aor(impu, false);
   build_task(impu_escaped);
 
-  HSSConnection::hss_query_param_t hss_query_param;
+  HSSConnection::irs_query_t irs_query;
 
   {
     InSequence s;
@@ -994,16 +994,16 @@ TEST_F(DeleteImpuTaskTest, Mainline)
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
-        .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+        .WillOnce(DoAll(SaveArg<0>(&irs_query),
                         Return(200)));
       EXPECT_CALL(*stack, send_reply(_, 200, _));
   }
 
   task->run();
  
-  ASSERT_EQ(hss_query_param.public_id, impu);
-  ASSERT_EQ(hss_query_param.req_type, HSSConnection::DEREG_ADMIN);
-  ASSERT_EQ(hss_query_param.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query.public_id, impu);
+  ASSERT_EQ(irs_query.req_type, HSSConnection::DEREG_ADMIN);
+  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, StoreFailure)
@@ -1035,7 +1035,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
   AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
-  HSSConnection::hss_query_param_t hss_query_param;
+  HSSConnection::irs_query_t irs_query;
 
   {
     InSequence s;
@@ -1045,15 +1045,15 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
-        .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+        .WillOnce(DoAll(SaveArg<0>(&irs_query),
                   Return(404)));
       EXPECT_CALL(*stack, send_reply(_, 404, _));
   }
 
   task->run();
 
-  ASSERT_EQ(hss_query_param.public_id, impu);
-  ASSERT_EQ(hss_query_param.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query.public_id, impu);
+  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
@@ -1064,7 +1064,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
   AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
-  HSSConnection::hss_query_param_t hss_query_param;
+  HSSConnection::irs_query_t irs_query;
 
   {
     InSequence s;
@@ -1074,15 +1074,15 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
-        .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+        .WillOnce(DoAll(SaveArg<0>(&irs_query),
                   Return(500)));
       EXPECT_CALL(*stack, send_reply(_, 502, _));
   }
 
   task->run();
 
-  ASSERT_EQ(hss_query_param.public_id, impu);
-  ASSERT_EQ(hss_query_param.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query.public_id, impu);
+  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
@@ -1093,7 +1093,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
   AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
-  HSSConnection::hss_query_param_t hss_query_param;
+  HSSConnection::irs_query_t irs_query;
 
   {
     InSequence s;
@@ -1103,15 +1103,15 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
-        .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+        .WillOnce(DoAll(SaveArg<0>(&irs_query),
                   Return(400)));
       EXPECT_CALL(*stack, send_reply(_, 400, _));
   }
 
   task->run();
 
-  ASSERT_EQ(hss_query_param.public_id, impu);
-  ASSERT_EQ(hss_query_param.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query.public_id, impu);
+  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
@@ -1123,7 +1123,7 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
   AoRPair* remote_aor = build_aor(impu);
   build_task(impu_escaped, htp_method_DELETE, true);
 
-  HSSConnection::hss_query_param_t hss_query_param;
+  HSSConnection::irs_query_t irs_query;
 
   {
     InSequence s;
@@ -1133,7 +1133,7 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
-        .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+        .WillOnce(DoAll(SaveArg<0>(&irs_query),
                   Return(200)));
 
       EXPECT_CALL(*remote_store1, get_aor_data(impu, _)).WillOnce(Return(remote_aor));
@@ -1146,8 +1146,8 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
 
   task->run();
 
-  ASSERT_EQ(hss_query_param.public_id, impu);
-  ASSERT_EQ(hss_query_param.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query.public_id, impu);
+  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, BadMethod)
@@ -1393,7 +1393,7 @@ TEST_F(PushProfileTaskTest, AllBindingExpired)
   AoRPair* aor_pair = new AoRPair(aor, aor2);
   build_pushprofile_request(body, default_uri);
 
-  HSSConnection::hss_query_param_t hss_query_param;
+  HSSConnection::irs_query_t irs_query;
 
   {
     InSequence s;
@@ -1403,13 +1403,13 @@ TEST_F(PushProfileTaskTest, AllBindingExpired)
       .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
                       Return(Store::OK)));
     EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
-      .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+      .WillOnce(DoAll(SaveArg<0>(&irs_query),
                       Return(200)));
     EXPECT_CALL(*stack, send_reply(_, 200, _));
   }
 
   task->run();
 
-  ASSERT_EQ(hss_query_param.public_id, default_uri);
-  ASSERT_EQ(hss_query_param.req_type, HSSConnection::DEREG_TIMEOUT);
+  ASSERT_EQ(irs_query.public_id, default_uri);
+  ASSERT_EQ(irs_query.req_type, HSSConnection::DEREG_TIMEOUT);
 }

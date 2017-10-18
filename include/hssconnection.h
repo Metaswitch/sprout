@@ -32,50 +32,26 @@
 class HSSConnection
 {
 public:
-  typedef struct hss_query_param_t
+  struct irs_query
   {
-    std::string public_id;
-    std::string private_id;
-    std::string req_type;
-    std::string server_name;
-    std::string wildcard;
-    bool cache_allowed;
+    std::string _public_id;
+    std::string _private_id;
+    std::string _req_type;
+    std::string _server_name;
+    std::string _wildcard;
+    bool _cache_allowed;
 
-    hss_query_param_t()
-    {
-    }
+  };
 
-    hss_query_param_t(std::string public_id) : public_id(public_id)
-    {
-    }
-
-    hss_query_param_t(std::string public_id,
-                      std::string private_id,
-                      std::string req_type,
-                      std::string server_name
-                      ) : public_id(public_id),
-                          private_id(private_id),
-                          req_type(req_type),
-                          server_name(server_name)
-    {
-    }
-
-  } hss_query_param_t;
-
-  typedef struct hss_query_return_t
+  struct irs_info
   {
-    std::string regstate;
-    std::map<std::string, Ifcs> service_profiles;
-    AssociatedURIs associated_uris;
-    std::vector<std::string> aliases;
-    std::deque<std::string> ccfs;
-    std::deque<std::string> ecfs;
-
-    hss_query_return_t()
-    {
-    }
-
-  } hss_query_return_t;
+    std::string _regstate;
+    std::map<std::string, Ifcs> _service_profiles;
+    AssociatedURIs _associated_uris;
+    std::vector<std::string> _aliases;
+    std::deque<std::string> _ccfs;
+    std::deque<std::string> _ecfs;
+  };
 
   HSSConnection(const std::string& server,
                 HttpResolver* resolver,
@@ -111,12 +87,12 @@ public:
                              rapidjson::Document*& object,
                              SAS::TrailId trail);
 
-  virtual HTTPCode update_registration_state(const hss_query_param_t& hss_query_parameter,
-                                             hss_query_return_t& hss_query_return,
+  virtual HTTPCode update_registration_state(const struct irs_query& irs_query,
+                                             struct irs_info& irs_info,
                                              SAS::TrailId trail);
 
-  virtual HTTPCode get_registration_data(const hss_query_param_t& hss_query_parameter,
-                                         hss_query_return_t& hss_query_return,
+  virtual HTTPCode get_registration_data(const std::string& public_id,
+                                         struct irs_info& irs_info,
                                          SAS::TrailId trail);
   rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
 

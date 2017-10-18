@@ -304,13 +304,13 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SAS::Marker start_marker(trail_id, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  const HSSConnection::hss_query_param_t hss_query_param(public_id);
-  HSSConnection::hss_query_return_t hss_query_return;
+  const HSSConnection::irs_query_t irs_query(public_id);
+  HSSConnection::irs_info_t irs_info;
 
-  HTTPCode http_code = _subscription->_hss->get_registration_data(hss_query_param,
-                                                                  hss_query_return,
+  HTTPCode http_code = _subscription->_hss->get_registration_data(irs_query,
+                                                                  irs_info,
                                                                   trail_id);
-  st_code = determine_hss_sip_response(http_code, hss_query_return.regstate, "SUBSCRIBE");
+  st_code = determine_hss_sip_response(http_code, irs_info.regstate, "SUBSCRIBE");
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -325,7 +325,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // should already have been rejected for the subscriber being unregistered,
   // but we handle the error case where it isn't.
   std::string aor;
-  if (!hss_query_return.associated_uris.get_default_impu(aor, false))
+  if (!irs_info.associated_uris.get_default_impu(aor, false))
   {
     pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
     send_response(rsp);
@@ -344,7 +344,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // If the write to the local store succeeds, then write to the remote stores.
   AoRPair* aor_pair = write_subscriptions_to_store(_subscription->_sdm,
                                                    aor,
-                                                   &(hss_query_return.associated_uris),
+                                                   &(irs_info.associated_uris),
                                                    req,
                                                    now,
                                                    NULL,
@@ -352,8 +352,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                    public_id,
                                                    true,
                                                    acr,
-                                                   hss_query_return.ccfs,
-                                                   hss_query_return.ecfs);
+                                                   irs_info.ccfs,
+                                                   irs_info.ecfs);
 
   if (aor_pair != NULL)
   {
@@ -370,7 +370,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
       {
         AoRPair* remote_aor_pair = write_subscriptions_to_store(*it,
                                                                 aor,
-                                                                &(hss_query_return.associated_uris),
+                                                                &(irs_info.associated_uris),
                                                                 req,
                                                                 now,
                                                                 aor_pair,
@@ -378,8 +378,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                                 public_id,
                                                                 false,
                                                                 acr,
-                                                                hss_query_return.ccfs,
-                                                                hss_query_return.ecfs);
+                                                                irs_info.ccfs,
+                                                                irs_info.ecfs);
         delete remote_aor_pair;
       }
     }

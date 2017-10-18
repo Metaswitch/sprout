@@ -24,13 +24,13 @@ public:
   virtual ~MockHSSConnection();
 
   MOCK_METHOD3(update_registration_state,
-               HTTPCode(const HSSConnection::hss_query_param_t& hss_query_param,
-                        HSSConnection::hss_query_return_t& hss_query_return,
+               HTTPCode(const HSSConnection::irs_query_t& irs_query,
+                        HSSConnection::irs_info_t& irs_info,
                         SAS::TrailId trail));
 
   MOCK_METHOD3(get_registration_data,
-               HTTPCode(const HSSConnection::hss_query_param_t& hss_query_param,
-                        HSSConnection::hss_query_return_t& hss_query_return,
+               HTTPCode(const HSSConnection::irs_query_t& irs_query,
+                        HSSConnection::irs_info_t& irs_info,
                         SAS::TrailId trail));
 
 };

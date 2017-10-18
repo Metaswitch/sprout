@@ -408,18 +408,18 @@ private:
   {
     // First registration OK.
     Message msg;
-    HSSConnection::hss_query_param_t hss_query_param;
+    HSSConnection::irs_query_t irs_query;
 
     EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
-      .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+      .WillOnce(DoAll(SaveArg<0>(&irs_query),
                       Return(HTTP_OK)));
     
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     pjsip_msg* out = current_txdata()->msg;
 
-    ASSERT_EQ(hss_query_param.public_id, "sip:6505550231@homedomain");
-    ASSERT_EQ(hss_query_param.req_type, HSSConnection::REG);
+    ASSERT_EQ(irs_query.public_id, "sip:6505550231@homedomain");
+    ASSERT_EQ(irs_query.req_type, HSSConnection::REG);
 
     EXPECT_EQ(200, out->line.status.code);
     EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
@@ -603,12 +603,12 @@ private:
     msg._contact_params = "";
     EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
       .WillOnce(Return(HTTP_OK))
-      .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+      .WillOnce(DoAll(SaveArg<0>(&irs_query),
                       Return(HTTP_OK)));
 
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
-    //ASSERT_EQ(hss_query_param.req_type, HSSConnection::DEREG_USER);
+    //ASSERT_EQ(irs_query.req_type, HSSConnection::DEREG_USER);
     out = current_txdata()->msg;
     EXPECT_EQ(200, out->line.status.code);
     EXPECT_EQ("OK", str_pj(out->line.status.reason));

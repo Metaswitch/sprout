@@ -261,7 +261,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
 
-  HSSConnection::hss_query_param_t hss_query_param;
+  HSSConnection::irs_query_t irs_query;
 
   {
     InSequence s;
@@ -296,15 +296,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
                         Return(Store::OK)));
 
       EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
-        .WillOnce(DoAll(SaveArg<0>(&hss_query_param),
+        .WillOnce(DoAll(SaveArg<0>(&irs_query),
                         Return(200)));
   }
 
   handler->run();
 
-  //ASSERT_EQ(hss_query_param.public_id, aor_id);
-  //ASSERT_EQ(hss_query_param.req_type, HSSConnection::DEREG_TIMEOUT); 
-  //ASSERT_EQ(hss_query_param.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  //ASSERT_EQ(irs_query.public_id, aor_id);
+  //ASSERT_EQ(irs_query.req_type, HSSConnection::DEREG_TIMEOUT); 
+  //ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 
 }
 

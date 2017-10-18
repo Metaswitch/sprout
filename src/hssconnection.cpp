@@ -310,8 +310,8 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
 }
 
 
-bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_param,
-                          HSSConnection::hss_query_return_t& hss_query_return,
+bool decode_homestead_xml(const std::string& public_id,
+                          struct HSSConnection::irs_info& irs_info,
                           std::shared_ptr<rapidxml::xml_document<> > root,
                           SIFCService* sifc_service,
                           const bool allowNoIMS,
@@ -321,7 +321,7 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
     TRC_WARNING("Malformed HSS XML for %s - document couldn't be parsed",
-                hss_query_param.public_id.c_str());
+                public_id.c_str());
     return false;
   }
 
@@ -332,7 +332,7 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed Homestead XML for %s - no ClearwaterRegData element:\n%s",
-                hss_query_param.public_id.c_str(),
+                public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
@@ -344,14 +344,14 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed Homestead XML for %s - no RegistrationState element:\n%s",
-                hss_query_param.public_id.c_str(),
+                public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
 
-  hss_query_return.regstate = reg->value();
+  irs_info._regstate = reg->value();
 
-  if ((hss_query_return.regstate == RegDataXMLUtils::STATE_NOT_REGISTERED) && (allowNoIMS))
+  if ((irs_info._regstate == RegDataXMLUtils::STATE_NOT_REGISTERED) && (allowNoIMS))
   {
     TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
@@ -364,24 +364,24 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
-                hss_query_param.public_id.c_str(),
+                public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
 
-  if (!SproutXmlUtils::parse_ims_subscription(hss_query_param.public_id,
+  if (!SproutXmlUtils::parse_ims_subscription(public_id,
                                               root,
                                               imss,
-                                              hss_query_return.service_profiles,
-                                              hss_query_return.associated_uris,
-                                              hss_query_return.aliases,
+                                              irs_info._service_profiles,
+                                              irs_info._associated_uris,
+                                              irs_info._aliases,
                                               sifc_service,
                                               trail))
   {
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed HSS XML for %s:\n%s",
-                hss_query_param.public_id.c_str(),
+                public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
@@ -390,7 +390,7 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
 
   if (charging_addrs_node)
   {
-    parse_charging_addrs_node(charging_addrs_node, hss_query_return.ccfs, hss_query_return.ecfs);
+    parse_charging_addrs_node(charging_addrs_node, irs_info._ccfs, irs_info._ecfs);
   }
   return true;
 }
@@ -403,23 +403,27 @@ bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_para
 // Returns the HTTP code from Homestead - callers should check that
 // this is HTTP_OK before relying on the output parameters.
 
-HTTPCode HSSConnection::update_registration_state(const hss_query_param_t& hss_query_param,
-                                                  hss_query_return_t& hss_query_return,
+HTTPCode HSSConnection::update_registration_state(const struct irs_query& irs_query,
+                                                  struct irs_info& irs_info,
                                                   SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_CHECK_STATE, 0);
-  event.add_var_param(hss_query_param.public_id);
-  event.add_var_param(hss_query_param.private_id);
-  event.add_var_param(hss_query_param.req_type);
+  event.add_var_param(irs_query._public_id);
+  event.add_var_param(irs_query._private_id);
+  event.add_var_param(irs_query._req_type);
   SAS::report_event(event);
 
-  std::string path = "/impu/" + Utils::url_escape(hss_query_param.public_id) + "/reg-data";
-  if (!hss_query_param.private_id.empty())
+  std::string path = "/impu/" + 
+                    Utils::url_escape(irs_query._public_id) + 
+                    "/reg-data";
+
+  if (!irs_query._private_id.empty())
   {
-    path += "?private_id=" + Utils::url_escape(hss_query_param.private_id);
+    path += "?private_id=" + 
+            Utils::url_escape(irs_query._private_id);
   }
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
@@ -428,15 +432,23 @@ HTTPCode HSSConnection::update_registration_state(const hss_query_param_t& hss_q
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  std::string json_wildcard =
-        (hss_query_param.wildcard != "") ? ", \"wildcard_identity\": \"" + hss_query_param.wildcard + "\"" : "";
-  std::string req_body = "{\"reqtype\": \"" + hss_query_param.req_type + "\"" +
-                          ", \"server_name\": \"" + hss_query_param.server_name + "\"" +
-                          json_wildcard +
-                          "}";
+  std::string json_wildcard = (irs_query._wildcard != "") ?
+    ", \"wildcard_identity\": \"" +
+    irs_query._wildcard +
+    "\""
+    : "";
+
+  std::string req_body = "{\"reqtype\": \"" +
+                         irs_query._req_type + 
+                         "\"" +
+                         ", \"server_name\": \"" +
+                         irs_query._server_name +
+                         "\"" +
+                         json_wildcard +
+                         "}";
   HTTPCode http_code = put_for_xml_object(path,
                                           req_body,
-                                          hss_query_param.cache_allowed,
+                                          irs_query._cache_allowed,
                                           root_underlying_ptr,
                                           trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
@@ -461,8 +473,8 @@ HTTPCode HSSConnection::update_registration_state(const hss_query_param_t& hss_q
     TRC_ERROR("Could not get subscriber data from HSS");
     return http_code;
   }
-  return decode_homestead_xml(hss_query_param,
-                              hss_query_return,
+  return decode_homestead_xml(irs_query._public_id,
+                              irs_info,
                               root,
                               _sifc_service,
                               false,
@@ -470,18 +482,20 @@ HTTPCode HSSConnection::update_registration_state(const hss_query_param_t& hss_q
 }
 
 
-HTTPCode HSSConnection::get_registration_data(const hss_query_param_t& hss_query_param,
-                                              hss_query_return_t& hss_query_return,
+HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
+                                              struct irs_info& irs_info,
                                               SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_GET_REG, 0);
-  event.add_var_param(hss_query_param.public_id);
+  event.add_var_param(public_id);
   SAS::report_event(event);
 
-  std::string path = "/impu/" + Utils::url_escape(hss_query_param.public_id) + "/reg-data";
+  std::string path = "/impu/" +
+                     Utils::url_escape(public_id) +
+                     "/reg-data";
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
@@ -516,8 +530,8 @@ HTTPCode HSSConnection::get_registration_data(const hss_query_param_t& hss_query
   // not return any iFCs (when the subscriber isn't registered), so a successful
   // response shouldn't be taken as a guarantee of iFCs.
   std::vector<std::string> unused_aliases;
-  return decode_homestead_xml(hss_query_param,
-                              hss_query_return,
+  return decode_homestead_xml(public_id,
+                              irs_info,
                               root,
                               _sifc_service,
                               true,

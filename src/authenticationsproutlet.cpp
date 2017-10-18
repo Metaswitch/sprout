@@ -1245,16 +1245,16 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       // Notify Homestead and the HSS that this authentication attempt
       // has definitively failed.
-      HSSConnection::hss_query_param_t hss_query_param;
-      hss_query_param.req_type = HSSConnection::AUTH_FAIL;
-      hss_query_param.server_name = _scscf_uri;
-      HSSConnection::hss_query_return_t hss_query_return;
+      HSSConnection::irs_query_t irs_query;
+      irs_query.req_type = HSSConnection::AUTH_FAIL;
+      irs_query.server_name = _scscf_uri;
+      HSSConnection::irs_info_t irs_info;
 
       PJUtils::get_impi_and_impu(req,
-                                 hss_query_param.private_id,
-                                 hss_query_param.public_id);
-      _authentication->_hss->update_registration_state(hss_query_param,
-                                                       hss_query_return,
+                                 irs_query.private_id,
+                                 irs_query.public_id);
+      _authentication->_hss->update_registration_state(irs_query,
+                                                       irs_info,
                                                        trail());
     }
 

@@ -295,27 +295,27 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 
 
 /// Read data from the HSS and store in member fields for sproutlet.
-long SCSCFSproutletTsx::read_hss_data(const HSSConnection::hss_query_param_t& hss_query_param,
-                                   HSSConnection::hss_query_return_t& hss_query_return,
-                                   SAS::TrailId trail)
+long SCSCFSproutletTsx::read_hss_data(const struct HSSConnection::irs_query& irs_query,
+                                      struct HSSConnection::irs_info& irs_info,
+                                      SAS::TrailId trail)
 {
 
-  long http_code = _scscf->_hss->update_registration_state(hss_query_param,
-                                                           hss_query_return,
+  long http_code = _scscf->_hss->update_registration_state(irs_query,
+                                                           irs_info,
                                                            trail);
 
   if (http_code == HTTP_OK)
   {
-    _ifcs = hss_query_return.service_profiles[hss_query_param.public_id];
+    _ifcs = irs_info.service_profiles[irs_query.public_id];
 
     // Get the default URI. This should always succeed.
-    hss_query_return.associated_uris.get_default_impu(_default_uri, true);
+    irs_info.associated_uris.get_default_impu(_default_uri, true);
 
     // We may want to route to bindings that are barred (in case of an
     // emergency), so get all the URIs.
-    _uris = hss_query_return.associated_uris.get_all_uris();
-    _registered = (hss_query_return.regstate == RegDataXMLUtils::STATE_REGISTERED);
-    _barred = hss_query_return.associated_uris.is_impu_barred(hss_query_param.public_id);
+    _uris = irs_info.associated_uris.get_all_uris();
+    _registered = (irs_info.regstate == RegDataXMLUtils::STATE_REGISTERED);
+    _barred = irs_info.associated_uris.is_impu_barred(irs_query.public_id);
   }
 
   return http_code;
@@ -1876,16 +1876,16 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
   {
     const std::string req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
 
-    HSSConnection::hss_query_param_t hss_query_param(public_id,
+    HSSConnection::irs_query_t irs_query(public_id,
                                                      _impi,
                                                      req_type,
                                                      _scscf_uri);
-    hss_query_param.wildcard = _wildcard;
-    hss_query_param.cache_allowed = !_auto_reg;
+    irs_query.wildcard = _wildcard;
+    irs_query.cache_allowed = !_auto_reg;
 
-    http_code = read_hss_data(hss_query_param,
-                                      _irs_info,
-                                      trail());
+    http_code = read_hss_data(irs_query,
+                              _irs_info,
+                              trail());
 
     if (http_code == HTTP_OK)
     {
@@ -2229,9 +2229,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       }
       else
       {
-        for (std::vector<std::string>::iterator alias = _irs_info.aliases.begin();
-             alias != _irs_info.aliases.end();
-             ++alias)
+        for std::string alias : _irs_info.aliases
         {
           std::string tel_URI_prefix = "tel:";
           bool has_tel_prefix = (alias->rfind(tel_URI_prefix.c_str(), 4) != std::string::npos);
