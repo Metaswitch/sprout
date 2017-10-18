@@ -135,6 +135,7 @@ private:
   /// routing.
   int _network_function_port;
 
+  /// The list of blacklisted S-CSCFs
   std::vector<std::string> _blacklisted_scscfs;
 };
 
