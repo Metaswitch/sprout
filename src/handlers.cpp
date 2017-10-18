@@ -198,11 +198,12 @@ static void update_hss_on_aor_expiry(std::string aor_id,
   // Get the S-CSCF URI off the AoR to put on the SAR.
   AoR* aor = aor_pair.get_current();
 
-  HSSConnection::hss_query_param_t hss_query_param(aor_id);
-  hss_query_param.req_type = HSSConnection::DEREG_TIMEOUT;
+  HSSConnection::hss_query_param_t hss_query_param(aor_id,
+                                                   "",
+                                                   HSSConnection::DEREG_TIMEOUT,
+                                                   aor->_scscf_uri);
   
   HSSConnection::hss_query_return_t hss_query_return;
-  hss_query_param.server_name = aor->_scscf_uri;
 
   hss->update_registration_state(hss_query_param,
                                  hss_query_return,
@@ -215,28 +216,26 @@ static bool get_reg_data(HSSConnection* hss,
                          std::map<std::string, Ifcs>& ifc_map,
                          SAS::TrailId trail)
 {
-  std::vector<std::string> unbarred_irs_impus;
   HSSConnection::hss_query_param_t hss_query_param(aor_id);
   HSSConnection::hss_query_return_t hss_query_return;
-  hss_query_return.service_profiles = ifc_map;
-  hss_query_return.associated_uris = associated_uris;
 
   HTTPCode http_code = hss->get_registration_data(hss_query_param,
                                                   hss_query_return,
                                                   trail);
 
-  unbarred_irs_impus = hss_query_return.associated_uris.get_unbarred_uris();
+  ifc_map = hss_query_return.service_profiles;
+  associated_uris = hss_query_return.associated_uris;
 
-  if ((http_code != HTTP_OK) || unbarred_irs_impus.empty())
+  if ((http_code != HTTP_OK) || associated_uris.get_unbarred_uris().empty())
   {
     // We were unable to determine the set of IMPUs for this AoR. Push the AoR
     // we have into the Associated URIs list so that we have at least one IMPU
     // we can issue NOTIFYs for. We should only do this if that IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor_id.c_str(), http_code);
-    if (!hss_query_return.associated_uris.is_impu_barred(aor_id))
+    if (!associated_uris.is_impu_barred(aor_id))
     {
-      hss_query_return.associated_uris.clear_uris();
-      hss_query_return.associated_uris.add_uri(aor_id, false);
+      associated_uris.clear_uris();
+      associated_uris.add_uri(aor_id, false);
     }
   }
 

@@ -2919,7 +2919,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
 
-  //check_notify(out, aor, "active", std::make_pair("active", "registered"));
+  check_notify(out, aor, "active", std::make_pair("active", "registered"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -2931,7 +2931,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  //check_notify(out, aor, "active", std::make_pair("active", "refreshed"));
+  check_notify(out, aor, "active", std::make_pair("active", "refreshed"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -2943,7 +2943,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  //check_notify(out, aor, "active", std::make_pair("active", "shortened"));
+  check_notify(out, aor, "active", std::make_pair("active", "shortened"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -2955,7 +2955,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  //check_notify(out, aor, "terminated", std::make_pair("terminated", "expired"));
+  check_notify(out, aor, "terminated", std::make_pair("terminated", "expired"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 }
@@ -3009,7 +3009,7 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
 
-  //check_notify(out, aor, "active", std::make_pair("active", "registered"));
+  check_notify(out, aor, "active", std::make_pair("active", "registered"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
