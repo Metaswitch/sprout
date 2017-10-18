@@ -1026,17 +1026,24 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
 {
   std::string old_served_user = _as_chain_link.served_user();
 
-  // TS 24.229 section 5.4.3.3 says that changing the Request-URI to an alias of the original URI
-  // doesn't count as a retarget, so get the aliases ready to check
-  std::vector<std::string> aliases;
-  get_aliases(old_served_user, aliases);
-
+  // Does the new served user exactly match the old served user?  Check this
+  // before getting aliases as it's the mainline case and it avoids a round trip
+  // to Homestead (which could save us up to 20ms for each terminating
+  // application server).
   if (new_served_user == old_served_user)
   {
     // URIs match exactly - this is not a retarget
     return false;
   }
-  else if (std::find(aliases.begin(), aliases.end(), new_served_user) != aliases.end())
+
+  // Otherwise, TS 24.229 section 5.4.3.3 says that changing the Request-URI to
+  // an alias of the original URI doesn't count as a retarget, so get the
+  // aliases and check.  Note that we could optimize this further by caching
+  // the aliases when we create the AsChain.
+  std::vector<std::string> aliases;
+  get_aliases(old_served_user, aliases);
+
+  if (std::find(aliases.begin(), aliases.end(), new_served_user) != aliases.end())
   {
     TRC_DEBUG("Application server has changed URI %s to the aliased URI %s - "
               "not treating as a retarget, not invoking originating-cdiv processing",
@@ -1926,11 +1933,16 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 }
 
 
-/// Look up the registration state for the given public ID, using the
-/// per-transaction cache, which will be present at this point
+/// Look up the registration state for the given public ID. If we can't get
+/// this information we assume that the subscriber isn't registered.
 bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 {
-  return _registered;
+  long http_code = get_data_from_hss(public_id);
+  if (http_code == HTTP_OK)
+  {
+    return _registered;
+  }
+  return false;
 }
 
 
