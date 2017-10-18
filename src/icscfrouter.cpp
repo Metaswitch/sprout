@@ -89,7 +89,6 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
       // S-CSCFs. Behave as if the HSS failed to return a S-CSCF.
       _attempted_scscfs.push_back(_hss_rsp.scscf);
       status_code = hss_query();
-      _queried_caps=true;
       TRC_DEBUG("S-CSCF %s is blacklisted - not routing request to this S-CSCF", _hss_rsp.scscf.c_str());
 
       SAS::Event event(_trail, SASEvent::SCSCF_BLACKLISTED, 0);

@@ -142,6 +142,7 @@ enum OptionTypes
   OPT_HTTP_ACR_LOGGING,
   OPT_HOMESTEAD_TIMEOUT,
   OPT_BLACKLISTED_SCSCFS,
+  OPT_ORIG_SIP_TO_TEL_CONV
 };
 
 
@@ -1730,6 +1731,7 @@ int main(int argc, char* argv[])
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
   opt.blacklisted_scscfs.push_back("");
+  opt.enable_orig_sip_to_tel_conv = false;
 
   status = init_logging_options(argc, argv, &opt);
 
