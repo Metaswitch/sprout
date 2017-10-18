@@ -52,8 +52,8 @@ public:
                  EnumService* enum_service,
                  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
-                 int network_function_port,
                  bool override_npdi,
+                 int network_function_port,
                  std::vector<std::string> blacklisted_scscfs={});
 
   virtual ~ICSCFSproutlet();
