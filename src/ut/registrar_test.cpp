@@ -1160,8 +1160,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   SCOPED_TRACE("REGISTER (about to inject)");
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
-  //ASSERT_EQ(2, txdata_count());
-  ASSERT_EQ(1, txdata_count());
+  ASSERT_EQ(2, txdata_count());
 
   SCOPED_TRACE("REGISTER (forwarded)");
   // INVITE passed on to AS
@@ -3066,7 +3065,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  //check_notify(out, aor, "active", std::make_pair("active", "registered"));
+  check_notify(out, aor, "active", std::make_pair("active", "registered"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -3079,7 +3078,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  //check_notify(out, aor, "active", std::make_pair("active", "created"));
+  check_notify(out, aor, "active", std::make_pair("active", "created"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -3091,7 +3090,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  //check_notify(out, aor, "active", std::make_pair("terminated", "expired"));
+  check_notify(out, aor, "active", std::make_pair("terminated", "expired"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 }

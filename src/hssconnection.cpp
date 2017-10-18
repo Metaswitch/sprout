@@ -311,16 +311,10 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
 
 
 bool decode_homestead_xml(const HSSConnection::hss_query_param_t& hss_query_param,
-                          std::shared_ptr<rapidxml::xml_document<> > root,
-                          /*std::string& regstate,
-                          std::map<std::string, Ifcs >& ifcs_map,
-                          AssociatedURIs& associated_uris,
-                          std::vector<std::string>& aliases,
-                          std::deque<std::string>& ccfs,
-                          std::deque<std::string>& ecfs,*/
                           HSSConnection::hss_query_return_t& hss_query_return,
+                          std::shared_ptr<rapidxml::xml_document<> > root,
                           SIFCService* sifc_service,
-                          bool allowNoIMS,
+                          const bool allowNoIMS,
                           SAS::TrailId trail)
 {
   if (!root.get())
@@ -468,8 +462,8 @@ HTTPCode HSSConnection::update_registration_state(const hss_query_param_t& hss_q
     return http_code;
   }
   return decode_homestead_xml(hss_query_param,
-                              root,
                               hss_query_return,
+                              root,
                               _sifc_service,
                               false,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
@@ -523,8 +517,8 @@ HTTPCode HSSConnection::get_registration_data(const hss_query_param_t& hss_query
   // response shouldn't be taken as a guarantee of iFCs.
   std::vector<std::string> unused_aliases;
   return decode_homestead_xml(hss_query_param,
-                              root,
                               hss_query_return,
+                              root,
                               _sifc_service,
                               true,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
@@ -532,8 +526,8 @@ HTTPCode HSSConnection::get_registration_data(const hss_query_param_t& hss_query
 
 
 // Makes a user authorization request, and returns the data as a JSON object.
-HTTPCode HSSConnection::get_user_auth_status(const std::string& private_id,
-                                             const std::string& public_id,
+HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_identity,
+                                             const std::string& public_user_identity,
                                              const std::string& visited_network,
                                              const std::string& auth_type,
                                              const bool& emergency,
@@ -544,15 +538,15 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_id,
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_AUTH_STATUS, 0);
-  event.add_var_param(private_id);
-  event.add_var_param(public_id);
+  event.add_var_param(private_user_identity);
+  event.add_var_param(public_user_identity);
   SAS::report_event(event);
 
   std::string path = "/impi/" +
-                     Utils::url_escape(private_id) +
+                     Utils::url_escape(private_user_identity) +
                      "/registration-status" +
                      "?impu=" +
-                     Utils::url_escape(public_id);
+                     Utils::url_escape(public_user_identity);
 
   if (!visited_network.empty())
   {

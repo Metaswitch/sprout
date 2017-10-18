@@ -301,8 +301,8 @@ long SCSCFSproutletTsx::read_hss_data(const HSSConnection::hss_query_param_t& hs
 {
 
   long http_code = _scscf->_hss->update_registration_state(hss_query_param,
-                                                   hss_query_return,
-                                                   trail);
+                                                           hss_query_return,
+                                                           trail);
 
   if (http_code == HTTP_OK)
   {

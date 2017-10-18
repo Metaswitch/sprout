@@ -283,8 +283,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   SAS::report_marker(start_marker);
 
   // Query the HSS for the associated URIs.
-  AssociatedURIs associated_uris = {};
-  std::map<std::string, Ifcs> ifc_map;
   std::string private_id;
   std::string private_id_for_binding;
   bool success = get_private_id(req, private_id);
@@ -338,7 +336,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                    private_id,
                                                    HSSConnection::REG,
                                                    _scscf_uri);
-  hss_query_param.cache_allowed = true;
 
   HSSConnection::hss_query_return_t hss_query_return;
   HTTPCode http_code = _registrar->_hss->update_registration_state(hss_query_param,
@@ -382,7 +379,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Get the default URI to use as a key in the binding store.
   std::string aor;
   success = hss_query_return.associated_uris.get_default_impu(aor,
-                                             num_emergency_bindings > 0);
+                                                              num_emergency_bindings > 0);
   if (!success)
   {
     // Don't have a default IMPU so send an error response. We only hit this
@@ -444,7 +441,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   bool all_bindings_expired;
   AoRPair* aor_pair = write_to_store(_registrar->_sdm,
                                      aor,
-                                     &associated_uris,
+                                     &(hss_query_return.associated_uris),
                                      req,
                                      now,
                                      expiry,
@@ -459,9 +456,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
 
     HSSConnection::hss_query_param_t hss_query_param(aor);
-    HSSConnection::hss_query_return_t hss_query_return;
-    hss_query_param.req_type = HSSConnection::REG;
+    hss_query_param.req_type = HSSConnection::DEREG_USER;
     hss_query_param.server_name = _scscf_uri;
+
+    HSSConnection::hss_query_return_t hss_query_return;
+
     _registrar->_hss->update_registration_state(hss_query_param,
                                                 hss_query_return,
                                                 trail());
@@ -484,7 +483,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
         bool ignored;
         AoRPair* remote_aor_pair = write_to_store(*it,
                                                   aor,
-                                                  &associated_uris,
+                                                  &(hss_query_return.associated_uris),
                                                   req,
                                                   now,
                                                   tmp_expiry,
@@ -745,7 +744,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Log any URIs that have been left out of the P-Associated-URI because they
   // are barred.
-  std::vector<std::string> barred_uris = associated_uris.get_barred_uris();
+  std::vector<std::string> barred_uris = hss_query_return.associated_uris.get_barred_uris();
   if (!barred_uris.empty())
   {
     std::stringstream ss;
@@ -841,12 +840,12 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // If the public ID is unbarred, we use that for third party registers. If
     // it is barred, we use the default URI.
     std::string as_reg_id = public_id;
-    if (associated_uris.is_impu_barred(public_id))
+    if (hss_query_return.associated_uris.is_impu_barred(public_id))
     {
       as_reg_id = aor;
     }
 
-    RegistrationUtils::register_with_application_servers(ifc_map[public_id],
+    RegistrationUtils::register_with_application_servers(hss_query_return.service_profiles[public_id],
                                                          _registrar->_fifc_service,
                                                          _registrar->_ifc_configuration,
                                                          _registrar->_sdm,
