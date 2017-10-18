@@ -95,8 +95,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          associated_uris.cpp \
                          sifcservice.cpp \
                          fifcservice.cpp \
-                         mmfservice.cpp \
-                         mmftargets.cpp \
                          event_statistic_accumulator.cpp \
                          aor.cpp \
                          astaire_aor_store.cpp \
@@ -204,7 +202,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        sifcservice_test.cpp \
                        mock_sifc_parser.cpp \
                        fifcservice_test.cpp \
-                       mmfservice_test.cpp \
                        scscf_utils.cpp \
                        test_interposer.cpp \
                        curl_interposer.cpp \

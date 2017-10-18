@@ -1,9 +1,0 @@
-{
-    "mmf_targets" : [
-        {   "name" : "TestAS",
-            "addresses" : "as.test.domain",
-            "pre-as" : true,
-            "post-as" : false
-        }
-    ]
-}
