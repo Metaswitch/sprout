@@ -766,17 +766,29 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   return all_bindings_expired;
 }
 
-/// Gets binding information for a specified AoR.   This function will look in
-/// the following places and stop as soon as it finds a record for the
-/// specified AoR that has > 0 bindings.
+/// Retrieve information from the Subscriber Data Manager for a specified AoR.
+/// This function will look in the following places and stop as soon as it finds
+/// a record for the specified AoR that has > 0 bindings.
 /// -- the primary_sdm
 /// -- the provided backup_aor_pair (if not null)
 /// -- the specified backup_sdms (if any have been provided).
-/// The function returns true unless it is unable to connect to the
-/// primary_sdm.  If it returns True then it will have created an AoRPair (even
-/// if it is empty because no bindings were found) and ownership of this
-/// AoRPair is transferred to the caller on exit (aor_pair).
-bool RegistrationUtils::get_bindings(AoRPair** aor_pair,
+///
+/// On success (return code true) it returns an AoRPair (as aor_pair) where the
+/// original copy of the AoR contains all bindings and subscriptions found, and
+/// the current copy contains all bindings and subscriptions that have not
+/// expired.  On failure (return code false) no aor_pair is returned. This
+/// function only returns false if there is an error and the data cannot be
+/// queried (see below); If the query is successful but no data was found it
+/// returns true and a blank AoRPair.
+///
+/// This function allocates additional importance to the primary_sdm: if the
+/// primary_sdm is unable to successfully query its store then (irrespective of
+/// whether we might have been able to get data from the backup_sdms) we return
+/// false and no AoR data. On the other hand, if the primary_sdm is able to
+/// successfully query its store then we return success and our best view of
+/// the data (across primary and backup sources) -- irrespective of whether the
+/// backup stores were successfully queried.
+bool RegistrationUtils::get_aor_data(AoRPair** aor_pair,
                                      std::string aor_id,
                                      SubscriberDataManager* primary_sdm,
                                      std::vector<SubscriberDataManager*> backup_sdms,
@@ -793,7 +805,7 @@ bool RegistrationUtils::get_bindings(AoRPair** aor_pair,
   {
     // Failed to get data for the AoR because there is no connection
     // to the store.
-    TRC_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
+    TRC_ERROR("Store connection error.  Failed to get AoR binding for %s from store", aor_id.c_str());
     return false;
   }
 

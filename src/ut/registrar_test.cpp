@@ -3443,6 +3443,9 @@ TEST_F(RegistrarTestMockStore, SubscriberDataManagerGetsFail)
   free_txdata();
 }
 
+// Test that if Homestead tells us that the subscriber was not previously
+// registered that we simply try to ADD it to the store instead of querying for
+// existing records first.
 TEST_F(RegistrarTestMockStore, DontReadOnInitialRegister)
 {
   // Homestead returns a PreviousRegisterState indicating that this is an
@@ -3464,28 +3467,43 @@ TEST_F(RegistrarTestMockStore, DontReadOnInitialRegister)
   free_txdata();
 }
 
+// Test that if Homestead tells us that the subscriber was not previously
+// registered that we simply try to ADD it to the store instead of querying for
+// existing records first, but that when that ADD fails (because there actually
+// was already data in the store) we fall back to querying the existing data and
+// correctly updating it instead.
 TEST_F(RegistrarTestMockStore, InitialRegisterAddFailure)
 {
   // Homestead returns a PreviousRegisterState indicating that this is an
   // initial register.
   _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "", "?private_id=Alice");
-  std::string expiry_time = std::to_string(time(NULL) + 300);
 
-  std::string initial_data = "{\"bindings\":{\"<urn:uuid:00000000-0000-0000-0000-777777777777>:1\":{\"uri\":\"sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob\",\"cid\":\"0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213\",\"cseq\":10000,\"expires\":" + expiry_time + ",\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-777777777777>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>\"],\"paths\":[\"sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob\"],\"private_id\":\"Alice\",\"emergency_reg\":false}},\"subscriptions\":{},\"associated-uris\":{\"uris\":[{\"uri\":\"sip:6505550231@homedomain\",\"barring\":false}],\"wildcard-mapping\":{}},\"notify_cseq\":2,\"timer_id\":\"post_identity\",\"scscf-uri\":\"sip:scscf.sprout.homedomain:5058;transport=TCP\"}";
-
-  // Expect the data to be set with a CAS of 0.   Simulate the race condition
-  // where actually data does exist in the store despite Homestead having
-  // thought that this was an initial REGISTER.
   InSequence s;
 
+  // Check that the registrar initially tries to ADD the data (set_data with cas=0). Simulate
+  // this ADD failing with a DATA_CONTENTION error.
   EXPECT_CALL(*_local_data_store, set_data("reg", "sip:6505550231@homedomain", _, 0, _, _))
     .WillOnce(Return(Store::DATA_CONTENTION));
 
+  // The ADD failed because there was data and so the Registrar should now try
+  // to get the existing data. Return example data with a cas value of 1 that might be present if
+  // there was a single binding for sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061.
+  std::string expiry_time = std::to_string(time(NULL) + 300);
+  std::string initial_data = (
+      "{\"bindings\":{"
+          "\"<urn:uuid:00000000-0000-0000-0000-777777777777>:1\":{\"uri\":\"sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob\",\"cid\":\"0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213\",\"cseq\":10000,\"expires\":" + expiry_time + ",\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-777777777777>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>\"],\"paths\":[\"sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob\"],\"private_id\":\"Alice\",\"emergency_reg\":false}"
+       "},"
+       "\"subscriptions\":{},"
+       "\"associated-uris\":{\"uris\":[{\"uri\":\"sip:6505550231@homedomain\",\"barring\":false}],\"wildcard-mapping\":{}},\"notify_cseq\":2,\"timer_id\":\"post_identity\",\"scscf-uri\":\"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   EXPECT_CALL(*_local_data_store, get_data("reg", "sip:6505550231@homedomain", _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(initial_data), // Returned data
                     SetArgReferee<3>(1), // Returned CAS value
                     Return(Store::OK)));
 
+  // Now the registrar should try and write back updated data including both
+  // the binding we returned on the get above (10.114.61.214) + the new binding
+  // we've just registered (10.114.61.213). Don't bother trying to work out
+  // exactly what data will be present -- just check for the 2 bindings.
   EXPECT_CALL(*_local_data_store, set_data("reg",
                                            "sip:6505550231@homedomain",
                                            AllOf(HasSubstr("10.114.61.214"),

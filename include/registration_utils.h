@@ -42,7 +42,7 @@ bool remove_bindings(SubscriberDataManager* sdm,
                      SAS::TrailId trail,
                      HTTPCode* hss_status_code = nullptr);
 
-bool get_bindings(AoRPair** aor_pair,
+bool get_aor_data(AoRPair** aor_pair,
                   std::string aor_id,
                   SubscriberDataManager* primary_sdm,
                   std::vector<SubscriberDataManager*> backup_sdms,

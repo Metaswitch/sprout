@@ -44,7 +44,7 @@ static AoRPair* get_and_set_local_aor_data(
 
   do
   {
-    if (!RegistrationUtils::get_bindings(&aor_pair,
+    if (!RegistrationUtils::get_aor_data(&aor_pair,
                                          aor_id,
                                          current_sdm,
                                          remote_sdms,
@@ -446,7 +446,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
 
   do
   {
-    if (!RegistrationUtils::get_bindings(&aor_pair,
+    if (!RegistrationUtils::get_aor_data(&aor_pair,
                                          aor_id,
                                          current_sdm,
                                          remote_sdms,
@@ -618,7 +618,7 @@ void GetCachedDataTask::run()
 
   // Lookup the IMPU in the store.
   AoRPair* aor_pair = nullptr;
-  if (!RegistrationUtils::get_bindings(&aor_pair,
+  if (!RegistrationUtils::get_aor_data(&aor_pair,
                                        impu,
                                        _cfg->_sdm,
                                        _cfg->_remote_sdms,

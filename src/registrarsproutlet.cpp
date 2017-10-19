@@ -183,7 +183,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
   int expiry = 0;
-  bool is_initial_registration;
 
   // Loop through headers as early as possible so that we know the expiry time
   // and which registration statistics to update.
@@ -447,18 +446,31 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Write to the local store, checking the remote stores if there is no entry locally.
   bool all_bindings_expired;
   int max_expiry;
+
+  // Figure out whether we think this is an intial registration, based on
+  // what Homestead thought the previous regstate was.
+  bool is_initial_registration = (prev_regstate == RegDataXMLUtils::STATE_NOT_REGISTERED);
+  bool no_existing_bindings_found = false;
   AoRPair* aor_pair = write_to_store(_registrar->_sdm,
                                      aor,
                                      &associated_uris,
                                      req,
                                      now,
                                      max_expiry,
-                                     (prev_regstate == RegDataXMLUtils::STATE_NOT_REGISTERED),
                                      is_initial_registration,
+                                     no_existing_bindings_found,
                                      NULL,
                                      _registrar->_remote_sdms,
                                      private_id_for_binding,
                                      all_bindings_expired);
+
+  // Update our view of whether this was in fact an initial registration based
+  // on whether we found any bindings. There are race conditions where
+  // at the time that Homestead processed the request this looked like an
+  // initial registration, but where another request has subsequently created
+  // bindings. If we got it wrong in the call to write_to_store that's fine --
+  // we'll just have been slightly less efficient.
+  is_initial_registration = no_existing_bindings_found;
 
   if (all_bindings_expired)
   {
@@ -475,7 +487,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // Log the bindings.
     log_bindings(aor, aor_pair->get_current());
 
-    // If we have any remote stores, try to store this in them too.  We don't worry
+    // If we have any remote stores, try to store this in them too. We don't worry
     // about failures in this case.
     for (std::vector<SubscriberDataManager*>::iterator it = _registrar->_remote_sdms.begin();
          it != _registrar->_remote_sdms.end();
@@ -894,10 +906,6 @@ void RegistrarSproutletTsx::update_bindings_from_req(AoRPair* aor_pair,      ///
   int expiry;
   max_expiry = 0;
 
-  // @@@ ToDo: Optimization -- we don't need to repeat this in the loop in the
-  // case of an initial registration -- it's going to be the same outcome
-  // each time!
-
   // Now loop through all the contacts.  If there are multiple contacts in
   // the contact header in the SIP message, pjsip parses them to separate
   // contact header structures.
@@ -1029,8 +1037,8 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
                    int now,                                    ///<time now
                    int& max_expiry,                            ///<[out] longest expiry time
                    bool is_initial_registration,               ///<Does the caller believe that this is an initial registration?
-                   bool& out_no_bindings_found,                ///<[out] true if no bindings were found.
-                   AoRPair* backup_aor, ///<backup data if no entry in store
+                   bool& out_no_existing_bindings_found,       ///<[out] true if no existing bindings were found in the store
+                   AoRPair* backup_aor,                        ///<backup data if no entry in store
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
                    std::string private_id,                     ///<private id that the binding was registered with
@@ -1044,37 +1052,48 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
   bool all_bindings_expired = false;
   Store::Status set_rc;
 
-  out_no_bindings_found = true;
+  out_no_existing_bindings_found = true;
 
   do // While the operations fail due to data contention
   {
     if (is_initial_registration)
     {
       // We think this is an initial registration so there won't be any
-      // bingings unless we've hit a race condition.  Optimize for the mainline
-      // by initially just trying to ADD the data.
+      // bindings already in the store unless we've hit a race condition.
+      // Optimize for the mainline:
+      // -- don't try and GET bindings from the store (without this
+      // optimization we'll look in the local store and not finding any
+      // bindings there we'll then look in each remote store too -- that's
+      // expensive).
+      // -- instead just create a blank aor_pair.  We'll try to add the new
+      // bindings to this and then, when we try to write it to the store it will
+      // get processed as an ADD because the AoRPair will have a CAS of zero.
+      // -- if we're wrong and there are actually bindings already in the store
+      // (possible in race conditions) then the ADD will fail and the write
+      // will return a DATA_CONTENTION error.  In that case we'll loop back and
+      // do all this processing again.  Set is_initial_registration to false now
+      // so that on second / subsequent attempts we always do the full GET and
+      // update processing.
       TRC_DEBUG("This is an initial registration -- attempt to ADD the data");
       aor_pair = new AoRPair(aor);
-
-      // If this fails because there actually is already data for the AoR then
-      // we'll get a DATA_CONTENTION error and retry.  Next time we want to do
-      // the usual GET and update.
       is_initial_registration = false;
     }
     else
     {
-      if (!RegistrationUtils::get_bindings(&aor_pair,
-                        aor,
-                        primary_sdm,
-                        backup_sdms,
-                        backup_aor,
-                        trail()))
+      bool store_access_ok = RegistrationUtils::get_aor_data(&aor_pair,
+                                                             aor,
+                                                             primary_sdm,
+                                                             backup_sdms,
+                                                             backup_aor,
+                                                             trail());
+      if (!store_access_ok)
       {
-        // Error reading bindings.
-        TRC_ERROR("Failed to get AoR binding for %s", aor.c_str());
+        // This means that there was an error accessing the store. We don't hit
+        // this if we just fail to find any bindings.
+        TRC_ERROR("Store access error: Failed to get AoR binding for %s", aor.c_str());
         break;
       }
-      out_no_bindings_found = out_no_bindings_found && aor_pair->get_current()->bindings().empty();
+      out_no_existing_bindings_found = out_no_existing_bindings_found && aor_pair->get_current()->bindings().empty();
     }
 
     int changed_bindings = 0;
