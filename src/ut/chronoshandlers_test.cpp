@@ -261,7 +261,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
 
-  HSSConnection::irs_query_t irs_query;
+  HSSConnection::irs_query irs_query;
 
   {
     InSequence s;

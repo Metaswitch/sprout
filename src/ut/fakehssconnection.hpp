@@ -46,8 +46,8 @@ public:
   void delete_rc(const std::string& url);
   bool url_was_requested(const std::string& url, const std::string& body);
 
-  HTTPCode update_registration_state(const HSSConnection::irs_query_t& irs_query,
-                                     HSSConnection::irs_info_t& irs_info,
+  HTTPCode update_registration_state(const HSSConnection::irs_query& irs_query,
+                                     HSSConnection::irs_info& irs_info,
                                      SAS::TrailId trail);
 
 private:

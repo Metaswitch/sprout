@@ -306,16 +306,15 @@ long SCSCFSproutletTsx::read_hss_data(const struct HSSConnection::irs_query& irs
 
   if (http_code == HTTP_OK)
   {
-    _ifcs = irs_info.service_profiles[irs_query.public_id];
+    _ifcs = irs_info._service_profiles[irs_query._public_id];
 
     // Get the default URI. This should always succeed.
-    irs_info.associated_uris.get_default_impu(_default_uri, true);
+    irs_info._associated_uris.get_default_impu(_default_uri, true);
 
     // We may want to route to bindings that are barred (in case of an
     // emergency), so get all the URIs.
-    _uris = irs_info.associated_uris.get_all_uris();
-    _registered = (irs_info.regstate == RegDataXMLUtils::STATE_REGISTERED);
-    _barred = irs_info.associated_uris.is_impu_barred(irs_query.public_id);
+    _registered = (irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED);
+    _barred = irs_info._associated_uris.is_impu_barred(irs_query._public_id);
   }
 
   return http_code;
@@ -403,7 +402,6 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
   _registered(false),
   _barred(false),
   _default_uri(""),
-  _uris(),
   _ifcs(),
   _in_dialog_acr(NULL),
   _failed_ood_acr(NULL),
@@ -620,7 +618,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // Add a P-Charging-Function-Addresses header if one is not already present
     // for some reason. We only do this if we have the charging addresses cached
     // (which we should do).
-    PJUtils::add_pcfa_header(req, get_pool(req), _irs_info.ccfs, _irs_info.ecfs, false);
+    PJUtils::add_pcfa_header(req, get_pool(req), _irs_info._ccfs, _irs_info._ecfs, false);
 
     // Add a second P-Asserted-Identity header if required on originating calls.
     // See 3GPP TS24.229, 5.4.3.2.
@@ -759,7 +757,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // Final response. Add a P-Charging-Function-Addresses header if one is
     // not already present for some reason. We only do this if we have
     // the charging addresses cached (which we should do).
-    PJUtils::add_pcfa_header(rsp, get_pool(rsp), _irs_info.ccfs, _irs_info.ecfs, false);
+    PJUtils::add_pcfa_header(rsp, get_pool(rsp), _irs_info._ccfs, _irs_info._ecfs, false);
   }
 
   if ((st_code < 300) && (_session_case->is_terminating()))
@@ -1874,14 +1872,13 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
   // Read IRS information from HSS if not previously cached.
   if (!_hss_data_cached)
   {
-    const std::string req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
-
-    HSSConnection::irs_query_t irs_query(public_id,
-                                                     _impi,
-                                                     req_type,
-                                                     _scscf_uri);
-    irs_query.wildcard = _wildcard;
-    irs_query.cache_allowed = !_auto_reg;
+    HSSConnection::irs_query irs_query;
+    irs_query._public_id = public_id;
+    irs_query._private_id =_impi;
+    irs_query._req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
+    irs_query._server_name = _scscf_uri;
+    irs_query._wildcard = _wildcard;
+    irs_query._cache_allowed = !_auto_reg;
 
     http_code = read_hss_data(irs_query,
                               _irs_info,
@@ -1915,7 +1912,7 @@ bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
   long http_code = get_data_from_hss(public_id);
   if (http_code == HTTP_OK)
   {
-    uris = _uris;
+    uris = _irs_info._associated_uris.get_all_uris();
   }
   return (http_code == HTTP_OK);
 }
@@ -1930,7 +1927,7 @@ bool SCSCFSproutletTsx::get_aliases(std::string public_id,
   long http_code = get_data_from_hss(public_id);
   if (http_code == HTTP_OK)
   {
-    aliases = _irs_info.aliases;
+    aliases = _irs_info._aliases;
   }
   return (http_code == HTTP_OK);
 }
@@ -2217,9 +2214,9 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       // If the SIP URI has a alias tel URI with the same username we add this
       // tel URI to the P-Asserted-Identity header. If not we select the first
       // tel URI in the alias list to add to the P-Asserted-Identity header.
-      if (find(_irs_info.aliases.begin(),
-               _irs_info.aliases.end(),
-               new_p_a_i_str) != _irs_info.aliases.end())
+      if (find(_irs_info._aliases.begin(),
+               _irs_info._aliases.end(),
+               new_p_a_i_str) != _irs_info._aliases.end())
       {
         TRC_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
         PJUtils::add_asserted_identity(msg,
@@ -2229,16 +2226,16 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       }
       else
       {
-        for std::string alias : _irs_info.aliases
+        for (std::string alias : _irs_info._aliases)
         {
           std::string tel_URI_prefix = "tel:";
-          bool has_tel_prefix = (alias->rfind(tel_URI_prefix.c_str(), 4) != std::string::npos);
+          bool has_tel_prefix = (alias.find(tel_URI_prefix.c_str(), 4) != std::string::npos);
           if (has_tel_prefix)
           {
-            TRC_DEBUG("Add second P-Asserted Identity for %s", alias->c_str());
+            TRC_DEBUG("Add second P-Asserted Identity for %s", alias.c_str());
             PJUtils::add_asserted_identity(msg,
                                            get_pool(msg),
-                                           *alias,
+                                           alias,
                                            asserted_id->name_addr.display);
             break;
           }

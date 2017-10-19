@@ -373,7 +373,6 @@ private:
   bool _registered;
   bool _barred;
   std::string _default_uri;
-  std::vector<std::string> _uris;
   Ifcs _ifcs;
   HSSConnection::irs_info _irs_info;
 

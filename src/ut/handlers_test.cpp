@@ -984,7 +984,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
   AoRPair* aor = build_aor(impu, false);
   build_task(impu_escaped);
 
-  HSSConnection::irs_query_t irs_query;
+  HSSConnection::irs_query irs_query;
 
   {
     InSequence s;
@@ -1001,9 +1001,10 @@ TEST_F(DeleteImpuTaskTest, Mainline)
 
   task->run();
  
-  ASSERT_EQ(irs_query.public_id, impu);
-  ASSERT_EQ(irs_query.req_type, HSSConnection::DEREG_ADMIN);
-  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query._public_id, impu);
+  ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_ADMIN);
+  ASSERT_EQ(irs_query._server_name, 
+            "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, StoreFailure)
@@ -1035,7 +1036,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
   AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
-  HSSConnection::irs_query_t irs_query;
+  HSSConnection::irs_query irs_query;
 
   {
     InSequence s;
@@ -1052,8 +1053,9 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
 
   task->run();
 
-  ASSERT_EQ(irs_query.public_id, impu);
-  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query._public_id, impu);
+  ASSERT_EQ(irs_query._server_name, 
+            "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
@@ -1064,7 +1066,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
   AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
-  HSSConnection::irs_query_t irs_query;
+  HSSConnection::irs_query irs_query;
 
   {
     InSequence s;
@@ -1081,8 +1083,9 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
 
   task->run();
 
-  ASSERT_EQ(irs_query.public_id, impu);
-  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query._public_id, impu);
+  ASSERT_EQ(irs_query._server_name, 
+            "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
@@ -1093,7 +1096,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
   AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
-  HSSConnection::irs_query_t irs_query;
+  HSSConnection::irs_query irs_query;
 
   {
     InSequence s;
@@ -1110,8 +1113,9 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
 
   task->run();
 
-  ASSERT_EQ(irs_query.public_id, impu);
-  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query._public_id, impu);
+  ASSERT_EQ(irs_query._server_name, 
+            "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
@@ -1123,7 +1127,7 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
   AoRPair* remote_aor = build_aor(impu);
   build_task(impu_escaped, htp_method_DELETE, true);
 
-  HSSConnection::irs_query_t irs_query;
+  HSSConnection::irs_query irs_query;
 
   {
     InSequence s;
@@ -1146,8 +1150,9 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
 
   task->run();
 
-  ASSERT_EQ(irs_query.public_id, impu);
-  ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query._public_id, impu);
+  ASSERT_EQ(irs_query._server_name, 
+            "sip:scscf.sprout.homedomain:5058;transport=TCP");
 }
 
 TEST_F(DeleteImpuTaskTest, BadMethod)
@@ -1393,7 +1398,7 @@ TEST_F(PushProfileTaskTest, AllBindingExpired)
   AoRPair* aor_pair = new AoRPair(aor, aor2);
   build_pushprofile_request(body, default_uri);
 
-  HSSConnection::irs_query_t irs_query;
+  HSSConnection::irs_query irs_query;
 
   {
     InSequence s;
@@ -1410,6 +1415,6 @@ TEST_F(PushProfileTaskTest, AllBindingExpired)
 
   task->run();
 
-  ASSERT_EQ(irs_query.public_id, default_uri);
-  ASSERT_EQ(irs_query.req_type, HSSConnection::DEREG_TIMEOUT);
+  ASSERT_EQ(irs_query._public_id, default_uri);
+  ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_TIMEOUT);
 }

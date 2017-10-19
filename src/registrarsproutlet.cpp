@@ -332,17 +332,18 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                             scscf_uri);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
-  HSSConnection::irs_query_t irs_query(public_id,
-                                                   private_id,
-                                                   HSSConnection::REG,
-                                                   _scscf_uri);
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = public_id;
+  irs_query._private_id = private_id;
+  irs_query._req_type = HSSConnection::REG;
+  irs_query._server_name = _scscf_uri;
 
-  HSSConnection::irs_info_t irs_info;
+  HSSConnection::irs_info irs_info;
   HTTPCode http_code = _registrar->_hss->update_registration_state(irs_query,
                                                                    irs_info,
                                                                    trail());
 
-  st_code = determine_hss_sip_response(http_code, irs_info.regstate, "REGISTER");
+  st_code = determine_hss_sip_response(http_code, irs_info._regstate, "REGISTER");
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -378,8 +379,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Get the default URI to use as a key in the binding store.
   std::string aor;
-  success = irs_info.associated_uris.get_default_impu(aor,
-                                                              num_emergency_bindings > 0);
+  success = irs_info._associated_uris.get_default_impu(aor,
+                                                       num_emergency_bindings > 0);
   if (!success)
   {
     // Don't have a default IMPU so send an error response. We only hit this
@@ -388,7 +389,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   }
 
   // Use the unbarred URIs for when we send NOTIFYs.
-  std::vector<std::string> unbarred_uris = irs_info.associated_uris.get_unbarred_uris();
+  std::vector<std::string> unbarred_uris = irs_info._associated_uris.get_unbarred_uris();
   TRC_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   if (reject_with_400)
@@ -441,7 +442,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   bool all_bindings_expired;
   AoRPair* aor_pair = write_to_store(_registrar->_sdm,
                                      aor,
-                                     &(irs_info.associated_uris),
+                                     &(irs_info._associated_uris),
                                      req,
                                      now,
                                      expiry,
@@ -455,11 +456,12 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
 
-    HSSConnection::irs_query_t irs_query(aor);
-    irs_query.req_type = HSSConnection::DEREG_USER;
-    irs_query.server_name = _scscf_uri;
+    HSSConnection::irs_query irs_query;
+    irs_query._public_id = aor;
+    irs_query._req_type = HSSConnection::DEREG_USER;
+    irs_query._server_name = _scscf_uri;
 
-    HSSConnection::irs_info_t irs_info;
+    HSSConnection::irs_info irs_info;
 
     _registrar->_hss->update_registration_state(irs_query,
                                                 irs_info,
@@ -483,7 +485,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
         bool ignored;
         AoRPair* remote_aor_pair = write_to_store(*it,
                                                   aor,
-                                                  &(irs_info.associated_uris),
+                                                  &(irs_info._associated_uris),
                                                   req,
                                                   now,
                                                   tmp_expiry,
@@ -744,7 +746,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Log any URIs that have been left out of the P-Associated-URI because they
   // are barred.
-  std::vector<std::string> barred_uris = irs_info.associated_uris.get_barred_uris();
+  std::vector<std::string> barred_uris = irs_info._associated_uris.get_barred_uris();
   if (!barred_uris.empty())
   {
     std::stringstream ss;
@@ -815,7 +817,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   }
 
   // Add a PCFA header.
-  PJUtils::add_pcfa_header(rsp, get_pool(rsp), irs_info.ccfs, irs_info.ecfs, true);
+  PJUtils::add_pcfa_header(rsp, get_pool(rsp), irs_info._ccfs, irs_info._ecfs, true);
 
   // Pass the response to the ACR.
   acr->tx_response(rsp);
@@ -840,12 +842,12 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // If the public ID is unbarred, we use that for third party registers. If
     // it is barred, we use the default URI.
     std::string as_reg_id = public_id;
-    if (irs_info.associated_uris.is_impu_barred(public_id))
+    if (irs_info._associated_uris.is_impu_barred(public_id))
     {
       as_reg_id = aor;
     }
 
-    RegistrationUtils::register_with_application_servers(irs_info.service_profiles[public_id],
+    RegistrationUtils::register_with_application_servers(irs_info._service_profiles[public_id],
                                                          _registrar->_fifc_service,
                                                          _registrar->_ifc_configuration,
                                                          _registrar->_sdm,

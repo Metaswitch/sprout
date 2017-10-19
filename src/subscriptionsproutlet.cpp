@@ -304,13 +304,12 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SAS::Marker start_marker(trail_id, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  const HSSConnection::irs_query_t irs_query(public_id);
-  HSSConnection::irs_info_t irs_info;
+  HSSConnection::irs_info irs_info;
 
-  HTTPCode http_code = _subscription->_hss->get_registration_data(irs_query,
+  HTTPCode http_code = _subscription->_hss->get_registration_data(public_id,
                                                                   irs_info,
                                                                   trail_id);
-  st_code = determine_hss_sip_response(http_code, irs_info.regstate, "SUBSCRIBE");
+  st_code = determine_hss_sip_response(http_code, irs_info._regstate, "SUBSCRIBE");
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -325,7 +324,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // should already have been rejected for the subscriber being unregistered,
   // but we handle the error case where it isn't.
   std::string aor;
-  if (!irs_info.associated_uris.get_default_impu(aor, false))
+  if (!irs_info._associated_uris.get_default_impu(aor, false))
   {
     pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
     send_response(rsp);
@@ -344,7 +343,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // If the write to the local store succeeds, then write to the remote stores.
   AoRPair* aor_pair = write_subscriptions_to_store(_subscription->_sdm,
                                                    aor,
-                                                   &(irs_info.associated_uris),
+                                                   &(irs_info._associated_uris),
                                                    req,
                                                    now,
                                                    NULL,
@@ -352,8 +351,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                    public_id,
                                                    true,
                                                    acr,
-                                                   irs_info.ccfs,
-                                                   irs_info.ecfs);
+                                                   irs_info._ccfs,
+                                                   irs_info._ecfs);
 
   if (aor_pair != NULL)
   {
@@ -370,7 +369,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
       {
         AoRPair* remote_aor_pair = write_subscriptions_to_store(*it,
                                                                 aor,
-                                                                &(irs_info.associated_uris),
+                                                                &(irs_info._associated_uris),
                                                                 req,
                                                                 now,
                                                                 aor_pair,
@@ -378,8 +377,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                                 public_id,
                                                                 false,
                                                                 acr,
-                                                                irs_info.ccfs,
-                                                                irs_info.ecfs);
+                                                                irs_info._ccfs,
+                                                                irs_info._ecfs);
         delete remote_aor_pair;
       }
     }

@@ -223,8 +223,8 @@ bool FakeHSSConnection::url_was_requested(const std::string& url, const std::str
   return (_calls.find(UrlBody(url, body)) != _calls.end());
 }
 
-HTTPCode FakeHSSConnection::update_registration_state(const HSSConnection::irs_query_t& irs_query,
-                                                      HSSConnection::irs_info_t& irs_info,
+HTTPCode FakeHSSConnection::update_registration_state(const HSSConnection::irs_query& irs_query,
+                                                      HSSConnection::irs_info& irs_info,
                                                       SAS::TrailId trail)
 {
   if (_hss_connection_observer != NULL)
