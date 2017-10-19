@@ -2274,7 +2274,31 @@ bool BasicProxy::UACTsx::get_next_server()
     AddrInfo addr;
     if (_servers_iter->next(addr))
     {
-      _current_server.set(addr, _stateless_proxy);
+      // Work out whether to blacklist this address by default (i.e. if the
+      // UACTsx gives up on it without explicitly determining its health. We
+      // blacklist by default if:
+      //
+      // -  The request has a transaction associated with it, meaning that the
+      //    request is not an ACK request. ACKs do not have a response so there
+      //    is no clear indication that it has succeeded.
+      //
+      // -  The address is a stateful proxy. For stateful proxies, the most
+      //    likely thing is that the host has failed in some weird way that the
+      //    UACTsx doesn't cope with, so the best thing to do is blacklist the
+      //    host.  State*less* proxies are only blacklisted on transport
+      //    failures. These are easy to spot, so it is unlikely the UACTsx
+      //    didn't spot this, and the best thing to do is mark the host as
+      //    successful.
+      bool blacklist_by_default = (_tsx != nullptr) && !_stateless_proxy;
+      _current_server.set(addr, blacklist_by_default);
+
+      if (Log::enabled(Log::DEBUG_LEVEL))
+      {
+        std::string host_str = addr.to_string();
+        TRC_DEBUG("Selected host %s (%s be blacklisted by default)",
+                  host_str.c_str(), blacklist_by_default ? "will" : "will not");
+      }
+
       return true;
     }
     else
@@ -2294,7 +2318,7 @@ bool BasicProxy::UACTsx::get_next_server()
 //
 
 BasicProxy::UACTsx::Target::Target() :
-  _addr(), _is_set(false), _health_known(false), _stateless_proxy(false)
+  _addr(), _is_set(false), _health_known(false), _blacklist_by_default(false)
 {}
 
 BasicProxy::UACTsx::Target::~Target()
@@ -2302,7 +2326,7 @@ BasicProxy::UACTsx::Target::~Target()
   unset();
 }
 
-void BasicProxy::UACTsx::Target::set(AddrInfo& addr, bool stateless_proxy)
+void BasicProxy::UACTsx::Target::set(AddrInfo& addr, bool blacklist_by_default)
 {
   // A new address is being set, so unset the current one.
   unset();
@@ -2310,7 +2334,7 @@ void BasicProxy::UACTsx::Target::set(AddrInfo& addr, bool stateless_proxy)
   _addr = addr;
   _is_set = true;
   _health_known = false;
-  _stateless_proxy = stateless_proxy;
+  _blacklist_by_default = blacklist_by_default;
 }
 
 bool BasicProxy::UACTsx::Target::is_set() { return _is_set; }
@@ -2341,21 +2365,13 @@ void BasicProxy::UACTsx::Target::unset()
     // We have a target already and we don't know its health (because the caller
     // hasn't told us). However we need to call success or blacklist on the
     // address.
-    //
-    // For stateful proxies, the most likely thing is that the host has failed
-    // in some weird way that the BasicProxy doesn't cope with, so the best
-    // thing to do is blacklist the host.
-    //
-    // State*less* proxies are only blacklisted on transport failures. These are
-    // easy to spot, so it is unlikely the BasicProxy didn't spot this, and the
-    // best thing to do is mark the host as successful.
-    if (_stateless_proxy)
+    if (_blacklist_by_default)
     {
-      PJUtils::success(_addr);
+      PJUtils::blacklist(_addr);
     }
     else
     {
-      PJUtils::blacklist(_addr);
+      PJUtils::success(_addr);
     }
   }
 }
