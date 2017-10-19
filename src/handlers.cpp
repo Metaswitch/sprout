@@ -119,6 +119,7 @@ static bool sdm_access_common(AoRPair** aor_pair,
 static AoRPair* get_and_set_local_aor_data(
                           SubscriberDataManager* current_sdm,
                           std::string aor_id,
+                          const SubscriberDataManager::EventTrigger& event_trigger,
                           AssociatedURIs* associated_uris,
                           AoRPair* previous_aor_pair,
                           std::vector<SubscriberDataManager*> remote_sdms,
@@ -143,6 +144,7 @@ static AoRPair* get_and_set_local_aor_data(
     aor_pair->get_current()->_associated_uris = *associated_uris;
 
     set_rc = current_sdm->set_aor_data(aor_id,
+                                       event_trigger,
                                        aor_pair,
                                        trail,
                                        all_bindings_expired);
@@ -157,6 +159,7 @@ static AoRPair* get_and_set_local_aor_data(
 }
 
 static void set_remote_aor_data(std::string aor_id,
+                                const SubscriberDataManager::EventTrigger& event_trigger,
                                 AssociatedURIs* associated_uris,
                                 AoRPair* previous_aor_pair,
                                 std::vector<SubscriberDataManager*> remote_sdms,
@@ -173,6 +176,7 @@ static void set_remote_aor_data(std::string aor_id,
     {
       AoRPair* remote_aor_pair = get_and_set_local_aor_data(sdm,
                                                             aor_id,
+                                                            event_trigger,
                                                             associated_uris,
                                                             previous_aor_pair,
                                                             {},
@@ -183,7 +187,8 @@ static void set_remote_aor_data(std::string aor_id,
   }
 }
 
-static void update_hss_on_aor_expiry(std::string aor_id,
+static void update_hss_on_aor_expiry(const std::string& aor_id,
+                                     const std::string& req_type,
                                      AoRPair& aor_pair,
                                      HSSConnection* hss,
                                      SAS::TrailId trail)
@@ -200,7 +205,7 @@ static void update_hss_on_aor_expiry(std::string aor_id,
 
   hss->update_registration_state(aor_id,
                                  "",
-                                 HSSConnection::DEREG_TIMEOUT,
+                                 req_type,
                                  aor->_scscf_uri,
                                  trail);
 }
@@ -314,9 +319,14 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   std::map<std::string, Ifcs> ifc_map;
   get_reg_data(_cfg->_hss, aor_id, associated_uris, ifc_map, trail());
 
+  const std::string req_type = HSSConnection::DEREG_TIMEOUT;
+  SubscriberDataManager::EventTrigger event_trigger = 
+    SubscriberDataManager::EventTrigger::DEREG_TIMEOUT;
+
   bool all_bindings_expired = false;
   AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
                                                  aor_id,
+                                                 event_trigger,
                                                  &associated_uris,
                                                  NULL,
                                                  _cfg->_remote_sdms,
@@ -326,6 +336,7 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   if (aor_pair != NULL)
   {
     set_remote_aor_data(aor_id,
+                        event_trigger,
                         &associated_uris,
                         aor_pair,
                         _cfg->_remote_sdms,
@@ -335,6 +346,7 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
     if (all_bindings_expired)
     {
       update_hss_on_aor_expiry(aor_id,
+                               req_type,
                                *aor_pair,
                                _cfg->_hss,
                                trail());
@@ -521,7 +533,6 @@ AoRPair* DeregistrationTask::deregister_bindings(
 {
   AoRPair* aor_pair = NULL;
   bool all_bindings_expired = false;
-  const bool admin_dereg = true;
   bool got_ifcs;
   Store::Status set_rc;
   std::vector<std::string> impis_to_dereg;
@@ -530,6 +541,9 @@ AoRPair* DeregistrationTask::deregister_bindings(
   AssociatedURIs associated_uris;
   std::map<std::string, Ifcs> ifc_map;
   got_ifcs = get_reg_data(_cfg->_hss, aor_id, associated_uris, ifc_map, trail());
+
+  const SubscriberDataManager::EventTrigger event_trigger = 
+    SubscriberDataManager::EventTrigger::DEREG_ADMIN;
 
   do
   {
@@ -549,7 +563,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
            aor_pair->get_current()->bindings().begin();
          i != aor_pair->get_current()->bindings().end();
          ++i)
-    {
+    {  
       // Get a list of the bindings to iterate over
       binding_ids.push_back(i->first);
     }
@@ -575,10 +589,10 @@ AoRPair* DeregistrationTask::deregister_bindings(
 
     aor_pair->get_current()->_associated_uris = associated_uris;
     set_rc = current_sdm->set_aor_data(aor_id,
+                                       event_trigger,
                                        aor_pair,
                                        trail(),
-                                       all_bindings_expired,
-                                       admin_dereg);
+                                       all_bindings_expired);
 
     if (set_rc != Store::OK)
     {
@@ -811,7 +825,6 @@ void DeleteImpuTask::run()
 
   HTTPCode hss_sc;
   int sc;
-  const bool admin_dereg = true;
 
   // Expire all the bindings. This will handle deregistering with the HSS and
   // sending NOTIFYs and 3rd party REGISTERs.
@@ -824,9 +837,9 @@ void DeleteImpuTask::run()
                                        impu,
                                        "*",
                                        HSSConnection::DEREG_ADMIN,
+                                       SubscriberDataManager::EventTrigger::DEREG_ADMIN,
                                        trail(),
-                                       &hss_sc,
-                                       admin_dereg);
+                                       &hss_sc);
 
   // Work out what status code to return.
   if (all_bindings_expired)
@@ -956,8 +969,13 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
   HTTPCode rc = HTTP_OK;
   bool all_bindings_expired = false;
+  const std::string req_type = HSSConnection::DEREG_ADMIN;
+  SubscriberDataManager::EventTrigger event_trigger = 
+    SubscriberDataManager::EventTrigger::DEREG_ADMIN;
+
   AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
                                                  _default_public_id,
+                                                 event_trigger,
                                                  &_associated_uris,
                                                  NULL,
                                                  _cfg->_remote_sdms,
@@ -967,6 +985,7 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
   if (aor_pair != NULL)
   {
     set_remote_aor_data(_default_public_id,
+                        event_trigger,
                         &_associated_uris,
                         aor_pair,
                         _cfg->_remote_sdms,
@@ -976,6 +995,7 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
     if (all_bindings_expired)
     {
       update_hss_on_aor_expiry(_default_public_id,
+                               req_type,
                                *aor_pair,
                                _cfg->_hss,
                                trail);

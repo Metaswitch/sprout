@@ -444,8 +444,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Write to the local store, checking the remote stores if there is no entry locally.
   bool all_bindings_expired;
+  const std::string req_type = HSSConnection::DEREG_USER;
+
   AoRPair* aor_pair = write_to_store(_registrar->_sdm,
                                      aor,
+                                     SubscriberDataManager::EventTrigger::DEREG_USER,
                                      &associated_uris,
                                      req,
                                      now,
@@ -461,8 +464,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
     _registrar->_hss->update_registration_state(aor,
                                                 "",
-                                                HSSConnection::DEREG_USER,
                                                 _scscf_uri,
+                                                req_type,
                                                 trail());
   }
 
@@ -483,6 +486,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
         bool ignored;
         AoRPair* remote_aor_pair = write_to_store(*it,
                                                   aor,
+                                     SubscriberDataManager::EventTrigger::DEREG_USER,
                                                   &associated_uris,
                                                   req,
                                                   now,
@@ -876,6 +880,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 AoRPair* RegistrarSproutletTsx::write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
+                   const SubscriberDataManager::EventTrigger& dereg_type,
                    AssociatedURIs* associated_uris,
                                                                ///<Associated IMPUs in Implicit Registration Set
                    pjsip_msg* req,                             ///<received request to read headers from
@@ -1101,6 +1106,7 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
     {
       aor_pair->get_current()->_associated_uris = *associated_uris;
       set_rc = primary_sdm->set_aor_data(aor,
+                                         dereg_type,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);

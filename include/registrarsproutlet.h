@@ -112,6 +112,7 @@ protected:
 
   AoRPair* write_to_store(SubscriberDataManager* primary_sdm,         ///<store to write to
                           std::string aor,                            ///<address of record to write to
+                          const SubscriberDataManager::EventTrigger& dereg_type,
                           AssociatedURIs* associated_uris,            ///<Associated IMPUs in Implicit Registration Set
                           pjsip_msg* req,                             ///<received request to read headers from
                           int now,                                    ///<time now

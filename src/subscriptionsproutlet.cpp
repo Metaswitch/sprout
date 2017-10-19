@@ -626,9 +626,11 @@ AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
     }
 
     // Try to write the AoR back to the store.
-    bool unused;
     aor_pair->get_current()->_associated_uris = *associated_uris;
-    set_rc = primary_sdm->set_aor_data(aor, aor_pair, trail(), unused);
+    set_rc = primary_sdm->set_aor_data(aor, 
+                                       SubscriberDataManager::EventTrigger::DEREG_TIMEOUT,
+                                       aor_pair, 
+                                       trail()); 
 
     if (set_rc == Store::OK)
     {

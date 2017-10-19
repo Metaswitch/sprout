@@ -133,7 +133,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            300)).Times(1);
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -168,7 +168,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            100)).Times(1);
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -191,7 +191,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
   // Update AoR record again in the store and check it, this time using get_binding.
   // Also, don't change the expiry time -- we shouldn't get an analytics log.
   b1->_cseq = 17040;
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -218,7 +218,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            0)).Times(1);
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -270,7 +270,7 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            300)).Times(1);
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -299,7 +299,7 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   s1->_expires = now + 300;
 
   // Write the record back to the store.
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -382,7 +382,7 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>",
                            300)).Times(1);
-  rc = this->_store->set_aor_data(aor1, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor1, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -413,7 +413,7 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   aor_data1->get_current()->_associated_uris = associated_uris;
 
   // Write AoR record back to store
-  rc = this->_store->set_aor_data(aor1, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor1, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -539,7 +539,7 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 
   // Write AoR record back to store.
   std::string aor1 = "5102175691@cw-ngv.com";
-  rc = this->_store->set_aor_data(aor1, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor1, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
   EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed subscription_created"));
@@ -553,7 +553,7 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 
   // Write AoR record back to store admin_dereg=true. This would simulate the 
   // behaviour of admin deregistration via Sprout/HSS.
-  rc = this->_store->set_aor_data(aor1, aor_data1, 0, all_bindings_expired, true);
+  rc = this->_store->set_aor_data(aor1, HSSConnection::DEREG_ADMIN, aor_data1, 0, all_bindings_expired);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -571,7 +571,7 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 
   // Write AoR record back to store admin_dereg=false. This would simulate the 
   // behaviour of an expired binding that subscribed to its own registration.
-  rc = this->_store->set_aor_data(aor1, aor_data1, 0, all_bindings_expired, false);
+  rc = this->_store->set_aor_data(aor1, HSSConnection::DEREG_USER, aor_data1, 0, all_bindings_expired);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -740,7 +740,7 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            100));
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -945,7 +945,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -964,7 +964,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 
   // Write the record back to the store. Check DELETE request is sent.
   EXPECT_CALL(*(this->_chronos_connection), send_delete(aor_data1->get_current()->_timer_id, _)).Times(1);
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -1011,7 +1011,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1037,7 +1037,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   // Write the record back to the store, expecting a chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1066,7 +1066,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   // Write the record back to the store, expecting a chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -1128,7 +1128,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1176,7 +1176,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
 
   // Write the record back to the store, expecting no chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1246,7 +1246,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1261,7 +1261,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
 
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1276,7 +1276,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, (200), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1291,7 +1291,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, (100), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -1332,7 +1332,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
