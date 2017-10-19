@@ -2389,6 +2389,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
   {
     TRC_DEBUG("Not doing ENUM lookup as URI was classified as local DN");
     SAS::Event event(trail, SASEvent::NO_ENUM_LOOKUP_LOCAL_DN, 0);
+    event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri));
     SAS::report_event(event);
   }
 }
@@ -2448,6 +2449,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
   {
     TRC_DEBUG("Not doing ENUM lookup as URI was classified as local DN");
     SAS::Event event(trail, SASEvent::NO_ENUM_LOOKUP_LOCAL_DN, 1);
+    event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri));
     SAS::report_event(event);
   }
   else
