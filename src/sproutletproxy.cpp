@@ -617,7 +617,7 @@ SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   _pending_timers()
 {
   int instances = ++_num_instances;
-  TRC_ERROR("Sproutlet Proxy transaction (%p) created. There are now %d instances",
+  TRC_DEBUG("Sproutlet Proxy transaction (%p) created. There are now %d instances",
             this, instances);
 }
 
@@ -650,7 +650,7 @@ SproutletProxy::UASTsx::~UASTsx()
   }
 
   int instances = --_num_instances;
-  TRC_ERROR("Sproutlet Proxy transaction (%p) destroyed. There are now %d instances",
+  TRC_DEBUG("Sproutlet Proxy transaction (%p) destroyed. There are now %d instances",
             this, instances);
 }
 
