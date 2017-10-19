@@ -2295,7 +2295,7 @@ bool BasicProxy::UACTsx::get_next_server()
       if (Log::enabled(Log::DEBUG_LEVEL))
       {
         std::string host_str = addr.to_string();
-        TRC_DEBUG("Selected host %s, %s blacklist by default",
+        TRC_DEBUG("Selected host %s (%s be blacklisted by default)",
                   host_str.c_str(), blacklist_by_default ? "will" : "will not");
       }
 

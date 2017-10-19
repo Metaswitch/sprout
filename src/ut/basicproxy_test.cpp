@@ -4102,6 +4102,7 @@ TEST_F(BasicProxyTest, FailedProbeDoesNotUngraylist)
   delete tp;
 }
 
+
 // Test that an ACK does not blacklist a target (due to not getting a response).
 TEST_F(BasicProxyTest, AckDoesNotBlacklist)
 {
@@ -4173,7 +4174,7 @@ TEST_F(BasicProxyTest, AckDoesNotBlacklist)
   ReqMatcher("INVITE").matches(tdata->msg);
 
   // Check that it was sent to the first server, which should not have been
-  // graylisted by being sent an ACK.
+  // blacklisted by being sent an ACK.
   EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
   EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
   server1 = str_pj(tdata->tp_info.transport->remote_name.host);
