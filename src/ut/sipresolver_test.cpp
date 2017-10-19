@@ -675,75 +675,12 @@ TEST_F(SIPResolverTest, NoMatchingNAPTR)
             RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter());
 }
 
-// Test the behaviour of SIPResolver's IP address allowed host state
-// verification
+// Check that the SIPResolver is checking the host state before accepting an IP
+// address.  This is a fairly lightweight test as the logic is tested in the
+// BaseResolver test suite.
 TEST_F(SIPResolverTest, AllowedHostStateForIPAddr)
 {
-  add_ip_to_blacklist("192.0.2.11", 80);
-  add_ip_to_blacklist("192.0.2.12", 1234);
-  add_ip_to_blacklist("[2001:db8::1]", 9001);
-
-  // Test that ALL_LISTS behaves correctly.
-  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 80, BaseResolver::ALL_LISTS));
-  EXPECT_TRUE(resolve_ip_port("192.0.2.11", 80, BaseResolver::ALL_LISTS));
-
-  // Allow whitelisted addresses only, and ensure that blacklisted addresses
-  // are not returned.
-  EXPECT_TRUE(resolve_ip_port("192.0.2.2", 1234, BaseResolver::WHITELISTED));
-  EXPECT_FALSE(resolve_ip_port("192.0.2.12", 1234, BaseResolver::WHITELISTED));
-
-  // Allow blacklisted addresses only, and ensure that whitelisted addresses
-  // are not returned. Throw in IPv6 for flavour.
   EXPECT_FALSE(resolve_ip_port("[2001:db8::]", 9001, BaseResolver::BLACKLISTED));
-  EXPECT_TRUE(resolve_ip_port("[2001:db8::1]", 9001, BaseResolver::BLACKLISTED));
-}
-
-// Test the behaviour of SIPResolver's IP address allowed host state
-// verification for graylisted hosts.
-TEST_F(SIPResolverTest, AllowedHostStateForGraylistedIPAddr)
-{
-  // Create 3 blacklisted addresses.
-  add_ip_to_blacklist("192.0.2.1", 5060); // Only resolve this using ALL_LISTS
-  add_ip_to_blacklist("192.0.2.2", 5060); // Only resolve this using WHITELISTED
-  add_ip_to_blacklist("192.0.2.3", 5060); // Only resolve this using BLACKLISTED
-
-  // Resolving the address with different allowed host states does what you
-  // would expect, and is also repeatable (gives the same answer each time).
-  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
-  EXPECT_FALSE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
-  EXPECT_TRUE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
-
-  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
-  EXPECT_FALSE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
-  EXPECT_TRUE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
-
-  // Advance time so the addresses become graylisted.
-  cwtest_advance_time_ms(32000);
-
-  // Now, an address is treated as whitelisted until it is selected, at which
-  // point is starts to behave as though it's been blacklisted.
-  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
-  EXPECT_TRUE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
-  EXPECT_FALSE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
-
-  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
-  EXPECT_FALSE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
-  EXPECT_FALSE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
-
-  // Make the addresses whitelisted again.
-  _sipresolver.success(ip_port_to_addrinfo("192.0.2.1", 5060));
-  _sipresolver.success(ip_port_to_addrinfo("192.0.2.2", 5060));
-  _sipresolver.success(ip_port_to_addrinfo("192.0.2.3", 5060));
-
-  // Resolving the address with different allowed host states does what you
-  // would expect, and is also repeatable.
-  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
-  EXPECT_TRUE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
-  EXPECT_FALSE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
-
-  EXPECT_TRUE(resolve_ip_port("192.0.2.1", 5060, BaseResolver::ALL_LISTS));
-  EXPECT_TRUE(resolve_ip_port("192.0.2.2", 5060, BaseResolver::WHITELISTED));
-  EXPECT_FALSE(resolve_ip_port("192.0.2.3", 5060, BaseResolver::BLACKLISTED));
 }
 
 // Simple test to verify that the resolve wrapper around resolve_iter for the
