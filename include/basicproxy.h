@@ -290,9 +290,11 @@ protected:
 
       /// Tell the Target about an address and whether it represents a stateless
       /// proxy.
-      /// @param addr            - The address in question.
-      /// @param stateless_proxy - Whether the address is for a stateless proxy.
-      void set(AddrInfo& addr, bool stateless_proxy);
+      /// @param addr - The address in question.
+      /// @param blacklist_by_default
+      ///             - Whether to blacklist the address when we have finished
+      ///               with it (if the state of the address is not known).
+      void set(AddrInfo& addr, bool blacklist_by_default);
 
       /// Helper method to check if the Target had been initialized with an
       /// address.
@@ -313,7 +315,7 @@ protected:
       AddrInfo _addr;
       bool _is_set;
       bool _health_known;
-      bool _stateless_proxy;
+      bool _blacklist_by_default;
 
       // This class is not copyable or moveable. If it were, the semantics of
       Target(const Target& rhs) = delete;
