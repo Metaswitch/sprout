@@ -293,7 +293,7 @@ private:
   /// Read data for a public user identity from the HSS. Returns the HTTP result
   /// code obtained from homestead.
   long read_hss_data(const HSSConnection::irs_query& irs_query,
-                     struct HSSConnection::irs_info& irs_info,
+                     HSSConnection::irs_info& irs_info,
                      SAS::TrailId trail);
 
   /// Look up the registration state for the given public ID, using the

@@ -73,12 +73,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
   associated_uris.add_uri(aor_id, false);
   associated_uris.add_uri("sip:another_user@another_domain.com", false);
 
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris = associated_uris;
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _));
-           //.WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
-                           //Return(HTTP_OK)));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _))
+           .WillOnce(DoAll(SetArgReferee<1>(irs_info), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
       EXPECT_CALL(*store, set_aor_data(aor_id, aor, _, _)).WillOnce(Return(Store::OK));
 
@@ -203,12 +206,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, LocalAoRNoBindingsTest)
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
 
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris = associated_uris;
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _));
-           //.WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
-                           //Return(HTTP_OK)));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _))
+           .WillOnce(DoAll(SetArgReferee<1>(irs_info), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor1));
@@ -262,13 +268,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   associated_uris.add_uri(aor_id, false);
 
   HSSConnection::irs_query irs_query;
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris = associated_uris;
 
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _));
-           //.WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
-                           //Return(HTTP_OK)));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _))
+           .WillOnce(DoAll(SetArgReferee<1>(irs_info), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _))
@@ -302,9 +310,9 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
 
   handler->run();
 
-  //ASSERT_EQ(irs_query.public_id, aor_id);
-  //ASSERT_EQ(irs_query.req_type, HSSConnection::DEREG_TIMEOUT); 
-  //ASSERT_EQ(irs_query.server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
+  ASSERT_EQ(irs_query._public_id, aor_id);
+  ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_TIMEOUT); 
+  ASSERT_EQ(irs_query._server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 
 }
 
@@ -327,12 +335,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, NullAoRTest)
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
 
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris = associated_uris;
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
-      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _));
-           //.WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
-                           //Return(HTTP_OK)));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _))
+           .WillOnce(DoAll(SetArgReferee<1>(irs_info), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));

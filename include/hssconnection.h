@@ -41,6 +41,15 @@ public:
     std::string _wildcard;
     bool _cache_allowed;
 
+    irs_query() : 
+      _public_id(""),
+      _private_id(""),
+      _req_type(""),
+      _server_name(""),
+      _wildcard(""),
+      _cache_allowed(true)
+   {
+   }
   };
 
   struct irs_info
@@ -51,6 +60,16 @@ public:
     std::vector<std::string> _aliases;
     std::deque<std::string> _ccfs;
     std::deque<std::string> _ecfs;
+
+    irs_info() : 
+      _regstate(""),
+      _service_profiles(),
+      _associated_uris({}),
+      _aliases(),
+      _ccfs(),
+      _ecfs()
+    {
+    }
   };
 
   HSSConnection(const std::string& server,
@@ -87,12 +106,12 @@ public:
                              rapidjson::Document*& object,
                              SAS::TrailId trail);
 
-  virtual HTTPCode update_registration_state(const struct irs_query& irs_query,
-                                             struct irs_info& irs_info,
+  virtual HTTPCode update_registration_state(const irs_query& irs_query,
+                                             irs_info& irs_info,
                                              SAS::TrailId trail);
 
   virtual HTTPCode get_registration_data(const std::string& public_id,
-                                         struct irs_info& irs_info,
+                                         irs_info& irs_info,
                                          SAS::TrailId trail);
   rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
 
@@ -113,7 +132,7 @@ private:
                               SAS::TrailId trail);
   virtual long put_for_xml_object(const std::string& path,
                                   std::string body,
-                                  bool cache_allowed,
+                                  const bool& cache_allowed,
                                   rapidxml::xml_document<>*& root,
                                   SAS::TrailId trail);
 

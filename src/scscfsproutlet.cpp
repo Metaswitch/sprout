@@ -295,8 +295,8 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 
 
 /// Read data from the HSS and store in member fields for sproutlet.
-long SCSCFSproutletTsx::read_hss_data(const struct HSSConnection::irs_query& irs_query,
-                                      struct HSSConnection::irs_info& irs_info,
+long SCSCFSproutletTsx::read_hss_data(const HSSConnection::irs_query& irs_query,
+                                      HSSConnection::irs_info& irs_info,
                                       SAS::TrailId trail)
 {
 
@@ -2229,7 +2229,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
         for (std::string alias : _irs_info._aliases)
         {
           std::string tel_URI_prefix = "tel:";
-          bool has_tel_prefix = (alias.find(tel_URI_prefix.c_str(), 4) != std::string::npos);
+          bool has_tel_prefix = (alias.rfind(tel_URI_prefix.c_str(), 4) != std::string::npos);
           if (has_tel_prefix)
           {
             TRC_DEBUG("Add second P-Asserted Identity for %s", alias.c_str());

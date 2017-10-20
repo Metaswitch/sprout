@@ -212,12 +212,9 @@ static void update_hss_on_aor_expiry(std::string aor_id,
 
 static bool get_reg_data(HSSConnection* hss,
                          const std::string& aor_id,
-                         struct HSSConnection::irs_info& irs_info,
+                         HSSConnection::irs_info& irs_info,
                          SAS::TrailId trail)
 {
-  HSSConnection::irs_query irs_query;
-  irs_query._public_id = aor_id;
-
   HTTPCode http_code = hss->get_registration_data(aor_id,
                                                   irs_info,
                                                   trail);
@@ -526,7 +523,6 @@ AoRPair* DeregistrationTask::deregister_bindings(
   std::vector<std::string> impis_to_dereg;
 
   // Get registration data
-  AssociatedURIs associated_uris;
   HSSConnection::irs_info irs_info;
   got_ifcs = get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
 
@@ -572,7 +568,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
       }
     }
 
-    aor_pair->get_current()->_associated_uris = associated_uris;
+    aor_pair->get_current()->_associated_uris = irs_info._associated_uris;
     set_rc = current_sdm->set_aor_data(aor_id,
                                        aor_pair,
                                        trail(),
@@ -652,8 +648,8 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
       // Server Error - this will trigger the timer service to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
       HSSConnection::irs_query irs_query;
-      irs_query._private_id = impu; 
-      irs_query._public_id = impi; 
+      irs_query._public_id = impu; 
+      irs_query._private_id = impi; 
       irs_query._req_type = HSSConnection::AUTH_TIMEOUT;
       irs_query._server_name = auth_challenge->get_scscf_uri();
       HSSConnection::irs_info unused_irs_info;

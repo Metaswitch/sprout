@@ -194,7 +194,7 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
 /// responsible for deleting the filled-in "root" pointer.
 HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
                                            std::string body,
-                                           const bool cache_allowed,
+                                           const bool& cache_allowed,
                                            rapidxml::xml_document<>*& root,
                                            SAS::TrailId trail)
 {
@@ -311,10 +311,10 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
 
 
 bool decode_homestead_xml(const std::string& public_id,
-                          struct HSSConnection::irs_info& irs_info,
+                          HSSConnection::irs_info& irs_info,
                           std::shared_ptr<rapidxml::xml_document<> > root,
                           SIFCService* sifc_service,
-                          const bool allowNoIMS,
+                          const bool& allowNoIMS,
                           SAS::TrailId trail)
 {
   if (!root.get())
@@ -403,8 +403,8 @@ bool decode_homestead_xml(const std::string& public_id,
 // Returns the HTTP code from Homestead - callers should check that
 // this is HTTP_OK before relying on the output parameters.
 
-HTTPCode HSSConnection::update_registration_state(const struct irs_query& irs_query,
-                                                  struct irs_info& irs_info,
+HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
+                                                  irs_info& irs_info,
                                                   SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -416,13 +416,13 @@ HTTPCode HSSConnection::update_registration_state(const struct irs_query& irs_qu
   event.add_var_param(irs_query._req_type);
   SAS::report_event(event);
 
-  std::string path = "/impu/" + 
-                    Utils::url_escape(irs_query._public_id) + 
-                    "/reg-data";
+  std::string path = "/impu/" +
+                     Utils::url_escape(irs_query._public_id) +
+                     "/reg-data";
 
   if (!irs_query._private_id.empty())
   {
-    path += "?private_id=" + 
+    path += "?private_id=" +
             Utils::url_escape(irs_query._private_id);
   }
 
@@ -439,7 +439,7 @@ HTTPCode HSSConnection::update_registration_state(const struct irs_query& irs_qu
     : "";
 
   std::string req_body = "{\"reqtype\": \"" +
-                         irs_query._req_type + 
+                         irs_query._req_type +
                          "\"" +
                          ", \"server_name\": \"" +
                          irs_query._server_name +
@@ -483,7 +483,7 @@ HTTPCode HSSConnection::update_registration_state(const struct irs_query& irs_qu
 
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
-                                              struct irs_info& irs_info,
+                                              irs_info& irs_info,
                                               SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;

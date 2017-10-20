@@ -95,7 +95,11 @@ void FakeHSSConnection::delete_result(const std::string& url)
   _results.erase(url);
 }
 
-long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, const bool cache_allowed, rapidxml::xml_document<>*& root, SAS::TrailId trail)
+long FakeHSSConnection::put_for_xml_object(const std::string& path, 
+                                           std::string body, 
+                                           const bool& cache_allowed, 
+                                           rapidxml::xml_document<>*& root, 
+                                           SAS::TrailId trail)
 {
   return FakeHSSConnection::get_xml_object(path,
                                            body,
@@ -218,7 +222,8 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   return http_code;
 }
 
-bool FakeHSSConnection::url_was_requested(const std::string& url, const std::string& body)
+bool FakeHSSConnection::url_was_requested(const std::string& url, 
+                                          const std::string& body)
 {
   return (_calls.find(UrlBody(url, body)) != _calls.end());
 }
