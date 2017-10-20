@@ -98,21 +98,27 @@ protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
 
-  AoRPair* write_subscriptions_to_store(
-                     SubscriberDataManager* primary_sdm,        ///<store to write to
-                     std::string aor,                           ///<address of record to write to
-                     AssociatedURIs* associated_uris,
-                                                                ///<IMPUs associated with this IRS
-                     pjsip_msg* req,                            ///<received request to read headers from
-                     int now,                                   ///<time now
-                     AoRPair* backup_aor,                       ///<backup data if no entry in store
-                     std::vector<SubscriberDataManager*> backup_sdms,
-                                                                ///<backup stores to read from if no entry in store and no backup data
-                     std::string public_id,                     ///
-                     bool send_ok,                              ///<Should we create an OK
-                     ACR* acr,                                  ///
-                     std::deque<std::string> ccfs,              ///
-                     std::deque<std::string> ecfs);             ///
+  AoR::Subscription create_subscription(pjsip_msg* req, int expiry);
+
+  Store::Status update_subscription_in_stores(SubscriptionSproutlet* _subscription,
+                                              AoR::Subscription& new_subscription,
+                                              std::string aor,
+                                              AssociatedURIs* associated_uris,
+                                              pjsip_msg* req,
+                                              std::string public_id,
+                                              ACR* acr,
+                                              std::deque<std::string> ccfs,
+                                              std::deque<std::string> ecfs);
+
+  AoRPair* read_and_cache_from_store(SubscriberDataManager* sdm,
+                                     std::string aor,
+                                     std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
+
+  void update_subscription(SubscriptionSproutlet* _subscription,
+                           AoR::Subscription& new_subscription,
+                           std::string aor,
+                           AoRPair* aor_pair,
+                           std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
 
   void log_subscriptions(const std::string& aor_name,
                          AoR* aor_data);
