@@ -366,6 +366,16 @@ bool is_param_in_route_hdr(const pjsip_route_hdr* route,
 bool is_param_in_top_route(const pjsip_msg* req,
                            const pj_str_t* param_name);
 
+/// Add a header immediately above the topmost existing instance of that
+/// header.  If there are no other instances of the header, add it at the very
+/// top of the message.  This is useful for keeping headers of the same type
+/// grouped together.  While that is not required by the SIP RFCs, it does make
+/// analysis of SIP flows much simpler.
+///
+/// @param msg        - The message to which the header should be added
+/// @param hdr        - The header to add
+void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
+
 } // namespace PJUtils
 
 #endif
