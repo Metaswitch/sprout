@@ -228,7 +228,7 @@ pj_status_t respond_stateful(pjsip_endpoint* endpt,
 pjsip_tx_data *clone_tdata(pjsip_tx_data* tdata);
 void clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool);
 
-void add_top_via(pjsip_tx_data* tdata);
+pjsip_via_hdr* add_top_via(pjsip_tx_data* tdata);
 
 void remove_top_via(pjsip_tx_data* tdata);
 

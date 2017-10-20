@@ -1619,12 +1619,13 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
   return cloned_tdata;
 }
 
-void PJUtils::add_top_via(pjsip_tx_data* tdata)
+pjsip_via_hdr* PJUtils::add_top_via(pjsip_tx_data* tdata)
 {
   // Add a new Via header with a unique branch identifier.
   pjsip_via_hdr *hvia = pjsip_via_hdr_create(tdata->pool);
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hvia);
   generate_new_branch_id(tdata);
+  return hvia;
 }
 
 void PJUtils::remove_top_via(pjsip_tx_data* tdata)
