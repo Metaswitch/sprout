@@ -54,7 +54,7 @@ public:
                  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                  bool override_npdi,
                  int network_function_port,
-                 std::vector<std::string> blacklisted_scscfs={});
+                 std::set<std::string> blacklisted_scscfs = std::set<std::string>());
 
   virtual ~ICSCFSproutlet();
 
@@ -66,10 +66,6 @@ public:
                         pjsip_sip_uri*& next_hop,
                         pj_pool_t* pool,
                         SAS::TrailId trail);
-  
-  /// Method that sets the list of blacklisted S-CSCFs. Used for
-  /// Unit Test purposes only.
-  void set_blacklisted_scscfs(std::vector<std::string> blacklisted_scscfs);
 
 private:
 
@@ -136,7 +132,7 @@ private:
   int _network_function_port;
 
   /// The list of blacklisted S-CSCFs
-  std::vector<std::string> _blacklisted_scscfs;
+  std::set<std::string> _blacklisted_scscfs;
 };
 
 

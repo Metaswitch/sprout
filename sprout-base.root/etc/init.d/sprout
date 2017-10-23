@@ -84,7 +84,7 @@ get_settings()
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
-        blacklisted_scscfs=""
+        blacklisted_scscf_uris=""
         scscf_node_uri=""
 
         # Enable no-ENUM TEL URI translation fallback by default for backwards compatibility
@@ -311,8 +311,8 @@ get_daemon_args()
         [ "$non_register_authentication" = "" ]   || DAEMON_ARGS="$DAEMON_ARGS --non-register-authentication=$non_register_authentication"
         [ "$nonce_count_supported" != "Y" ]       || DAEMON_ARGS="$DAEMON_ARGS --nonce-count-supported"
         [ "$listen_port" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --listen-port=$listen_port"
-        [ "$blacklisted_scscfs" = "" ]            || DAEMON_ARGS="$DAEMON_ARGS --blacklisted-scscfs=$blacklisted_scscfs"
-        
+        [ "$blacklisted_scscf_uris" = "" ]        || DAEMON_ARGS="$DAEMON_ARGS --blacklisted-scscfs=$blacklisted_scscf_uris"
+
         for script in /usr/share/clearwater/sprout/plugin_conf.d/*.plugin_conf
         do
           if [ -x "$script" ]

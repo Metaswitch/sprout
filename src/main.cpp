@@ -1015,11 +1015,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_BLACKLISTED_SCSCFS:
-      TRC_INFO("Hello");
-      options->blacklisted_scscfs.clear();
-      Utils::split_string(std::string(pj_optarg), ',', options->blacklisted_scscfs, 0, false);
-      TRC_INFO("%d blacklisted S-CSCFs passed on the command line",
-                options->blacklisted_scscfs.size());   
+      {
+        std::vector<std::string> blacklisted_scscfs;
+        Utils::split_string(std::string(pj_optarg), ',', blacklisted_scscfs, 0, false);
+        options->blacklisted_scscfs.clear();
+        options->blacklisted_scscfs.insert(blacklisted_scscfs.begin(), blacklisted_scscfs.end());
+        TRC_INFO("%d blacklisted S-CSCF URIs passed on the command line: %s",
+                  options->blacklisted_scscfs.size(), pj_optarg);
+      }   
       break;
       
     case OPT_DNS_SERVER:
@@ -1032,7 +1035,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_OVERRIDE_NPDI:
       options->override_npdi = true;
       TRC_INFO("Number portability lookups will be done on URIs containing the 'npdi' indicator");
-      break;          
+      break;
 
     case OPT_EXCEPTION_MAX_TTL:
       {
@@ -1729,7 +1732,6 @@ int main(int argc, char* argv[])
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
-  opt.blacklisted_scscfs.push_back("");
 
   status = init_logging_options(argc, argv, &opt);
 

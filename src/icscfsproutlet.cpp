@@ -48,7 +48,7 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
                                int network_function_port,
-                               std::vector<std::string> blacklisted_scscfs) :
+                               std::set<std::string> blacklisted_scscfs) :
   Sproutlet(icscf_name,
             port,
             uri,
@@ -99,12 +99,6 @@ bool ICSCFSproutlet::init()
   // LCOV_EXCL_STOP
 
   return init_success;
-}
-
-/// Set method for _blacklisted_scscfs (used with UTs)
-void ICSCFSproutlet::set_blacklisted_scscfs(std::vector<std::string> blacklisted_scscfs)
-{
-  _blacklisted_scscfs = blacklisted_scscfs;
 }
 
 /// Creates a ICSCFSproutletTsx instance for performing I-CSCF service processing

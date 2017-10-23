@@ -28,7 +28,7 @@ ICSCFRouter::ICSCFRouter(HSSConnection* hss,
                          SAS::TrailId trail,
                          ACR* acr,
                          int port,
-                         std::vector<std::string> blacklisted_scscfs) :
+                         std::set<std::string> blacklisted_scscfs) :
   _hss(hss),
   _scscf_selector(scscf_selector),
   _trail(trail),
@@ -82,14 +82,12 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
   {
     wildcard = _hss_rsp.wildcard;
     if ((!_hss_rsp.scscf.empty()) && 
-        (std::find(_blacklisted_scscfs.begin(), _blacklisted_scscfs.end(),
-        _hss_rsp.scscf) != _blacklisted_scscfs.end()))
+        (_blacklisted_scscfs.find(_hss_rsp.scscf) != _blacklisted_scscfs.end()))
     {
-      // The HSS returned a S-CSCF name that is one of the blacklisted
-      // S-CSCFs. Behave as if the HSS failed to return a S-CSCF.
+      // The HSS returned blacklisted S-CSCF. Query the capabilities.
+      TRC_DEBUG("S-CSCF %s is blacklisted - not routing request to this S-CSCF", _hss_rsp.scscf.c_str());
       _attempted_scscfs.push_back(_hss_rsp.scscf);
       status_code = hss_query();
-      TRC_DEBUG("S-CSCF %s is blacklisted - not routing request to this S-CSCF", _hss_rsp.scscf.c_str());
 
       SAS::Event event(_trail, SASEvent::SCSCF_BLACKLISTED, 0);
       event.add_var_param(_hss_rsp.scscf);
@@ -110,12 +108,12 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
       // We queried capabilities from the HSS, so select a suitable S-CSCF.
       // We pass both _blacklisted_scscfs and _attempted_scscfs to be rejected 
       // since these are not suitable S-CSCFs.
-      std::vector<std::string> _reject_scscfs;
-      _reject_scscfs.insert(_reject_scscfs.end(), _attempted_scscfs.begin(), _attempted_scscfs.end());
-      _reject_scscfs.insert(_reject_scscfs.end(), _blacklisted_scscfs.begin(), _blacklisted_scscfs.end());
+      std::vector<std::string> rejected_scscfs;
+      rejected_scscfs.insert(rejected_scscfs.end(), _attempted_scscfs.begin(), _attempted_scscfs.end());
+      rejected_scscfs.insert(rejected_scscfs.end(), _blacklisted_scscfs.begin(), _blacklisted_scscfs.end());
       scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
                                          _hss_rsp.optional_caps,
-                                         _reject_scscfs,
+                                         rejected_scscfs,
                                          _trail);
       TRC_DEBUG("SCSCF selected: %s", scscf.c_str());
     }
@@ -327,7 +325,7 @@ ICSCFUARouter::ICSCFUARouter(HSSConnection* hss,
                              const std::string& visited_network,
                              const std::string& auth_type,
                              const bool& emergency,
-                             std::vector<std::string> blacklisted_scscfs) :
+                             std::set<std::string> blacklisted_scscfs) :
   ICSCFRouter(hss, scscf_selector, trail, acr, port, blacklisted_scscfs),
   _impi(impi),
   _impu(impu),
@@ -405,7 +403,7 @@ ICSCFLIRouter::ICSCFLIRouter(HSSConnection* hss,
                              int port,
                              const std::string& impu,
                              bool originating,
-                             std::vector<std::string> blacklisted_scscfs) :
+                             std::set<std::string> blacklisted_scscfs) :
   ICSCFRouter(hss, scscf_selector, trail, acr, port, blacklisted_scscfs),
   _impu(impu),
   _originating(originating)
