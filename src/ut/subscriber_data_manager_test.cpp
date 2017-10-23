@@ -99,11 +99,9 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
   AoRPair* aor_data1;
   AoR::Binding* b1;
   AssociatedURIs associated_uris = {};
-  bool rc;
-  int now;
 
   // Get an initial empty AoR record and add a binding.
-  now = time(NULL);
+  int now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->_timer_id = "AoRtimer";
@@ -133,7 +131,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            300)).Times(1);
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  bool rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -168,7 +166,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            100)).Times(1);
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -191,7 +189,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
   // Update AoR record again in the store and check it, this time using get_binding.
   // Also, don't change the expiry time -- we shouldn't get an analytics log.
   b1->_cseq = 17040;
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -218,7 +216,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            0)).Times(1);
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -236,11 +234,9 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   AoR::Binding* b1;
   AssociatedURIs associated_uris = {};
   AoR::Subscription* s1;
-  bool rc;
-  int now;
 
   // Get an initial empty AoR record and add a binding.
-  now = time(NULL);
+  int now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->_timer_id = "AoRtimer";
@@ -270,7 +266,7 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            300)).Times(1);
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  bool rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -299,7 +295,7 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   s1->_expires = now + 300;
 
   // Write the record back to the store.
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -337,11 +333,9 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   AoR::Binding* b1;
   AoR::Subscription* s1;
   AssociatedURIs associated_uris = {};
-  bool rc;
-  int now;
 
   // Get an initial empty AoR record and add a binding and subscription.
-  now = time(NULL);
+  int now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175691@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->_timer_id = "AoRtimer";
@@ -382,7 +376,7 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>",
                            300)).Times(1);
-  rc = this->_store->set_aor_data(aor1, "", aor_data1, 0);
+  bool rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -413,7 +407,7 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   aor_data1->get_current()->_associated_uris = associated_uris;
 
   // Write AoR record back to store
-  rc = this->_store->set_aor_data(aor1, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -446,57 +440,31 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   delete aor_data1; aor_data1 = NULL;
 }
 
-// Use log to check that Admin Deregistration will send a final NOTIFY, while
-// expiry of an endpoint that subscribe to its own registration state will skip
-// such NOTIFY.
+// Test that if a binding is removed due to administrative deregistration then a
+// NOTIFY is sent, and if it's removed because it's expired or deregistered by
+// the endpoint then a NOTIFY isn't sent.
 TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 {
   CapturingTestLogger log;
-  AoRPair* aor_data1;
   AoR::Binding* b0;
   AoR::Binding* b1;
   AoR::Binding* b2;
   AoR::Subscription* s0;
   AoR::Subscription* s1;
   AssociatedURIs associated_uris = {};
-  bool rc;
-  int now;
   bool all_bindings_expired = false;
 
   // Get an initial empty AoR record.
-  now = time(NULL);
-  aor_data1 = this->_store->get_aor_data(std::string("5102175691@cw-ngv.com"), 0);
+  int now = time(NULL);
+  AoRPair* aor_data1 = this->_store->get_aor_data(std::string("5102175691@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->_timer_id = "AoRtimer";
   aor_data1->get_current()->_associated_uris = associated_uris;
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
 
-  // Add a binding and corresponding subscription. URI has to be exact match as the code assumes so.
-  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
-  b1->_uri = std::string("<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>");
-  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
-  b1->_cseq = 17038;
-  b1->_expires = now + 300;
-  b1->_priority = 0;
-  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
-  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
-  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
-  b1->_params["reg-id"] = "1";
-  b1->_params["+sip.ice"] = "";
-  b1->_private_id = "5102175691@cw-ngv.com";
-  b1->_emergency_registration = false;
-
-  s1 = aor_data1->get_current()->get_subscription("1234");
-  s1->_req_uri = std::string("<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>");
-  s1->_from_uri = std::string("<sip:5102175691@cw-ngv.com>");
-  s1->_from_tag = std::string("4321");
-  s1->_to_uri = std::string("<sip:5102175691@cw-ngv.com>");
-  s1->_to_tag = std::string("1234");
-  s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  s1->_expires = now + 300;
-
-  // Add another pair of binding and subscription.
+  // Add a binding and corresponding subscription.
+  // The URI is the same for the binding and the subscription as they're made
+  // from the same endpoint.
   b0 = aor_data1->get_current()->get_binding(std::string("urn:uuid:0-0000-0000-0000-b4dd32817622:1"));
   b0->_uri = std::string("sip:5678@5678");
   b0->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
@@ -521,7 +489,32 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   s0->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s0->_expires = now + 300;
 
-  // Add another binding so that when the other twos are removed, the AoR is not
+  // Add another pair of binding and subscription.
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175691@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>");
+  s1->_from_uri = std::string("<sip:5102175691@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175691@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Add another binding so that when the other two are removed, the AoR is not
   // void.
   b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:111111-0000-0000-0000-b4dd32817622:1"));
   b2->_uri = std::string("<sip:111111@192.91.191.29:59934;transport=tcp;ob>");
@@ -539,7 +532,7 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 
   // Write AoR record back to store.
   std::string aor1 = "5102175691@cw-ngv.com";
-  rc = this->_store->set_aor_data(aor1, "", aor_data1, 0);
+  bool rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
   EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed subscription_created"));
@@ -551,14 +544,14 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   aor_data1->get_current()->remove_subscription(std::string("1234"));
 
-  // Write AoR record back to store admin_dereg=true. This would simulate the 
+  // Write AoR record back to store with ADMIN. This would simulate the 
   // behaviour of admin deregistration via Sprout/HSS.
-  rc = this->_store->set_aor_data(aor1, HSSConnection::DEREG_ADMIN, aor_data1, 0, all_bindings_expired);
+  rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0, all_bindings_expired);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  // Check a NOTIFY has been sent to the removed binding about its
-  // deregitration.
+  // Use log to check a NOTIFY has been sent to the removed binding about its
+  // deregistration.
   EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed"));
   EXPECT_TRUE(log.contains("The subscription 1234 has been terminated, send final NOTIFY"));
 
@@ -569,14 +562,14 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   aor_data1->get_current()->remove_binding(std::string("urn:uuid:0-0000-0000-0000-b4dd32817622:1"));
   aor_data1->get_current()->remove_subscription(std::string("5678"));
 
-  // Write AoR record back to store admin_dereg=false. This would simulate the 
+  // Write AoR record back to store with TIMEOUT. This would simulate the 
   // behaviour of an expired binding that subscribed to its own registration.
-  rc = this->_store->set_aor_data(aor1, HSSConnection::DEREG_USER, aor_data1, 0, all_bindings_expired);
+  rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::TIMEOUT, aor_data1, 0, all_bindings_expired);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  // Check a NOTIFY has been sent to the removed binding about its
-  // deregitration.
+  // Use log to check that expiry of an endpoint that subscribe to its own 
+  // registration state will skip such NOTIFY.
   EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 5678: reason(s) bindings_changed"));
   EXPECT_TRUE(log.contains("Skip expired subscription 5678 as the binding sip:5678@5678 has expired"));
 }
@@ -740,7 +733,7 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
                            "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
                            "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
                            100));
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::TIMEOUT, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -945,7 +938,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::TIMEOUT, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -964,7 +957,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 
   // Write the record back to the store. Check DELETE request is sent.
   EXPECT_CALL(*(this->_chronos_connection), send_delete(aor_data1->get_current()->_timer_id, _)).Times(1);
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::TIMEOUT, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -1011,7 +1004,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1037,7 +1030,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   // Write the record back to the store, expecting a chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1066,7 +1059,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   // Write the record back to the store, expecting a chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -1128,7 +1121,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1176,7 +1169,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
 
   // Write the record back to the store, expecting no chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1246,7 +1239,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1261,7 +1254,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
 
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1276,7 +1269,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, (200), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1291,7 +1284,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, (100), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -1332,7 +1325,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
   associated_uris.add_uri(aor, false);
   aor_data1->get_current()->_associated_uris = associated_uris;
 
-  rc = this->_store->set_aor_data(aor, "", aor_data1, 0);
+  rc = this->_store->set_aor_data(aor, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 

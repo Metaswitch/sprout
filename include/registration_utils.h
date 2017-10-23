@@ -41,7 +41,7 @@ bool remove_bindings(SubscriberDataManager* sdm,
                      const std::string& dereg_type,
                      const SubscriberDataManager::EventTrigger& event_trigger,
                      SAS::TrailId trail,
-                     HTTPCode* hss_status_code = nullptr); 
+                     HTTPCode* hss_status_code = nullptr);
 
 void deregister_with_application_servers(Ifcs& ifcs,
                                          FIFCService* fifc_service,

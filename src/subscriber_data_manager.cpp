@@ -571,7 +571,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
   bool associated_uris_changed = false;
 
   // Iterate over the bindings in the original AoR. Find any that aren't in the current
-  // AoR and mark those as deleted.
+  // AoR and mark those as expired.
   for (std::pair<std::string, AoR::Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
@@ -584,7 +584,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
     if ((!binding->_emergency_registration) &&
         (aor_pair->get_current()->bindings().find(b_id) == aor_pair->get_current()->bindings().end()))
     {
-      TRC_DEBUG("Binding %s has been deleted", b_id.c_str());
+      TRC_DEBUG("Binding %s has been expired", b_id.c_str());
       missing_binding_uris.push_back(binding->_uri);
       NotifyUtils::BindingNotifyInformation* bni =
                new NotifyUtils::BindingNotifyInformation(b_id,
@@ -790,9 +790,9 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 
     if (((std::find(missing_binding_uris.begin(), missing_binding_uris.end(), s->_req_uri) 
           != missing_binding_uris.end())) 
-        && (event_trigger == SubscriberDataManager::EventTrigger::DEREG_USER))
+        && (event_trigger != SubscriberDataManager::EventTrigger::ADMIN))
     {
-      // Binding has been deleted, and not due to admin deregister.
+      // Binding is missing, and this event is not triggered by admin.
       // This NOTIFY would go to a binding which no longer exists - skip it.
       TRC_DEBUG("Skip expired subscription %s as the binding %s has expired", 
                 s_id.c_str(), (s->_req_uri).c_str());

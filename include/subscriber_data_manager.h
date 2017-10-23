@@ -37,9 +37,9 @@ class SubscriberDataManager
 public:
   enum EventTrigger
   {
-    DEREG_USER,
-    DEREG_ADMIN,
-    DEREG_TIMEOUT
+    USER,
+    ADMIN,
+    TIMEOUT
   };
 
   /// @class SubscriberDataManager::ChronosTimerRequestSender
@@ -137,7 +137,7 @@ public:
                                    const EventTrigger& event_trigger,
                                    AoRPair* aor_pair,
                                    ClassifiedBindings binding_info_to_notify,
-                                   std::vector<std::string> deleted_binding_uris,
+                                   std::vector<std::string> missing_binding_uris,
                                    int now,
                                    SAS::TrailId trail);
   };

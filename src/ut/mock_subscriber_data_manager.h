@@ -24,10 +24,10 @@ public:
   MOCK_METHOD2(get_aor_data, AoRPair*(const std::string& aor_id,
                                       SAS::TrailId trail));
   MOCK_METHOD5(set_aor_data, Store::Status(const std::string& aor_id,
+                                           const SubscriberDataManager::EventTrigger& event_trigger,
                                            AoRPair* data,
                                            SAS::TrailId trail,
-                                           bool& all_bindings_expired,
-                                           bool admin_dereg));
+                                           bool& all_bindings_expired));
   MOCK_METHOD0(has_servers, bool());
 };
 

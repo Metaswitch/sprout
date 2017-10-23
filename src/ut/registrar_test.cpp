@@ -1550,6 +1550,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                                      user,
                                      "*",
                                      HSSConnection::DEREG_ADMIN,
+                                     SubscriberDataManager::EventTrigger::ADMIN,
                                      0);
 
   SCOPED_TRACE("deREGISTER");
@@ -2891,7 +2892,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   s1->_expires = now + 300;
 
   aor_pair->get_current()->_associated_uris.add_uri(aor, false);
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  pj_status_t rc = _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2981,7 +2982,7 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   s1->_expires = now + 300;
 
   aor_pair->get_current()->_associated_uris.add_uri(aor, false);
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  pj_status_t rc = _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -3040,7 +3041,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   s1->_expires = now + 300;
 
   aor_pair->get_current()->_associated_uris.add_uri(aor, false);
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  pj_status_t rc = _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
   ASSERT_EQ(1, txdata_count());

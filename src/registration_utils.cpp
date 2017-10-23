@@ -91,7 +91,7 @@ public:
                                          _reg_data->public_id,
                                          "*",
                                          HSSConnection::DEREG_ADMIN,
-                                         SubscriberDataManager::EventTrigger::DEREG_ADMIN,
+                                         SubscriberDataManager::EventTrigger::ADMIN,
                                          _reg_data->trail);
     }
 
@@ -416,7 +416,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                          served_user,
                                          "*",
                                          HSSConnection::DEREG_ADMIN,
-                                         SubscriberDataManager::EventTrigger::DEREG_ADMIN,
+                                         SubscriberDataManager::EventTrigger::ADMIN,
                                          trail);
     }
   }
