@@ -1846,12 +1846,12 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
 
   if (is_internal_network_func_boundary() && !stack_data.sprout_hostname.empty())
   {
-    // Add a Via header to indicate that the request has traversed this network
-    // function.  This can be used to determine the source network function on
-    // requests passed internally.
+    // Add a Via header to indicate that the request has traversed the upstream
+    // network function.  This can be used to determine the source network
+    // function on requests passed internally.
     pjsip_via_hdr *hvia = PJUtils::add_top_via(req);
     std::string network_func_host =
-                         _this_network_func + "." + stack_data.sprout_hostname;
+                     _upstream_network_func + "." + stack_data.sprout_hostname;
     pj_strdup2(req->pool, &hvia->sent_by.host, network_func_host.c_str());
     pj_strdup2(req->pool, &hvia->transport, "TCP");
   }
