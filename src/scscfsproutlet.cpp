@@ -290,7 +290,6 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
                                      aor,
                                      binding_id,
                                      HSSConnection::DEREG_TIMEOUT,
-                                     SubscriberDataManager::EventTrigger::TIMEOUT,
                                      trail);
 }
 

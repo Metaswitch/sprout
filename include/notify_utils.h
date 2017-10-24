@@ -33,15 +33,7 @@ namespace NotifyUtils
   enum class RegistrationState { ACTIVE, TERMINATED };
   enum class ContactState { ACTIVE, TERMINATED };
   enum class SubscriptionState { ACTIVE, TERMINATED };
-  enum class ContactEvent { 
-    REGISTERED, 
-    CREATED, 
-    REFRESHED, 
-    SHORTENED,
-    EXPIRED, 
-    DEACTIVATED, 
-    UNREGISTERED
-  };
+  enum class ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, SHORTENED };
 
   // Wrapper for the bindings in a NOTIFY. The information needed is
   // the binding itself, a unique ID for it and the contact event
