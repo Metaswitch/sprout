@@ -119,7 +119,6 @@ static bool sdm_access_common(AoRPair** aor_pair,
 static AoRPair* get_and_set_local_aor_data(
                           SubscriberDataManager* current_sdm,
                           std::string aor_id,
-                          const SubscriberDataManager::EventTrigger& event_trigger,
                           AssociatedURIs* associated_uris,
                           AoRPair* previous_aor_pair,
                           std::vector<SubscriberDataManager*> remote_sdms,
@@ -144,7 +143,6 @@ static AoRPair* get_and_set_local_aor_data(
     aor_pair->get_current()->_associated_uris = *associated_uris;
 
     set_rc = current_sdm->set_aor_data(aor_id,
-                                       event_trigger,
                                        aor_pair,
                                        trail,
                                        all_bindings_expired);
@@ -159,7 +157,6 @@ static AoRPair* get_and_set_local_aor_data(
 }
 
 static void set_remote_aor_data(std::string aor_id,
-                                const SubscriberDataManager::EventTrigger& event_trigger,
                                 AssociatedURIs* associated_uris,
                                 AoRPair* previous_aor_pair,
                                 std::vector<SubscriberDataManager*> remote_sdms,
@@ -176,7 +173,6 @@ static void set_remote_aor_data(std::string aor_id,
     {
       AoRPair* remote_aor_pair = get_and_set_local_aor_data(sdm,
                                                             aor_id,
-                                                            event_trigger,
                                                             associated_uris,
                                                             previous_aor_pair,
                                                             {},
@@ -187,7 +183,7 @@ static void set_remote_aor_data(std::string aor_id,
   }
 }
 
-static void update_hss_on_aor_expiry(const std::string& aor_id,
+static void update_hss_on_aor_expiry(std::string aor_id,
                                      AoRPair& aor_pair,
                                      HSSConnection* hss,
                                      SAS::TrailId trail)
@@ -321,7 +317,6 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   bool all_bindings_expired = false;
   AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
                                                  aor_id,
-                                                 SubscriberDataManager::EventTrigger::TIMEOUT,
                                                  &associated_uris,
                                                  NULL,
                                                  _cfg->_remote_sdms,
@@ -331,7 +326,6 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   if (aor_pair != NULL)
   {
     set_remote_aor_data(aor_id,
-                        SubscriberDataManager::EventTrigger::TIMEOUT,
                         &associated_uris,
                         aor_pair,
                         _cfg->_remote_sdms,
@@ -580,11 +574,9 @@ AoRPair* DeregistrationTask::deregister_bindings(
 
     aor_pair->get_current()->_associated_uris = associated_uris;
     set_rc = current_sdm->set_aor_data(aor_id,
-                                       SubscriberDataManager::EventTrigger::ADMIN,
                                        aor_pair,
                                        trail(),
                                        all_bindings_expired);
-
     if (set_rc != Store::OK)
     {
       delete aor_pair; aor_pair = NULL;
@@ -828,7 +820,6 @@ void DeleteImpuTask::run()
                                        impu,
                                        "*",
                                        HSSConnection::DEREG_ADMIN,
-                                       SubscriberDataManager::EventTrigger::ADMIN,
                                        trail(),
                                        &hss_sc);
 
@@ -960,10 +951,8 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
   HTTPCode rc = HTTP_OK;
   bool all_bindings_expired = false;
-
   AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
                                                  _default_public_id,
-                                                 SubscriberDataManager::EventTrigger::ADMIN,
                                                  &_associated_uris,
                                                  NULL,
                                                  _cfg->_remote_sdms,
@@ -973,7 +962,6 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
   if (aor_pair != NULL)
   {
     set_remote_aor_data(_default_public_id,
-                        SubscriberDataManager::EventTrigger::ADMIN,
                         &_associated_uris,
                         aor_pair,
                         _cfg->_remote_sdms,
