@@ -231,6 +231,7 @@ private:
   // @param aor_pair              The AoR pair to compare and classify bindings for
   // @param classified_bindings   Output vector of classified bindings
   void classify_bindings(const std::string& aor_id,
+                         const SubscriberDataManager::EventTrigger& event_trigger,
                          AoRPair* aor_pair,
                          ClassifiedBindings& classified_bindings);
 

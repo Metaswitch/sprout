@@ -125,7 +125,7 @@ class DeregistrationTaskTest : public SipTest
         // Write the information to the local store
         EXPECT_CALL(*_subscriber_data_manager, 
                     set_aor_data(aor_ids[ii], 
-                                 SubscriberDataManager::EventTrigger::USER,
+                                 SubscriberDataManager::EventTrigger::ADMIN,
                                  _, _, _))
           .WillOnce(Return(Store::OK));
       }

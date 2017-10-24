@@ -82,7 +82,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
            .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*store, set_aor_data(aor_id, SubscriberDataManager::EventTrigger::TIMEOUT, aor, _, _)).WillOnce(Return(Store::OK));
 
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor1));

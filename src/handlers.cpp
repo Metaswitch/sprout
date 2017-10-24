@@ -580,7 +580,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
 
     aor_pair->get_current()->_associated_uris = associated_uris;
     set_rc = current_sdm->set_aor_data(aor_id,
-                                       SubscriberDataManager::EventTrigger::USER,
+                                       SubscriberDataManager::EventTrigger::ADMIN,
                                        aor_pair,
                                        trail(),
                                        all_bindings_expired);
