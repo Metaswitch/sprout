@@ -35,7 +35,8 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_aliases,
                                const std::list<Sproutlet*>& sproutlets,
-                               const std::set<std::string>& stateless_proxies) :
+                               const std::set<std::string>& stateless_proxies,
+                               int max_sproutlet_depth) :
   BasicProxy(endpt,
              "mod-sproutlet-controller",
              priority,
@@ -43,7 +44,8 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
              stateless_proxies),
   _root_uri(NULL),
   _host_aliases(host_aliases),
-  _sproutlets(sproutlets)
+  _sproutlets(sproutlets),
+  _max_sproutlet_depth(max_sproutlet_depth)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   TRC_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
@@ -591,6 +593,16 @@ bool SproutletProxy::timer_running(pj_timer_entry* tentry)
 }
 
 
+SproutletProxy::UASTsx::TimerCallback::TimerCallback(pj_timer_entry* timer) :
+  _timer_entry(timer)
+{
+}
+
+void SproutletProxy::UASTsx::TimerCallback::run()
+{
+  ((TimerCallbackData*)_timer_entry->user_data)->uas_tsx->process_timer_pop(_timer_entry);
+}
+
 SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   BasicProxy::UASTsx(proxy),
   _root(NULL),
@@ -612,7 +624,7 @@ SproutletProxy::UASTsx::~UASTsx()
        timer != _timers.end();
        ++timer)
   {
-    SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)(*timer)->user_data;
+    TimerCallbackData* tdata = (TimerCallbackData*)(*timer)->user_data;
     delete tdata;
     delete *timer;
   }
@@ -683,6 +695,8 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                                    alias,
                                    _req,
                                    _original_transport,
+                                   "EXTERNAL",
+                                   _sproutlet_proxy->_max_sproutlet_depth,
                                    trail());
     }
   }
@@ -858,6 +872,8 @@ void SproutletProxy::UASTsx::tx_request(SproutletWrapper* upstream,
   pr.req = req.tx_data;
   pr.upstream = std::make_pair(upstream, fork_id);
   pr.allowed_host_state = req.allowed_host_state;
+  pr.sproutlet_depth = upstream->get_depth() - 1;
+  pr.upstream_network_func = upstream->get_network_function();
   _pending_req_q.push(pr);
 }
 
@@ -872,11 +888,25 @@ void SproutletProxy::UASTsx::schedule_requests()
     // Reject the request if the Max-Forwards value has dropped to zero.
     pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
                   pjsip_msg_find_hdr(req.req->msg, PJSIP_H_MAX_FORWARDS, NULL);
-    if ((mf_hdr != NULL) &&
-        (mf_hdr->ivalue <= 0))
+    bool loop_detected = false;
+
+    if ((mf_hdr != NULL) && (mf_hdr->ivalue <= 0))
     {
-      // Max-Forwards has decayed to zero, so either reject the request or
-      // discard it if it's an ACK.
+      // Max-Forwards has decayed to zero - we've detected a loop.
+      TRC_DEBUG("Max-Forwards too low");
+      loop_detected = true;
+    }
+    else if (req.sproutlet_depth <= 0)
+    {
+      // Maximum recursion depth for Sproutlets reached - it's a loop.
+      TRC_ERROR("Exceeded maximum Sproutlet tree depth");
+      loop_detected = true;
+    }
+
+    if (loop_detected)
+    {
+      // We've detected a loop, so either reject the request or discard it if
+      // it's an ACK.
       if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
       {
         TRC_INFO("Loop detected - rejecting request with 483 status code");
@@ -914,6 +944,8 @@ void SproutletProxy::UASTsx::schedule_requests()
                                                             alias,
                                                             req.req,
                                                             _original_transport,
+                                                            req.upstream_network_func,
+                                                            req.sproutlet_depth,
                                                             trail());
 
         // Set up the mappings.
@@ -923,7 +955,8 @@ void SproutletProxy::UASTsx::schedule_requests()
           _umap[(void*)downstream] = req.upstream;
         }
 
-        if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
+        if (downstream->is_network_func_boundary() &&
+            (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD))
         {
           // Send an immediate 100 Trying response to the upstream
           // Sproutlet.
@@ -980,7 +1013,7 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
                                             TimerID& id,
                                             int duration)
 {
-  SproutletTimerCallbackData* tdata = new SproutletTimerCallbackData;
+  TimerCallbackData* tdata = new TimerCallbackData;
   tdata->uas_tsx = this;
   tdata->sproutlet_wrapper = tsx;
   tdata->context = context;
@@ -1022,8 +1055,13 @@ bool SproutletProxy::UASTsx::timer_running(TimerID id)
 void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
                                           pj_timer_entry* tentry)
 {
-  TRC_DEBUG("Sproutlet timer popped, id = %ld", (TimerID)tentry);
-  ((SproutletTimerCallbackData*)tentry->user_data)->uas_tsx->process_timer_pop(tentry);
+
+  TimerCallback* callback = new TimerCallback(tentry);
+
+  // Timer pops happen on the main pjsip transport thread, but we want to handle
+  // them on a worker thread.
+  // We relinquish ownership of the TimerCallback
+  PJUtils::run_callback_on_worker_thread(callback);
 }
 
 
@@ -1032,7 +1070,7 @@ void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
   enter_context();
 
   _pending_timers.erase(tentry);
-  SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)tentry->user_data;
+  TimerCallbackData* tdata = (TimerCallbackData*)tentry->user_data;
   tdata->sproutlet_wrapper->on_timer_pop((TimerID)tentry, tdata->context);
   schedule_requests();
 
@@ -1229,6 +1267,8 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
                                    const std::string& sproutlet_alias,
                                    pjsip_tx_data* req,
                                    pjsip_transport* original_transport,
+                                   const std::string& upstream_network_func,
+                                   int depth,
                                    SAS::TrailId trail_id) :
   _proxy(proxy),
   _proxy_tsx(proxy_tsx),
@@ -1239,6 +1279,9 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _req(req),
   _req_type(),
   _original_transport(original_transport),
+  _this_network_func(""),
+  _upstream_network_func(upstream_network_func),
+  _depth(depth),
   _packets(),
   _send_requests(),
   _send_responses(),
@@ -1274,6 +1317,11 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     // We haven't been supplied a tsx, so create a default SproutletTsx to
     // handle the request.
     _sproutlet_tsx = new SproutletTsx(NULL);
+    _this_network_func = _service_name;
+  }
+  else
+  {
+    _this_network_func = _sproutlet_tsx->get_network_function();
   }
 
   // Initialize the Tsx
@@ -1785,12 +1833,15 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   // Keep an immutable reference to the request.
   _req = req;
 
-  // Decrement Max-Forwards if present.
-  pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
-                      pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
-  if (mf_hdr != NULL)
+  if (is_network_func_boundary())
   {
-    --mf_hdr->ivalue;
+    // Decrement Max-Forwards when transitioning between Network Functions.
+    pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
+                      pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
+    if (mf_hdr != NULL)
+    {
+      --mf_hdr->ivalue;
+    }
   }
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
@@ -1814,9 +1865,10 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   }
 
   // We consider an ACK transaction to be complete immediately after the
-  // sproutlet's actions have been processed, regardless of whether the
-  // sproutlet forwarded the ACK (some sproutlets are unable to in certain
-  // situations).
+  // sproutlet's actions have been processed, as we won't receive any response,
+  // so won't get another opportunity to tidy up the transaction state.
+  // We do this regardless of whether the sproutlet forwarded the ACK (some
+  // sproutlets are unable to in certain situations).
   bool complete_after_actions = (req->msg->line.req.method.id == PJSIP_ACK_METHOD);
   process_actions(complete_after_actions);
 }
@@ -1949,7 +2001,7 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
 
 void SproutletWrapper::on_timer_pop(TimerID id, void* context)
 {
-  TRC_DEBUG("Timer has popped");
+  TRC_DEBUG("Processing timer pop, id = %ld", id);
   _pending_timers.erase(id);
   _sproutlet_tsx->on_timer_expiry(context);
   process_actions(false);
@@ -2074,16 +2126,24 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
 
   if (status_code == 100)
   {
-    // We will already have sent a locally generated 100 Trying response, so
-    // don't forward this one.
-    TRC_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
-    deregister_tdata(rsp);
-    pjsip_tx_data_dec_ref(rsp);
-    return;
+    if (is_network_func_boundary())
+    {
+      // We will already have sent a locally generated 100 Trying response, so
+      // don't forward this one.
+      TRC_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
+      deregister_tdata(rsp);
+      pjsip_tx_data_dec_ref(rsp);
+    }
+    else
+    {
+      // This Sproutlet does not automatically send 100 Trying responses.  Pass
+      // this one through now.
+      TRC_DEBUG("Forward 100 Trying response");
+      tx_response(rsp);
+    }
   }
-
-  if ((status_code > 100) &&
-      (status_code < 199))
+  else if ((status_code > 100) &&
+           (status_code < 199))
   {
     // Forward all provisional responses to INVITEs.
     TRC_DEBUG("Forward 1xx response");
@@ -2288,4 +2348,16 @@ void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
               _service_name.c_str(),
               (int)size,
               buf);
+}
+
+bool SproutletWrapper::is_network_func_boundary() const
+{
+  bool network_func_boundary = (_this_network_func != _upstream_network_func);
+
+  TRC_DEBUG("Network function boundary: %s ('%s'->'%s')",
+            network_func_boundary ? "yes" : "no",
+            _upstream_network_func.c_str(),
+            _this_network_func.c_str());
+
+  return network_func_boundary;
 }

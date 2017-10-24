@@ -182,7 +182,7 @@ private:
       if (status_code == PJSIP_SC_NOT_FOUND)
       {
         // No targets set up by default function, so see if any have been
-        // manually configured in the test case
+        // manually configured in the test case.
         TRC_DEBUG("Check for test targets");
         std::string aor = PJUtils::public_id_from_uri(_req->msg->line.req.uri);
         std::list<BasicProxyUT::TestTarget> test_targets = ((BasicProxyUT*)_proxy)->find_test_targets(aor);
@@ -268,7 +268,7 @@ public:
 
     pjsip_tsx_layer_dump(true);
 
-    // Terminate all transactions
+    // Terminate all transactions.
     list<pjsip_transaction*> tsxs = get_all_tsxs();
     for (list<pjsip_transaction*>::iterator it2 = tsxs.begin();
          it2 != tsxs.end();
@@ -286,7 +286,7 @@ public:
     cwtest_advance_time_ms(33000L);
     poll();
 
-    // Stop and restart the transaction layer just in case
+    // Stop and restart the transaction layer just in case.
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
   }
@@ -363,7 +363,7 @@ TEST_F(BasicProxyTest, RouteOnRouteHeaders)
   msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -413,7 +413,7 @@ TEST_F(BasicProxyTest, RouteOnRouteHeaders)
   msg2._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg2.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -479,7 +479,7 @@ TEST_F(BasicProxyTest, RouteOnRouteHeadersWithTelURI)
   msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -543,7 +543,7 @@ TEST_F(BasicProxyTest, RouteOnRequestURIDomain)
   msg1._via = tp->to_string(false);
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -612,7 +612,7 @@ TEST_F(BasicProxyTest, RouteToHomeURINoPathTransport)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -687,7 +687,7 @@ TEST_F(BasicProxyTest, RouteToHomeURIWithPath)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -767,7 +767,7 @@ TEST_F(BasicProxyTest, RouteToHomeURIWithTransport)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp1);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -848,7 +848,7 @@ TEST_F(BasicProxyTest, RouteToHomeURITransportCancel)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp1);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -970,7 +970,7 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and five forwarded INVITEs
+  // Expecting 100 Trying and five forwarded INVITEs.
   ASSERT_EQ(6, txdata_count());
 
   // Check the 100 Trying.
@@ -1150,7 +1150,7 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and four forwarded INVITEs
+  // Expecting 100 Trying and four forwarded INVITEs.
   ASSERT_EQ(5, txdata_count());
 
   // Check the 100 Trying.
@@ -1287,7 +1287,7 @@ TEST_F(BasicProxyTest, ForkedRequestConnFail)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and three forwarded INVITEs
+  // Expecting 100 Trying and three forwarded INVITEs.
   ASSERT_EQ(3, txdata_count());
 
   // Check the 100 Trying.
@@ -1380,7 +1380,7 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and three forwarded INVITEs
+  // Expecting 100 Trying and three forwarded INVITEs.
   ASSERT_EQ(4, txdata_count());
 
   // Check the 100 Trying.
@@ -1545,7 +1545,7 @@ TEST_F(BasicProxyTest, ForkedRequest6xx)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and three forwarded INVITEs
+  // Expecting 100 Trying and three forwarded INVITEs.
   ASSERT_EQ(4, txdata_count());
 
   // Check the 100 Trying.
@@ -1714,7 +1714,7 @@ TEST_F(BasicProxyTest, StrictRouterUpstream)
   msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>\r\nRoute: <sip:bob@awaydomain>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -1816,7 +1816,7 @@ TEST_F(BasicProxyTest, StrictRouterDownstream)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -1837,7 +1837,7 @@ TEST_F(BasicProxyTest, StrictRouterDownstream)
   EXPECT_EQ("sip:proxy1.awaydomain;transport=TCP", str_uri(tdata->msg->line.req.uri));
 
   // Check the first Route header has been removed and the second Route header
-  // rewritten with the RequestURI
+  // rewritten with the RequestURI.
   string route = get_headers(tdata->msg, "Route");
   EXPECT_EQ("Route: <sip:bob@awaydomain>", route);
 
@@ -1887,7 +1887,7 @@ TEST_F(BasicProxyTest, StrictRouterTelUri)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -1907,7 +1907,7 @@ TEST_F(BasicProxyTest, StrictRouterTelUri)
   EXPECT_EQ("sip:proxy1.awaydomain;transport=TCP", str_uri(tdata->msg->line.req.uri));
 
   // Check the first Route header has been removed and the second Route header
-  // rewritten with the RequestURI
+  // rewritten with the RequestURI.
   string route = get_headers(tdata->msg, "Route");
   EXPECT_EQ("Route: <tel:+1234>", route);
 
@@ -1955,7 +1955,7 @@ TEST_F(BasicProxyTest, StatelessForwardResponse)
   msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -2037,7 +2037,7 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
   msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -2283,7 +2283,7 @@ TEST_F(BasicProxyTest, LateCancel)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and the forwarded INVITEs
+  // Expecting 100 Trying and the forwarded INVITEs.
   ASSERT_EQ(2, txdata_count());
 
   // Check the 100 Trying.
@@ -2360,7 +2360,7 @@ TEST_F(BasicProxyTest, RequestErrors)
                                         "1.2.3.4",
                                         49152);
 
-  // Inject a INVITE request with a tel: RequestURI
+  // Inject a INVITE request with a tel: RequestURI.
   Message msg1;
   msg1._first_hop = true;
   msg1._method = "INVITE";
@@ -2463,7 +2463,7 @@ TEST_F(BasicProxyTest, ResponseErrors)
   msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -2661,7 +2661,7 @@ TEST_F(BasicProxyTest, DontRetryOnTimeout)
   msg1._route = "Route: <sip:proxy-x.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -2743,7 +2743,7 @@ TEST_F(BasicProxyTest, RetryOnTransportError)
   msg1._route = "Route: <sip:proxy-x.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -2822,6 +2822,172 @@ TEST_F(BasicProxyTest, RetryOnTransportError)
   delete tp;
 }
 
+TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
+{
+  // Tests that if all servers fail the request stops retrying after 5 retries.
+  // (5 is currently the default set in PJ Utils)
+
+  pjsip_tx_data* tdata;
+
+  // Add a host mapping for proxy-x.awaydomain to six IP addresses.
+  add_host_mapping("proxy-x.awaydomain",
+                   "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103,10.10.10.104,10.10.10.105,10.10.10.106,10.10.10.107,10.10.10.108,10.10.10.109");
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.5",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._first_hop = true;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy-x.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Try to send the request 5 times, and have the request fail after each
+  // attempt due to a transport error. Verify that after 5 failed attempts the
+  // request stops being retried, despite there being addresses left to try.
+  for (int ii = 0; ii < 5; ++ii)
+  {
+    // Check that it was sent to one of the server addresses.
+    EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+    EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+    string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+    EXPECT_THAT(server1, MatchesRegex("10.10.10.10[0-9]")) << "Unexpected server address " << server1;
+
+    // Kill the transport the request was sent on.
+    fake_tcp_init_shutdown((fake_tcp_transport*)tdata->tp_info.transport, PJ_EEOF);
+    free_txdata();
+    poll();
+
+    if (ii < 4)
+    {
+      // There are attempts left, so check that the request has been redirected
+      // to another server.
+      ASSERT_EQ(1, txdata_count());
+      tdata = current_txdata();
+      ReqMatcher("INVITE").matches(tdata->msg);
+    }
+  }
+
+  // The 5th retry just failed, so check that the request is not retried,
+  // and instead it fails and this failure of the request is reported.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(408).matches(tdata->msg); // Response is a 408 Timeout.
+
+  free_txdata();
+
+  delete tp;
+}
+
+
+TEST_F(BasicProxyTest, StopsRetryingIfFewAddresses)
+{
+  // Tests that if there are fewer than 5 addresses, the BasicProxy stops
+  // retrying once it rusn out of targets and reports that the request has
+  // failed.
+
+  pjsip_tx_data* tdata;
+
+  // Add a host mapping for proxy-x.awaydomain to six IP addresses.
+  add_host_mapping("proxy-x.awaydomain",
+                   "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103");
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.5",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._first_hop = true;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy-x.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Try to send the request 4 times, and have the request fail after each
+  // attempt due to a transport error. Verify that after there stops being any
+  // addresses left to try, the request fails and this is reported.
+  for (int ii = 0; ii < 4; ++ii)
+  {
+    // Check that it was sent to one of the server addresses.
+    EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+    EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+    string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+    EXPECT_THAT(server1, MatchesRegex("10.10.10.10[0-3]")) << "Unexpected server address " << server1;
+
+    // Kill the transport the request was sent on.
+    fake_tcp_init_shutdown((fake_tcp_transport*)tdata->tp_info.transport, PJ_EEOF);
+    free_txdata();
+    poll();
+
+    if (ii < 3)
+    {
+      // There are addresses left, so check that the request has been redirected
+      // to another server.
+      ASSERT_EQ(1, txdata_count());
+      tdata = current_txdata();
+      ReqMatcher("INVITE").matches(tdata->msg);
+    }
+  }
+
+  // There are no addresses left, so check that the request is not retried
+  // again, and its failure is reported.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(408).matches(tdata->msg); // Response is a 408 Timeout.
+
+  free_txdata();
+
+  delete tp;
+}
+
 
 TEST_F(BasicProxyTest, RetryOn5xx)
 {
@@ -2851,7 +3017,7 @@ TEST_F(BasicProxyTest, RetryOn5xx)
   msg1._route = "Route: <sip:proxy-x.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -2962,7 +3128,7 @@ TEST_F(BasicProxyTest, RetryFailed)
   msg1._route = "Route: <sip:proxy-x.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -3126,7 +3292,7 @@ TEST_F(BasicProxyTest, NonInvite100Trying)
   rr = get_headers(tdata1->msg, "Record-Route");
   EXPECT_EQ("", rr);
 
-  // Advance time, and check the 100 Trying was created
+  // Advance time, and check the 100 Trying was created.
   cwtest_advance_time_ms(4000);
   poll();
 
@@ -3409,11 +3575,11 @@ TEST_F(BasicProxyTest, InviteTimerCExpiryRace)
   msg1._method = "ACK";
   inject_msg(msg1.get_request(), tp);
 
-  // Delay briefly to allow the INVITE transactions to be completed and destroyed
+  // Delay briefly to allow the INVITE transactions to be completed and destroyed.
   cwtest_advance_time_ms(1000);
   poll();
 
-  // Send in a late CANCEL failure response, and check that this is absorbed
+  // Send in a late CANCEL failure response, and check that this is absorbed.
   inject_msg(respond_to_txdata(cancel, 481));
   ASSERT_EQ(0, txdata_count());
 
@@ -3554,7 +3720,7 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
   msg1._route = "Route: <sip:proxy.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -3590,7 +3756,7 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
   msg1._unique++;
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -3619,6 +3785,411 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
   tp->expect_target(tdata);
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
+  delete tp;
+}
+
+
+// Checks that if there is a successful call to a graylisted target it moves to
+// the whitelist.
+TEST_F(BasicProxyTest, GraylistToWhitelistOnCallSuccess)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up SRV records so that proxy-x has a higher priority than proxy-y,
+  // meaning x will always be chosen in preference to y unless x is
+  // blacklisted.
+  std::vector<DnsRRecord*> srv_records;
+  srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
+                                         36000000,
+                                         1,
+                                         100,
+                                         5060,
+                                         "proxy-x.awaydomain"));
+  srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
+                                         36000000,
+                                         2,
+                                         100,
+                                         5060,
+                                         "proxy-y.awaydomain"));
+  _dnsresolver.add_to_cache("_sip._tcp.proxy.awaydomain", ns_t_srv, srv_records);
+
+  add_host_mapping("proxy-x.awaydomain", "10.10.10.100");
+  add_host_mapping("proxy-y.awaydomain", "10.10.10.101");
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that it was sent to the first server.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+  free_txdata();
+
+  // This server doesn't respond, so advance time to trigger the timeout.
+  cwtest_advance_time_ms(33000);
+  poll();
+
+  // Check a 408 Timeout response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(408).matches(tdata->msg);
+  free_txdata();
+
+  // Wait for the server to move onto the graylist.
+  cwtest_advance_time_ms(33000);
+  poll();
+
+  // Now inject another INVITE.
+  msg1._unique++;
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that it was sent to the first server, since that server is graylisted
+  // and so is being probed by this request. The fact that an INVITE message was
+  // successfully sent means that success is reported on that server, moving it
+  // to the whitelist.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+
+  // Send a 200 OK response for the request.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // Now inject another INVITE.
+  msg1._unique++;
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that it was sent to the first server, since it has been moved back to
+  // the whitelist following its successful probing.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  delete tp;
+}
+
+
+// Test that a failed graylist probe does not ungraylist the target.
+TEST_F(BasicProxyTest, FailedProbeDoesNotUngraylist)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up SRV records so that proxy-x has a higher priority than proxy-y.
+  std::vector<DnsRRecord*> srv_records;
+  srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
+                                         36000000,
+                                         1,
+                                         100,
+                                         5060,
+                                         "proxy-x.awaydomain"));
+  srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
+                                         36000000,
+                                         2,
+                                         100,
+                                         5060,
+                                         "proxy-y.awaydomain"));
+  _dnsresolver.add_to_cache("_sip._tcp.proxy.awaydomain", ns_t_srv, srv_records);
+
+  add_host_mapping("proxy-x.awaydomain", "10.10.10.100");
+  add_host_mapping("proxy-y.awaydomain", "10.10.10.101");
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that it was sent to the first server.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+  free_txdata();
+
+  // This server doesn't respond, so advance time to trigger the timeout.
+  cwtest_advance_time_ms(33000);
+  poll();
+
+  // Check a 408 Timeout response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(408).matches(tdata->msg);
+  free_txdata();
+
+  // Wait for the server to move onto the graylist.
+  cwtest_advance_time_ms(33000);
+  poll();
+
+  // Now inject another INVITE.
+  msg1._unique++;
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that it was sent to the first server, since that server is graylisted
+  // and so is being probed by this request. The fact that an INVITE message was
+  // successfully sent means that success is reported on that server, moving it
+  // to the whitelist.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+  free_txdata();
+
+  // Now inject a third INVITE. This should go to the second server as the first
+  // is being probed.
+  msg1._unique++;
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that it was sent to the first server, since that server is graylisted
+  // and so is being probed by this request. The fact that an INVITE message was
+  // successfully sent means that success is reported on that server, moving it
+  // to the whitelist.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.101");
+
+  // Send a 200 OK response for the request.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // This server doesn't respond, so advance time to trigger the timeout.
+  cwtest_advance_time_ms(33000);
+  poll();
+
+  // Check a 408 Timeout response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(408).matches(tdata->msg);
+  free_txdata();
+
+  delete tp;
+}
+
+
+// Test that an ACK does not blacklist a target (due to not getting a response).
+TEST_F(BasicProxyTest, AckDoesNotBlacklist)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up SRV records so that proxy-x has a higher priority than proxy-y.
+  std::vector<DnsRRecord*> srv_records;
+  srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
+                                         36000000,
+                                         1,
+                                         100,
+                                         5060,
+                                         "proxy-x.awaydomain"));
+  srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
+                                         36000000,
+                                         2,
+                                         100,
+                                         5060,
+                                         "proxy-y.awaydomain"));
+  _dnsresolver.add_to_cache("_sip._tcp.proxy.awaydomain", ns_t_srv, srv_records);
+
+  add_host_mapping("proxy-x.awaydomain", "10.10.10.100");
+  add_host_mapping("proxy-y.awaydomain", "10.10.10.101");
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "ACK";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+
+  // Check that it was sent to the first server.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+  free_txdata();
+
+  // Now inject an INVITE.
+  msg1._unique++;
+  msg1._method = "INVITE";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that it was sent to the first server, which should not have been
+  // blacklisted by being sent an ACK.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  EXPECT_EQ(server1, "10.10.10.100");
+
+  // Send a 200 OK response for the request.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
   delete tp;
 }
 
@@ -3672,7 +4243,7 @@ TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
   msg1._route = "Route: <sip:stateless-proxy.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -3708,7 +4279,7 @@ TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
   msg1._unique++;
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and forwarded INVITE
+  // Expecting 100 Trying and forwarded INVITE.
 
   // Check the 100 Trying.
   ASSERT_EQ(2, txdata_count());
@@ -3770,7 +4341,7 @@ TEST_F(BasicProxyTest, TransportFailureWithCancelPending)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and the forwarded INVITEs
+  // Expecting 100 Trying and the forwarded INVITEs.
   ASSERT_EQ(2, txdata_count());
 
   // Check the 100 Trying.

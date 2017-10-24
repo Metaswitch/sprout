@@ -128,13 +128,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       icscf_uri = opt.external_icscf_uri;
     }
 
-    // Create the MMF cluster uri
-    std::string mmf_cluster_uri = "sip:" + opt.sprout_hostname + ";service=mmf";
-
-    // As there is not currently a shared_config option for this, form the
-    // MMF node uri manually, directly specifying the mmf service
-    std::string mmf_node_uri = scscf_node_uri + ";service=mmf";
-
     // Create Application Server communication trackers.
     _sess_term_as_alarm = new Alarm(alarm_manager,
                                     "sprout",
@@ -160,9 +153,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           scscf_node_uri,
                                           icscf_uri,
                                           opt.uri_bgcf,
-                                          mmf_cluster_uri,
-                                          mmf_node_uri,
                                           0,
+                                          "",
+                                          opt.prefix_scscf,
                                           "",
                                           local_sdm,
                                           remote_sdms,
@@ -172,7 +165,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           _incoming_sip_transactions_tbl,
                                           _outgoing_sip_transactions_tbl,
                                           opt.override_npdi,
-                                          mmf_service,
                                           fifc_service,
                                           IFCConfiguration(opt.apply_fallback_ifcs,
                                                            opt.reject_if_no_matching_ifcs,
@@ -189,6 +181,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     _subscription_sproutlet = new SubscriptionSproutlet(SUBSCRIPTION_SERVICE_NAME,
                                                         0,
                                                         "",
+                                                        opt.prefix_scscf,
                                                         PROXY_SERVICE_NAME,
                                                         local_sdm,
                                                         remote_sdms,
@@ -216,8 +209,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     _registrar_sproutlet = new RegistrarSproutlet(REGISTRAR_SERVICE_NAME,
                                                   0,
                                                   "",
-                                                  SUBSCRIPTION_SERVICE_NAME,
                                                   {},
+                                                  opt.prefix_scscf,
+                                                  SUBSCRIPTION_SERVICE_NAME,
                                                   local_sdm,
                                                   remote_sdms,
                                                   hss_connection,
@@ -253,8 +247,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
         new AuthenticationSproutlet(AUTHENTICATION_SERVICE_NAME,
                                     opt.port_scscf,
                                     "",
-                                    REGISTRAR_SERVICE_NAME,
                                     {opt.prefix_scscf},
+                                    opt.prefix_scscf,
+                                    REGISTRAR_SERVICE_NAME,
                                     opt.auth_realm,
                                     local_impi_store,
                                     remote_impi_stores,

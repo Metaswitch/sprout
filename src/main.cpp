@@ -115,6 +115,7 @@ enum OptionTypes
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
+  OPT_MAX_SPROUTLET_DEPTH,
   OPT_RALF_THREADS,
   OPT_NON_REGISTERING_PBXES,
   OPT_PBX_SERVICE_ROUTE,
@@ -1103,6 +1104,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_MAX_SPROUTLET_DEPTH:
+      {
+        VALIDATE_INT_PARAM(options->max_sproutlet_depth,
+                           max_sproutlet_depth,
+                           Maximum depth of Sproutlet recursion);
+      }
+      break;
+
     case OPT_NON_REGISTERING_PBXES:
       {
         options->pbxes = std::string(pj_optarg);
@@ -1406,7 +1415,6 @@ AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
-MMFService* mmf_service = NULL;
 
 int create_astaire_stores(struct options opt,
                           AstaireResolver*& astaire_resolver,
@@ -1503,7 +1511,7 @@ int create_astaire_stores(struct options opt,
 
   if (local_data_store == NULL)
   {
-    TRC_ERROR("Failed to connect to data store");
+    TRC_ERROR("Failed to connect to data store. Aborting startup");
     return 1;
   }
 
@@ -1695,6 +1703,7 @@ int main(int argc, char* argv[])
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
   opt.stateless_proxies.clear();
+  opt.max_sproutlet_depth = SproutletProxy::DEFAULT_MAX_SPROUTLET_DEPTH;
   opt.ralf_threads = 25;
   opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
   opt.force_third_party_register_body = false;
@@ -1996,7 +2005,14 @@ int main(int argc, char* argv[])
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
-  sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
+  if (opt.pcscf_enabled)
+  {
+    sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration, 0);
+  }
+  else
+  {
+    sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
+  }
 
   // Create a new quiescing manager instance and register our completion handler
   // with it.
@@ -2106,11 +2122,6 @@ int main(int argc, char* argv[])
                                            AlarmDef::SPROUT_FIFC_STATUS,
                                            AlarmDef::CRITICAL));
 
-  mmf_service = new MMFService(new Alarm(alarm_manager,
-                                         "sprout",
-                                         AlarmDef::SPROUT_MMF_STATUS,
-                                         AlarmDef::CRITICAL));
-
   // Create ENUM service.
   if (!opt.enum_servers.empty())
   {
@@ -2165,7 +2176,7 @@ int main(int argc, char* argv[])
                                  opt.emerg_reg_accepted);
     if (status != PJ_SUCCESS)
     {
-      TRC_ERROR("Failed to enable P-CSCF edge proxy");
+      TRC_ERROR("Failed to enable P-CSCF edge proxy. Aborting startup");
       return 1;
     }
 
@@ -2259,7 +2270,7 @@ int main(int argc, char* argv[])
   if (!loader->load(sproutlets))
   {
     CL_SPROUT_PLUGIN_FAILURE.log();
-    TRC_ERROR("Failed to successfully load plug-ins");
+    TRC_ERROR("Failed to successfully load plug-ins. Aborting startup");
     return 1;
   }
 
@@ -2290,10 +2301,11 @@ int main(int argc, char* argv[])
                                          opt.sprout_hostname,
                                          host_aliases,
                                          sproutlets,
-                                         opt.stateless_proxies);
+                                         opt.stateless_proxies,
+                                         opt.max_sproutlet_depth);
     if (sproutlet_proxy == NULL)
     {
-      TRC_ERROR("Failed to create SproutletProxy");
+      TRC_ERROR("Failed to create SproutletProxy. Aborting startup");
       return 1;
     }
   }
@@ -2496,7 +2508,6 @@ int main(int argc, char* argv[])
   delete chronos_connection;
   delete hss_connection;
   delete fifc_service;
-  delete mmf_service;
   delete sifc_service;
   delete quiescing_mgr;
   delete exception_handler;

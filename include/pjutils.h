@@ -31,6 +31,8 @@ extern "C" {
 
 namespace PJUtils {
 
+static const int DEFAULT_RETRIES = 5;
+
 pj_status_t init();
 void term();
 
@@ -153,6 +155,11 @@ pjsip_tx_data* create_cancel(pjsip_endpoint* endpt,
                              pjsip_tx_data* tdata,
                              int reason_code);
 
+BaseAddrIterator* resolve_iter(const std::string& name,
+                               int port,
+                               int transport,
+                               int allowed_host_state);
+
 void resolve(const std::string& name,
              int port,
              int transport,
@@ -160,13 +167,19 @@ void resolve(const std::string& name,
              std::vector<AddrInfo>& servers,
              int allowed_host_state);
 
+BaseAddrIterator* resolve_next_hop_iter(pjsip_tx_data* tdata,
+                                        int allowed_host_state,
+                                        SAS::TrailId trail);
+
 void resolve_next_hop(pjsip_tx_data* tdata,
                       int retries,
                       std::vector<AddrInfo>& servers,
                       int allowed_host_state,
                       SAS::TrailId trail);
 
-void blacklist_server(AddrInfo& server);
+void blacklist(AddrInfo& server);
+
+void success(AddrInfo& server);
 
 void set_dest_info(pjsip_tx_data* tdata, const AddrInfo& ai);
 
@@ -182,6 +195,9 @@ public:
 // A function that takes a token and a pjsip_event, and returns a Callback
 // object that can safely be run on another thread.
 typedef Callback* (*send_callback_builder)(void* token, pjsip_event* event);
+
+// Runs the specified callback on a worker thread
+void run_callback_on_worker_thread(PJUtils::Callback* cb);
 
 pj_status_t send_request(pjsip_tx_data* tdata,
                          int retries=0,
@@ -226,7 +242,9 @@ void create_random_token(size_t length, std::string& token);
 
 std::string get_header_value(pjsip_hdr*);
 
-void mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg);
+void mark_sas_call_branch_ids(const SAS::TrailId trail,
+                              pjsip_msg* msg,
+                              const std::vector<std::string>& cids = std::vector<std::string>());
 
 bool is_emergency_registration(pjsip_contact_hdr* contact_hdr);
 
@@ -300,7 +318,7 @@ std::set<pjmedia_type> get_media_types(const pjsip_msg *msg);
 
 // Get the next routing URI - this is the top routing header (or the
 // request URI if there's no route headers), and it's context.
-// The URI returned is only valid while the passed in PJSIP message is valid
+// The URI returned is only valid while the passed in PJSIP message is valid.
 pjsip_uri* get_next_routing_uri(const pjsip_msg* msg,
                                 pjsip_uri_context_e* context);
 

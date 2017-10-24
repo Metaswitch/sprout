@@ -15,7 +15,8 @@
 #include "sproutsasevent.h"
 
 SIPResolver::SIPResolver(DnsCachedResolver* dns_client,
-                         int blacklist_duration) :
+                         int blacklist_duration,
+                         int graylist_duration) :
   BaseResolver(dns_client)
 {
   TRC_DEBUG("Creating SIP resolver");
@@ -30,7 +31,7 @@ SIPResolver::SIPResolver(DnsCachedResolver* dns_client,
   create_srv_cache();
 
   // Create the blacklist.
-  create_blacklist(blacklist_duration);
+  create_blacklist(blacklist_duration, graylist_duration);
 
   TRC_STATUS("Created SIP resolver");
 }
@@ -42,6 +43,8 @@ SIPResolver::~SIPResolver()
   destroy_naptr_cache();
 }
 
+/// Wrapper for resolve_iter. Converts the iterator to a vector and stores that
+/// in targets.
 void SIPResolver::resolve(const std::string& name,
                           int af,
                           int port,
@@ -51,12 +54,31 @@ void SIPResolver::resolve(const std::string& name,
                           int allowed_host_state,
                           SAS::TrailId trail)
 {
+  BaseAddrIterator* targets_iter = resolve_iter(name, af, port, transport, allowed_host_state, trail);
+  targets = targets_iter->take(retries);
+  delete targets_iter; targets_iter = nullptr;
+}
+
+/// Returns an iterator to a vector of targets. An iterator is used to ensure
+/// that targets are tried in that order. This is especially important if the
+/// request is used to probe a graylisted target, since that target will be the
+/// first one returned and it is assumed that this request will actually probe
+/// it.
+BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
+                                            int af,
+                                            int port,
+                                            int transport,
+                                            int allowed_host_state,
+                                            SAS::TrailId trail)
+{
   int dummy_ttl = 0;
-  targets.clear();
 
   // First determine the transport following the process in RFC3263 section
   // 4.1.
   AddrInfo ai;
+
+  // Iterator to the targets will be stored here.
+  BaseAddrIterator* targets_iter;
 
   TRC_DEBUG("SIPResolver::resolve for name %s, port %d, transport %d, family %d",
             name.c_str(), port, transport, af);
@@ -78,40 +100,23 @@ void SIPResolver::resolve(const std::string& name,
     // Use specified transport and port or defaults if not specified.
     TRC_DEBUG("Target is an IP address - default port/transport if required");
 
-    // Check which host states are permitted.
-    const bool whitelisted_allowed = allowed_host_state & BaseResolver::WHITELISTED;
-    const bool blacklisted_allowed = allowed_host_state & BaseResolver::BLACKLISTED;
+    // Creates an empty vector to contain the targets, which will contain only
+    // this address if the address' host state is allowed, and be empty
+    // otherwise. An iterator to this vector will be returned.
+    std::vector<AddrInfo> targets;
 
+    // Check with the resolver if this host is allowed based on its current
+    // blacklist state.
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
 
-    bool addr_blacklisted = blacklisted(ai);
-    bool addr_rejected = false;
-
-    if ((!addr_blacklisted && whitelisted_allowed)||
-        ( addr_blacklisted && blacklisted_allowed))
+    if (select_address(ai, trail, allowed_host_state))
     {
       targets.push_back(ai);
     }
-    else
-    {
-      TRC_DEBUG("IP address rejected as host state %s was not allowed",
-                          (addr_blacklisted) ? "blacklisted" : "whitelisted");
-      addr_rejected = true;
-    }
 
-    if (trail != 0)
-    {
-      SAS::Event event(trail, SASEvent::SIPRESOLVE_IP_ADDRESS, 0);
-      event.add_var_param(name);
-      event.add_static_param(addr_rejected);
-      std::string port_str = std::to_string(ai.port);
-      std::string transport_str = get_transport_str(ai.transport);
-      event.add_var_param(transport_str);
-      event.add_var_param(port_str);
-      event.add_static_param(addr_blacklisted);
-      SAS::report_event(event);
-    }
+    // Creates an iterator to the vector of targets.
+    targets_iter = new SimpleAddrIterator(targets);
   }
   else
   {
@@ -148,11 +153,11 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      NAPTRReplacement* naptr = _naptr_cache->get(name, dummy_ttl, trail);
+      std::shared_ptr<NAPTRReplacement> naptr = _naptr_cache->get(name, dummy_ttl, trail);
 
       if (naptr != NULL)
       {
-        // NAPTR resolved to a supported service
+        // NAPTR resolved to a supported service.
         TRC_DEBUG("NAPTR resolved to transport %d", naptr->transport);
         transport = naptr->transport;
         if (strcasecmp(naptr->flags.c_str(), "S") == 0)
@@ -231,8 +236,6 @@ void SIPResolver::resolve(const std::string& name,
           transport = IPPROTO_UDP;
         }
       }
-
-      _naptr_cache->dec_ref(name);
     }
     else if (transport == IPPROTO_UDP)
     {
@@ -286,7 +289,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      srv_resolve(srv_name, af, transport, retries, targets, dummy_ttl, trail, allowed_host_state);
+      targets_iter = srv_resolve_iter(srv_name, af, transport, trail, allowed_host_state);
     }
     else
     {
@@ -304,31 +307,11 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      a_resolve(a_name, af, port, transport, retries, targets, dummy_ttl, trail, allowed_host_state);
+      targets_iter = a_resolve_iter(a_name, af, port, transport, dummy_ttl, trail, allowed_host_state);
     }
   }
 
-  if ((targets.size() == 0) && (trail != 0))
-  {
-    if ((allowed_host_state == BaseResolver::WHITELISTED) ||
-        (allowed_host_state == BaseResolver::BLACKLISTED))
-    {
-      // The search was restricted to either just blacklisted or just
-      // whitelisted addresses - there were none with the specified state.
-      bool blacklisted = (allowed_host_state == BaseResolver::BLACKLISTED);
-      SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_ALLOWED_RECORDS, 0);
-      event.add_var_param(name);
-      event.add_static_param(blacklisted);
-      SAS::report_event(event);
-    }
-    else
-    {
-      // No records at all for this address
-      SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_RECORDS, 0);
-      event.add_var_param(name);
-      SAS::report_event(event);
-    }
-  }
+  return targets_iter;
 }
 
 std::string SIPResolver::get_transport_str(int transport)

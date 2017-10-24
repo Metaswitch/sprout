@@ -116,8 +116,8 @@ void SipTest::SetUpTestCase()
   stack_data.record_route_on_completion_of_terminating = true;
   stack_data.default_session_expires = 60 * 10;
   stack_data.max_session_expires = 90 * 10;
-  stack_data.sipresolver = new SIPResolver(&_dnsresolver);
   stack_data.addr_family = AF_INET;
+  stack_data.sipresolver = new SIPResolver(&_dnsresolver);
 
   // Sort out logging.
   init_pjsip_logging(99, false, "");
@@ -143,6 +143,14 @@ void SipTest::SetUpTestCase()
 
   // Now we have a pool with PJSIP, we can parse the S-CSCF URI.
   SipTest::SetScscfUri("sip:scscf.sprout.homedomain:5058;transport=TCP");
+}
+
+// Replaces the SIP Resolver with one without a graylist. Used by bono_test,
+// as bono does not currently support graylisting.
+void SipTest::SIPResolverNoGraylist()
+{
+  delete stack_data.sipresolver;
+  stack_data.sipresolver = new SIPResolver(&_dnsresolver, 30, 0);
 }
 
 void SipTest::SetScscfUri(const std::string& scscf_uri)

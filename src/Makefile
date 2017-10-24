@@ -67,6 +67,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          chronoshandlers.cpp \
                          contact_filtering.cpp \
                          sproutletproxy.cpp \
+                         compositesproutlet.cpp \
                          pluginloader.cpp \
                          alarm.cpp \
                          base_communication_monitor.cpp \
@@ -94,8 +95,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          associated_uris.cpp \
                          sifcservice.cpp \
                          fifcservice.cpp \
-                         mmfservice.cpp \
-                         mmftargets.cpp \
                          event_statistic_accumulator.cpp \
                          aor.cpp \
                          astaire_aor_store.cpp \
@@ -199,12 +198,10 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
                        authenticationsproutlet.cpp \
-                       forwardingsproutlet.cpp \
                        pthread_cond_var_helper.cpp \
                        sifcservice_test.cpp \
                        mock_sifc_parser.cpp \
                        fifcservice_test.cpp \
-                       mmfservice_test.cpp \
                        scscf_utils.cpp \
                        test_interposer.cpp \
                        curl_interposer.cpp \
@@ -303,7 +300,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp forwardingsproutlet.cpp scscf_utils.cpp
+sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp scscf_utils.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
@@ -315,6 +312,9 @@ VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/ap
 
 # Use valgrind suppression file for UT
 sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp
+
+# Exclude the Bono tests from valgrind unless SLOW is set
+sprout_test_VALGRIND_EXCL = $(if ${SLOW},,Stateful*Proxy*Test.*)
 
 include ../build-infra/cpp.mk
 
@@ -335,8 +335,16 @@ include ../modules/cpp-common/makefiles/alarm-utils.mk
 ../usr/include/sprout_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
 	$< -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
 	mv sprout_alarmdefinition.h $@
-${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
+
 CLEANS += ../usr/include/sprout_alarmdefinition.h
+
+# The following files all include the alarm defintion
+ALARM_DEFINITION_FILES := ${sprout_test_OBJECT_DIR}/hssconnection_test.o \
+                          ${sprout_test_OBJECT_DIR}/enumservice_test.o \
+                          ${sprout_OBJECT_DIR}/main.o \
+                          ${sprout_scscf.so_OBJECT_DIR}/scscfplugin.o
+
+${ALARM_DEFINITION_FILES} : ../usr/include/sprout_alarmdefinition.h
 
 ../usr/include/memento_as_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
 	$< -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"

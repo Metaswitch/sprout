@@ -79,13 +79,16 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           opt.uri_bgcf,
                                           opt.port_icscf,
                                           opt.uri_icscf,
+                                          opt.prefix_icscf,
+                                          "",
                                           hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
                                           enum_service,
                                           _incoming_sip_transactions_tbl,
                                           _outgoing_sip_transactions_tbl,
-                                          opt.override_npdi);
+                                          opt.override_npdi,
+                                          opt.port_icscf);
     _icscf_sproutlet->init();
 
     sproutlets.push_back(_icscf_sproutlet);
