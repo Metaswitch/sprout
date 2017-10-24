@@ -27,7 +27,6 @@
 #include "impistore.h"
 #include "analyticslogger.h"
 #include "fifcservice.h"
-#include "mmfservice.h"
 
 // Struct containing the possible values for non-REGISTER authentication. These
 // are a set of flags that indicate different conditions that may cause a
@@ -119,6 +118,7 @@ struct options
   int                                  session_continued_timeout_ms;
   int                                  session_terminated_timeout_ms;
   std::set<std::string>                stateless_proxies;
+  int                                  max_sproutlet_depth;
   std::string                          pbxes;
   std::string                          pbx_service_route;
   uint32_t                             non_register_auth_mode;
@@ -165,6 +165,5 @@ extern AlarmManager* alarm_manager;
 extern AnalyticsLogger* analytics_logger;
 extern ChronosConnection* chronos_connection;
 extern FIFCService* fifc_service;
-extern MMFService* mmf_service;
 
 #endif

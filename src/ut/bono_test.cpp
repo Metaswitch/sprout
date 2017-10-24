@@ -62,6 +62,10 @@ public:
   {
     SipTest::SetUpTestCase();
 
+    // Bono does not currently support SIP Graylisting, so this creates a SIP
+    // Resolver without graylisting
+    SipTest::SIPResolverNoGraylist();
+
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);

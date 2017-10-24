@@ -20,6 +20,7 @@
 #include "test_interposer.hpp"
 
 using namespace std;
+using ::testing::MatchesRegex;
 
 /// Fixture for SIPResolverTest.
 class SIPResolverTest : public ::testing::Test
@@ -37,6 +38,7 @@ class SIPResolverTest : public ::testing::Test
 
   virtual ~SIPResolverTest()
   {
+    cwtest_reset_time();
   }
 
   DnsRRecord* a(const std::string& name,
@@ -80,15 +82,36 @@ class SIPResolverTest : public ::testing::Test
                                            service, regex, replacement);
   }
 
-  void add_ip_to_blacklist(const std::string address,
-                           const int port=5060)
+  AddrInfo ip_port_to_addrinfo(const std::string address,
+                               const int port=5060)
   {
     AddrInfo ai;
     ai.port = port;
     ai.transport = IPPROTO_TCP;
-
     EXPECT_TRUE(Utils::parse_ip_target(address, ai.address));
-    _sipresolver.blacklist(ai);
+
+    return ai;
+  }
+
+  void add_ip_to_blacklist(const std::string address,
+                           const int port)
+  {
+    _sipresolver.blacklist(ip_port_to_addrinfo(address, port));
+  }
+
+  bool resolve_ip_port(const std::string address,
+                       const int port,
+                       int allowed_host_state)
+  {
+    std::vector<AddrInfo> targets;
+    _sipresolver.resolve(address,
+                         AF_INET,
+                         port,
+                         IPPROTO_TCP,
+                         5,
+                         targets,
+                         allowed_host_state);
+    return !(targets.empty());
   }
 };
 
@@ -130,11 +153,31 @@ public:
     std::string output;
 
     _resolver.resolve(_name, _af, _port, _transport, 1, targets, BaseResolver::ALL_LISTS, 0);
+
     if (!targets.empty())
     {
       // Successful, so render AddrInfo as a string.
       output = targets[0].to_string();
     }
+    return output;
+  }
+
+  std::string resolve_iter()
+  {
+    SCOPED_TRACE(_name);
+    std::string output;
+
+    BaseAddrIterator* targets_iter = _resolver.resolve_iter(_name, _af, _port, _transport, BaseResolver::ALL_LISTS, 0);
+
+    AddrInfo record;
+
+    if (targets_iter->next(record))
+    {
+      // Successful, so render AddrInfo as a string.
+      output = record.to_string();
+    }
+
+    delete targets_iter; targets_iter = nullptr;
     return output;
   }
 
@@ -153,38 +196,38 @@ TEST_F(SIPResolverTest, IPv4AddressResolution)
 {
   // Test defaulting of port and transport when target is IP address
   EXPECT_EQ("3.0.0.1:5060;transport=UDP",
-            RT(_sipresolver, "3.0.0.1").resolve());
+            RT(_sipresolver, "3.0.0.1").resolve_iter());
 
   // Test defaulting of port when target is IP address
   EXPECT_EQ("3.0.0.2:5060;transport=TCP",
-            RT(_sipresolver, "3.0.0.2").set_transport(IPPROTO_TCP).resolve());
+            RT(_sipresolver, "3.0.0.2").set_transport(IPPROTO_TCP).resolve_iter());
 
   // Test defaulting of transport when target is IP address
   EXPECT_EQ("3.0.0.3:5054;transport=UDP",
-            RT(_sipresolver, "3.0.0.3").set_port(5054).resolve());
+            RT(_sipresolver, "3.0.0.3").set_port(5054).resolve_iter());
 
   // Test specifying both port and transport when target is IP address
   EXPECT_EQ("3.0.0.4:5052;transport=TCP",
-            RT(_sipresolver, "3.0.0.4").set_port(5052).set_transport(IPPROTO_TCP).resolve());
+            RT(_sipresolver, "3.0.0.4").set_port(5052).set_transport(IPPROTO_TCP).resolve_iter());
 }
 
 TEST_F(SIPResolverTest, IPv6AddressResolution)
 {
   // Test defaulting of port and transport when target is IP address
   EXPECT_EQ("[3::1]:5060;transport=UDP",
-            RT(_sipresolver, "3::1").set_af(AF_INET6).resolve());
+            RT(_sipresolver, "3::1").set_af(AF_INET6).resolve_iter());
 
   // Test defaulting of port when target is IP address
   EXPECT_EQ("[3::2]:5060;transport=TCP",
-            RT(_sipresolver, "3::2").set_transport(IPPROTO_TCP).set_af(AF_INET6).resolve());
+            RT(_sipresolver, "3::2").set_transport(IPPROTO_TCP).set_af(AF_INET6).resolve_iter());
 
   // Test defaulting of transport when target is IP address
   EXPECT_EQ("[3::3]:5054;transport=UDP",
-            RT(_sipresolver, "3::3").set_port(5054).set_af(AF_INET6).resolve());
+            RT(_sipresolver, "3::3").set_port(5054).set_af(AF_INET6).resolve_iter());
 
   // Test specifying both port and transport when target is IP address
   EXPECT_EQ("[3::4]:5052;transport=TCP",
-            RT(_sipresolver, "3::4").set_port(5052).set_transport(IPPROTO_TCP).set_af(AF_INET6).resolve());
+            RT(_sipresolver, "3::4").set_port(5052).set_transport(IPPROTO_TCP).set_af(AF_INET6).resolve_iter());
 }
 
 TEST_F(SIPResolverTest, SimpleNAPTRSRVTCPResolution)
@@ -203,7 +246,7 @@ TEST_F(SIPResolverTest, SimpleNAPTRSRVTCPResolution)
   TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter());
 }
 
 TEST_F(SIPResolverTest, SimpleNAPTRSRVUDPResolution)
@@ -222,7 +265,7 @@ TEST_F(SIPResolverTest, SimpleNAPTRSRVUDPResolution)
   TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter());
 }
 
 TEST_F(SIPResolverTest, SimpleSRVTCPResolution)
@@ -238,7 +281,7 @@ TEST_F(SIPResolverTest, SimpleSRVTCPResolution)
   TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter());
 }
 
 TEST_F(SIPResolverTest, SimpleSRVUDPResolution)
@@ -254,7 +297,7 @@ TEST_F(SIPResolverTest, SimpleSRVUDPResolution)
   TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter());
 }
 
 TEST_F(SIPResolverTest, SimpleSRVUDPPreference)
@@ -273,7 +316,7 @@ TEST_F(SIPResolverTest, SimpleSRVUDPPreference)
   TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter());
 }
 
 TEST_F(SIPResolverTest, SimpleAResolution)
@@ -287,19 +330,19 @@ TEST_F(SIPResolverTest, SimpleAResolution)
 
   // Test default port/transport.
   EXPECT_EQ("3.0.0.1:5060;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter());
 
   // Test overriding port.
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").set_port(5054).resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").set_port(5054).resolve_iter());
 
   // Test overriding transport.
   EXPECT_EQ("3.0.0.1:5060;transport=TCP",
-            RT(_sipresolver, "sprout.cw-ngv.com").set_transport(IPPROTO_TCP).resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").set_transport(IPPROTO_TCP).resolve_iter());
 
   // Test overriding port and transport.
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
-            RT(_sipresolver, "sprout.cw-ngv.com").set_port(5054).set_transport(IPPROTO_TCP).resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").set_port(5054).set_transport(IPPROTO_TCP).resolve_iter());
 }
 
 // This unit test doesn't assert anything - it tests for a bug where
@@ -366,19 +409,19 @@ TEST_F(SIPResolverTest, SimpleAAAAResolution)
 
   // Test default port/transport.
   EXPECT_EQ("[3::1]:5060;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").set_af(AF_INET6).resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").set_af(AF_INET6).resolve_iter());
 
   // Test overriding port.
   EXPECT_EQ("[3::1]:5054;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").set_af(AF_INET6).set_port(5054).resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").set_af(AF_INET6).set_port(5054).resolve_iter());
 
   // Test overriding transport.
   EXPECT_EQ("[3::1]:5060;transport=TCP",
-            RT(_sipresolver, "sprout.cw-ngv.com").set_af(AF_INET6).set_transport(IPPROTO_TCP).resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").set_af(AF_INET6).set_transport(IPPROTO_TCP).resolve_iter());
 
   // Test overriding port and transport.
   EXPECT_EQ("[3::1]:5054;transport=TCP",
-            RT(_sipresolver, "sprout.cw-ngv.com").set_af(AF_INET6).set_port(5054).set_transport(IPPROTO_TCP).resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").set_af(AF_INET6).set_port(5054).set_transport(IPPROTO_TCP).resolve_iter());
 }
 
 TEST_F(SIPResolverTest, NAPTROrderPreference)
@@ -401,7 +444,7 @@ TEST_F(SIPResolverTest, NAPTROrderPreference)
   TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
-            RT(_sipresolver, "sprout-1.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout-1.cw-ngv.com").resolve_iter());
 
   // Test NAPTR selection according to preference - select UDP as first in preference.
   records.push_back(naptr("sprout-2.cw-ngv.com", 3600, 0, 2, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
@@ -411,7 +454,7 @@ TEST_F(SIPResolverTest, NAPTROrderPreference)
   TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
-            RT(_sipresolver, "sprout-2.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout-2.cw-ngv.com").resolve_iter());
 }
 
 TEST_F(SIPResolverTest, SRVPriority)
@@ -437,7 +480,7 @@ TEST_F(SIPResolverTest, SRVPriority)
 
   for (int ii = 0; ii < 100; ++ii)
   {
-    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve()]++;
+    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter()]++;
   }
 
   EXPECT_EQ(100, counts["3.0.0.1:5054;transport=TCP"]);
@@ -474,7 +517,7 @@ TEST_F(SIPResolverTest, SRVWeight)
 
   for (int ii = 0; ii < 1000; ++ii)
   {
-    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve()]++;
+    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter()]++;
   }
 
   EXPECT_LT(100-5*9, counts["3.0.0.1:5054;transport=TCP"]);
@@ -505,7 +548,7 @@ TEST_F(SIPResolverTest, ARecordLoadBalancing)
 
   for (int ii = 0; ii < 1000; ++ii)
   {
-    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve()]++;
+    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter()]++;
   }
 
   EXPECT_LT(250-5*14, counts["3.0.0.1:5060;transport=UDP"]);
@@ -557,7 +600,7 @@ TEST_F(SIPResolverTest, BlacklistSRVRecords)
 
   for (int ii = 0; ii < 1000; ++ii)
   {
-    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve()]++;
+    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter()]++;
   }
 
   EXPECT_EQ(0, counts["3.0.0.4:5054;transport=TCP"]);
@@ -595,7 +638,7 @@ TEST_F(SIPResolverTest, BlacklistARecord)
 
   for (int ii = 0; ii < 1000; ++ii)
   {
-    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve()]++;
+    counts[RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter()]++;
   }
 
   EXPECT_EQ(0, counts["3.0.0.3:5060;transport=UDP"]);
@@ -629,48 +672,50 @@ TEST_F(SIPResolverTest, NoMatchingNAPTR)
   TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("4.0.0.1:5060;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout.cw-ngv.com").resolve_iter());
 }
 
-// Test the behaviour of SIPResolver's IP address allowed host state
-// verification
+// Check that the SIPResolver is checking the host state before accepting an IP
+// address.  This is a fairly lightweight test as the logic is tested in the
+// BaseResolver test suite.
 TEST_F(SIPResolverTest, AllowedHostStateForIPAddr)
 {
+  EXPECT_FALSE(resolve_ip_port("[2001:db8::]", 9001, BaseResolver::BLACKLISTED));
+}
+
+// Simple test to verify that the resolve wrapper around resolve_iter for the
+// SIPResolver is working, and correctly returns a vector of the results.
+TEST_F(SIPResolverTest, TestResolveMethod)
+{
+  // Creates 2 SRVs and adds an A Record to each.
+  std::vector<DnsRRecord*> records;
+  records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
+  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
+
+  records.push_back(srv("_sip._tcp.sprout.cw-ngv.com", 3600, 0, 100, 5054, "sprout-1.cw-ngv.com"));
+  records.push_back(srv("_sip._tcp.sprout.cw-ngv.com", 3600, 0, 200, 5054, "sprout-2.cw-ngv.com"));
+  _dnsresolver.add_to_cache("_sip._tcp.sprout.cw-ngv.com", ns_t_srv, records);
+
+  records.push_back(a("sprout-1.cw-ngv.com", 3600, "3.0.0.1"));
+  _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_a, records);
+  records.push_back(a("sprout-2.cw-ngv.com", 3600, "3.0.0.2"));
+  _dnsresolver.add_to_cache("sprout-2.cw-ngv.com", ns_t_a, records);
+
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+
   std::vector<AddrInfo> targets;
-  add_ip_to_blacklist("192.0.2.11", 80);
-  add_ip_to_blacklist("192.0.2.12", 1234);
-  add_ip_to_blacklist("[2001:db8::1]", 9001);
+  _sipresolver.resolve("sprout.cw-ngv.com", AF_INET, 0, IPPROTO_TCP, 2, targets, BaseResolver::ALL_LISTS, 0);
 
-  // Test that ALL_LISTS behaves correctly.
-  _sipresolver.resolve(
-    "192.0.2.1", AF_INET, 80, IPPROTO_TCP, 5, targets, BaseResolver::ALL_LISTS);
-  EXPECT_EQ(1, targets.size());
-  targets.pop_back();
+  // The two whitelisted targets will be returned in some order as they are at
+  // the same priority level.
+  std::string whitelist_regex = "3.0.0.[1-2]:5054";
+  std::string result_str_1 = targets[0].address_and_port_to_string();
+  std::string result_str_2 = targets[1].address_and_port_to_string();
 
-  _sipresolver.resolve(
-    "192.0.2.11", AF_INET, 80, IPPROTO_TCP, 5, targets, BaseResolver::ALL_LISTS);
-  EXPECT_EQ(1, targets.size());
-  targets.pop_back();
+  EXPECT_EQ(2, targets.size());
+  EXPECT_THAT(result_str_1, MatchesRegex(whitelist_regex));
+  EXPECT_THAT(result_str_2, MatchesRegex(whitelist_regex));
 
-  // Allow whitelisted addresses only, and ensure that blacklisted addresses
-  // are not returned.
-  _sipresolver.resolve(
-    "192.0.2.2", AF_INET, 1234, IPPROTO_TCP, 5, targets, BaseResolver::WHITELISTED);
-  EXPECT_EQ(1, targets.size());
-  targets.pop_back();
-
-  _sipresolver.resolve(
-    "192.0.2.12", AF_INET, 1234, IPPROTO_TCP, 5, targets, BaseResolver::WHITELISTED);
-  EXPECT_EQ(0, targets.size()); // Blocked from being added to targets
-
-  // Allow blacklisted addresses only, and ensure that whitelisted addresses
-  // are not returned. Throw in IPv6 for flavour.
-  _sipresolver.resolve(
-    "[2001:db8::]", AF_INET6, 9001, IPPROTO_TCP, 5, targets, BaseResolver::BLACKLISTED);
-  EXPECT_EQ(0, targets.size()); // Blocked from being added to targets
-
-  _sipresolver.resolve(
-    "[2001:db8::1]", AF_INET6, 9001, IPPROTO_TCP, 5, targets, BaseResolver::BLACKLISTED);
-  EXPECT_EQ(1, targets.size());
-  targets.pop_back();
+  // Verifies that the same target wasn't returned twice.
+  EXPECT_NE(result_str_1, result_str_2);
 }

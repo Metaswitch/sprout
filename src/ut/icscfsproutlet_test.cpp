@@ -72,13 +72,16 @@ public:
                                           "sip:bgcf.homedomain",
                                           ICSCF_PORT,
                                           "sip:icscf.homedomain:5052;transport=tcp",
+                                          "icscf",
+                                          "",
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
                                           _enum_service,
                                           NULL,
                                           NULL,
-                                          false);
+                                          false,
+                                          ICSCF_PORT);
     _icscf_sproutlet->init();
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_icscf_sproutlet);
@@ -214,7 +217,7 @@ using TestingCommon::Message;
 
 TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
 {
-  // Tests routing of REGISTER requests when the HSS responses with a server
+  // Tests routing of REGISTER requests when the HSS responds with a server
   // name.  There are two cases tested here - one where the impi is defaulted
   // from the impu and one where the impi is explicit specified in an
   // Authorization header.
