@@ -539,7 +539,9 @@ TEST_F(SubscriptionTest, NotRegistered)
 
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = pop_txdata()->msg;
-  EXPECT_EQ(504, out->line.status.code);
+
+  // A subscription for an unregistered subscriber should result in a 480
+  EXPECT_EQ(480, out->line.status.code);
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
