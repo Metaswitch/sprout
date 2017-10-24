@@ -40,11 +40,13 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
           // "if the Request-URI of the SUBSCRIBE request contains a URI for
           // which currently no binding exists, then send a 480 (Temporarily
           // Unavailable) response"
-          st_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE ;
+          st_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
         }
         else
         {
+          // LCOV_EXCL_START
           st_code = PJSIP_SC_SERVER_TIMEOUT;
+          // LCOV_EXCL_STOP
         }
         break;
 
