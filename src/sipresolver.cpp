@@ -105,39 +105,14 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
     // otherwise. An iterator to this vector will be returned.
     std::vector<AddrInfo> targets;
 
-    // Check which host states are permitted.
-    const bool whitelisted_allowed = allowed_host_state & BaseResolver::WHITELISTED;
-    const bool blacklisted_allowed = allowed_host_state & BaseResolver::BLACKLISTED;
-
+    // Check with the resolver if this host is allowed based on its current
+    // blacklist state.
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
 
-    bool addr_blacklisted = blacklisted(ai);
-    bool addr_rejected = false;
-
-    if ((!addr_blacklisted && whitelisted_allowed)||
-        ( addr_blacklisted && blacklisted_allowed))
+    if (select_address(ai, trail, allowed_host_state))
     {
       targets.push_back(ai);
-    }
-    else
-    {
-      TRC_DEBUG("IP address rejected as host state %s was not allowed",
-                          (addr_blacklisted) ? "blacklisted" : "whitelisted");
-      addr_rejected = true;
-    }
-
-    if (trail != 0)
-    {
-      SAS::Event event(trail, SASEvent::SIPRESOLVE_IP_ADDRESS, 0);
-      event.add_var_param(name);
-      event.add_static_param(addr_rejected);
-      std::string port_str = std::to_string(ai.port);
-      std::string transport_str = get_transport_str(ai.transport);
-      event.add_var_param(transport_str);
-      event.add_var_param(port_str);
-      event.add_static_param(addr_blacklisted);
-      SAS::report_event(event);
     }
 
     // Creates an iterator to the vector of targets.
