@@ -47,6 +47,30 @@ void delete_bindings(ClassifiedBindings& cbs)
   cbs.clear();
 }
 
+/// Helper to map SDM EventTrigger to ContactEvent for Notify
+NotifyUtils::ContactEvent determine_contact_event(
+                       const SubscriberDataManager::EventTrigger& event_trigger)
+{
+  NotifyUtils::ContactEvent contact_event;
+  switch(event_trigger){
+    case SubscriberDataManager::EventTrigger::TIMEOUT:
+      contact_event = NotifyUtils::ContactEvent::EXPIRED;
+      break;
+    case SubscriberDataManager::EventTrigger::USER:
+      contact_event = NotifyUtils::ContactEvent::UNREGISTERED;
+      break;
+    case SubscriberDataManager::EventTrigger::ADMIN:
+      contact_event = NotifyUtils::ContactEvent::DEACTIVATED;
+      break;
+    // LCOV_EXCL_START - not hittable as all cases of event_trigger are covered
+    default:
+      contact_event = NotifyUtils::ContactEvent::EXPIRED;
+      break;
+    // LCOV_EXCL_STOP
+  }
+  return contact_event;
+}
+
 /// SubscriberDataManager Methods
 SubscriberDataManager::SubscriberDataManager(AoRStore* aor_store,
                                              ChronosConnection* chronos_connection,
@@ -235,7 +259,7 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
       ClassifiedBinding* binding_record =
         new ClassifiedBinding(aor_orig_b.first,
                               aor_orig_b.second,
-                              NotifyUtils::ContactEvent::EXPIRED);
+                              determine_contact_event(event_trigger));
       classified_bindings.push_back(binding_record);
     }
   }
@@ -287,7 +311,9 @@ void SubscriberDataManager::log_removed_or_shortened_bindings(ClassifiedBindings
 {
   for (ClassifiedBinding* classified_binding : classified_bindings)
   {
-    if (classified_binding->_contact_event == NotifyUtils::ContactEvent::EXPIRED)
+    if ((classified_binding->_contact_event == NotifyUtils::ContactEvent::EXPIRED)     ||
+        (classified_binding->_contact_event == NotifyUtils::ContactEvent::DEACTIVATED) ||
+        (classified_binding->_contact_event == NotifyUtils::ContactEvent::UNREGISTERED))
     {
       _analytics->registration(classified_binding->_b->_address_of_record,
                                classified_binding->_id,
@@ -557,23 +583,6 @@ SubscriberDataManager::NotifySender::NotifySender()
 
 SubscriberDataManager::NotifySender::~NotifySender()
 {
-}
-NotifyUtils::ContactEvent determine_contact_event(
-                       const SubscriberDataManager::EventTrigger& event_trigger)
-{
-  NotifyUtils::ContactEvent contact_event;
-  switch(event_trigger){
-    case SubscriberDataManager::EventTrigger::TIMEOUT:
-      contact_event = NotifyUtils::ContactEvent::EXPIRED;
-      break;
-    case SubscriberDataManager::EventTrigger::USER:
-      contact_event = NotifyUtils::ContactEvent::UNREGISTERED;
-      break;
-    case SubscriberDataManager::EventTrigger::ADMIN:
-      contact_event = NotifyUtils::ContactEvent::DEACTIVATED;
-      break;
-  }
-  return contact_event;
 }
 
 void SubscriberDataManager::NotifySender::send_notifys(
