@@ -102,19 +102,8 @@ extern "C" {
 #include "contact_filtering.h"
 #include "uri_classifier.h"
 
-static SubscriberDataManager* sdm;
-static SubscriberDataManager* remote_sdm;
-
-static IfcHandler* ifc_handler;
-
 static AnalyticsLogger* analytics_logger;
-
-static EnumService *enum_service;
-static BgcfService *bgcf_service;
-
 static ACRFactory* cscf_acr_factory;
-static ACRFactory* bgcf_acr_factory;
-static ACRFactory* icscf_acr_factory;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
@@ -125,7 +114,6 @@ static SNMP::U32Scalar* flow_count = NULL;
 
 static FlowTable* flow_table;
 static DialogTracker* dialog_tracker;
-static HSSConnection* hss;
 static pjsip_uri* icscf_uri = NULL;
 
 static bool ibcf = false;
@@ -1560,7 +1548,6 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
       // - remove the Route header,
       // - proceed as if it received this modified request.
       tdata->msg->line.req.uri = hroute->name_addr.uri;
-      target = tdata->msg->line.req.uri;
       pj_list_erase(hroute);
     }
   }
@@ -1747,13 +1734,9 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _trust(trust),
   _pending_destroy(false),
   _context_count(0),
-  _as_chain_links(),
   _upstream_acr(acr),
   _downstream_acr(acr),
   _in_dialog(false),
-  _icscf_router(NULL),
-  _icscf_acr(NULL),
-  _bgcf_acr(NULL),
   _se_helper(stack_data.default_session_expires)
 {
   TRC_DEBUG("UASTransaction constructor (%p)", this);
@@ -1831,42 +1814,6 @@ UASTransaction::~UASTransaction()
     }
   }
 
-  if (_icscf_acr != NULL)
-  {
-    // I-CSCF ACR has been created for this transaction, so send the message
-    // and delete the ACR.
-    TRC_DEBUG("I-CSCF ACR = %p", _icscf_acr);
-    _icscf_acr->send();
-
-    if (_downstream_acr == _icscf_acr)
-    {
-      // Downstream ACR was referencing the I-CSCF ACR, so reset it back to
-      // the same as the upstream ACR so it doesn't get reported or freed twice.
-      _downstream_acr = _upstream_acr;
-    }
-
-    delete _icscf_acr;
-    _icscf_acr = NULL;
-  }
-
-  if (_bgcf_acr != NULL)
-  {
-    // BGCF ACR has been created for this transaction, so send the message
-    // and delete the ACR.
-    TRC_DEBUG("BGCF ACR = %p", _bgcf_acr);
-    _bgcf_acr->send();
-
-    if (_downstream_acr == _bgcf_acr)
-    {
-      // Downstream ACR was referencing the BGCF ACR, so reset it back to
-      // the same as the upstream ACR so it doesn't get reported or freed twice.
-      _downstream_acr = _upstream_acr;
-    }
-
-    delete _bgcf_acr;
-    _bgcf_acr = NULL;
-  }
-
   TRC_DEBUG("Upstream ACR = %p, Downstream ACR = %p", _upstream_acr, _downstream_acr);
 
   // This transaction is still in control of the ACR, so send it now.
@@ -1883,12 +1830,6 @@ UASTransaction::~UASTransaction()
   delete _upstream_acr;
   _upstream_acr = NULL;
   _downstream_acr = NULL;
-
-  if (_icscf_router != NULL)
-  {
-    delete _icscf_router;
-    _icscf_router = NULL;
-  }
 
   if (_req != NULL)
   {
@@ -2272,14 +2213,6 @@ pj_status_t UASTransaction::handle_final_response()
     pjsip_tx_data *best_rsp = _best_rsp;
     int st_code = best_rsp->msg->line.status.code;
 
-    if ((_icscf_acr != NULL) &&
-        (_icscf_acr != _downstream_acr))
-    {
-      // Report the final response to the I-CSCF ACR.
-      _icscf_acr->rx_response(best_rsp->msg);
-      _icscf_acr->tx_response(best_rsp->msg);
-    }
-
     // Pass the final response to the upstream ACR.
     _upstream_acr->tx_response(best_rsp->msg);
 
@@ -2352,7 +2285,7 @@ void UASTransaction::enter_context()
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
-  pj_assert((!_pending_destroy) || (_context_count > 0));
+  assert((!_pending_destroy) || (_context_count > 0));
 
   _context_count++;
 }
@@ -2364,7 +2297,7 @@ void UASTransaction::exit_context()
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
-  pj_assert(_context_count > 0);
+  assert(_context_count > 0);
 
   _context_count--;
   if ((_context_count == 0) && (_pending_destroy))
@@ -3167,7 +3100,7 @@ void UACTransaction::enter_context()
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
-  pj_assert((!_pending_destroy) || (_context_count > 0));
+  assert((!_pending_destroy) || (_context_count > 0));
 
   _context_count++;
 }
@@ -3179,7 +3112,7 @@ void UACTransaction::exit_context()
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
-  pj_assert(_context_count > 0);
+  assert(_context_count > 0);
 
   _context_count--;
   if ((_context_count == 0) && (_pending_destroy))
@@ -3198,10 +3131,7 @@ void UACTransaction::exit_context()
 ///@{
 // MODULE LIFECYCLE
 
-pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
-                                SubscriberDataManager* reg_remote_sdm,
-                                IfcHandler* ifc_handler_in,
-                                pj_bool_t enable_edge_proxy,
+pj_status_t init_stateful_proxy(pj_bool_t enable_edge_proxy,
                                 const std::string& upstream_proxy_arg,
                                 int upstream_proxy_port,
                                 int upstream_proxy_connections,
@@ -3211,35 +3141,20 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
                                 const std::string& pbx_host_str,
                                 const std::string& pbx_service_route_arg,
                                 AnalyticsLogger* analytics,
-                                EnumService *enumService,
-                                BgcfService *bgcfService,
-                                HSSConnection* hss_connection,
                                 ACRFactory* cscf_rfacr_factory,
-                                ACRFactory* bgcf_rfacr_factory,
-                                ACRFactory* icscf_rfacr_factory,
                                 const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager,
                                 bool icscf_enabled,
                                 bool scscf_enabled,
                                 bool emerg_reg_accepted)
 {
-  pj_status_t status;
-
   analytics_logger = analytics;
-  reg_sdm = sdm;
-  reg_remote_sdm = remote_sdm;
-
-  ifc_handler = ifc_handler_in;
-
   icscf = icscf_enabled;
   scscf = scscf_enabled;
   allow_emergency_reg = emerg_reg_accepted;
-
   cscf_acr_factory = cscf_rfacr_factory;
-  bgcf_acr_factory = bgcf_rfacr_factory;
-  icscf_acr_factory = icscf_rfacr_factory;
-
   edge_proxy = enable_edge_proxy;
+
   assert(edge_proxy);
 
   // Create a URI for the upstream proxy to use in Route headers.
@@ -3334,10 +3249,6 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
     }
   }
 
-  enum_service = enumService;
-  bgcf_service = bgcfService;
-  hss = hss_connection;
-
   if (!icscf_uri_str.empty())
   {
     // Got an I-CSCF - parse it.
@@ -3349,7 +3260,7 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
     }
   }
 
-  status = pjsip_endpt_register_module(stack_data.endpt, &mod_stateful_proxy);
+  pj_status_t status = pjsip_endpt_register_module(stack_data.endpt, &mod_stateful_proxy);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_tu);
