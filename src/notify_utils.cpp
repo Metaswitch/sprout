@@ -219,12 +219,10 @@ pj_xml_node* notify_create_reg_state_xml(
           c_event = STR_UNREGISTERED;
           c_state = STR_TERMINATED;
           break;
-        // LCOV_EXCL_START - TODO
         case NotifyUtils::ContactEvent::DEACTIVATED:
           c_event = STR_DEACTIVATED;
           c_state = STR_TERMINATED;
           break;
-        // LCOV_EXCL_STOP
       }
 
       contact_node = create_contact_node(pool,

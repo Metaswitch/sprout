@@ -488,6 +488,11 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   s0->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s0->_expires = now + 300;
 
+  // Add URI
+  std::string aor1 = "5102175691@cw-ngv.com";
+  associated_uris.add_uri(aor1, false);
+  aor_data1->get_current()->_associated_uris = associated_uris;
+
   // Add another pair of binding and subscription.
   b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>");
@@ -530,7 +535,6 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   b2->_emergency_registration = false;
 
   // Write AoR record back to store.
-  std::string aor1 = "5102175691@cw-ngv.com";
   bool rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
