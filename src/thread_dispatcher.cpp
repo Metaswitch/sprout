@@ -79,6 +79,9 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
 
 static pjsip_process_rdata_param pjsip_entry_point;
 
+static pj_status_t reject_with_retry_header(pjsip_rx_data* rdata,
+                                            pjsip_status_code code);
+
 // Module to clone SIP requests and dispatch them to worker threads.
 
 // Priority of PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-1 causes this to run
@@ -157,14 +160,7 @@ bool process_queue_element()
             SAS::Marker end_marker(trail, MARKER_ID_END, 2u);
             SAS::report_marker(end_marker);
 
-            pjsip_retry_after_hdr* retry_after =
-                           pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
-            PJUtils::respond_stateless(stack_data.endpt,
-                                       rdata,
-                                       PJSIP_SC_SERVICE_UNAVAILABLE,
-                                       NULL,
-                                       (pjsip_hdr*)retry_after,
-                                       NULL);
+            reject_with_retry_header(rdata, PJSIP_SC_SERVICE_UNAVAILABLE);
             pjsip_rx_data_free_cloned(rdata);
           }
         }
@@ -203,14 +199,7 @@ bool process_queue_element()
                (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
             {
               TRC_DEBUG("Returning 500 response following exception");
-              pjsip_retry_after_hdr* retry_after =
-                             pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
-              PJUtils::respond_stateless(stack_data.endpt,
-                                       rdata,
-                                       PJSIP_SC_INTERNAL_SERVER_ERROR,
-                                       NULL,
-                                       (pjsip_hdr*)retry_after,
-                                       NULL);
+              reject_with_retry_header(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
             }
 
             if (num_worker_threads == 1)
@@ -327,6 +316,18 @@ static int get_rx_msg_priority(pjsip_rx_data* rdata)
   return SipEventPriorityLevel::NORMAL_PRIORITY;
 }
 
+static pj_status_t reject_with_retry_header(pjsip_rx_data* rdata,
+                                            pjsip_status_code code)
+{
+  pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
+  return PJUtils::respond_stateless(stack_data.endpt,
+                                    rdata,
+                                    code,
+                                    NULL,
+                                    (pjsip_hdr*)retry_after,
+                                    NULL);
+}
+
 // Reject a SIP message with a 503 Service Unavailable
 static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
@@ -338,22 +339,15 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
   SAS::report_marker(start_marker);
 
   SAS::Event event(trail, SASEvent::SIP_OVERLOAD, 0);
-  event.add_static_param(load_monitor->get_target_latency());
-  event.add_static_param(load_monitor->get_current_latency());
+  event.add_static_param(load_monitor->get_target_latency_us());
+  event.add_static_param(load_monitor->get_current_latency_us());
   event.add_static_param(load_monitor->get_rate_limit());
   SAS::report_event(event);
 
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
-  pj_status_t status = PJUtils::respond_stateless(stack_data.endpt,
-                                                  rdata,
-                                                  PJSIP_SC_SERVICE_UNAVAILABLE,
-                                                  NULL,
-                                                  (pjsip_hdr*)retry_after,
-                                                  NULL);
-
+  pj_status_t status = reject_with_retry_header(rdata, PJSIP_SC_SERVICE_UNAVAILABLE);
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START
@@ -447,8 +441,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   TRC_DEBUG("Queuing cloned received message %p for worker threads with priority %d",
             clone_rdata, qe.priority);
   SAS::Event priority_event(trail, SASEvent::THREAD_DISPATCHER_SET_PRIORITY_LEVEL, 0);
-  std::string priority_str = std::to_string(qe.priority);
-  priority_event.add_var_param(priority_str);
+  priority_event.add_static_param(qe.priority);
   SAS::report_event(priority_event);
 
   // Track the current queue size
