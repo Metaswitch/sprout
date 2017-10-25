@@ -445,6 +445,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Write to the local store, checking the remote stores if there is no entry locally.
   bool all_bindings_expired;
+
   AoRPair* aor_pair = write_to_store(_registrar->_sdm,
                                      aor,
                                      &associated_uris,
@@ -1102,6 +1103,7 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
     {
       aor_pair->get_current()->_associated_uris = *associated_uris;
       set_rc = primary_sdm->set_aor_data(aor,
+                                         SubscriberDataManager::EventTrigger::USER,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);
