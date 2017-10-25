@@ -35,6 +35,13 @@ typedef std::vector<ClassifiedBinding*> ClassifiedBindings;
 class SubscriberDataManager
 {
 public:
+  enum EventTrigger
+  {
+    USER,
+    ADMIN,
+    TIMEOUT
+  };
+
   /// @class SubscriberDataManager::ChronosTimerRequestSender
   ///
   /// Class responsible for sending any requests to Chronos about
@@ -104,6 +111,7 @@ public:
     /// @param now          The current time
     /// @param trail        SAS trail
     void send_notifys(const std::string& aor_id,
+                      const EventTrigger& event_trigger,
                       AoRPair* aor_pair,
                       int now,
                       SAS::TrailId trail);
@@ -126,9 +134,10 @@ public:
     // @param trail        SAS trail
     void send_notifys_for_expired_subscriptions(
                                    const std::string& aor_id,
+                                   const EventTrigger& event_trigger,
                                    AoRPair* aor_pair,
                                    ClassifiedBindings binding_info_to_notify,
-                                   std::vector<std::string> expired_binding_uris,
+                                   std::vector<std::string> missing_binding_uris,
                                    int now,
                                    SAS::TrailId trail);
   };
@@ -178,6 +187,7 @@ public:
   /// @param all_bindings_expired Whether all bindings have expired
   ///                             as a result of the set
   virtual Store::Status set_aor_data(const std::string& aor_id,
+                                     const EventTrigger& event_trigger,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired = unused_bool);
@@ -221,6 +231,7 @@ private:
   // @param aor_pair              The AoR pair to compare and classify bindings for
   // @param classified_bindings   Output vector of classified bindings
   void classify_bindings(const std::string& aor_id,
+                         const SubscriberDataManager::EventTrigger& event_trigger,
                          AoRPair* aor_pair,
                          ClassifiedBindings& classified_bindings);
 

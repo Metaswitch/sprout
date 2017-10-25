@@ -91,6 +91,7 @@ public:
                                          _reg_data->public_id,
                                          "*",
                                          HSSConnection::DEREG_ADMIN,
+                                         SubscriberDataManager::EventTrigger::ADMIN,
                                          _reg_data->trail);
     }
 
@@ -415,6 +416,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                          served_user,
                                          "*",
                                          HSSConnection::DEREG_ADMIN,
+                                         SubscriberDataManager::EventTrigger::ADMIN,
                                          trail);
     }
   }
@@ -619,6 +621,7 @@ static void notify_application_servers()
 
 static bool expire_bindings(SubscriberDataManager *sdm,
                             const std::string& aor,
+                            const SubscriberDataManager::EventTrigger& event_trigger,
                             AssociatedURIs* associated_uris,
                             const std::string& binding_id,
                             std::string& scscf_uri,
@@ -656,7 +659,11 @@ static bool expire_bindings(SubscriberDataManager *sdm,
     }
 
     aor_pair->get_current()->_associated_uris = *associated_uris;
-    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired);
+    set_rc = sdm->set_aor_data(aor, 
+                               event_trigger,
+                               aor_pair, 
+                               trail, 
+                               all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
@@ -677,6 +684,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         const std::string& aor,
                                         const std::string& binding_id,
                                         const std::string& dereg_type,
+                                        const SubscriberDataManager::EventTrigger& event_trigger,
                                         SAS::TrailId trail,
                                         HTTPCode* hss_status_code)
 {
@@ -712,7 +720,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   std::string scscf_uri;
 
-  if (expire_bindings(sdm, aor, &associated_uris, binding_id, scscf_uri, trail))
+  if (expire_bindings(sdm, aor, event_trigger, &associated_uris, binding_id, scscf_uri, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -760,7 +768,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, &associated_uris, binding_id, scscf_uri, trail);
+    (void) expire_bindings(*remote_sdm, aor, event_trigger, &associated_uris, binding_id, scscf_uri, trail);
   }
 
   return all_bindings_expired;
