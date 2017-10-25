@@ -2246,7 +2246,11 @@ TEST_F(SproutletProxyTest, RepeatedNetworkFunction)
   EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
-  // Check the INVITE and send a 100 Trying.
+  // Check the INVITE and send a 100 Trying.  There should be three Via headers
+  // on the INVITE that coms out the other side (from top, to bottom):
+  //  - One from exiting the SPN
+  //  - One from the internal network function boundary
+  //  - One from the original sender
   pjsip_tx_data* req = pop_txdata();
   expect_target("TCP", "10.10.20.1", 5060, req);
   ReqMatcher("INVITE").matches(req->msg);
@@ -2265,9 +2269,15 @@ TEST_F(SproutletProxyTest, RepeatedNetworkFunction)
   inject_msg(respond_to_txdata(req, 200));
   ASSERT_EQ(1, txdata_count());
 
-  // Check the 200 OK.
+  // Check the 200 OK.  It should contain just a single Via header (belonging
+  // to the original sender).
   tdata = current_txdata();
   RespMatcher(200).matches(tdata->msg);
+  via_hdrs.clear();
+  via_str = get_headers(tdata->msg, "Via");
+  boost::algorithm::split_regex(via_hdrs, via_str, boost::regex("\r\n"));
+  EXPECT_EQ(1, via_hdrs.size());
+  EXPECT_THAT(via_hdrs[0], MatchesRegex("Via: SIP/2.0/TCP 1.2.3.4.*"));
   tp->expect_target(tdata);
   free_txdata();
 

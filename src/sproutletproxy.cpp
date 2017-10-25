@@ -1641,6 +1641,8 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
     return;
   }
 
+  pjsip_tx_data* tdata = it->second;
+
   // Check that this actually is a response
   if (rsp->type != PJSIP_RESPONSE_MSG)
   {
@@ -1648,10 +1650,17 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
     return;
   }
 
-  TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(it->second));
+  if (is_internal_network_func_boundary())
+  {
+    // We're at an internal network function boundary - strip off the Via
+    // header that we added on the request.
+    PJUtils::remove_top_via(tdata);
+  }
+
+  TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(tdata));
 
   // We've found the tdata, move it to _send_responses.
-  _send_responses.push_back(it->second);
+  _send_responses.push_back(tdata);
 
   // Move the clone out of the clones list.
   _packets.erase(rsp);
@@ -1898,13 +1907,6 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
   if (Log::enabled(Log::VERBOSE_LEVEL))
   {
     log_inter_sproutlet(rsp, false);
-  }
-
-  if (is_internal_network_func_boundary())
-  {
-    // We're at an internal network function boundary - strip off the Via
-    // header that we added on the request.
-    PJUtils::remove_top_via(rsp);
   }
 
   register_tdata(rsp);
