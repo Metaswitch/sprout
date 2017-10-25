@@ -1112,6 +1112,7 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
     {
       aor_pair->get_current()->_associated_uris = *associated_uris;
       set_rc = primary_sdm->set_aor_data(aor,
+                                         SubscriberDataManager::EventTrigger::USER,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);

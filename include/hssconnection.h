@@ -26,7 +26,7 @@
 
 /// @class HSSConnection
 ///
-/// Provides a connection to the Homstead service for retrieving user
+/// Provides a connection to the Homestead service for retrieving user
 /// profiles and authentication information.
 ///
 class HSSConnection
