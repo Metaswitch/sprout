@@ -7,5 +7,5 @@ modules/clearwater-etcd-plugins/sprout/sprout_json_plugin.py /usr/share/clearwat
 modules/clearwater-etcd-plugins/sprout/sprout_scscf_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
 modules/clearwater-etcd-plugins/sprout/sprout_enum_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
 
-modules/cleearwater-etcd-plugins/clearwater_config_access/scscf_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
-modules/cleearwater-etcd-plugins/clearwater_config_access/enum_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
+modules/clearwater-etcd-plugins/clearwater_config_access/scscf_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
+modules/clearwater-etcd-plugins/clearwater_config_access/enum_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
