@@ -32,8 +32,6 @@ extern "C" {
 #include "cfgoptions.h"
 #include "compositesproutlet.h"
 
-typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
-
 class AuthenticationSproutletTsx;
 
 // Classes representing authentication vectors. This allows most of the
@@ -103,7 +101,7 @@ public:
                           AnalyticsLogger* analytics_logger,
                           SNMP::AuthenticationStatsTables* auth_stats_tbls,
                           bool nonce_count_supported_arg,
-                          get_expiry_for_binding_fn get_expiry_for_binding_arg);
+                          int cfg_max_expires);
   ~AuthenticationSproutlet();
 
   bool init();
@@ -190,10 +188,10 @@ private:
   // Whether nonce counts are supported.
   bool _nonce_count_supported = false;
 
-  // A function that the authentication module can use to work out the expiry
-  // time for a given binding. This is needed so that it knows how long to
-  // authentication challenges for.
-  get_expiry_for_binding_fn _get_expiry_for_binding;
+  /// The maximum time (in seconds) that a device can register for.  We need
+  /// this to determine the expiry time of authentication challenges based on
+  /// the contact expiry times.
+  int _max_expires;
 
   // PJSIP structure for control server authentication functions.
   pjsip_auth_srv _auth_srv;

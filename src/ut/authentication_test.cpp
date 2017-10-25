@@ -42,11 +42,6 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
-int get_binding_expiry(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires)
-{
-  return 300;
-}
-
 /// Common fixture for all authentication tests.
 class BaseAuthenticationTest : public SipTest
 {
@@ -300,7 +295,7 @@ class AuthenticationTestTemplate : public BaseAuthenticationTest
                                   _analytics,
                                   &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
                                   C::nonce_count_supported(),
-                                  get_binding_expiry);
+                                  300);
     EXPECT_TRUE(auth_sproutlet->init());
     return auth_sproutlet;
   }

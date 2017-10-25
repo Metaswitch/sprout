@@ -19,15 +19,10 @@ class UACTransaction;
 #include <list>
 
 #include "pjutils.h"
-#include "enumservice.h"
-#include "bgcfservice.h"
 #include "analyticslogger.h"
-#include "subscriber_data_manager.h"
 #include "stack.h"
 #include "trustboundary.h"
 #include "sessioncase.h"
-#include "ifchandler.h"
-#include "hssconnection.h"
 #include "aschain.h"
 #include "quiescing_manager.h"
 #include "icscfrouter.h"
@@ -96,13 +91,6 @@ private:
   AsChainLink _original_dialog;
 };
 
-struct HSSCallInformation
-{
-  bool registered;
-  Ifcs ifcs;
-  std::vector<std::string> uris;
-};
-
 // This is the data that is attached to the UAS transaction
 class UASTransaction
 {
@@ -165,20 +153,8 @@ private:
   bool redirect_int(pjsip_uri* target, int code);
   pjsip_history_info_hdr* create_history_info_hdr(pjsip_uri* target);
   void update_history_info_reason(pjsip_uri* history_info_uri, int code);
-  AsChainLink create_as_chain(const SessionCase& session_case, Ifcs ifcs, std::string served_user = "");
 
-  bool find_as_chain(const ServingState& serving_state);
-  AsChainLink::Disposition handle_originating(Target*& target);
-  void common_start_of_terminating_processing();
-  bool move_to_terminating_chain();
-  AsChainLink::Disposition handle_terminating(Target*& target);
-  AsChainLink::Disposition apply_services(Target*& target);
   void handle_outgoing_non_cancel(Target* target);
-
-  bool get_data_from_hss(std::string public_id, HSSCallInformation& data, SAS::TrailId trail);
-  bool lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail);
-  bool get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail);
-  bool is_user_registered(std::string public_id);
 
   void routing_proxy_record_route(const SessionCase& session_case);
 
@@ -187,19 +163,6 @@ private:
                                TargetList& targets,
                                int max_targets,
                                SAS::TrailId trail);
-  void get_targets_from_store(const std::string& aor,
-                              SubscriberDataManager*& sdm,
-                              SubscriberDataManager*& remote_sdm,
-                              pjsip_msg*& msg,
-                              pj_pool_t* pool,
-                              int max_targets,
-                              TargetList& targets,
-                              SAS::TrailId trail);
-  void get_all_bindings(const std::string& aor,
-                        SubscriberDataManager*& sdm,
-                        SubscriberDataManager*& remote_sdm,
-                        AoR** aor_data,
-                        SAS::TrailId trail);
 
   void cancel_trying_timer();
 
@@ -221,12 +184,6 @@ private:
   } _analytics;
   bool                 _pending_destroy;
   int                  _context_count;
-  std::list<AsChainLink> _as_chain_links; //< References to the AsChains this transaction is associated with.
-                                          //< The last in the list is the chain currently controlling the
-                                          //< transaction.
-
-  // Maps public IDs to their associated URIs and iFC
-  std::map<std::string, HSSCallInformation> cached_hss_data;
 
   /// Pointer to ACR used for the upstream side of the transaction.  NULL if
   /// Rf not enabled.
@@ -242,17 +199,6 @@ private:
   /// Indication of in-dialog transaction.  This is used to determine whether
   /// or not to send ACRs on 1xx responses.
   bool                 _in_dialog;
-
-  /// I-CSCF router instance if inline I-CSCF processing is performed in this
-  /// transaction, NULL otherwise.
-  ICSCFRouter*         _icscf_router;
-
-  /// Stores an I-CSCF ACR if inline I-CSCF processing was performed in this
-  /// transaction.
-  ACR*                 _icscf_acr;
-
-  /// Stores a BGCF ACR if BGCF processing was performed in this transaction.
-  ACR*                 _bgcf_acr;
 
   /// Object to handle session expires processing.
   SessionExpiresHelper _se_helper;
@@ -326,10 +272,7 @@ private:
   static const int LIVENESS_TIMER = 1;
 };
 
-pj_status_t init_stateful_proxy(SubscriberDataManager* sdm,
-                                SubscriberDataManager* remote_sdm,
-                                IfcHandler* ifc_handler,
-                                pj_bool_t enable_access_proxy,
+pj_status_t init_stateful_proxy(pj_bool_t enable_access_proxy,
                                 const std::string& upstream_proxy,
                                 int upstream_proxy_port,
                                 int upstream_proxy_connections,
@@ -339,12 +282,7 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* sdm,
                                 const std::string& pbx_host_str,
                                 const std::string& pbx_service_route_arg,
                                 AnalyticsLogger* analytics_logger,
-                                EnumService *enumService,
-                                BgcfService *bgcfService,
-                                HSSConnection* hss_connection,
                                 ACRFactory* cscf_rfacr_factory,
-                                ACRFactory* bgcf_rfacr_factory,
-                                ACRFactory* icscf_rfacr_factory,
                                 const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager,
                                 bool icscf_enabled,

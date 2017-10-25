@@ -2161,10 +2161,7 @@ int main(int argc, char* argv[])
                 new ACRFactory();
 
     // Launch stateful proxy as P-CSCF.
-    status = init_stateful_proxy(NULL,
-                                 NULL,
-                                 NULL,
-                                 true,
+    status = init_stateful_proxy(true,
                                  opt.upstream_proxy,
                                  opt.upstream_proxy_port,
                                  opt.upstream_proxy_connections,
@@ -2174,12 +2171,7 @@ int main(int argc, char* argv[])
                                  opt.pbxes,
                                  opt.pbx_service_route,
                                  analytics_logger,
-                                 NULL,
-                                 NULL,
-                                 NULL,
                                  pcscf_acr_factory,
-                                 NULL,
-                                 NULL,
                                  "",
                                  quiescing_mgr,
                                  opt.enabled_icscf,

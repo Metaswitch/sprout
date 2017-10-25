@@ -26,7 +26,7 @@
 
 /// @class HSSConnection
 ///
-/// Provides a connection to the Homstead service for retrieving user
+/// Provides a connection to the Homestead service for retrieving user
 /// profiles and authentication information.
 ///
 class HSSConnection
@@ -70,6 +70,7 @@ public:
                                      const std::string& private_user_identity,
                                      const std::string& type,
                                      std::string& regstate,
+                                     std::string& prev_regstate,
                                      std::string server_name,
                                      std::map<std::string, Ifcs >& service_profiles,
                                      AssociatedURIs& associated_uris,
@@ -79,16 +80,18 @@ public:
                                      bool cache_allowed,
                                      const std::string& wildcard,
                                      SAS::TrailId trail);
-  virtual HTTPCode update_registration_state(const std::string& public_user_identity,
-                                             const std::string& private_user_identity,
-                                             const std::string& type,
-                                             std::string& regstate,
-                                             std::string server_name,
-                                             std::map<std::string, Ifcs >& service_profiles,
-                                             AssociatedURIs& associated_uris,
-                                             std::deque<std::string>& ccfs,
-                                             std::deque<std::string>& ecfs,
-                                             SAS::TrailId trail);
+  // Specific entry point for updates of type REG in order to support additional
+  // prev_regstate parameter without going over 10 parameter limit of gmock.
+  virtual HTTPCode update_registration_state_reg(const std::string& public_user_identity,
+                                                 const std::string& private_user_identity,
+                                                 std::string& regstate,
+                                                 std::string& prev_regstate,
+                                                 std::string server_name,
+                                                 std::map<std::string, Ifcs >& service_profiles,
+                                                 AssociatedURIs& associated_uris,
+                                                 std::deque<std::string>& ccfs,
+                                                 std::deque<std::string>& ecfs,
+                                                 SAS::TrailId trail);
   HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
                                      const std::string& type,

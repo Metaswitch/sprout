@@ -127,7 +127,7 @@ public:
     // Add the AoR record to the store.
     AssociatedURIs associated_uris = {};
     associated_uris.add_uri(aor, false);
-    _sdm->set_aor_data(aor, aor_pair, 0);
+    _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
     delete aor_pair; aor_pair = NULL;
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
@@ -185,7 +185,7 @@ public:
     // Add the AoR record to the store.
     AssociatedURIs associated_uris = {};
     associated_uris.add_uri(aor, false);
-    _sdm->set_aor_data(aor, aor_pair, 0);
+    _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
     delete aor_pair; aor_pair = NULL;
   }
 
@@ -821,7 +821,7 @@ TEST_F(SubscriptionTest, LocalStoreNoSubscriptions)
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
 
-  _remote_sdm->set_aor_data(aor, aor_pair, 0);
+  _remote_sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
   // Ensure the local store currently has no subscriptions at this point
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -894,7 +894,7 @@ TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
   // Add the AoR record to the store.
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
-  _remote_sdm->set_aor_data(aor, aor_pair, 0);
+  _remote_sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
 
   _remote_data_store->force_contention();
 
@@ -1078,7 +1078,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   std::string aor = "sip:6505550233@homedomain";
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
-  _sdm->set_aor_data(aor, aor_pair, 0);
+  _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   SubscribeMessage msg;
@@ -1144,7 +1144,7 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   std::string aor = "sip:6505550231@homedomain";
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
-  _sdm->set_aor_data(aor, aor_data1, 0);
+  _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_data1, 0);
   delete aor_data1; aor_data1 = NULL;
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -1257,7 +1257,7 @@ TEST_F(SubscriptionTest, SubscriptionWithWildcard)
   std::string aor = "sip:6505551231@homedomain";
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
-  _sdm->set_aor_data(aor, aor_pair, 0);
+  _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
@@ -1316,7 +1316,7 @@ TEST_F(SubscriptionTest, SubscriptionWithBarredIdentity)
   std::string aor = "sip:6505551231@homedomain";
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
-  _sdm->set_aor_data(aor, aor_pair, 0);
+  _sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
