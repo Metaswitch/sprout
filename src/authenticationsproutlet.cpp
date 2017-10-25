@@ -12,6 +12,7 @@
 #include "constants.h"
 #include "sproutsasevent.h"
 #include "authenticationsproutlet.h"
+#include "registration_utils.h"
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
@@ -59,7 +60,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  AnalyticsLogger* analytics_logger,
                                                  SNMP::AuthenticationStatsTables* auth_stats_tbls,
                                                  bool nonce_count_supported_arg,
-                                                 get_expiry_for_binding_fn get_expiry_for_binding_arg) :
+                                                 int cfg_max_expires) :
   Sproutlet(name, port, uri, "", aliases, NULL, NULL, network_function),
   _aka_realm((realm_name != "") ?
     pj_strdup3(stack_data.pool, realm_name.c_str()) :
@@ -72,7 +73,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
   _analytics(analytics_logger),
   _auth_stats_tables(auth_stats_tbls),
   _nonce_count_supported(nonce_count_supported_arg),
-  _get_expiry_for_binding(get_expiry_for_binding_arg),
+  _max_expires(cfg_max_expires),
   _non_register_auth_mode(non_register_auth_mode_param),
   _next_hop_service(next_hop_service)
 {
@@ -326,7 +327,9 @@ int AuthenticationSproutletTsx::calculate_challenge_expiration_time(pjsip_msg* r
        contact_hdr = (pjsip_contact_hdr*)
           pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
   {
-    expires = std::max(expires, _authentication->_get_expiry_for_binding(contact_hdr, expires_hdr));
+    expires = std::max(expires, RegistrationUtils::expiry_for_binding(contact_hdr,
+                                                                      expires_hdr,
+                                                                      _authentication->_max_expires));
   }
 
   return expires + time(NULL);

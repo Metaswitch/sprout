@@ -309,10 +309,11 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
   }
 }
 
-
 bool decode_homestead_xml(const std::string public_user_identity,
                           std::shared_ptr<rapidxml::xml_document<> > root,
-                          std::string& regstate,
+                          std::string& regstate,      ///<[out] the value of the RegistrationState element.
+                          std::string& prev_regstate, ///<[out] the value of the PreviousRegistrationState element
+                                                      /// if present. The empty string otherwise.
                           std::map<std::string, Ifcs >& ifcs_map,
                           AssociatedURIs& associated_uris,
                           std::vector<std::string>& aliases,
@@ -361,6 +362,12 @@ bool decode_homestead_xml(const std::string public_user_identity,
     TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
   }
+
+  // Look for the Previous Registration State.  If there is no Previous
+  // Registration State in the message set prev_regstate to the empty
+  // string.
+  rapidxml::xml_node<>* prev_reg = cw->first_node(RegDataXMLUtils::PREVIOUS_REGISTRATION_STATE);
+  prev_regstate = (!prev_reg) ? "" : prev_reg->value();
 
   rapidxml::xml_node<>* imss = cw->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 
@@ -420,10 +427,12 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   std::vector<std::string> unused_aliases;
   std::deque<std::string> unused_ccfs;
   std::deque<std::string> unused_ecfs;
+  std::string unused_prev_regstate;
   return update_registration_state(public_user_identity,
                                    private_user_identity,
                                    type,
                                    regstate,
+                                   unused_prev_regstate,
                                    server_name,
                                    ifcs_map,
                                    associated_uris,
@@ -444,6 +453,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   SAS::TrailId trail)
 {
   std::string unused_regstate;
+  std::string unused_prev_regstate;
   std::vector<std::string> unused_aliases;
   std::deque<std::string> unused_ccfs;
   std::deque<std::string> unused_ecfs;
@@ -451,6 +461,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    private_user_identity,
                                    type,
                                    unused_regstate,
+                                   unused_prev_regstate,
                                    server_name,
                                    ifcs_map,
                                    associated_uris,
@@ -471,6 +482,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   std::map<std::string, Ifcs > ifcs_map;
   AssociatedURIs associated_uris = {};
   std::string unused_regstate;
+  std::string unused_prev_regstate;
   std::vector<std::string> unused_aliases;
   std::deque<std::string> unused_ccfs;
   std::deque<std::string> unused_ecfs;
@@ -478,6 +490,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    private_user_identity,
                                    type,
                                    unused_regstate,
+                                   unused_prev_regstate,
                                    server_name,
                                    ifcs_map,
                                    associated_uris,
@@ -489,22 +502,25 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    trail);
 }
 
-HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
-                                                  const std::string& private_user_identity,
-                                                  const std::string& type,
-                                                  std::string& regstate,
-                                                  std::string server_name,
-                                                  std::map<std::string, Ifcs >& ifcs_map,
-                                                  AssociatedURIs& associated_uris,
-                                                  std::deque<std::string>& ccfs,
-                                                  std::deque<std::string>& ecfs,
-                                                  SAS::TrailId trail)
+// Specific entry point for updates of type REG in order to support additional
+// prev_regstate parameter without going over 10 parameter limit of gmock.
+HTTPCode HSSConnection::update_registration_state_reg(const std::string& public_user_identity,
+                                                      const std::string& private_user_identity,
+                                                      std::string& regstate,
+                                                      std::string& prev_regstate,
+                                                      std::string server_name,
+                                                      std::map<std::string, Ifcs >& ifcs_map,
+                                                      AssociatedURIs& associated_uris,
+                                                      std::deque<std::string>& ccfs,
+                                                      std::deque<std::string>& ecfs,
+                                                      SAS::TrailId trail)
 {
   std::vector<std::string> unused_aliases;
   return update_registration_state(public_user_identity,
                                    private_user_identity,
-                                   type,
+                                   HSSConnection::REG,
                                    regstate,
+                                   prev_regstate,
                                    server_name,
                                    ifcs_map,
                                    associated_uris,
@@ -520,6 +536,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
                                                   std::string& regstate,
+                                                  std::string& prev_regstate,
                                                   std::string server_name,
                                                   std::map<std::string, Ifcs >& ifcs_map,
                                                   AssociatedURIs& associated_uris,
@@ -588,6 +605,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   return decode_homestead_xml(public_user_identity,
                               root,
                               regstate,
+                              prev_regstate,
                               ifcs_map,
                               associated_uris,
                               aliases,
@@ -625,6 +643,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
+  std::string unused_prev_regstate;
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_GET_REG, 0);
   event.add_var_param(public_user_identity);
@@ -668,6 +687,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   return decode_homestead_xml(public_user_identity,
                               root,
                               regstate,
+                              unused_prev_regstate,
                               ifcs_map,
                               associated_uris,
                               unused_aliases,
