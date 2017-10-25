@@ -821,7 +821,7 @@ TEST_F(SubscriptionTest, LocalStoreNoSubscriptions)
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
 
-  _remote_sdm->set_aor_data(aor, aor_pair, 0);
+  _remote_sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
   // Ensure the local store currently has no subscriptions at this point
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -894,7 +894,7 @@ TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
   // Add the AoR record to the store.
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
-  _remote_sdm->set_aor_data(aor, aor_pair, 0);
+  _remote_sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, aor_pair, 0);
 
   _remote_data_store->force_contention();
 
