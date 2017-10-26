@@ -108,6 +108,7 @@ static pjsip_module mod_thread_dispatcher =
   NULL,                                 /* on_tsx_state()       */
 };
 
+// LCOV_EXCL_START
 static void pause_stopwatch(Utils::StopWatch& s, const std::string& reason)
 {
   TRC_DEBUG("Pausing stopwatch due to %s", reason.c_str());
@@ -119,6 +120,7 @@ static void resume_stopwatch(Utils::StopWatch& s, const std::string& reason)
   TRC_DEBUG("Resuming stopwatch after %s", reason.c_str());
   s.start();
 }
+// LCOV_EXCL_STOP
 
 bool process_queue_element()
 {
