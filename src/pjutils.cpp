@@ -527,7 +527,7 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
   }
 
   rr->name_addr.uri = (pjsip_uri*)uri;
-  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)rr);
+  add_top_header(tdata->msg, (pjsip_hdr*)rr);
 
   TRC_DEBUG("Added Record-Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, rr->name_addr.uri).c_str());
 }
@@ -540,7 +540,7 @@ void PJUtils::add_top_route_header(pjsip_msg* msg,
   pjsip_route_hdr* hroute = pjsip_route_hdr_create(pool);
   hroute->name_addr.uri = (pjsip_uri*)uri;
   uri->lr_param = 1;            // Always use loose routing.
-  pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)hroute);
+  add_top_header(msg, (pjsip_hdr*)hroute);
 }
 
 /// Add a Route header with the specified URI.
@@ -1619,12 +1619,13 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
   return cloned_tdata;
 }
 
-void PJUtils::add_top_via(pjsip_tx_data* tdata)
+pjsip_via_hdr* PJUtils::add_top_via(pjsip_tx_data* tdata)
 {
   // Add a new Via header with a unique branch identifier.
   pjsip_via_hdr *hvia = pjsip_via_hdr_create(tdata->pool);
-  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hvia);
+  add_top_header(tdata->msg, (pjsip_hdr*)hvia);
   generate_new_branch_id(tdata);
+  return hvia;
 }
 
 void PJUtils::remove_top_via(pjsip_tx_data* tdata)
@@ -2637,4 +2638,21 @@ bool PJUtils::is_param_in_top_route(const pjsip_msg* req,
 {
   std::string ignored;
   return get_param_in_top_route(req, param_name, ignored);
+}
+
+void PJUtils::add_top_header(pjsip_msg* msg, pjsip_hdr* hdr)
+{
+  pjsip_hdr* top_hdr = (pjsip_hdr*)pjsip_msg_find_hdr(msg, hdr->type, NULL);
+
+  if (top_hdr != NULL)
+  {
+    // There is an existing header of this type.  Add the new header above it.
+    pj_list_insert_before(top_hdr, hdr);
+  }
+  else
+  {
+    // There are no existing headers of this type.  Add the new header at the
+    // top of the message.
+    pj_list_insert_after(&msg->hdr, hdr);
+  }
 }

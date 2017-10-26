@@ -282,6 +282,8 @@ protected:
 class SproutletWrapper : public SproutletTsxHelper
 {
 public:
+  static constexpr const char* EXTERNAL_NETWORK_FUNCTION = "EXTERNAL";
+
   /// Constructor
   SproutletWrapper(SproutletProxy* proxy,
                    SproutletProxy::UASTsx* proxy_tsx,
@@ -333,6 +335,7 @@ public:
                               pj_pool_t* pool) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
   bool is_network_func_boundary() const;
+  bool is_internal_network_func_boundary() const;
   int get_depth() const { return _depth; };
   const std::string& get_network_function() const { return _this_network_func; };
 
