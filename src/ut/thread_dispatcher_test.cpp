@@ -13,7 +13,7 @@
 #include "gtest/gtest.h"
 #include "test_interposer.hpp"
 #include "testingcommon.h"
-#include "mock_load_monitor.h"
+#include "mockloadmonitor.hpp"
 #include "mock_pjsip_module.h"
 #include "siptest.hpp"
 #include "stack.h"
@@ -134,6 +134,7 @@ TEST_F(ThreadDispatcherTest, OverloadedInviteTest)
   msg._method = "INVITE";
 
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(false));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(*mod_mock, on_tx_response(ResultOf(get_tx_status_code, 503)));
 
   inject_msg_thread(msg.get_request());
