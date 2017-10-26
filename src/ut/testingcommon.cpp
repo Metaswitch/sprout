@@ -277,6 +277,18 @@ void Message::convert_routeset(pjsip_msg* msg)
   _route = route;
 }
 
+std::string Message::get_call_id()
+{
+  char buf[80];
+
+  int n = snprintf(buf,
+                   sizeof(buf),
+                   "0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%1$04dohntC@10.114.61.213",
+                   _unique);
+  std::string ret(buf, n);
+  return ret;
+}
+
 // Build a request message, which is returned as a string.
 std::string Message::get_request()
 {
@@ -318,7 +330,7 @@ std::string Message::get_request()
                    "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
                    "%10$s\r\n"
                    "Max-Forwards: %8$d\r\n"
-                   "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
+                   "Call-ID: %11$s\r\n"
                    "CSeq: %15$d %1$s\r\n"
                    "User-Agent: Accession 2.0.0.0\r\n"
                    "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
@@ -338,7 +350,7 @@ std::string Message::get_request()
                    /*  8 */ _forwards,
                    /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
                    /* 10 */ to_header.c_str(),
-                   /* 11 */ _unique,
+                   /* 11 */ get_call_id().c_str(),
                    /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
                    /* 13 */ _via.c_str(),
                    /* 14 */ route.c_str(),

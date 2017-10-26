@@ -60,6 +60,7 @@ setup_environment()
         ulimit -Hn 1000000
         ulimit -Sn 1000000
         ulimit -c unlimited
+        ulimit -e 30 # Allow sprout threads to de-nice as far as -10.
         # enable gdb to dump a parent sprout process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
 }
@@ -182,6 +183,7 @@ get_daemon_args()
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
         [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
         [ -z "$dummy_app_server" ] || dummy_app_server_arg="--dummy-app-server=$dummy_app_server"
+        [ -z "$request_on_queue_timeout" ] || request_on_queue_timeout_arg="--request-on-queue-timeout=$request_on_queue_timeout"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -225,6 +227,7 @@ get_daemon_args()
                      $override_npdi_arg
                      $exception_max_ttl_arg
                      $force_3pr_body_arg
+                     $request_on_queue_timeout_arg
                      --http-address=$local_ip
                      --http-port=9888
                      --analytics=$log_directory

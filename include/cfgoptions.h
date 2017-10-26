@@ -27,7 +27,6 @@
 #include "impistore.h"
 #include "analyticslogger.h"
 #include "fifcservice.h"
-#include "mmfservice.h"
 
 // Struct containing the possible values for non-REGISTER authentication. These
 // are a set of flags that indicate different conditions that may cause a
@@ -142,6 +141,7 @@ struct options
   std::string                          dummy_app_server;
   bool                                 http_acr_logging;
   int                                  homestead_timeout;
+  int                                  request_on_queue_timeout;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
@@ -166,6 +166,5 @@ extern AlarmManager* alarm_manager;
 extern AnalyticsLogger* analytics_logger;
 extern ChronosConnection* chronos_connection;
 extern FIFCService* fifc_service;
-extern MMFService* mmf_service;
 
 #endif

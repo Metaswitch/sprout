@@ -621,7 +621,7 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   }
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bool ret = sdm->set_aor_data(uri, aor, 0);
+  bool ret = sdm->set_aor_data(uri, SubscriberDataManager::EventTrigger::ADMIN, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 };

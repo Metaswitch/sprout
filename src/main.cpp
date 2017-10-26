@@ -141,6 +141,7 @@ enum OptionTypes
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
   OPT_HOMESTEAD_TIMEOUT,
+  OPT_REQUEST_ON_QUEUE_TIMEOUT
 };
 
 
@@ -230,6 +231,7 @@ const static struct pj_getopt_option long_opt[] =
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
+  { "request-on-queue-timeout",     required_argument, 0, OPT_REQUEST_ON_QUEUE_TIMEOUT},
   { NULL,                           0,                 0, 0}
 };
 
@@ -1290,6 +1292,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_REQUEST_ON_QUEUE_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->request_on_queue_timeout,
+                           request_on_queue_timeout,
+                           Maximum time (in ms) a request can wait to be processed);
+      }
+      break;
+
     SPROUTLET_MACRO(SPROUTLET_OPTIONS)
 
     case 'h':
@@ -1415,7 +1425,6 @@ AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
-MMFService* mmf_service = NULL;
 
 int create_astaire_stores(struct options opt,
                           AstaireResolver*& astaire_resolver,
@@ -1719,6 +1728,7 @@ int main(int argc, char* argv[])
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
+  opt.request_on_queue_timeout = 4000; // TODO decide on actual default
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -2123,11 +2133,6 @@ int main(int argc, char* argv[])
                                            AlarmDef::SPROUT_FIFC_STATUS,
                                            AlarmDef::CRITICAL));
 
-  mmf_service = new MMFService(new Alarm(alarm_manager,
-                                         "sprout",
-                                         AlarmDef::SPROUT_MMF_STATUS,
-                                         AlarmDef::CRITICAL));
-
   // Create ENUM service.
   if (!opt.enum_servers.empty())
   {
@@ -2156,10 +2161,7 @@ int main(int argc, char* argv[])
                 new ACRFactory();
 
     // Launch stateful proxy as P-CSCF.
-    status = init_stateful_proxy(NULL,
-                                 NULL,
-                                 NULL,
-                                 true,
+    status = init_stateful_proxy(true,
                                  opt.upstream_proxy,
                                  opt.upstream_proxy_port,
                                  opt.upstream_proxy_connections,
@@ -2169,12 +2171,7 @@ int main(int argc, char* argv[])
                                  opt.pbxes,
                                  opt.pbx_service_route,
                                  analytics_logger,
-                                 NULL,
-                                 NULL,
-                                 NULL,
                                  pcscf_acr_factory,
-                                 NULL,
-                                 NULL,
                                  "",
                                  quiescing_mgr,
                                  opt.enabled_icscf,
@@ -2316,16 +2313,16 @@ int main(int argc, char* argv[])
     }
   }
 
-  init_common_sip_processing(load_monitor,
-                             requests_counter,
-                             overload_counter,
+  init_common_sip_processing(requests_counter,
                              hc);
 
   init_thread_dispatcher(opt.worker_threads,
                          latency_table,
                          queue_size_table,
+                         overload_counter,
                          load_monitor,
-                         exception_handler);
+                         exception_handler,
+                         opt.request_on_queue_timeout);
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.
@@ -2514,7 +2511,6 @@ int main(int argc, char* argv[])
   delete chronos_connection;
   delete hss_connection;
   delete fifc_service;
-  delete mmf_service;
   delete sifc_service;
   delete quiescing_mgr;
   delete exception_handler;

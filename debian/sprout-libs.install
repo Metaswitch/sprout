@@ -1,2 +1,2 @@
-usr/lib/*.so usr/share/clearwater/sprout/lib
-usr/lib/*.so.* usr/share/clearwater/sprout/lib
+usr/lib/*.so usr/lib
+usr/lib/*.so.* usr/lib

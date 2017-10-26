@@ -128,13 +128,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       icscf_uri = opt.external_icscf_uri;
     }
 
-    // Create the MMF cluster uri
-    std::string mmf_cluster_uri = "sip:" + opt.sprout_hostname + ";service=mmf";
-
-    // As there is not currently a shared_config option for this, form the
-    // MMF node uri manually, directly specifying the mmf service
-    std::string mmf_node_uri = scscf_node_uri + ";service=mmf";
-
     // Create Application Server communication trackers.
     _sess_term_as_alarm = new Alarm(alarm_manager,
                                     "sprout",
@@ -160,8 +153,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           scscf_node_uri,
                                           icscf_uri,
                                           opt.uri_bgcf,
-                                          mmf_cluster_uri,
-                                          mmf_node_uri,
                                           0,
                                           "",
                                           opt.prefix_scscf,
@@ -174,7 +165,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           _incoming_sip_transactions_tbl,
                                           _outgoing_sip_transactions_tbl,
                                           opt.override_npdi,
-                                          mmf_service,
                                           fifc_service,
                                           IFCConfiguration(opt.apply_fallback_ifcs,
                                                            opt.reject_if_no_matching_ifcs,
@@ -270,10 +260,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     analytics_logger,
                                     &auth_stats_tbls,
                                     opt.nonce_count_supported,
-                                    std::bind(&RegistrarSproutlet::expiry_for_binding,
-                                              _registrar_sproutlet,
-                                              std::placeholders::_1,
-                                              std::placeholders::_2));
+                                    opt.sub_max_expires);
       ok = ok && _auth_sproutlet->init();
       sproutlets.push_front(_auth_sproutlet);
     }

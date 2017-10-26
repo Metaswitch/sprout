@@ -29,6 +29,7 @@ extern "C" {
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <sys/resource.h>
 
 #include "constants.h"
 #include "eventq.h"
@@ -158,6 +159,17 @@ static int pjsip_thread_func(void *p)
   tid = syscall(SYS_gettid);
 
   TRC_STATUS("PJSIP transport thread started with kernel thread ID %d", tid);
+
+  // Increase the priority of the transport thread (by reducing its niceness to
+  // -10). This means that the transport thread is scheduled more aggressively
+  // than the worker threads which means that messages are read from the network
+  // promptly, but then rejected due to unavailability of the worker threads.
+  if (setpriority(PRIO_PROCESS, 0, -10) != 0)
+  {
+    TRC_WARNING("Unable to increase priority of the transport thread. "
+                "Overload may not be handled gracefully. "
+                "Error: %s", strerror(errno));
+  }
 
   pj_bool_t curr_quiescing = PJ_FALSE;
   pj_bool_t new_quiescing = quiescing;
@@ -532,6 +544,17 @@ pj_status_t init_pjsip()
   // Create the endpoint.
   status = pjsip_endpt_create(&stack_data.cp.factory, NULL, &stack_data.endpt);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+  // Increase the limit on the number of timers that PJSIP processes each time
+  // it polls the timer heap.
+  //
+  // By default PJSIP will process up to 64 timers and 16 epoll events per call
+  // to pjsip_endpt_handle_events. This ratio means that if inbound messages
+  // spawn more than a handlful of timers we can set timers faster than they can
+  // be expired.
+  pj_timer_heap_set_max_timed_out_per_poll(
+                                   pjsip_endpt_get_timer_heap(stack_data.endpt),
+                                   4096);
 
   // Init transaction layer.
   status = pjsip_tsx_layer_init_module(stack_data.endpt);
