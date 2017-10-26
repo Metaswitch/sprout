@@ -228,7 +228,7 @@ pj_status_t respond_stateful(pjsip_endpoint* endpt,
 pjsip_tx_data *clone_tdata(pjsip_tx_data* tdata);
 void clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool);
 
-pjsip_via_hdr* add_top_via(pjsip_tx_data* tdata);
+void add_top_via(pjsip_tx_data* tdata);
 
 void remove_top_via(pjsip_tx_data* tdata);
 
@@ -365,16 +365,6 @@ bool is_param_in_route_hdr(const pjsip_route_hdr* route,
 /// @return           - Whether the parameter was present or not.
 bool is_param_in_top_route(const pjsip_msg* req,
                            const pj_str_t* param_name);
-
-/// Add a header immediately above the topmost existing instance of that
-/// header.  If there are no other instances of the header, add it at the very
-/// top of the message.  This is useful for keeping headers of the same type
-/// grouped together.  While that is not required by the SIP RFCs, it does make
-/// analysis of SIP flows much simpler.
-///
-/// @param msg        - The message to which the header should be added
-/// @param hdr        - The header to add
-void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
 
 } // namespace PJUtils
 
