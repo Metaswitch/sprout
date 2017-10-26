@@ -230,6 +230,7 @@ sprout_test_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS} \
                         -DGTEST_USE_OWN_TR1_TUPLE=0
 
 SPROUT_COMMON_LDFLAGS := -rdynamic \
+                         -Wl,-rpath -Wl,/usr/share/clearwater/sprout/lib \
                          -L../usr/lib \
                          -lmemcached \
                          -lmemcachedutil \
