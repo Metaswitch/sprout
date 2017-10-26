@@ -616,6 +616,9 @@ pj_status_t init_stack(const std::string& system_name,
   std::string contact_str = "<"+scscf_uri+">";
   stack_data.scscf_contact = pj_str(strdup(contact_str.c_str()));
 
+  // Sprout hostname
+  stack_data.sprout_hostname = sprout_hostname;
+
   // Build a set of home domains
   stack_data.home_domains = std::unordered_set<std::string>();
   stack_data.home_domains.insert(PJUtils::pj_str_to_string(&stack_data.default_home_domain));
