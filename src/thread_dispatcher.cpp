@@ -108,6 +108,18 @@ static pjsip_module mod_thread_dispatcher =
   NULL,                                 /* on_tsx_state()       */
 };
 
+static void pause_stopwatch(Utils::StopWatch& s, const std::string& reason)
+{
+  TRC_DEBUG("Pausing stopwatch due to %s", reason.c_str());
+  s.stop();
+}
+
+static void resume_stopwatch(Utils::StopWatch& s, const std::string& reason)
+{
+  TRC_DEBUG("Resuming stopwatch after %s", reason.c_str());
+  s.start();
+}
+
 bool process_queue_element()
 {
   TRC_DEBUG("Attempting to process queue element");
@@ -121,6 +133,10 @@ bool process_queue_element()
     if (qe.type == MESSAGE)
     {
       pjsip_rx_data* rdata = qe.event_data.rdata;
+
+      // Create an IO hook that pauses the stopwatch while blocked on IO.
+      Utils::IOHook io_hook(std::bind(pause_stopwatch, qe.stop_watch, std::placeholders::_1),
+                            std::bind(resume_stopwatch, qe.stop_watch, std::placeholders::_1));
 
       if (rdata)
       {

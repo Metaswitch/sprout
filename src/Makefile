@@ -146,7 +146,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        bono_test.cpp \
                        bgcfservice_test.cpp \
                        options_test.cpp \
-                       utils_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
                        ifchandler_test.cpp \

@@ -136,6 +136,16 @@ extern void set_quiescing_false()
   quiescing = PJ_FALSE;
 }
 
+static void on_io_started(const std::string& msg)
+{
+  TRC_WARNING("Performing blocking work on PJSIP transport thread: %s", msg.c_str());
+
+  if (Log::enabled(Log::DEBUG_LEVEL))
+  {
+    TRC_BACKTRACE("Call stack for blocking work follows");
+  }
+}
+
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
 /// and timers.
 static int pjsip_thread_func(void *p)
@@ -163,6 +173,11 @@ static int pjsip_thread_func(void *p)
 
   pj_bool_t curr_quiescing = PJ_FALSE;
   pj_bool_t new_quiescing = quiescing;
+
+  // Log whenever we do any I/O on this thread. There is only one transport
+  // thread so blocking on it is a really bad idea!
+  Utils::IOHook io_hook(&on_io_started,
+                        Utils::IOHook::NOOP_ON_COMPLETE);
 
   while (!quit_flag)
   {
