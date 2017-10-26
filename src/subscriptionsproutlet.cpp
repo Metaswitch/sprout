@@ -336,6 +336,13 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
   if (st_code != PJSIP_SC_OK)
   {
+    if (st_code == PJSIP_SC_TEMPORARILY_UNAVAILABLE)
+    {
+      // A 480 response means that the subscriber wasn't registered
+      SAS::Event event(trail_id, SASEvent::SUBSCRIBE_FAILED_EARLY_NOT_REG, 0);
+      SAS::report_event(event);
+    }
+
     pjsip_msg* rsp = create_response(req, st_code);
     send_response(rsp);
     free_msg(req);
