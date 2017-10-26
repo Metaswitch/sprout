@@ -695,7 +695,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                                    alias,
                                    _req,
                                    _original_transport,
-                                   SproutletWrapper::EXTERNAL_NETWORK_FUNCTION,
+                                   "EXTERNAL",
                                    _sproutlet_proxy->_max_sproutlet_depth,
                                    trail());
     }
@@ -1641,8 +1641,6 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
     return;
   }
 
-  pjsip_tx_data* tdata = it->second;
-
   // Check that this actually is a response
   if (rsp->type != PJSIP_RESPONSE_MSG)
   {
@@ -1650,17 +1648,10 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
     return;
   }
 
-  if (is_internal_network_func_boundary())
-  {
-    // We're at an internal network function boundary - strip off the Via
-    // header that we added on the request.
-    PJUtils::remove_top_via(tdata);
-  }
-
-  TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(tdata));
+  TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(it->second));
 
   // We've found the tdata, move it to _send_responses.
-  _send_responses.push_back(tdata);
+  _send_responses.push_back(it->second);
 
   // Move the clone out of the clones list.
   _packets.erase(rsp);
@@ -1851,18 +1842,6 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
     {
       --mf_hdr->ivalue;
     }
-  }
-
-  if (is_internal_network_func_boundary() && !stack_data.sprout_hostname.empty())
-  {
-    // Add a Via header to indicate that the request has traversed the upstream
-    // network function.  This can be used to determine the source network
-    // function on requests passed internally.
-    pjsip_via_hdr *hvia = PJUtils::add_top_via(req);
-    std::string network_func_host =
-                     _upstream_network_func + "." + stack_data.sprout_hostname;
-    pj_strdup2(req->pool, &hvia->sent_by.host, network_func_host.c_str());
-    pj_strdup2(req->pool, &hvia->transport, "TCP");
   }
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
@@ -2373,32 +2352,12 @@ void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
 
 bool SproutletWrapper::is_network_func_boundary() const
 {
-  // If this network function has a different name to the upstream one, then
-  // we're obviously at a network function boundary.  We're also on a boundary
-  // between two instances of the same network function if the service name
-  // matches the upstream network function (i.e. the two network function names
-  // match, but we're entering the first Sproutlet in the network function).
-  bool network_func_boundary = (_this_network_func != _upstream_network_func) ||
-                               (_service_name == _upstream_network_func);
+  bool network_func_boundary = (_this_network_func != _upstream_network_func);
 
-  TRC_DEBUG("Network function boundary: %s ('%s'->'%s'/'%s')",
+  TRC_DEBUG("Network function boundary: %s ('%s'->'%s')",
             network_func_boundary ? "yes" : "no",
             _upstream_network_func.c_str(),
-            _this_network_func.c_str(),
-            _service_name.c_str());
+            _this_network_func.c_str());
 
   return network_func_boundary;
-}
-
-bool SproutletWrapper::is_internal_network_func_boundary() const
-{
-  // An internal network function boundary doesn't involve an external hop.
-  bool internal_boundary = is_network_func_boundary() &&
-                           (_upstream_network_func != EXTERNAL_NETWORK_FUNCTION) &&
-                           (_this_network_func != EXTERNAL_NETWORK_FUNCTION);
-
-  TRC_DEBUG("Internal network function boundary: %s",
-            internal_boundary ? "yes" : "no");
-
-  return internal_boundary;
 }

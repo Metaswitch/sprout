@@ -51,7 +51,6 @@ struct stack_data_struct
   pj_str_t             default_home_domain;
   std::unordered_set<std::string> home_domains;
   std::unordered_set<std::string> aliases;
-  std::string          sprout_hostname;
   pj_str_t             cdf_domain;
   pj_str_t             scscf_uri_str;
   pjsip_sip_uri*       scscf_uri;

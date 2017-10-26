@@ -17,7 +17,6 @@
 #include "pjutils.h"
 #include "pjsip.h"
 #include "pjsip_simple.h"
-#include "boost/algorithm/string_regex.hpp"
 
 #include <mutex>
 
@@ -630,10 +629,6 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("loop2", 0, "sip:loop2.homedomain;transport=tcp", "", "", NULL, NULL, "loop-nf", "loop1"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("composite1", 0, "sip:cmp1.homedomain;transport=tcp", "", "", NULL, NULL, "cmp-nf", "composite2"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("composite2", 0, "sip:cmp2.homedomain;transport=tcp", "", "", NULL, NULL, "cmp-nf", "fwd"));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat1", 0, "sip:rep1.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", "repeat2"));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat2", 0, "sip:rep2.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", "repeat"));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat", 0, "sip:rep.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", "repeat3"));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat3", 0, "sip:rep3.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", ""));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -2165,12 +2160,6 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
             str_uri(req->msg->line.req.uri));
   EXPECT_EQ("Max-Forwards: 98", get_headers(req->msg, "Max-Forwards"));
   EXPECT_EQ("", get_headers(req->msg, "Route"));
-  vector<string> via_hdrs;
-  string via_str = get_headers(req->msg, "Via");
-  boost::algorithm::split_regex(via_hdrs, via_str, boost::regex("\r\n"));
-  EXPECT_EQ(3, via_hdrs.size());
-  EXPECT_THAT(via_hdrs[1], MatchesRegex("Via: SIP/2.0/TCP cmp-nf.sprout.homedomain.*"));
-
   inject_msg(respond_to_txdata(req, 100));
 
   // Send a 200 OK response.
@@ -2201,84 +2190,6 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
   EXPECT_EQ("sip:bob@proxy1.awaydomain:5060;transport=TCP", str_uri(tdata->msg->line.req.uri));
   EXPECT_EQ("", get_headers(tdata->msg, "Route"));
   EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
-  free_txdata();
-
-  // All done!
-  ASSERT_EQ(0, txdata_count());
-
-  delete tp;
-}
-
-TEST_F(SproutletProxyTest, RepeatedNetworkFunction)
-{
-  // Tests passing a request through two network functions with the same name.
-  // We should still be able to detect the boundary between them, and add the
-  // internal Via header.  For testing purposes, we've mocked this up by having
-  // two separate network functions which report the same name.  In real
-  // situations it will be two instances of the same network function, which
-  // the call is routed through in complex ways.
-  pjsip_tx_data* tdata;
-
-  // Create a TCP connection to the listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.scscf_port,
-                                        "1.2.3.4",
-                                        49152);
-
-  // Inject a request with a Route header referencing the first Sproutlet in
-  // the first instance of the network function.
-  Message msg1;
-  msg1._method = "INVITE";
-  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
-  msg1._from = "sip:alice@homedomain";
-  msg1._to = "sip:bob@awaydomain";
-  msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:repeat1.proxy1.homedomain;transport=TCP;lr>";
-  inject_msg(msg1.get_request(), tp);
-
-  // Expecting 100 Trying and forwarded INVITEs.
-  ASSERT_EQ(2, txdata_count());
-
-  // Check the 100 Trying.
-  tdata = current_txdata();
-  RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
-  free_txdata();
-
-  // Check the INVITE and send a 100 Trying.  There should be three Via headers
-  // on the INVITE that coms out the other side (from top, to bottom):
-  //  - One from exiting the SPN
-  //  - One from the internal network function boundary
-  //  - One from the original sender
-  pjsip_tx_data* req = pop_txdata();
-  expect_target("TCP", "10.10.20.1", 5060, req);
-  ReqMatcher("INVITE").matches(req->msg);
-  EXPECT_EQ("sip:bob@proxy1.awaydomain:5060;transport=TCP",
-            str_uri(req->msg->line.req.uri));
-  EXPECT_EQ("", get_headers(req->msg, "Route"));
-  vector<string> via_hdrs;
-  string via_str = get_headers(req->msg, "Via");
-  boost::algorithm::split_regex(via_hdrs, via_str, boost::regex("\r\n"));
-  EXPECT_EQ(3, via_hdrs.size());
-  EXPECT_THAT(via_hdrs[1], MatchesRegex("Via: SIP/2.0/TCP repeat.sprout.homedomain.*"));
-
-  inject_msg(respond_to_txdata(req, 100));
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_txdata(req, 200));
-  ASSERT_EQ(1, txdata_count());
-
-  // Check the 200 OK.  It should contain just a single Via header (belonging
-  // to the original sender).
-  tdata = current_txdata();
-  RespMatcher(200).matches(tdata->msg);
-  via_hdrs.clear();
-  via_str = get_headers(tdata->msg, "Via");
-  boost::algorithm::split_regex(via_hdrs, via_str, boost::regex("\r\n"));
-  EXPECT_EQ(1, via_hdrs.size());
-  EXPECT_THAT(via_hdrs[0], MatchesRegex("Via: SIP/2.0/TCP 1.2.3.4.*"));
-  tp->expect_target(tdata);
   free_txdata();
 
   // All done!
