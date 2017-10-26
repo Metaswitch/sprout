@@ -271,12 +271,25 @@ MmtelTsx::MmtelTsx(pjsip_msg* req,
                      pjsip_msg_find_hdr_by_name(req, &STR_P_SERVED_USER, NULL);
   if (psu_hdr != NULL)
   {
+    // Inspect the `sescase` parameter to see if it indicates origination.
     TRC_DEBUG("Found P-Served-User header: %s",
               PJUtils::hdr_to_string(psu_hdr).c_str());
     pjsip_param* sescase = pjsip_param_find(&psu_hdr->other_param, &STR_SESCASE);
-    if ((sescase != NULL) &&
-        ((pj_stricmp(&sescase->value, &STR_ORIG) == 0) ||
-         (pj_stricmp(&sescase->value, &STR_ORIG_CDIV) == 0)))
+    bool sescase_orig = false;
+    bool sescase_cdiv = false;
+
+    if (sescase != NULL)
+    {
+      sescase_orig = (pj_stricmp(&sescase->value, &STR_ORIG) == 0);
+      sescase_cdiv = (pj_stricmp(&sescase->value, &STR_ORIG_CDIV) == 0);
+    }
+
+    // Inspect the `orig-cdiv` parameter.  This takes no value, but its
+    // presence indicates originating services applied for call diversion.
+    pjsip_param* orig_cdiv_param = pjsip_param_find(&psu_hdr->other_param,
+                                                    &STR_ORIG_CDIV);
+
+    if (sescase_orig || sescase_cdiv || (orig_cdiv_param != NULL))
     {
       _originating = true;
     }
