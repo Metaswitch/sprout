@@ -973,7 +973,7 @@ void SproutletProxy::UASTsx::schedule_requests()
         }
 
         // Pass the request to the downstream sproutlet.
-        downstream->rx_request(req.req);
+        downstream->rx_request(req.req, req.allowed_host_state);
       }
       else
       {
@@ -1126,7 +1126,7 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
         _dmap_sproutlet.erase(i->second);
         _umap.erase(i);
       }
-      upstream->rx_response(rsp, fork_id);
+      upstream->rx_response(rsp, fork_id, downstream->get_error_state());
     }
     else
     {
@@ -1292,6 +1292,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _process_actions_entered(0),
   _forks(),
   _pending_timers(),
+  _allowed_host_state(0),
   _trail_id(trail_id)
 {
   if (_original_transport != NULL)
@@ -1617,7 +1618,7 @@ int SproutletWrapper::send_request(pjsip_msg*& req, int allowed_host_state)
 
   _send_requests[fork_id] = {
     .tx_data = it->second,
-    .allowed_host_state = allowed_host_state
+    .allowed_host_state = (_allowed_host_state & allowed_host_state)
   };
 
   TRC_VERBOSE("%s sending %s on fork %d",
@@ -1825,7 +1826,7 @@ std::string SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri) const
   return _proxy->get_local_hostname(uri);
 }
 
-void SproutletWrapper::rx_request(pjsip_tx_data* req)
+void SproutletWrapper::rx_request(pjsip_tx_data* req, int allowed_host_state)
 {
   // SAS log the start of processing by this sproutlet
   SAS::Event event(trail(), SASEvent::BEGIN_SPROUTLET_REQ, 0);
@@ -1841,6 +1842,7 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
 
   // Keep an immutable reference to the request.
   _req = req;
+  _allowed_host_state = allowed_host_state;
 
   if (is_network_func_boundary())
   {
@@ -1894,7 +1896,9 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   process_actions(complete_after_actions);
 }
 
-void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
+void SproutletWrapper::rx_response(pjsip_tx_data* rsp,
+                                   int fork_id,
+                                   ForkErrorState error_state)
 {
   // SAS log the start of processing by this sproutlet
   SAS::Event event(trail(), SASEvent::BEGIN_SPROUTLET_RSP, 0);
@@ -1925,6 +1929,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     // Final response, so mark the fork as completed and decrement the number
     // of pending responses.
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
+    _forks[fork_id].state.error_state = error_state;
     pjsip_tx_data_dec_ref(_forks[fork_id].req);
     _forks[fork_id].req = NULL;
     TRC_VERBOSE("%s received final response %s on fork %d, state = %s",
@@ -2401,4 +2406,26 @@ bool SproutletWrapper::is_internal_network_func_boundary() const
             internal_boundary ? "yes" : "no");
 
   return internal_boundary;
+}
+
+// Get the overall error state for this wrapper.  This will return NONE, unless
+// all of the error states match.
+ForkErrorState SproutletWrapper::get_error_state() const
+{
+  if (_forks.size() <= 0)
+  {
+    return ForkErrorState::NONE;
+  }
+
+  ForkErrorState error_state = _forks[0].state.error_state;
+
+  for (const auto& fork : _forks)
+  {
+    if (fork.state.error_state != error_state)
+    {
+      return ForkErrorState::NONE;
+    }
+  }
+
+  return error_state;
 }
