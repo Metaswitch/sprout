@@ -2408,8 +2408,14 @@ bool SproutletWrapper::is_internal_network_func_boundary() const
   return internal_boundary;
 }
 
-// Get the overall error state for this wrapper.  This will return NONE, unless
-// all of the error states match.
+// Get the overall error state for this wrapper.  This is used when passing
+// error state upstream to another sproutlet.  In the most common case, there
+// will only have been a single fork, and we will return its state.  For more
+// complicated scenarios, we can't infer anything about the downstream error
+// state unless all forks had the same error state.  For example, a transport
+// error on a single fork is not significant, as the sproutlet may have retried
+// on another fork, and had a successful result.  If the results don't match,
+// we return NONE.
 ForkErrorState SproutletWrapper::get_error_state() const
 {
   if (_forks.size() <= 0)

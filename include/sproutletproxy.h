@@ -438,6 +438,10 @@ private:
   /// until all these timers have popped or been cancelled.
   std::set<TimerID> _pending_timers;
 
+  // The allowed host state for outbound requests from the sproutlet wrapped by
+  // this wrapper.  If there are no addresses of the appropriate state (e.g.
+  // whitelisted), then a 503 response will be internally generated, and the
+  // error state will be set to indicate that there were no matching addresses.
   int _allowed_host_state;
 
   SAS::TrailId _trail_id;

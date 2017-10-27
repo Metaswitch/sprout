@@ -592,6 +592,56 @@ public:
   }
 };
 
+class FakeSproutletRestrict : public FakeSproutletTsxNextHop
+{
+public:
+  FakeSproutletRestrict(Sproutlet* sproutlet) :
+   FakeSproutletTsxNextHop(sproutlet)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    int allowed_state = BaseResolver::ALL_LISTS;
+
+    string hdr_state = get_headers(req, "X-Host-State");
+
+    if (!hdr_state.empty())
+    {
+      allowed_state = std::stoi(hdr_state.substr(14));
+    }
+
+    TRC_DEBUG("Forward on with allowed state restriction: %d", allowed_state);
+    send_request(req, allowed_state);
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    TRC_DEBUG("Got %d response", rsp->line.status.code);
+
+    ForkState state = fork_state(fork_id);
+    if (state.error_state != ForkErrorState::NONE)
+    {
+      // The downstream sproutlet hit an error.  Encode this by adding the
+      // error value to 700, to produce a unique status code to send upstream.
+      // This is just to allow the UTs to check on the error state result, we
+      // wouldn't expect real sproutlets to expose this internal error state.
+      TRC_DEBUG("Got error state: %d", state.error_state);
+      free_msg(rsp);
+      pjsip_msg* err_rsp =
+        create_response(original_request(),
+                        (pjsip_status_code)(700 + state.error_state));
+      send_response(err_rsp);
+    }
+    else
+    {
+      // Pass the response upstream
+      TRC_DEBUG("No error state");
+      send_response(rsp);
+    }
+  }
+};
+
 class SproutletProxyTest : public SipTest
 {
 public:
@@ -634,6 +684,8 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat2", 0, "sip:rep2.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", "repeat"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat", 0, "sip:rep.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", "repeat3"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat3", 0, "sip:rep3.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletRestrict>("restrict", 0, "sip:restrict.homedomain;transport=tcp", "", "", NULL, NULL, "state-nf", "downstream"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false>>("downstream", 0, "sip:downstream.homedomain;transport=tcp", "", "", NULL, NULL, "state-nf", ""));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -2404,6 +2456,109 @@ TEST_F(SproutletProxyTest, LoopDetectionSproutletDepth)
   inject_msg(msg2.get_request(), tp);
 
   // The ACK should be discarded.
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, RestrictHostStateNone)
+{
+  // Tests passing a request through a Network Function that restricts the
+  // allowed host state of request targets, and having a downstream sproutlet
+  // fail to meet those restrictions.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the first restricting
+  // Sproutlet.  Include the internal UT header X-Host-State to indicate that
+  // the restrict sproutlet should not allow any address types.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg1._route = "Route: <sip:restrict.proxy1.homedomain;transport=TCP;lr>";
+  msg1._extra = "X-Host-State: 0";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and error response from restrict sproutlet.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the error response.  The restrict sproutlet makes up an error code
+  // by adding 700 to the index of the error state that it encountered.
+  int err_code = 700 + (int)ForkErrorState::NO_ADDRESSES;
+  tdata = current_txdata();
+  RespMatcher(err_code).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, RestrictHostStateTimeout)
+{
+  // Tests passing a request through a Network Function that restricts the
+  // allowed host state of request targets, and having a downstream sproutlet
+  // fail to meet those restrictions.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the first restricting
+  // Sproutlet.  Include the internal UT header X-Host-State to indicate that
+  // the restrict sproutlet can use only whitelisted addresses.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg1._route = "Route: <sip:restrict.proxy1.homedomain;transport=TCP;lr>";
+  msg1._extra = "X-Host-State: " + BaseResolver::WHITELISTED;
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the INVITE, but don't send any trying response (we're being
+  // unresponsive to trigger a timeout).
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+
+  // Advance time to make the call timeout
+  cwtest_advance_time_ms(33000L);
+  poll();
+
+  // Check the error response.  The restrict sproutlet makes up an error code
+  // by adding 700 to the index of the error state that it encountered.
+  ASSERT_EQ(1, txdata_count());
+  int err_code = 700 + (int)ForkErrorState::TIMEOUT;
+  tdata = current_txdata();
+  RespMatcher(err_code).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
   ASSERT_EQ(0, txdata_count());
 
   delete tp;
