@@ -309,7 +309,6 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
   }
 }
 
-
 bool decode_homestead_xml(const std::string& public_id,
                           HSSConnection::irs_info& irs_info,
                           std::shared_ptr<rapidxml::xml_document<> > root,
@@ -356,6 +355,12 @@ bool decode_homestead_xml(const std::string& public_id,
     TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
   }
+
+  // Look for the Previous Registration State.  If there is no Previous
+  // Registration State in the message set prev_regstate to the empty
+  // string.
+  rapidxml::xml_node<>* prev_reg = cw->first_node(RegDataXMLUtils::PREVIOUS_REGISTRATION_STATE);
+  irs_info._prev_regstate = (!prev_reg) ? "" : prev_reg->value();
 
   rapidxml::xml_node<>* imss = cw->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 

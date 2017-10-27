@@ -290,6 +290,7 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
                                      aor,
                                      binding_id,
                                      HSSConnection::DEREG_TIMEOUT,
+                                     SubscriberDataManager::EventTrigger::TIMEOUT,
                                      trail);
 }
 
@@ -299,7 +300,6 @@ long SCSCFSproutletTsx::read_hss_data(const HSSConnection::irs_query& irs_query,
                                       HSSConnection::irs_info& irs_info,
                                       SAS::TrailId trail)
 {
-
   long http_code = _scscf->_hss->update_registration_state(irs_query,
                                                            irs_info,
                                                            trail);

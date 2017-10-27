@@ -60,6 +60,44 @@ class HssConnectionTest : public BaseTest
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
+        "<PreviousRegistrationState>NOT_REGISTERED</PreviousRegistrationState>"
+        "<IMSSubscription>"
+          "<ServiceProfile>"
+            "<PublicIdentity>"
+              "<Identity>sip:123@example.com</Identity>"
+            "</PublicIdentity>"
+            "<PublicIdentity>"
+              "<Identity>sip:456@example.com</Identity>"
+            "</PublicIdentity>"
+            "<InitialFilterCriteria>"
+              "<TriggerPoint>"
+                "<ConditionTypeCNF>0</ConditionTypeCNF>"
+                "<SPT>"
+                  "<ConditionNegated>0</ConditionNegated>"
+                  "<Group>0</Group>"
+                  "<Method>INVITE</Method>"
+                  "<Extension></Extension>"
+                "</SPT>"
+              "</TriggerPoint>"
+              "<ApplicationServer>"
+                "<ServerName>mmtel.narcissi.example.com</ServerName>"
+                "<DefaultHandling>0</DefaultHandling>"
+              "</ApplicationServer>"
+            "</InitialFilterCriteria>"
+          "</ServiceProfile>"
+        "</IMSSubscription>"
+        "<ChargingAddresses>"
+          "<CCF priority=\"1\">ccf1</CCF>"
+          "<CCF priority=\"2\">ccf2</CCF>"
+          "<ECF priority=\"2\">ecf2</ECF>"
+          "<ECF priority=\"1\">ecf1</ECF>"
+        "</ChargingAddresses>"
+      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42_rereg/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
+        "<PreviousRegistrationState>REGISTERED</PreviousRegistrationState>"
         "<IMSSubscription>"
           "<ServiceProfile>"
             "<PublicIdentity>"
@@ -425,6 +463,23 @@ TEST_F(HssConnectionTest, SimpleIfc)
 
   _hss.update_registration_state(irs_query, irs_info, 0);
 
+  EXPECT_EQ("NOT_REGISTERED", irs_info._prev_regstate);
+  EXPECT_EQ("REGISTERED", irs_info._regstate);
+  EXPECT_FALSE(irs_info._service_profiles.empty());
+}
+
+TEST_F(HssConnectionTest, SimpleIfcReReg)
+{
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = "pubid42_rereg";
+  irs_query._req_type = HSSConnection::REG;
+  irs_query._server_name = "server_name";
+  HSSConnection::irs_info irs_info;
+
+  _hss.update_registration_state(irs_query, irs_info, 0);
+
+  EXPECT_EQ("REGISTERED", irs_info._prev_regstate);
+  EXPECT_EQ("REGISTERED", irs_info._regstate);
   EXPECT_FALSE(irs_info._service_profiles.empty());
 }
 
@@ -715,7 +770,6 @@ TEST_F(HssConnectionTest, SimpleAliases)
   EXPECT_EQ("sip:321@example.com", irs_info._aliases[0]);
   EXPECT_EQ("pubid46", irs_info._aliases[1]);
   EXPECT_EQ("tel:321", irs_info._aliases[2]);
-
 }
 
 TEST_F(HssConnectionTest, CacheNotAllowed)

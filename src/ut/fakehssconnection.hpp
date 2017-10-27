@@ -41,6 +41,13 @@ public:
                        std::string,
                        std::string = "",
                        const std::string& wildcard = "");
+  void set_impu_result_with_prev(const std::string&,
+                                 const std::string&,
+                                 const std::string&,
+                                 const std::string&,
+                                 std::string,
+                                 std::string = "",
+                                 const std::string& wildcard = "");
   void delete_result(const std::string& url);
   void set_rc(const std::string& url, long rc);
   void delete_rc(const std::string& url);
@@ -51,6 +58,14 @@ public:
                                      SAS::TrailId trail);
 
 private:
+  void set_impu_result_internal(const std::string&,
+                                const std::string&,
+                                const std::string&,
+                                const std::string&,
+                                std::string,
+                                std::string = "",
+                                const std::string& wildcard = "");
+
   long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);
   long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
   long get_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);

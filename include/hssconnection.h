@@ -26,7 +26,7 @@
 
 /// @class HSSConnection
 ///
-/// Provides a connection to the Homstead service for retrieving user
+/// Provides a connection to the Homestead service for retrieving user
 /// profiles and authentication information.
 ///
 class HSSConnection
@@ -55,6 +55,7 @@ public:
   struct irs_info
   {
     std::string _regstate;
+    std::string _prev_regstate;
     std::map<std::string, Ifcs> _service_profiles;
     AssociatedURIs _associated_uris;
     std::vector<std::string> _aliases;
@@ -63,6 +64,7 @@ public:
 
     irs_info() : 
       _regstate(""),
+      _prev_regstate(""),
       _service_profiles(),
       _associated_uris({}),
       _aliases(),

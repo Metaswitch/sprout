@@ -65,6 +65,40 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                                         std::string extra_params,
                                         const std::string& wildcard)
 {
+  set_impu_result_internal(impu,
+                           type,
+                           state,
+                           "",
+                           subxml,
+                           extra_params,
+                           wildcard);
+}
+
+void FakeHSSConnection::set_impu_result_with_prev(const std::string& impu,
+                                                  const std::string& type,
+                                                  const std::string& state,
+                                                  const std::string& prev_state,
+                                                  std::string subxml,
+                                                  std::string extra_params,
+                                                  const std::string& wildcard)
+{
+  set_impu_result_internal(impu,
+                           type,
+                           state,
+                           prev_state,
+                           subxml,
+                           extra_params,
+                           wildcard);
+}
+
+void FakeHSSConnection::set_impu_result_internal(const std::string& impu,
+                                                 const std::string& type,
+                                                 const std::string& state,
+                                                 const std::string& prev_state,
+                                                 std::string subxml,
+                                                 std::string extra_params,
+                                                 const std::string& wildcard)
+{
   std::string url = "/impu/" + Utils::url_escape(impu) + "/reg-data" + extra_params;
 
   if (subxml.empty())
@@ -82,9 +116,15 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                                   "  <ECF priority=\"2\">ecf2</ECF>\n"
                                   "</ChargingAddresses>");
 
+  std::string prev_state_string = "";
+  if (prev_state != "")
+  {
+    prev_state_string = ("<PreviousRegistrationState>" + prev_state + "</PreviousRegistrationState>");
+  }
+
   std::string result = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                         "<ClearwaterRegData><RegistrationState>" + state + "</RegistrationState>"
-                        + subxml + chargingaddrsxml + "</ClearwaterRegData>");
+                        + prev_state_string + subxml + chargingaddrsxml + "</ClearwaterRegData>");
 
   _results[url] = result;
 }
@@ -243,4 +283,3 @@ HTTPCode FakeHSSConnection::update_registration_state(const HSSConnection::irs_q
                                                   irs_info,
                                                   trail);
 }
-

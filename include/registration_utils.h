@@ -39,8 +39,20 @@ bool remove_bindings(SubscriberDataManager* sdm,
                      const std::string& aor,
                      const std::string& binding_id,
                      const std::string& dereg_type,
+                     const SubscriberDataManager::EventTrigger& event_trigger,
                      SAS::TrailId trail,
                      HTTPCode* hss_status_code = nullptr);
+
+bool get_aor_data(AoRPair** aor_pair,
+                  std::string aor_id,
+                  SubscriberDataManager* primary_sdm,
+                  std::vector<SubscriberDataManager*> backup_sdms,
+                  AoRPair* backup_aor_pair,
+                  SAS::TrailId trail);
+
+int expiry_for_binding(pjsip_contact_hdr* contact,
+                       pjsip_expires_hdr* expires,
+                       int max_expires);
 
 void deregister_with_application_servers(Ifcs& ifcs,
                                          FIFCService* fifc_service,
