@@ -60,7 +60,7 @@ public:
 
 
     // Load monitor with one token in the bucket at startup.
-    _lm = new LoadMonitor(0, 1, 0, 0);
+    _lm = new LoadMonitor(0, 1, 0, 0, 0);
 
     _requests_counter = &SNMP::FAKE_COUNTER_BY_SCOPE_TABLE;
     _overload_counter = &SNMP::FAKE_COUNTER_BY_SCOPE_TABLE;
@@ -295,7 +295,7 @@ TEST_F(CommonProcessingTest, SupportedHeaderWithCommas)
 
   // Set up a new Load monitor with enough tokens for each test.
   delete(_lm);
-  _lm = new LoadMonitor(0, headers.size(), 0, 0);
+  _lm = new LoadMonitor(0, headers.size(), 0, 0, 0);
   init_common_sip_processing(_requests_counter, _health_checker);
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_ok);

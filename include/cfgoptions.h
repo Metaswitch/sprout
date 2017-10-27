@@ -107,6 +107,7 @@ struct options
   int                                  max_tokens;
   float                                init_token_rate;
   float                                min_token_rate;
+  float                                max_token_rate;
   int                                  cass_target_latency_us;
   int                                  exception_max_ttl;
   int                                  sip_blacklist_duration;
