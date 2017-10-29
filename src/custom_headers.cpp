@@ -1435,6 +1435,132 @@ int pjsip_accept_contact_hdr_print_on(void* void_hdr,
   return buf-startbuf;
 }
 
+pjsip_hdr* parse_hdr_resource_priority(pjsip_parse_ctx* ctx)
+{
+  // The Resource-Priority header has the following ABNF:
+  //
+  //    Resource-Priority  = "Resource-Priority" HCOLON
+  //                         r-value *(COMMA r-value)
+  //    r-value            = namespace "." r-priority
+  //    namespace          = token-nodot
+  //    r-priority         = token-nodot
+  //    token-nodot        = 1*( alphanum / "-"  / "!" / "%" / "*"
+  //                                / "_" / "+" / "`" / "'" / "~" )
+  pj_pool_t* pool = ctx->pool;
+  pj_scanner* scanner = ctx->scanner;
+  const pjsip_parser_const_t* pc = pjsip_parser_const();
+  pjsip_resource_priority_hdr* hdr = pjsip_resource_priority_hdr_create(pool);
+
+  // Skip any following whitespace (to the end of the line)
+  pj_scan_skip_whitespace(scanner);
+
+  // If we're EOF or looking at a newline, we're done.
+  while (!pj_scan_is_eof(scanner) &&
+         (*scanner->curptr != '\r') &&
+         (*scanner->curptr != '\n'))
+  {
+    if (*scanner->curptr == ',')
+    {
+      // Consume the ','
+      pj_scan_get_char(scanner);
+    }
+
+    pj_scan_skip_whitespace(scanner);
+
+    // Read the value.
+    // TODO: Spec question: Should we be checking here that the namespaces/
+    // values match the RFC? I've assumed not for now so that a badly formed
+    // RPH doesn't break PJSIP parsing, but then we'll be strict when we're
+    // determining the priority (this function doesn't exist yet).
+    pj_str_t namespace_value;
+    pj_str_t priority_value;
+    pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC_NO_DOT, &namespace_value);
+    pj_scan_get_char(scanner);
+    pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC_NO_DOT, &priority_value);
+    hdr->namespace_priorities.push_back(std::make_pair(namespace_value, priority_value));
+
+    // Skip any following whitespace (to the end of the line)
+    pj_scan_skip_whitespace(scanner);
+  }
+
+  // We're done parsing this header.
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)hdr;
+}
+
+
+pjsip_resource_priority_hdr* pjsip_resource_priority_hdr_create(pj_pool_t* pool)
+{
+  void* mem = pj_pool_alloc(pool, sizeof(pjsip_resource_priority_hdr));
+  return pjsip_resource_priority_hdr_init(pool, mem);
+}
+
+pjsip_hdr_vptr pjsip_resource_priority_vptr = {
+  pjsip_resource_priority_hdr_clone,
+  pjsip_resource_priority_hdr_shallow_clone,
+  pjsip_resource_priority_hdr_print_on
+};
+
+pjsip_resource_priority_hdr* pjsip_resource_priority_hdr_init(pj_pool_t* pool, void* mem)
+{
+  pjsip_resource_priority_hdr* hdr = (pjsip_resource_priority_hdr*)mem;
+  PJ_UNUSED_ARG(pool);
+
+  // Based on init_hdr from sip_msg.c
+  hdr->type = PJSIP_H_OTHER;
+  hdr->name = STR_RESOURCE_PRIORITY;
+  hdr->vptr = &pjsip_resource_priority_vptr;
+  pj_list_init(hdr);
+
+  return hdr;
+}
+
+void *pjsip_resource_priority_hdr_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_resource_priority_hdr* hdr = pjsip_resource_priority_hdr_create(pool);
+  pjsip_resource_priority_hdr* other = (pjsip_resource_priority_hdr*)o;
+
+  hdr->namespace_priorities = other->namespace_priorities;
+
+  return hdr;
+}
+
+void *pjsip_resource_priority_hdr_shallow_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_resource_priority_hdr* hdr = pjsip_resource_priority_hdr_create(pool);
+  pjsip_resource_priority_hdr* other = (pjsip_resource_priority_hdr*)o;
+
+  hdr->namespace_priorities = other->namespace_priorities;
+
+  return hdr;
+}
+
+int pjsip_resource_priority_hdr_print_on(void* void_hdr,
+                                         char* buf,
+                                         pj_size_t size)
+{
+  char *startbuf = buf;
+  char *endbuf = buf + size;
+  pjsip_resource_priority_hdr* hdr = (pjsip_resource_priority_hdr *)void_hdr;
+
+  copy_advance(buf, hdr->name);
+  copy_advance(buf, pj_str(": "));
+  copy_advance(buf, hdr->namespace_priorities[0].first);
+  copy_advance(buf, pj_str("."));
+  copy_advance(buf, hdr->namespace_priorities[0].second);
+
+  for (uint32_t i = 1; i < hdr->namespace_priorities.size(); i++)
+  {
+    copy_advance(buf, pj_str(", "));
+    copy_advance(buf, hdr->namespace_priorities[i].first);
+    copy_advance(buf, pj_str("."));
+    copy_advance(buf, hdr->namespace_priorities[i].second);
+  }
+
+  return buf-startbuf;
+}
+
 /// Register all of our custom header parsers with pjSIP.  This should be
 // called once during startup.
 pj_status_t register_custom_headers()
@@ -1468,6 +1594,8 @@ pj_status_t register_custom_headers()
   status = pjsip_register_hdr_parser("Reject-Contact", "j", &parse_hdr_reject_contact);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("Accept-Contact", "a", &parse_hdr_accept_contact);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("Resource-Priority", NULL, &parse_hdr_resource_priority);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   return PJ_SUCCESS;

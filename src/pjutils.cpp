@@ -2656,3 +2656,45 @@ void PJUtils::add_top_header(pjsip_msg* msg, pjsip_hdr* hdr)
     pj_list_insert_after(&msg->hdr, hdr);
   }
 }
+
+int PJUtils::get_priority_of_message(const pjsip_msg* msg)
+{
+  int priority = 10; // TODO: Spec question - what's the default priority?
+
+  // Pull out all the Resource-Priority headers, and all the values within the
+  // headers. For each value, get the priority of that value. The final
+  // prioritisation of the message is the priority of the highest value.
+  // TODO: Spec question - is this correct?
+  std::vector<pjsip_resource_priority_hdr*> resource_priority_headers;
+  pjsip_resource_priority_hdr* resource_priority_header =
+   (pjsip_resource_priority_hdr*)pjsip_msg_find_hdr_by_name(
+     msg,
+     &STR_RESOURCE_PRIORITY,
+     NULL);
+
+  while (resource_priority_header != NULL)
+  {
+    resource_priority_headers.push_back(resource_priority_header);
+    resource_priority_header =
+     (pjsip_resource_priority_hdr*)pjsip_msg_find_hdr_by_name(
+       msg,
+       &STR_RESOURCE_PRIORITY,
+       resource_priority_header->next);
+  }
+
+  for (pjsip_resource_priority_hdr* hdr : resource_priority_headers)
+  {
+    for (namespace_priority np : hdr->namespace_priorities)
+    {
+      // TODO: Implementation - Actually get the individual priority.
+      // Currently hard coded to 5 and the log is to get past compiler
+      // warnings (it should be in the get_priority_of_value function).
+      //int temp_pri = get_priority_of_value(np);
+      int temp_pri = 5;
+      TRC_DEBUG("Message priority for %s.%s is %d", np.first, np.second, temp_pri);
+      priority = (temp_pri < priority) ? temp_pri : priority;
+    }
+  }
+
+  return priority;
+}

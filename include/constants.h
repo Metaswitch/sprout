@@ -116,6 +116,29 @@ const pj_str_t STR_NAMESPACE = pj_str((char*)"namespace");
 const pj_str_t STR_MMFTARGET = pj_str((char*)"mmftarget");
 const pj_str_t STR_MMFSCOPE = pj_str((char*)"mmfscope");
 
+/// Constants for Resource-Priority
+/// TODO - Spec question: Are the values in this header completely fixed by the RFC? Or
+/// can users define their own namespaces/values, so that we have to support configuration
+/// for that?
+const pj_str_t STR_RESOURCE_PRIORITY = pj_str((char*)"Resource-Priority");
+const pj_str_t STR_ACCEPT_RESOURCE_PRIORITY = pj_str((char*)"Accept-Resource-Priority");
+const pj_str_t STR_DRSN = pj_str((char*)"drsn");
+const pj_str_t STR_DSN = pj_str((char*)"dsn");
+const pj_str_t STR_Q735 = pj_str((char*)"q735");
+const pj_str_t STR_ETS = pj_str((char*)"ets");
+const pj_str_t STR_WPS = pj_str((char*)"wps");
+const pj_str_t STR_ROUTINE = pj_str((char*)"routine");
+const pj_str_t STR_PRIORITY = pj_str((char*)"priority");
+const pj_str_t STR_IMMEDIATE = pj_str((char*)"immediate");
+const pj_str_t STR_FLASH = pj_str((char*)"flash");
+const pj_str_t STR_FLASH_OVERRIDE = pj_str((char*)"flash-override");
+const pj_str_t STR_FLASH_OVERRIDE_OVERRIDE = pj_str((char*)"flash-override-override");
+const pj_str_t STR_PRIORITY_4 = pj_str((char*)"4");
+const pj_str_t STR_PRIORITY_3 = pj_str((char*)"3");
+const pj_str_t STR_PRIORITY_2 = pj_str((char*)"2");
+const pj_str_t STR_PRIORITY_1 = pj_str((char*)"1");
+const pj_str_t STR_PRIORITY_0 = pj_str((char*)"0");
+
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
 
