@@ -1292,7 +1292,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _process_actions_entered(0),
   _forks(),
   _pending_timers(),
-  _allowed_host_state(0),
+  _allowed_host_state(BaseResolver::ALL_LISTS),
   _trail_id(trail_id)
 {
   if (_original_transport != NULL)
@@ -1842,7 +1842,6 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req, int allowed_host_state)
 
   // Keep an immutable reference to the request.
   _req = req;
-  _allowed_host_state = allowed_host_state;
 
   if (is_network_func_boundary())
   {
@@ -1853,6 +1852,12 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req, int allowed_host_state)
     {
       --mf_hdr->ivalue;
     }
+  }
+  else
+  {
+    // The request was passed by another sproutlet in the same network
+    // function, so respect any host state restrictions passed through.
+    _allowed_host_state = allowed_host_state;
   }
 
   if (is_internal_network_func_boundary() && !stack_data.sprout_hostname.empty())
@@ -2418,8 +2423,9 @@ bool SproutletWrapper::is_internal_network_func_boundary() const
 // we return NONE.
 ForkErrorState SproutletWrapper::get_error_state() const
 {
-  if (_forks.size() <= 0)
+  if ((_forks.size() <= 0) || is_network_func_boundary())
   {
+    // Don't expose error state upstream across network boundaries.
     return ForkErrorState::NONE;
   }
 
