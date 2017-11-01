@@ -2145,7 +2145,7 @@ bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
   return true;
 }
 
-
+// KRISTA - this is where timer expires
 /// Handles liveness timer expiry.
 void SCSCFSproutletTsx::on_timer_expiry(void* context)
 {
@@ -2161,6 +2161,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
     cancel_pending_forks();
+    mark_forks_as_not_pending();
 
     if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {

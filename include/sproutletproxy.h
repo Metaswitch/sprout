@@ -320,6 +320,7 @@ public:
   void send_response(pjsip_msg*& rsp);
   void cancel_fork(int fork_id, int reason=0);
   void cancel_pending_forks(int reason=0);
+  void mark_forks_as_not_pending();
   const ForkState& fork_state(int fork_id);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);

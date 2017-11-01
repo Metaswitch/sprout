@@ -49,7 +49,6 @@ using testing::_;
 using testing::NiceMock;
 using testing::HasSubstr;
 using ::testing::Return;
-using ::testing::AtLeast;
 using ::testing::SaveArg;
 
 // TODO - make this class more consistent with the
@@ -3559,18 +3558,16 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   inject_msg(msg.get_request(), &tpBono);
 }
 
-
-// Bug for both session terminated and session continue (see clearwater-issues)
-// When liveness timer pops before SIP response is received from AS, Sprout
-// doesn't send immediate failure upstream but keeps retrying.
-// Currently the test is made to pass superficially to achieve full coverage
+// Test that if an AS is unresponsive (ie. does not respond in 2s), and Default
+// Handling is set to Session Terminated, that the call is rejected (without
+// waiting for all retries to the AS to time out).
 TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
 {
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // to session terminated.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
@@ -3581,10 +3578,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
                                    "UNREGISTERED",
                                    subscription.return_sub());
 
-  // The tracker should be called only once. Currently there is a code bug that
-  // Sprout keeps retrying if liveness timer pops before AS response is
-  // received. So the tracker are being  called several times.
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout"))).Times(AtLeast(1));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3617,8 +3611,8 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   free_txdata();
 
   // Advance time without receiving a response. The application server is
-  // bypassed. Give plenty of time for retrying.
-  cwtest_advance_time_ms(60000);
+  // bypassed.
+  cwtest_advance_time_ms(6000);
 
   // 408 received at callee.
   poll();
@@ -3628,9 +3622,15 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   RespMatcher(408).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
+
+  // Caller ACKs error response.
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(0, txdata_count());
 }
 
-
+// TODO - also fix this? or is it unrelated?
 // Disabled because terminated default handling is broken at the moment.
 TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
 {

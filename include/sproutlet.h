@@ -292,6 +292,10 @@ public:
   ///
   virtual void cancel_pending_forks(int reason=0) = 0;
 
+  /// Removes forks from list pending responses.
+  ///
+  virtual void mark_forks_as_not_pending() = 0;
+
   /// Returns the current status of a downstream fork, including the
   /// transaction state and whether a timeout or transport error has been
   /// detected on the fork.
@@ -627,6 +631,11 @@ protected:
   ///
   void cancel_pending_forks(int reason=0)
     {_helper->cancel_pending_forks(reason);}
+
+  /// Removes forks from list pending response.
+  ///
+  void mark_forks_as_not_pending()
+    {_helper->mark_forks_as_not_pending();}
 
   /// Returns the current status of a downstream fork, including the
   /// transaction state and whether a timeout or transport error has been
