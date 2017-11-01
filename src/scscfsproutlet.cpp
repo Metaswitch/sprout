@@ -2145,7 +2145,6 @@ bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
   return true;
 }
 
-// KRISTA - this is where timer expires
 /// Handles liveness timer expiry.
 void SCSCFSproutletTsx::on_timer_expiry(void* context)
 {
