@@ -3689,7 +3689,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
   poll();
 
   // 408 received at callee.
-  poll();
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3780,7 +3779,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
   poll();
 
   // 408 received at callee.
-  poll();
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3863,7 +3861,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
   poll();
 
   // 408 received at callee.
-  poll();
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3954,7 +3951,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
   poll();
 
   // 408 received at callee.
-  poll();
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);

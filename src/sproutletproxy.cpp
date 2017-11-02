@@ -1939,13 +1939,22 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
   {
     // Final response, so mark the fork as completed and decrement the number
     // of pending responses.
+    // However, if the flag to mark that a UACTsx is active is set, this means
+    // the number of pending responses has already been decremented. In this
+    // case don't decrement the number of pending responses again, but do unset
+    // the flag (as the UACTsx has received a final response so another isn't
+    // expected).
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
     pjsip_tx_data_dec_ref(_forks[fork_id].req);
     _forks[fork_id].req = NULL;
     TRC_VERBOSE("%s received final response %s on fork %d, state = %s",
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
-    --_pending_responses;
+    if (!_forks[fork_id].uactsx_still_active)
+    {
+      --_pending_responses;
+    }
+    _forks[fork_id].uactsx_still_active = false;
 
     if ((_sproutlet != NULL) &&
       (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
@@ -2016,7 +2025,7 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
     // If the flag to mark that a UACTsx is active is set, this means the number
     // of pending responses has already been decremented. In this case don't
     // decrement the number of pending responses again, but do unset the flag
-    // (as the UACTsx has unlinked itself to end up here).
+    // (as the UACTsx has received a final response so another isn't expected).
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
     pjsip_tx_data_dec_ref(_forks[fork_id].req);
     _forks[fork_id].req = NULL;
