@@ -141,7 +141,7 @@ struct options
   std::string                          dummy_app_server;
   bool                                 http_acr_logging;
   int                                  homestead_timeout;
-  bool                                 enable_orig_sip_to_tel_conv;
+  bool                                 enable_orig_sip_to_tel_coerce;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

@@ -575,7 +575,7 @@ pj_status_t init_stack(const std::string& system_name,
                        QuiescingManager *quiescing_mgr_arg,
                        const std::string& cdf_domain,
                        std::vector<std::string> sproutlet_uris,
-                       bool enable_orig_sip_to_tel_conv)
+                       bool enable_orig_sip_to_tel_coerce)
 {
   pj_status_t status;
   pj_sockaddr pri_addr;
@@ -605,7 +605,7 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.max_session_expires = max_session_expires;
   stack_data.sip_tcp_connect_timeout = sip_tcp_connect_timeout;
   stack_data.sip_tcp_send_timeout = sip_tcp_send_timeout;
-  stack_data.enable_orig_sip_to_tel_conv = enable_orig_sip_to_tel_conv;
+  stack_data.enable_orig_sip_to_tel_coerce = enable_orig_sip_to_tel_coerce;
 
   // Work out local and public hostnames and cluster domain names.
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
