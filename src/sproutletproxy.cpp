@@ -1688,7 +1688,7 @@ void SproutletWrapper::cancel_fork(int fork_id, int reason)
 }
 
 void SproutletWrapper::cancel_pending_forks(int reason,
-                                            bool dont_require_response)
+                                            bool require_response)
 {
   for (size_t ii = 0; ii < _forks.size(); ++ii)
   {
@@ -1708,12 +1708,12 @@ void SproutletWrapper::cancel_pending_forks(int reason,
         // Otherwise no response will be sent upstream until all retries to the
         // AS have timed out, even though we have already given up on, and
         // cancelled, that fork.
-        if (dont_require_response)
+        if (!require_response)
         {
           --_pending_responses;
           // This fork may never receive a message, however it still could, as
-          // the UACTsx is still active. Set a flag to mark this, so the fork is
-          // not deleted yet.
+          // the UACTsx is still active. Set a flag to mark this, so the
+          // Sproutlet is not deleted yet.
           _forks[ii].uactsx_still_active = true;
         }
       }

@@ -291,7 +291,7 @@ public:
   /// requests).
   ///
   virtual void cancel_pending_forks(int reason=0,
-                                    bool dont_require_response=false) = 0;
+                                    bool require_response=true) = 0;
 
   /// Returns the current status of a downstream fork, including the
   /// transaction state and whether a timeout or transport error has been
@@ -626,8 +626,8 @@ protected:
   /// (for INVITE requests) or terminating the transaction (for non-INVITE
   /// requests).
   ///
-  void cancel_pending_forks(int reason=0, bool dont_require_response=false)
-    {_helper->cancel_pending_forks(reason, dont_require_response);}
+  void cancel_pending_forks(int reason=0, bool require_response=true)
+    {_helper->cancel_pending_forks(reason, require_response);}
 
   /// Returns the current status of a downstream fork, including the
   /// transaction state and whether a timeout or transport error has been

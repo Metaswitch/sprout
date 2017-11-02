@@ -319,7 +319,7 @@ public:
   int send_request(pjsip_msg*& req, int allowed_host_state);
   void send_response(pjsip_msg*& rsp);
   void cancel_fork(int fork_id, int reason=0);
-  void cancel_pending_forks(int reason=0, bool dont_require_response=false);
+  void cancel_pending_forks(int reason=0, bool require_response=true);
   const ForkState& fork_state(int fork_id);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);

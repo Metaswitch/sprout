@@ -2145,6 +2145,7 @@ bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
   return true;
 }
 
+
 /// Handles liveness timer expiry.
 void SCSCFSproutletTsx::on_timer_expiry(void* context)
 {
@@ -2159,10 +2160,12 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
 
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
-    // When cancelling, set the flag to mark that the UACTsx could still receive
-    // a response. This will prevent the Sproutlet from being destroyed and then
-    // called by the UACTsx.
-    cancel_pending_forks(0, true);
+    // When cancelling, set the flag to mark that the a response is not
+    // required. This will set the flag to mark the UACTsx as still active, to
+    // prevent the Sproutlet from being destroyed and then called by the UACTsx.
+    // It also means no response is required from these forks for response
+    // aggregation.
+    cancel_pending_forks(0, false);
 
     if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {
