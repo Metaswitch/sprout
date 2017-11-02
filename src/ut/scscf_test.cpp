@@ -3558,6 +3558,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   inject_msg(msg.get_request(), &tpBono);
 }
 
+
 // Test that if an AS is unresponsive (ie. does not respond in 2s), and Default
 // Handling is set to Session Terminated, that the call is rejected (without
 // waiting for all retries to the AS to time out).
@@ -3630,8 +3631,189 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   ASSERT_EQ(0, txdata_count());
 }
 
-// TODO - also fix this? or is it unrelated?
-// Disabled because terminated default handling is broken at the moment.
+
+// Test that after a 408 has been sent in response to an unresponsive AS, a 100
+// Trying response from the AS is still handled.
+TEST_F(SCSCFTest, DefaultHandlingTerminateSuccessAfterTimeout)
+{
+  // Register an endpoint to act as the callee.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Set up an application server for the caller. It's default handling is set
+  // to session terminated.
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
+
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+
+  TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+
+  // Caller sends INVITE.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to caller.
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
+
+  // INVITE passed on to AS.
+  // Save off the INVITE, as it is needed later on in the test.
+  pjsip_tx_data* inv_for_as = pop_txdata();
+  out = inv_for_as->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  free_txdata();
+
+  // Advance time without receiving a response. The application server is
+  // bypassed.
+  cwtest_advance_time_ms(6000);
+
+  // 408 received at callee.
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(408).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+
+  // Caller ACKs error response.
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(0, txdata_count());
+
+  // Advance some time.
+  cwtest_advance_time_ms(6000);
+
+  // Now the AS finally responds with a 100 Trying.
+  inject_msg(respond_to_txdata(inv_for_as, 100), &tpAS1);
+
+  // Respond to the AS with a CANCEL, as the timeout error has already been sent
+  // to the caller.
+  out = current_txdata()->msg;
+  ReqMatcher("CANCEL").matches(out);
+  tpAS1.expect_target(current_txdata(), true);
+  free_txdata();
+
+  // Check no other messages are pending.
+  ASSERT_EQ(0, txdata_count());
+
+  inv_for_as = NULL;
+}
+
+
+// Test that after a 408 has been sent in response to an unresponsive AS, a 4xx
+// error response from the AS is still handled.
+TEST_F(SCSCFTest, DefaultHandlingTerminateErrorAfterTimeout)
+{
+  // Register an endpoint to act as the callee.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Set up an application server for the caller. It's default handling is set
+  // to session terminated.
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
+
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+
+  TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+
+  // Caller sends INVITE.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to caller.
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
+
+  // INVITE passed on to AS.
+  // Save off this invite, as it will be needed later in the test.
+  pjsip_tx_data* inv_for_as = pop_txdata();
+  out = inv_for_as->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  free_txdata();
+
+  // Advance time without receiving a response. The application server is
+  // bypassed.
+  cwtest_advance_time_ms(6000);
+
+  // 408 received at callee.
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(408).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+
+  // Caller ACKs error response.
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(0, txdata_count());
+
+  // Advance some time.
+  cwtest_advance_time_ms(6000);
+
+  // Now the AS finally responds with a 405 (a 4xx error code chosen at random).
+  inject_msg(respond_to_txdata(inv_for_as, 405), &tpAS1);
+
+  // Send an ACK for to the AS for the error.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  ReqMatcher("ACK").matches(out);
+  tpAS1.expect_target(current_txdata(), true);
+  free_txdata();
+
+  // Check error is not forwarded on, as timeout error has already been sent.
+  ASSERT_EQ(0, txdata_count());
+
+  inv_for_as = NULL;
+}
+
+
 TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
 {
   // Disable the liveness timer for session terminated ASs.
@@ -3641,7 +3823,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // to session terminate.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0 , 1);
@@ -4505,7 +4687,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   inject_msg(respond_to_txdata(current_txdata(), 200, "", ""), &tpCallee);
   free_txdata();
 
-  // 200 OK received at callee.
+  // 200 OK received at caller.
   poll();
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
