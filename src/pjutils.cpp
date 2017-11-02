@@ -298,12 +298,12 @@ pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg,
     TRC_DEBUG("Served user from From header (%p)", uri);
   }
 
-  if (stack_data.enable_orig_sip_to_tel_conv &&
+  if (stack_data.enable_orig_sip_to_tel_coerce &&
       (uri != NULL) && 
       PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    // Determine whether this SIP URI can be translated into a Tel URI
-    URIClass uri_class = URIClassifier::classify_uri(uri, false);
+    // Determine whether this originating SIP URI is to be treated as a Tel URI
+    URIClass uri_class = URIClassifier::classify_uri(uri);
     pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
 
     if (uri_class == GLOBAL_PHONE_NUMBER)

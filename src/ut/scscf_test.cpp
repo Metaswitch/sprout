@@ -6507,7 +6507,6 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 // originating "user=phone" SIP URIs are looked up using the equivalent Tel URI
 TEST_F(SCSCFTest, OriginatingExternal)
 {
-  stack_data.enable_orig_sip_to_tel_conv = true;
   register_uri(_sdm, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("tel:6505551000")
@@ -6629,9 +6628,6 @@ TEST_F(SCSCFTest, OriginatingExternal)
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-
-  // Reset originating SIP URI to Tel conversion
-  stack_data.enable_orig_sip_to_tel_conv = false;
 }
 
 // Test local call with both originating and terminating ASs.

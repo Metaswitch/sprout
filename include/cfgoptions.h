@@ -142,7 +142,7 @@ struct options
   bool                                 http_acr_logging;
   int                                  homestead_timeout;
   std::set<std::string>                blacklisted_scscfs;
-  bool                                 enable_orig_sip_to_tel_conv;
+  bool                                 enable_orig_sip_to_tel_coerce;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
