@@ -37,11 +37,11 @@ public:
                         std::map<std::string, Ifcs >& service_profiles,
                         AssociatedURIs& associated_uris,
                         SAS::TrailId trail));
-  MOCK_METHOD10(update_registration_state,
+  MOCK_METHOD10(update_registration_state_reg,
                 HTTPCode(const std::string& public_user_identity,
                          const std::string& private_user_identity,
-                         const std::string& type,
                          std::string& regstate,
+                         std::string& prev_regstate,
                          std::string server_name,
                          std::map<std::string, Ifcs >& ifcs_map,
                          AssociatedURIs& associated_uris,

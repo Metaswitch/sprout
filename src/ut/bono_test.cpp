@@ -66,22 +66,7 @@ public:
     // Resolver without graylisting
     SipTest::SIPResolverNoGraylist();
 
-    _chronos_connection = new FakeChronosConnection();
-    _local_data_store = new LocalStore();
-    _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _analytics = new AnalyticsLogger();
-    _hss_connection = new FakeHSSConnection();
-    if (ifcs)
-    {
-      _xdm_connection = new FakeXDMConnection();
-      _ifc_handler = new IfcHandler();
-    }
-    // We only test with a JSONEnumService, not with a DNSEnumService - since
-    // it is stateful_proxy.cpp that's under test here, the EnumService
-    // implementation doesn't matter.
-    _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
-    _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
     _icscf_uri_str = icscf_uri_str;
@@ -89,10 +74,7 @@ public:
     _scscf = scscf_enabled;
     _emerg_reg = emerg_reg_enabled;
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_stateful_proxy(_sdm,
-                                          NULL,
-                                          _ifc_handler,
-                                          !_edge_upstream_proxy.empty(),
+    pj_status_t ret = init_stateful_proxy(!_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),
                                           stack_data.pcscf_trusted_port,
                                           10,
@@ -102,11 +84,6 @@ public:
                                           pbx_hosts.c_str(),
                                           pbx_service_routes,
                                           _analytics,
-                                          _enum_service,
-                                          _bgcf_service,
-                                          _hss_connection,
-                                          _acr_factory,
-                                          _acr_factory,
                                           _acr_factory,
                                           _icscf_uri_str,
                                           &_quiescing_manager,
@@ -126,31 +103,13 @@ public:
     pjsip_tsx_layer_destroy();
     destroy_stateful_proxy();
     delete _acr_factory; _acr_factory = NULL;
-    delete _sdm; _sdm = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
-    delete _local_aor_store; _local_aor_store = NULL;
-    delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
-    delete _ifc_handler; _ifc_handler = NULL;
-    delete _hss_connection; _hss_connection = NULL;
-    delete _xdm_connection; _xdm_connection = NULL;
-    delete _enum_service; _enum_service = NULL;
-    delete _bgcf_service; _bgcf_service = NULL;
     SipTest::TearDownTestCase();
   }
 
   StatefulProxyTestBase()
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
-    _local_data_store->flush_all();  // start from a clean slate on each test
-    if (_hss_connection)
-    {
-      _hss_connection->flush_all();
-    }
-    if (_xdm_connection)
-    {
-      _xdm_connection->flush_all();
-    }
   }
 
   ~StatefulProxyTestBase()
@@ -189,16 +148,7 @@ public:
   }
 
 protected:
-  static LocalStore* _local_data_store;
-  static FakeChronosConnection* _chronos_connection;
-  static AstaireAoRStore* _local_aor_store;
-  static SubscriberDataManager* _sdm;
   static AnalyticsLogger* _analytics;
-  static FakeHSSConnection* _hss_connection;
-  static FakeXDMConnection* _xdm_connection;
-  static IfcHandler* _ifc_handler;
-  static EnumService* _enum_service;
-  static BgcfService* _bgcf_service;
   static ACRFactory* _acr_factory;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
@@ -220,16 +170,7 @@ protected:
                      bool pcpi);
 };
 
-LocalStore* StatefulProxyTestBase::_local_data_store;
-FakeChronosConnection* StatefulProxyTestBase::_chronos_connection;
-AstaireAoRStore* StatefulProxyTestBase::_local_aor_store;
-SubscriberDataManager* StatefulProxyTestBase::_sdm;
 AnalyticsLogger* StatefulProxyTestBase::_analytics;
-FakeHSSConnection* StatefulProxyTestBase::_hss_connection;
-FakeXDMConnection* StatefulProxyTestBase::_xdm_connection;
-IfcHandler* StatefulProxyTestBase::_ifc_handler;
-EnumService* StatefulProxyTestBase::_enum_service;
-BgcfService* StatefulProxyTestBase::_bgcf_service;
 ACRFactory* StatefulProxyTestBase::_acr_factory;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;

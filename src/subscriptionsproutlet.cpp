@@ -336,6 +336,13 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
   if (st_code != PJSIP_SC_OK)
   {
+    if (st_code == PJSIP_SC_TEMPORARILY_UNAVAILABLE)
+    {
+      // A 480 response means that the subscriber wasn't registered
+      SAS::Event event(trail_id, SASEvent::SUBSCRIBE_FAILED_EARLY_NOT_REG, 0);
+      SAS::report_event(event);
+    }
+
     pjsip_msg* rsp = create_response(req, st_code);
     send_response(rsp);
     free_msg(req);
@@ -544,7 +551,7 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
     update_subscription(_subscription, new_subscription, aor, local_aor_pair, _cached_aors);
     local_aor_pair->get_current()->_associated_uris = *associated_uris;
 
-    status = _subscription->_sdm->set_aor_data(aor, local_aor_pair, trail());
+    status = _subscription->_sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, local_aor_pair, trail());
     if (status == Store::DATA_CONTENTION)
     {
       TRC_DEBUG("Hit data contention attempting to write to local store for AoR %s, subscription %s",
@@ -594,7 +601,7 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
       update_subscription(_subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
       remote_aor_pair->get_current()->_associated_uris = *associated_uris;
 
-      rc = sdm->set_aor_data(aor, remote_aor_pair, trail());
+      rc = sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, remote_aor_pair, trail());
       if (rc == Store::DATA_CONTENTION)
       {
         TRC_DEBUG("Hit data contention attempting to write AoR %s to remote store", aor.c_str());
@@ -655,6 +662,7 @@ AoRPair* SubscriptionSproutletTsx::read_and_cache_from_store(
   _cached_aors[sdm] = aor_pair;
   return aor_pair;
 }
+
 
 // Updates the AoRPair with the details of the new_subscription
 // If the AoRPair doesn't contain any subscriptions, checks to see if any remote

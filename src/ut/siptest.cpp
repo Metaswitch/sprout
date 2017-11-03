@@ -118,6 +118,7 @@ void SipTest::SetUpTestCase()
   stack_data.max_session_expires = 90 * 10;
   stack_data.addr_family = AF_INET;
   stack_data.sipresolver = new SIPResolver(&_dnsresolver);
+  stack_data.sprout_hostname = "sprout.homedomain";
 
   // Sort out logging.
   init_pjsip_logging(99, false, "");
@@ -621,7 +622,7 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   }
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bool ret = sdm->set_aor_data(uri, aor, 0);
+  bool ret = sdm->set_aor_data(uri, SubscriberDataManager::EventTrigger::ADMIN, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 };
@@ -888,7 +889,7 @@ void MsgMatcher::matches(pjsip_msg* msg)
 void MsgMatcher::body_regex_matches(pjsip_msg* msg)
 {
   if (_body_regex != "")
-  {    
+  {
     char buf[16384];
     int n = msg->body->print_body(msg->body, buf, sizeof(buf));
     string body(buf, n);

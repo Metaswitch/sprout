@@ -2612,6 +2612,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -8641,7 +8642,7 @@ TEST_F(SCSCFTest, TestAddStoredPathHeader)
   binding->_emergency_registration = false;
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bool ret = _sdm->set_aor_data(uri, aor, 0);
+  bool ret = _sdm->set_aor_data(uri, SubscriberDataManager::EventTrigger::USER, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 
@@ -8672,7 +8673,7 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   binding->_emergency_registration = false;
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bool ret = _sdm->set_aor_data(uri, aor, 0);
+  bool ret = _sdm->set_aor_data(uri, SubscriberDataManager::EventTrigger::USER, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 
