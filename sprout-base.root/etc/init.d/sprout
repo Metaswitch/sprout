@@ -1,4 +1,6 @@
-#! /bin/sh
+#! /bin/bash
+# Use bash as the interpreter as we need more ulimit options than the default
+# shell provides.
 
 # @file sprout.init.d
 #
@@ -59,7 +61,7 @@ setup_environment()
         ulimit -Hn 1000000
         ulimit -Sn 1000000
         ulimit -c unlimited
-        ulimit -e 30 # Allow sprout threads to de-nice as far as -10.
+        ulimit -r 1 # Allow sprout threads to use realtime priorities.
         # enable gdb to dump a parent sprout process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
 }

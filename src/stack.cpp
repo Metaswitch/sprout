@@ -18,6 +18,9 @@ extern "C" {
 
 #include <arpa/inet.h>
 
+#include <pthread.h>
+#include <sched.h>
+
 // Common STL includes.
 #include <cassert>
 #include <vector>
@@ -160,15 +163,20 @@ static int pjsip_thread_func(void *p)
 
   TRC_STATUS("PJSIP transport thread started with kernel thread ID %d", tid);
 
-  // Increase the priority of the transport thread (by reducing its niceness to
-  // -10). This means that the transport thread is scheduled more aggressively
-  // than the worker threads which means that messages are read from the network
-  // promptly, but then rejected due to unavailability of the worker threads.
-  if (setpriority(PRIO_PROCESS, 0, -10) != 0)
+  // Increase the priority of the transport thread (by giving it a real-time
+  // scheduling policy and a non-zero priority). This means that the transport
+  // thread is scheduled more aggressively than the worker threads which means
+  // that messages are read from the network promptly, but then rejected due to
+  // unavailability of the worker threads.
+  pthread_t this_thread = pthread_self();
+
+  struct sched_param params;
+  params.sched_priority = sched_get_priority_min(SCHED_FIFO);
+
+  if (pthread_setschedparam(this_thread, SCHED_FIFO, &params) != 0)
   {
-    TRC_WARNING("Unable to increase priority of the transport thread. "
-                "Overload may not be handled gracefully. "
-                "Error: %s", strerror(errno));
+    TRC_WARNING("Unable to set SCHED_FIFO scheduling policy on the transport thread. "
+                "Overload may not be handled gracefully");
   }
 
   pj_bool_t curr_quiescing = PJ_FALSE;
