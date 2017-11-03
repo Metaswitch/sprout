@@ -389,6 +389,7 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
         event.add_static_param(now);
         SAS::report_event(event);
       }
+
       // The subscription has expired, so remove it. This could be
       // a single one shot subscription though - if so pretend it was
       // part of the original AoR
@@ -758,6 +759,12 @@ void SubscriberDataManager::NotifySender::send_notifys(
       if (status == PJ_SUCCESS)
       {
         set_trail(tdata_notify, trail);
+
+        SAS::Event event(trail, SASEvent::SENDING_NOTIFICATION, 0);
+        event.add_var_param(s_id);
+        event.add_var_param(reasons);
+        SAS::report_event(event);
+
         status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
 
         if (status == PJ_SUCCESS)
@@ -796,11 +803,11 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     NotifyUtils::RegistrationState::ACTIVE :
     NotifyUtils::RegistrationState::TERMINATED;
 
-  // missing_binding_uris lists bindings which no longer exist in AoR. 
-  // They may have been removed by administrative deregistration, and 
+  // missing_binding_uris lists bindings which no longer exist in AoR.
+  // They may have been removed by administrative deregistration, and
   // corresponding endpoints need to be NOTIFYed of their termination.
   // They may have been removed because the endpoint expired or deregistered,
-  // and we no longer have a valid connection to these endpoints. Don't send a 
+  // and we no longer have a valid connection to these endpoints. Don't send a
   // NOTIFY in this case.
   //
   // Note that we can't just check whether a binding exists before sending a NOTIFY - a SUBSCRIBE
@@ -816,15 +823,21 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     AoR::Subscription* s = aor_orig_s->second;
     std::string s_id = aor_orig_s->first;
 
-    if (((std::find(missing_binding_uris.begin(), missing_binding_uris.end(), s->_req_uri) 
-          != missing_binding_uris.end())) 
+    if (((std::find(missing_binding_uris.begin(), missing_binding_uris.end(), s->_req_uri)
+          != missing_binding_uris.end()))
         && (event_trigger != SubscriberDataManager::EventTrigger::ADMIN))
     {
       // Binding is missing, and this event is not triggered by admin.
       // This NOTIFY would go to a binding which no longer exists due to user
       // deregistration or timeout - skip it.
-      TRC_DEBUG("Skip expired subscription %s as the binding %s has expired", 
+      TRC_DEBUG("Skip expired subscription %s as the binding %s has expired",
                 s_id.c_str(), (s->_req_uri).c_str());
+
+      SAS::Event event(trail, SASEvent::NO_NOTIFY_REMOVED_BINDING, 0);
+      event.add_var_param(s->_req_uri);
+      event.add_var_param(s_id);
+      SAS::report_event(event);
+
       continue;
     }
 
@@ -856,6 +869,11 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
       if (status == PJ_SUCCESS)
       {
         set_trail(tdata_notify, trail);
+
+        SAS::Event event(trail, SASEvent::SENDING_FINAL_NOTIFY, 0);
+        event.add_var_param(s->_req_uri);
+        SAS::report_event(event);
+
         status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
 
         if (status == PJ_SUCCESS)
