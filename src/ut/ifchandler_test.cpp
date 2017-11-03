@@ -1524,6 +1524,23 @@ TEST_F(IfcHandlerTest, ReqURINoMatch)
          false);
 }
 
+TEST_F(IfcHandlerTest, ReqURIUnusual)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <RequestURI>tel:5755550033</RequestURI>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
 TEST_F(IfcHandlerTest, ReqURIBadRegex)
 {
   CapturingTestLogger log;
