@@ -718,29 +718,29 @@ void SubscriberDataManager::NotifySender::send_notifys(
 
     if (bindings_changed || associated_uris_changed || sub_created || sub_refreshed)
     {
-      std::string reasons;
+      std::string reasons = "Reason(s): - ";
 
       if (bindings_changed)
       {
-        reasons += "bindings_changed ";
+        reasons += "At least one binding has changed - ";
       }
 
       if (sub_created)
       {
-        reasons += "subscription_created ";
+        reasons += "At least one subscription has been created - ";
       }
 
       if (sub_refreshed)
       {
-        reasons += "subscription_refreshed ";
+        reasons += "At least one subscription has been refreshed - ";
       }
 
       if (associated_uris_changed)
       {
-        reasons += "changed_associated_uris ";
+        reasons += "The associated URIs have changed - ";
       }
 
-      TRC_DEBUG("Sending NOTIFY for subscription %s: reason(s) %s",
+      TRC_DEBUG("Sending NOTIFY for subscription %s: %s",
                 s_id.c_str(),
                 reasons.c_str());
 
@@ -761,7 +761,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
         set_trail(tdata_notify, trail);
 
         SAS::Event event(trail, SASEvent::SENDING_NOTIFICATION, 0);
-        event.add_var_param(s_id);
+        event.add_var_param(subscription->_req_uri);
         event.add_var_param(reasons);
         SAS::report_event(event);
 
@@ -835,7 +835,6 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 
       SAS::Event event(trail, SASEvent::NO_NOTIFY_REMOVED_BINDING, 0);
       event.add_var_param(s->_req_uri);
-      event.add_var_param(s_id);
       SAS::report_event(event);
 
       continue;
