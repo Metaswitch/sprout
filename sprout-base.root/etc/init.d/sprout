@@ -91,7 +91,7 @@ get_settings()
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
-        num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
+        num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 250))
         num_http_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
 
         # Testing has shown that we can handle at least 250 requests per second per core - this is
