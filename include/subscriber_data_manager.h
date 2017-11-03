@@ -108,11 +108,13 @@ public:
     /// @param associated_uris
     ///                     The IMPUs associated with this IRS
     /// @param aor_pair     The AoR pair to send NOTIFYs for
+    /// @param classified_bindings // TODO
     /// @param now          The current time
     /// @param trail        SAS trail
     void send_notifys(const std::string& aor_id,
                       const EventTrigger& event_trigger,
                       AoRPair* aor_pair,
+                      ClassifiedBindings classified_bindings,
                       int now,
                       SAS::TrailId trail);
 
@@ -166,9 +168,9 @@ public:
   virtual bool has_servers() { return _aor_store->has_servers(); }
 
   /// Get the data for a particular address of record (registered SIP URI,
-  /// in format "sip:2125551212@example.com"), creating creating it if
-  /// necessary.  May return NULL in case of error.  Result is owned
-  /// by caller and must be freed with delete.
+  /// in format "sip:2125551212@example.com"), creating it if necessary.  May
+  /// return NULL in case of error.  Result is owned by caller and must be freed
+  /// with delete.
   ///
   /// @param aor_id    The AoR to retrieve
   /// @param trail     SAS trail

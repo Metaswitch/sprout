@@ -417,7 +417,7 @@ pj_status_t NotifyUtils::create_subscription_notify(
                                                   s,
                                                   aor,
                                                   associated_uris,
-                                                  aor_data->_notify_cseq,
+                                                  s->_notify_cseq,
                                                   bnis,
                                                   reg_state,
                                                   state,

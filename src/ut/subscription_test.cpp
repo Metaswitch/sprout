@@ -873,7 +873,7 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
-// Check data contention in a remote store 
+// Check data contention in a remote store
 TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
 {
   // Add the base AoR to the remote store

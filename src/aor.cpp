@@ -405,6 +405,7 @@ void AoR::Subscription::
     writer.EndArray();
 
     writer.String(JSON_EXPIRES); writer.Int(_expires);
+    writer.String(JSON_NOTIFY_CSEQ); writer.Int(_notify_cseq);
   }
   writer.EndObject();
 }
@@ -431,6 +432,7 @@ void AoR::Subscription::from_json(const rapidjson::Value& s_obj)
   }
 
   JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, _expires);
+  JSON_GET_INT_MEMBER(s_obj, JSON_NOTIFY_CSEQ, _notify_cseq);
 }
 
 // Utility function to return the expiry time of the binding or subscription due

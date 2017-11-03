@@ -208,7 +208,37 @@ Store::Status SubscriberDataManager::set_aor_data(
   // as it's safe to increment it unnecessarily, and if we wait to find out
   // how many NOTIFYs we're going to send then we'll have to write back to
   // memcached again
-  aor_pair->get_current()->_notify_cseq++;
+
+  // TODO: Why const?
+  // TODO: Only increment on primary sdm!
+  TRC_ERROR("(TJW2) Block 4, AoR %s", aor_pair->get_current()->_uri.c_str());
+  if (_primary_sdm)
+  {
+    TRC_ERROR("(TJW2) Primary SDM");
+    for (AoR::Subscriptions::const_iterator current_sub =
+          aor_pair->get_current()->subscriptions().begin();
+         current_sub != aor_pair->get_current()->subscriptions().end();
+         ++current_sub)
+    {
+      TRC_ERROR("(TJW2) CSeq %d on sub %s incremented",
+                current_sub->second->_notify_cseq,
+                current_sub->first.c_str());
+      current_sub->second->_notify_cseq += 1;
+    }
+
+    // TODO: Remove this block
+    TRC_ERROR("(TJW2) Primary SDM");
+    for (AoR::Subscriptions::const_iterator current_sub =
+          aor_pair->get_orig()->subscriptions().begin();
+         current_sub != aor_pair->get_orig()->subscriptions().end();
+         ++current_sub)
+    {
+      TRC_ERROR("(TJW2) Old CSeq %d on sub %s not incremented",
+                current_sub->second->_notify_cseq,
+                current_sub->first.c_str());
+    }
+  }
+
   Store::Status rc = _aor_store->set_aor_data(aor_id,
                                               aor_pair,
                                               max_expires - now,
@@ -231,7 +261,12 @@ Store::Status SubscriberDataManager::set_aor_data(
     }
 
     // 6. Send any NOTIFYs
-    _notify_sender->send_notifys(aor_id, event_trigger, aor_pair, now, trail);
+    _notify_sender->send_notifys(aor_id,
+                                 event_trigger,
+                                 aor_pair,
+                                 classified_bindings,
+                                 now,
+                                 trail);
   }
 
   delete_bindings(classified_bindings);
@@ -248,14 +283,22 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   // it just in case
   delete_bindings(classified_bindings);
 
-  // 1/2: Iterate over original bindings and record those not in current AoR
+  // 1/2: Iterate over original bindings and record those not in current AoR.
+  // The reason they are missing is determined from EventTrigger.
   for (std::pair<std::string, AoR::Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
+    // Emergency bindings are excluded from notifications.
+    if (aor_orig_b.second->_emergency_registration)
+    {
+      continue;
+    }
+
+    // Determine if this binding is not in the current AoR.
     if (aor_pair->get_current()->bindings().find(aor_orig_b.first) ==
         aor_pair->get_current()->bindings().end())
     {
-      // Binding is missing.
+      TRC_DEBUG("Binding %s is missing from current AoR", aor_orig_b.first.c_str());
       ClassifiedBinding* binding_record =
         new ClassifiedBinding(aor_orig_b.first,
                               aor_orig_b.second,
@@ -264,10 +307,17 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
     }
   }
 
-  // 2/2: Iterate over the bindings in the current AoR.
+  // 2/2: Iterate over the bindings in the current AoR. Determine if the
+  // bindings have been CREATED, REFRESHED, REGISTERED or SHORTENED.
   for (std::pair<std::string, AoR::Binding*> aor_current_b :
          aor_pair->get_current()->bindings())
   {
+    // Emergency bindings are excluded from notifications.
+    if (aor_current_b.second->_emergency_registration)
+    {
+      continue;
+    }
+
     AoR::Bindings::const_iterator aor_orig_b_match =
       aor_pair->get_orig()->bindings().find(aor_current_b.first);
 
@@ -275,7 +325,8 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
 
     if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
     {
-      // Binding is new
+      // The binding is only in the current AoR, so has been CREATED
+      TRC_DEBUG("Binding %s has been CREATED", aor_current_b.first.c_str());
       event = NotifyUtils::ContactEvent::CREATED;
     }
     else
@@ -283,17 +334,21 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
       // The binding is in both AoRs. Check if the expiry time has changed at all
       if (aor_orig_b_match->second->_expires < aor_current_b.second->_expires)
       {
-        // Binding has been refreshed
+        // The expires value has increased, so the binding has been REFRESHED
+        TRC_DEBUG("Binding %s has been REFRESHED", aor_current_b.first.c_str());
         event = NotifyUtils::ContactEvent::REFRESHED;
       }
       else if (aor_orig_b_match->second->_expires > aor_current_b.second->_expires)
       {
-        // Binding has been shortened
+        // The expires value has decreased, so the binding has been SHORTENED
+        TRC_DEBUG("Binding %s has been SHORTENED", aor_current_b.first.c_str());
         event = NotifyUtils::ContactEvent::SHORTENED;
       }
       else
       {
-        // Binding unchanged
+        // The expires value has not changed, so the binding has been
+        // (re)REGISTERED
+        TRC_DEBUG("Binding %s has been REGISTERED", aor_current_b.first.c_str());
         event = NotifyUtils::ContactEvent::REGISTERED;
       }
     }
@@ -589,93 +644,26 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                const std::string& aor_id,
                                const SubscriberDataManager::EventTrigger& event_trigger,
                                AoRPair* aor_pair,
+                               ClassifiedBindings classified_bindings,
                                int now,
                                SAS::TrailId trail)
 {
   std::vector<std::string> missing_binding_uris;
-  ClassifiedBindings binding_info_to_notify;
   bool bindings_changed = false;
   bool associated_uris_changed = false;
 
-  // Iterate over the bindings in the original AoR and find those that are
-  // missing from the current AoR to build up a list.
-  // The reason they are missing is determined from EventTrigger. Add
-  // corresponding ContactEvent to the NOTIFY message.
-  for (std::pair<std::string, AoR::Binding*> aor_orig_b :
-         aor_pair->get_orig()->bindings())
+  for (ClassifiedBinding* cb : classified_bindings)
   {
-    AoR::Binding* binding = aor_orig_b.second;
-    std::string b_id = aor_orig_b.first;
-
-    // Emergency bindings are excluded from notifications.
-    if ((!binding->_emergency_registration) &&
-        (aor_pair->get_current()->bindings().find(b_id) == aor_pair->get_current()->bindings().end()))
+    if (cb->_contact_event != NotifyUtils::ContactEvent::REGISTERED)
     {
-      TRC_DEBUG("Binding %s is missing from current AoR", b_id.c_str());
-      missing_binding_uris.push_back(binding->_uri);
-
-      NotifyUtils::BindingNotifyInformation* bni =
-        new NotifyUtils::BindingNotifyInformation(b_id,
-                                                  binding,
-                                                  determine_contact_event(event_trigger));
-      binding_info_to_notify.push_back(bni);
       bindings_changed = true;
     }
-  }
 
-  // Iterate over the bindings in the current AoR. Figure out if the bindings
-  // have been CREATED, REFRESHED, REGISTERED or SHORTENED.
-  for (std::pair<std::string, AoR::Binding*> aor_current_b :
-         aor_pair->get_current()->bindings())
-  {
-    AoR::Binding* binding = aor_current_b.second;
-    std::string b_id = aor_current_b.first;
-
-    if (!binding->_emergency_registration)
+    if (cb->_contact_event == NotifyUtils::ContactEvent::EXPIRED ||
+        cb->_contact_event == NotifyUtils::ContactEvent::DEACTIVATED ||
+        cb->_contact_event == NotifyUtils::ContactEvent::UNREGISTERED)
     {
-      // If the binding is only in the current AoR, mark it as created
-      AoR::Bindings::const_iterator aor_orig_b_match =
-        aor_pair->get_orig()->bindings().find(b_id);
-
-      if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
-      {
-        TRC_DEBUG("Binding %s has been created", aor_current_b.first.c_str());
-        NotifyUtils::BindingNotifyInformation* bni =
-              new NotifyUtils::BindingNotifyInformation(b_id,
-                                                        binding,
-                                                        NotifyUtils::ContactEvent::CREATED);
-        binding_info_to_notify.push_back(bni);
-        bindings_changed = true;
-      }
-      else
-      {
-        // The binding is in both AoRs. Check if the expiry time has changed at all
-        NotifyUtils::ContactEvent event;
-
-        if (aor_orig_b_match->second->_expires < binding->_expires)
-        {
-          TRC_DEBUG("Binding %s has been refreshed", b_id.c_str());
-          event = NotifyUtils::ContactEvent::REFRESHED;
-          bindings_changed = true;
-        }
-        else if (aor_orig_b_match->second->_expires > binding->_expires)
-        {
-          TRC_DEBUG("Binding %s has been shortened", b_id.c_str());
-          event = NotifyUtils::ContactEvent::SHORTENED;
-          bindings_changed = true;
-        }
-        else
-        {
-          TRC_DEBUG("Binding %s is unchanged", b_id.c_str());
-          event = NotifyUtils::ContactEvent::REGISTERED;
-        }
-
-        NotifyUtils::BindingNotifyInformation* bni =
-              new NotifyUtils::BindingNotifyInformation(b_id,
-                                                        binding,
-                                                        event);
-        binding_info_to_notify.push_back(bni);
-      }
+      missing_binding_uris.push_back(cb->_b->_uri);
     }
   }
 
@@ -688,7 +676,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
   send_notifys_for_expired_subscriptions(aor_id,
                                          event_trigger,
                                          aor_pair,
-                                         binding_info_to_notify,
+                                         classified_bindings,
                                          missing_binding_uris,
                                          now,
                                          trail);
@@ -750,7 +738,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                             aor_id,
                                             &aor_pair->get_current()->_associated_uris,
                                             aor_pair->get_orig(),
-                                            binding_info_to_notify,
+                                            classified_bindings,
                                             NotifyUtils::RegistrationState::ACTIVE,
                                             now,
                                             trail);
@@ -777,8 +765,6 @@ void SubscriberDataManager::NotifySender::send_notifys(
       }
     }
   }
-
-  delete_bindings(binding_info_to_notify);
 }
 
 void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions(
@@ -796,11 +782,11 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     NotifyUtils::RegistrationState::ACTIVE :
     NotifyUtils::RegistrationState::TERMINATED;
 
-  // missing_binding_uris lists bindings which no longer exist in AoR. 
-  // They may have been removed by administrative deregistration, and 
+  // missing_binding_uris lists bindings which no longer exist in AoR.
+  // They may have been removed by administrative deregistration, and
   // corresponding endpoints need to be NOTIFYed of their termination.
   // They may have been removed because the endpoint expired or deregistered,
-  // and we no longer have a valid connection to these endpoints. Don't send a 
+  // and we no longer have a valid connection to these endpoints. Don't send a
   // NOTIFY in this case.
   //
   // Note that we can't just check whether a binding exists before sending a NOTIFY - a SUBSCRIBE
@@ -816,14 +802,14 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     AoR::Subscription* s = aor_orig_s->second;
     std::string s_id = aor_orig_s->first;
 
-    if (((std::find(missing_binding_uris.begin(), missing_binding_uris.end(), s->_req_uri) 
-          != missing_binding_uris.end())) 
+    if (((std::find(missing_binding_uris.begin(), missing_binding_uris.end(), s->_req_uri)
+          != missing_binding_uris.end()))
         && (event_trigger != SubscriberDataManager::EventTrigger::ADMIN))
     {
       // Binding is missing, and this event is not triggered by admin.
       // This NOTIFY would go to a binding which no longer exists due to user
       // deregistration or timeout - skip it.
-      TRC_DEBUG("Skip expired subscription %s as the binding %s has expired", 
+      TRC_DEBUG("Skip expired subscription %s as the binding %s has expired",
                 s_id.c_str(), (s->_req_uri).c_str());
       continue;
     }

@@ -134,7 +134,7 @@ public:
   class Subscription
   {
   public:
-    Subscription(): _refreshed(false) {};
+    Subscription(): _refreshed(false), _notify_cseq(0) {};
 
     /// The Contact URI for the subscription dialog (used as the Request URI
     /// of the NOTIFY)
@@ -165,6 +165,9 @@ public:
     /// The time (in seconds since the epoch) at which this subscription
     /// should expire.
     int _expires;
+
+    /// The current NOTIFY CSeq value
+    int _notify_cseq;
 
     /// Serialize the subscription as a JSON object.
     ///
