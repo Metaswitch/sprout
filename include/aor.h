@@ -88,6 +88,9 @@ public:
     /// present on the register. Empty if there were none.
     std::list<std::string> _path_uris;
 
+    /// The CSeq value of the REGISTER request.
+    int _cseq;
+
     /// The time (in seconds since the epoch) at which this binding should
     /// expire.  Based on the expires parameter of the Contact: header.
     int _expires;
@@ -245,15 +248,6 @@ public:
   ///
   /// @param source_aor           Source AoR for the copy
   void copy_aor(AoR* source_aor);
-
-  /// CSeq value for event notifications for this AoR.  This is initialised
-  /// to one when the AoR record is first set up and incremented every time
-  /// the record is updated while there are active subscriptions.  (It is
-  /// sufficient to use the same CSeq for each NOTIFY sent on each active
-  /// because there is no requirement that the first NOTIFY in a dialog has
-  /// CSeq=1, and once a subscription dialog is established it should
-  /// receive every NOTIFY for the AoR.)
-  int _notify_cseq;
 
   // Chronos Timer ID
   std::string _timer_id;

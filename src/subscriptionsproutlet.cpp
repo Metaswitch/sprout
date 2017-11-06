@@ -511,6 +511,7 @@ AoR::Subscription SubscriptionSproutletTsx::create_subscription(pjsip_msg* req, 
   subscription._from_tag = PJUtils::pj_str_to_string(&from->tag);
   subscription._refreshed = true;
   subscription._expires = now + expiry;
+  subscription._notify_cseq = ((pjsip_cseq_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CSEQ, NULL))->cseq;
 
   return subscription;
 }
@@ -570,6 +571,11 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
     }
   }
   while (status == Store::DATA_CONTENTION);
+
+  // Updating the subscription in the local store causes a NOTIFY to be sent,
+  // incrementing the stored CSeq value. Update the corresponding CSeq on
+  // new_subscription.
+  new_subscription._notify_cseq += 1;
 
   log_subscriptions(aor, local_aor_pair->get_current());
 
@@ -720,6 +726,17 @@ void SubscriptionSproutletTsx::update_subscription(
   subscription->_from_tag = new_subscription._from_tag;
   subscription->_refreshed = true;
   subscription->_expires = new_subscription._expires;
+
+  // Set the CSeqs on both the new subscription and the stored subscription to
+  // be the maximum of the two.
+  if (subscription->_notify_cseq < new_subscription._notify_cseq)
+  {
+    subscription->_notify_cseq = new_subscription._notify_cseq;
+  }
+  else
+  {
+    new_subscription._notify_cseq = subscription->_notify_cseq;
+  }
 }
 
 void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,

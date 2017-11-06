@@ -208,15 +208,14 @@ Store::Status SubscriberDataManager::set_aor_data(
   // always update the cseq as it's safe to increment it unnecessarily, and if
   // we wait to find out how many NOTIFYs we're going to send then we'll have to
   // write back to memcached again.
-  if (_primary_sdm)
+
+  // TJW2_TODO: Smart incrementing behaviour
+  for (AoR::Subscriptions::const_iterator current_sub =
+        aor_pair->get_current()->subscriptions().begin();
+       current_sub != aor_pair->get_current()->subscriptions().end();
+       ++current_sub)
   {
-    for (AoR::Subscriptions::const_iterator current_sub =
-          aor_pair->get_current()->subscriptions().begin();
-         current_sub != aor_pair->get_current()->subscriptions().end();
-         ++current_sub)
-    {
-      current_sub->second->_notify_cseq += 1;
-    }
+    current_sub->second->_notify_cseq += 1;
   }
 
   Store::Status rc = _aor_store->set_aor_data(aor_id,

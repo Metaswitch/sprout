@@ -21,7 +21,6 @@ extern "C" {
 
 /// Default constructor.
 AoR::AoR(std::string sip_uri) :
-  _notify_cseq(1),
   _timer_id(""),
   _scscf_uri(""),
   _bindings(),
@@ -77,7 +76,6 @@ void AoR::common_constructor(const AoR& other)
   }
 
   _associated_uris = AssociatedURIs(other._associated_uris);
-  _notify_cseq = other._notify_cseq;
   _timer_id = other._timer_id;
   _cas = other._cas;
   _uri = other._uri;
@@ -281,6 +279,7 @@ void AoR::Binding::
   {
     writer.String(JSON_URI); writer.String(_uri.c_str());
     writer.String(JSON_CID); writer.String(_cid.c_str());
+    writer.String(JSON_CSEQ); writer.Int(_cseq);
     writer.String(JSON_EXPIRES); writer.Int(_expires);
     writer.String(JSON_PRIORITY); writer.Int(_priority);
 
@@ -331,6 +330,7 @@ void AoR::Binding::from_json(const rapidjson::Value& b_obj)
 
   JSON_GET_STRING_MEMBER(b_obj, JSON_URI, _uri);
   JSON_GET_STRING_MEMBER(b_obj, JSON_CID, _cid);
+  JSON_GET_INT_MEMBER(b_obj, JSON_CSEQ, _cseq);
   JSON_GET_INT_MEMBER(b_obj, JSON_EXPIRES, _expires);
   JSON_GET_INT_MEMBER(b_obj, JSON_PRIORITY, _priority);
 
@@ -492,7 +492,6 @@ void AoR::copy_aor(AoR* source_aor)
   }
 
   _associated_uris = AssociatedURIs(source_aor->_associated_uris);
-  _notify_cseq = source_aor->_notify_cseq;
   _timer_id = source_aor->_timer_id;
   _uri = source_aor->_uri;
   _scscf_uri = source_aor->_scscf_uri;

@@ -232,8 +232,6 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
       aor->_associated_uris.from_json(au_obj);
     }
 
-    JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
-
     JSON_SAFE_GET_STRING_MEMBER(doc, JSON_TIMER_ID, aor->_timer_id);
     JSON_SAFE_GET_STRING_MEMBER(doc, JSON_SCSCF_URI, aor->_scscf_uri);
   }
@@ -292,7 +290,6 @@ std::string AstaireAoRStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_
     aor_data->_associated_uris.to_json(writer);
 
     // Notify Cseq flag
-    writer.String(JSON_NOTIFY_CSEQ); writer.Int(aor_data->_notify_cseq);
     writer.String(JSON_TIMER_ID); writer.String(aor_data->_timer_id.c_str());
     writer.String(JSON_SCSCF_URI); writer.String(aor_data->_scscf_uri.c_str());
   }
