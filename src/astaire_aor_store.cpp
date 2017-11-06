@@ -74,7 +74,7 @@ AoR* AstaireAoRStore::Connector::get_aor_data(
                                              const std::string& aor_id,
                                              SAS::TrailId trail)
 {
-  TRC_ERROR("(TJW2) Get AoR data for %s", aor_id.c_str());
+  TRC_DEBUG("Get AoR data for %s", aor_id.c_str());
   AoR* aor_data = NULL;
 
   std::string data;
@@ -133,7 +133,7 @@ Store::Status AstaireAoRStore::Connector::set_aor_data(
                                             int expiry,
                                             SAS::TrailId trail)
 {
-  TRC_ERROR("(TJW2) Set AoR data for %s", aor_id.c_str());
+  TRC_DEBUG("Set AoR data for %s", aor_id.c_str());
   std::string data = _serializer_deserializer->serialize_aor(aor_data);
 
   SAS::Event event(trail, SASEvent::REGSTORE_SET_START, 0);

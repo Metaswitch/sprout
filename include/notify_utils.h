@@ -33,13 +33,13 @@ namespace NotifyUtils
   enum class RegistrationState { ACTIVE, TERMINATED };
   enum class ContactState { ACTIVE, TERMINATED };
   enum class SubscriptionState { ACTIVE, TERMINATED };
-  enum class ContactEvent { 
-    REGISTERED, 
-    CREATED, 
-    REFRESHED, 
+  enum class ContactEvent {
+    REGISTERED,
+    CREATED,
+    REFRESHED,
     SHORTENED,
-    EXPIRED, 
-    DEACTIVATED, 
+    EXPIRED,
+    DEACTIVATED,
     UNREGISTERED
   };
 
@@ -67,6 +67,7 @@ namespace NotifyUtils
                                          std::vector<BindingNotifyInformation*> bnis,
                                          NotifyUtils::RegistrationState reg_state,
                                          int now,
+                                         bool updated_cseq,
                                          SAS::TrailId trail);
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,

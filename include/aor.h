@@ -88,9 +88,6 @@ public:
     /// present on the register. Empty if there were none.
     std::list<std::string> _path_uris;
 
-    /// The CSeq value of the REGISTER request.
-    int _cseq;
-
     /// The time (in seconds since the epoch) at which this binding should
     /// expire.  Based on the expires parameter of the Contact: header.
     int _expires;

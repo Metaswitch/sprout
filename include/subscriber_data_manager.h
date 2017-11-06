@@ -104,13 +104,13 @@ public:
 
     /// Create and send any appropriate NOTIFYs
     ///
-    /// @param aor_id       The AoR ID
-    /// @param associated_uris
-    ///                     The IMPUs associated with this IRS
-    /// @param aor_pair     The AoR pair to send NOTIFYs for
-    /// @param classified_bindings // TODO
-    /// @param now          The current time
-    /// @param trail        SAS trail
+    /// @param aor_id              The AoR ID
+    /// @param associated_uris     The IMPUs associated with this IRS
+    /// @param aor_pair            The AoR pair to send NOTIFYs for
+    /// @param classified_bindings Classification of the bindings associated
+    ///                            with this AoR
+    /// @param now                 The current time
+    /// @param trail               SAS trail
     void send_notifys(const std::string& aor_id,
                       const EventTrigger& event_trigger,
                       AoRPair* aor_pair,

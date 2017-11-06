@@ -204,38 +204,18 @@ Store::Status SubscriberDataManager::set_aor_data(
 
   // 4. Write the data to memcached. If this fails, bail out here
 
-  // Update the Notify CSeq, and write to store. We always update the cseq
-  // as it's safe to increment it unnecessarily, and if we wait to find out
-  // how many NOTIFYs we're going to send then we'll have to write back to
-  // memcached again
-
-  // TODO: Why const?
-  // TODO: Only increment on primary sdm!
-  TRC_ERROR("(TJW2) Block 4, AoR %s", aor_pair->get_current()->_uri.c_str());
+  // Update the Notify CSeq on every active subscription, and write to store. We
+  // always update the cseq as it's safe to increment it unnecessarily, and if
+  // we wait to find out how many NOTIFYs we're going to send then we'll have to
+  // write back to memcached again.
   if (_primary_sdm)
   {
-    TRC_ERROR("(TJW2) Primary SDM");
     for (AoR::Subscriptions::const_iterator current_sub =
           aor_pair->get_current()->subscriptions().begin();
          current_sub != aor_pair->get_current()->subscriptions().end();
          ++current_sub)
     {
-      TRC_ERROR("(TJW2) CSeq %d on sub %s incremented",
-                current_sub->second->_notify_cseq,
-                current_sub->first.c_str());
       current_sub->second->_notify_cseq += 1;
-    }
-
-    // TODO: Remove this block
-    TRC_ERROR("(TJW2) Primary SDM");
-    for (AoR::Subscriptions::const_iterator current_sub =
-          aor_pair->get_orig()->subscriptions().begin();
-         current_sub != aor_pair->get_orig()->subscriptions().end();
-         ++current_sub)
-    {
-      TRC_ERROR("(TJW2) Old CSeq %d on sub %s not incremented",
-                current_sub->second->_notify_cseq,
-                current_sub->first.c_str());
     }
   }
 
@@ -741,6 +721,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                             classified_bindings,
                                             NotifyUtils::RegistrationState::ACTIVE,
                                             now,
+                                            true,
                                             trail);
 
       if (status == PJ_SUCCESS)
@@ -837,6 +818,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                           binding_info_to_notify,
                                           reg_state,
                                           now,
+                                          false,
                                           trail);
 
       if (status == PJ_SUCCESS)

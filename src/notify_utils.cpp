@@ -401,6 +401,7 @@ pj_status_t NotifyUtils::create_subscription_notify(
                                     std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                     NotifyUtils::RegistrationState reg_state,
                                     int now,
+                                    bool updated_cseq,
                                     SAS::TrailId trail)
 {
   // Set the correct subscription state header
@@ -413,11 +414,19 @@ pj_status_t NotifyUtils::create_subscription_notify(
     state = NotifyUtils::SubscriptionState::TERMINATED;
   }
 
+  int cseq = s -> _notify_cseq;
+  if (!updated_cseq)
+  {
+    // If this subscription has been terminated, the cseq has not been
+    // incremented yet, so increment it now.
+    cseq += 1;
+  }
+
   pj_status_t status = NotifyUtils::create_notify(tdata_notify,
                                                   s,
                                                   aor,
                                                   associated_uris,
-                                                  s->_notify_cseq,
+                                                  cseq,
                                                   bnis,
                                                   reg_state,
                                                   state,
