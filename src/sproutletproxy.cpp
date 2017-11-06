@@ -695,7 +695,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                                    alias,
                                    _req,
                                    _original_transport,
-                                   "EXTERNAL",
+                                   SproutletWrapper::EXTERNAL_NETWORK_FUNCTION,
                                    _sproutlet_proxy->_max_sproutlet_depth,
                                    trail());
     }
@@ -973,7 +973,7 @@ void SproutletProxy::UASTsx::schedule_requests()
         }
 
         // Pass the request to the downstream sproutlet.
-        downstream->rx_request(req.req);
+        downstream->rx_request(req.req, req.allowed_host_state);
       }
       else
       {
@@ -1126,7 +1126,7 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
         _dmap_sproutlet.erase(i->second);
         _umap.erase(i);
       }
-      upstream->rx_response(rsp, fork_id);
+      upstream->rx_response(rsp, fork_id, downstream->get_error_state());
     }
     else
     {
@@ -1292,6 +1292,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _process_actions_entered(0),
   _forks(),
   _pending_timers(),
+  _allowed_host_state(BaseResolver::ALL_LISTS),
   _trail_id(trail_id)
 {
   if (_original_transport != NULL)
@@ -1617,7 +1618,7 @@ int SproutletWrapper::send_request(pjsip_msg*& req, int allowed_host_state)
 
   _send_requests[fork_id] = {
     .tx_data = it->second,
-    .allowed_host_state = allowed_host_state
+    .allowed_host_state = (_allowed_host_state & allowed_host_state)
   };
 
   TRC_VERBOSE("%s sending %s on fork %d",
@@ -1641,6 +1642,8 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
     return;
   }
 
+  pjsip_tx_data* tdata = it->second;
+
   // Check that this actually is a response
   if (rsp->type != PJSIP_RESPONSE_MSG)
   {
@@ -1648,10 +1651,17 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
     return;
   }
 
-  TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(it->second));
+  if (is_internal_network_func_boundary())
+  {
+    // We're at an internal network function boundary - strip off the Via
+    // header that we added on the request.
+    PJUtils::remove_top_via(tdata);
+  }
+
+  TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(tdata));
 
   // We've found the tdata, move it to _send_responses.
-  _send_responses.push_back(it->second);
+  _send_responses.push_back(tdata);
 
   // Move the clone out of the clones list.
   _packets.erase(rsp);
@@ -1816,7 +1826,7 @@ std::string SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri) const
   return _proxy->get_local_hostname(uri);
 }
 
-void SproutletWrapper::rx_request(pjsip_tx_data* req)
+void SproutletWrapper::rx_request(pjsip_tx_data* req, int allowed_host_state)
 {
   // SAS log the start of processing by this sproutlet
   SAS::Event event(trail(), SASEvent::BEGIN_SPROUTLET_REQ, 0);
@@ -1842,6 +1852,24 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
     {
       --mf_hdr->ivalue;
     }
+  }
+  else
+  {
+    // The request was passed by another sproutlet in the same network
+    // function, so respect any host state restrictions passed through.
+    _allowed_host_state = allowed_host_state;
+  }
+
+  if (is_internal_network_func_boundary() && !stack_data.sprout_hostname.empty())
+  {
+    // Add a Via header to indicate that the request has traversed the upstream
+    // network function.  This can be used to determine the source network
+    // function on requests passed internally.
+    pjsip_via_hdr *hvia = PJUtils::add_top_via(req);
+    std::string network_func_host =
+                     _upstream_network_func + "." + stack_data.sprout_hostname;
+    pj_strdup2(req->pool, &hvia->sent_by.host, network_func_host.c_str());
+    pj_strdup2(req->pool, &hvia->transport, "TCP");
   }
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
@@ -1873,7 +1901,9 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   process_actions(complete_after_actions);
 }
 
-void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
+void SproutletWrapper::rx_response(pjsip_tx_data* rsp,
+                                   int fork_id,
+                                   ForkErrorState error_state)
 {
   // SAS log the start of processing by this sproutlet
   SAS::Event event(trail(), SASEvent::BEGIN_SPROUTLET_RSP, 0);
@@ -1904,6 +1934,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     // Final response, so mark the fork as completed and decrement the number
     // of pending responses.
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
+    _forks[fork_id].state.error_state = error_state;
     pjsip_tx_data_dec_ref(_forks[fork_id].req);
     _forks[fork_id].req = NULL;
     TRC_VERBOSE("%s received final response %s on fork %d, state = %s",
@@ -2352,12 +2383,61 @@ void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
 
 bool SproutletWrapper::is_network_func_boundary() const
 {
-  bool network_func_boundary = (_this_network_func != _upstream_network_func);
+  // If this network function has a different name to the upstream one, then
+  // we're obviously at a network function boundary.  We're also on a boundary
+  // between two instances of the same network function if the service name
+  // matches the upstream network function (i.e. the two network function names
+  // match, but we're entering the first Sproutlet in the network function).
+  bool network_func_boundary = (_this_network_func != _upstream_network_func) ||
+                               (_service_name == _upstream_network_func);
 
-  TRC_DEBUG("Network function boundary: %s ('%s'->'%s')",
+  TRC_DEBUG("Network function boundary: %s ('%s'->'%s'/'%s')",
             network_func_boundary ? "yes" : "no",
             _upstream_network_func.c_str(),
-            _this_network_func.c_str());
+            _this_network_func.c_str(),
+            _service_name.c_str());
 
   return network_func_boundary;
+}
+
+bool SproutletWrapper::is_internal_network_func_boundary() const
+{
+  // An internal network function boundary doesn't involve an external hop.
+  bool internal_boundary = is_network_func_boundary() &&
+                           (_upstream_network_func != EXTERNAL_NETWORK_FUNCTION) &&
+                           (_this_network_func != EXTERNAL_NETWORK_FUNCTION);
+
+  TRC_DEBUG("Internal network function boundary: %s",
+            internal_boundary ? "yes" : "no");
+
+  return internal_boundary;
+}
+
+// Get the overall error state for this wrapper.  This is used when passing
+// error state upstream to another sproutlet.  In the most common case, there
+// will only have been a single fork, and we will return its state.  For more
+// complicated scenarios, we can't infer anything about the downstream error
+// state unless all forks had the same error state.  For example, a transport
+// error on a single fork is not significant, as the sproutlet may have retried
+// on another fork, and had a successful result.  If the results don't match,
+// we return NONE.
+ForkErrorState SproutletWrapper::get_error_state() const
+{
+  if ((_forks.size() <= 0) || is_network_func_boundary())
+  {
+    // Don't expose error state upstream across network boundaries.
+    return ForkErrorState::NONE;
+  }
+
+  ForkErrorState error_state = _forks[0].state.error_state;
+
+  for (const auto& fork : _forks)
+  {
+    if (fork.state.error_state != error_state)
+    {
+      return ForkErrorState::NONE;
+    }
+  }
+
+  return error_state;
 }

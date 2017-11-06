@@ -91,6 +91,7 @@ public:
                                          _reg_data->public_id,
                                          "*",
                                          HSSConnection::DEREG_ADMIN,
+                                         SubscriberDataManager::EventTrigger::ADMIN,
                                          _reg_data->trail);
     }
 
@@ -415,6 +416,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                          served_user,
                                          "*",
                                          HSSConnection::DEREG_ADMIN,
+                                         SubscriberDataManager::EventTrigger::ADMIN,
                                          trail);
     }
   }
@@ -619,6 +621,7 @@ static void notify_application_servers()
 
 static bool expire_bindings(SubscriberDataManager *sdm,
                             const std::string& aor,
+                            const SubscriberDataManager::EventTrigger& event_trigger,
                             AssociatedURIs* associated_uris,
                             const std::string& binding_id,
                             std::string& scscf_uri,
@@ -656,7 +659,11 @@ static bool expire_bindings(SubscriberDataManager *sdm,
     }
 
     aor_pair->get_current()->_associated_uris = *associated_uris;
-    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired);
+    set_rc = sdm->set_aor_data(aor, 
+                               event_trigger,
+                               aor_pair, 
+                               trail, 
+                               all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
@@ -677,6 +684,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         const std::string& aor,
                                         const std::string& binding_id,
                                         const std::string& dereg_type,
+                                        const SubscriberDataManager::EventTrigger& event_trigger,
                                         SAS::TrailId trail,
                                         HTTPCode* hss_status_code)
 {
@@ -712,7 +720,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   std::string scscf_uri;
 
-  if (expire_bindings(sdm, aor, &associated_uris, binding_id, scscf_uri, trail))
+  if (expire_bindings(sdm, aor, event_trigger, &associated_uris, binding_id, scscf_uri, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -760,8 +768,129 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, &associated_uris, binding_id, scscf_uri, trail);
+    (void) expire_bindings(*remote_sdm, aor, event_trigger, &associated_uris, binding_id, scscf_uri, trail);
   }
 
   return all_bindings_expired;
+}
+
+/// Retrieve information from the Subscriber Data Manager for a specified AoR.
+/// This function will look in the following places and stop as soon as it finds
+/// a record for the specified AoR that has > 0 bindings.
+/// -- the primary_sdm
+/// -- the provided backup_aor_pair (if not null)
+/// -- the specified backup_sdms (if any have been provided).
+///
+/// On success (return code true) it returns an AoRPair (as aor_pair) where the
+/// original copy of the AoR contains all bindings and subscriptions found, and
+/// the current copy contains all bindings and subscriptions that have not
+/// expired.  On failure (return code false) no aor_pair is returned. This
+/// function only returns false if there is an error and the data cannot be
+/// queried (see below); If the query is successful but no data was found it
+/// returns true and a blank AoRPair.
+///
+/// This function allocates additional importance to the primary_sdm: if the
+/// primary_sdm is unable to successfully query its store then (irrespective of
+/// whether we might have been able to get data from the backup_sdms) we return
+/// false and no AoR data. On the other hand, if the primary_sdm is able to
+/// successfully query its store then we return success and our best view of
+/// the data (across primary and backup sources) -- irrespective of whether the
+/// backup stores were successfully queried.
+bool RegistrationUtils::get_aor_data(AoRPair** aor_pair,
+                                     std::string aor_id,
+                                     SubscriberDataManager* primary_sdm,
+                                     std::vector<SubscriberDataManager*> backup_sdms,
+                                     AoRPair* backup_aor_pair,
+                                     SAS::TrailId trail)
+{
+  // Find the current bindings for the AoR.
+  delete *aor_pair;
+  *aor_pair = primary_sdm->get_aor_data(aor_id, trail);
+  TRC_DEBUG("Retrieved AoR data %p", *aor_pair);
+
+  if ((*aor_pair == NULL) ||
+      ((*aor_pair)->get_current() == NULL))
+  {
+    // Failed to get data for the AoR because there is no connection
+    // to the store.
+    TRC_ERROR("Store connection error.  Failed to get AoR binding for %s from store", aor_id.c_str());
+    return false;
+  }
+
+  // If we don't have any bindings, try the backup AoR and/or stores.
+  if ((*aor_pair)->get_current()->bindings().empty())
+  {
+    bool found_binding = false;
+    bool backup_aor_pair_alloced = false;
+
+    if ((backup_aor_pair != NULL) &&
+        (backup_aor_pair->current_contains_bindings()))
+    {
+      found_binding = true;
+    }
+    else
+    {
+      std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
+      AoRPair* local_backup_aor_pair = NULL;
+
+      while ((it != backup_sdms.end()) && (!found_binding))
+      {
+        if ((*it)->has_servers())
+        {
+          local_backup_aor_pair = (*it)->get_aor_data(aor_id, trail);
+
+          if ((local_backup_aor_pair != NULL) &&
+              (local_backup_aor_pair->current_contains_bindings()))
+          {
+            found_binding = true;
+            backup_aor_pair = local_backup_aor_pair;
+
+            // Flag that we have allocated the memory for the backup pair so
+            // that we can tidy it up later.
+            backup_aor_pair_alloced = true;
+          }
+        }
+
+        if (!found_binding)
+        {
+          ++it;
+
+          if (local_backup_aor_pair != NULL)
+          {
+            delete local_backup_aor_pair;
+            local_backup_aor_pair = NULL;
+          }
+        }
+      }
+    }
+
+    if (found_binding)
+    {
+      (*aor_pair)->get_current()->copy_aor(backup_aor_pair->get_current());
+    }
+
+    if (backup_aor_pair_alloced)
+    {
+      delete backup_aor_pair;
+      backup_aor_pair = NULL;
+    }
+  }
+
+  return true;
+}
+
+int RegistrationUtils::expiry_for_binding(pjsip_contact_hdr* contact,
+                                          pjsip_expires_hdr* expires,
+                                          int max_expires)
+{
+  int expiry = (contact->expires != -1) ? contact->expires :
+               (expires != NULL) ? expires->ivalue :
+               max_expires;
+  if (expiry > max_expires)
+  {
+    // Expiry is too long, set it to the maximum.
+    expiry = max_expires;
+  }
+
+  return expiry;
 }

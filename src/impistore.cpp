@@ -31,9 +31,9 @@ rapidjson::Document* ImpiStore::json_from_string(const std::string& string)
   json->Parse<0>(string.c_str());
   if (json->HasParseError())
   {
-    TRC_INFO("Failed to parse JSON: %s\nError: %s",
-             string.c_str(),
-             rapidjson::GetParseError_En(json->GetParseError()));
+    TRC_INFO("Failed to parse JSON.  Error: %s\n%s",
+             rapidjson::GetParseError_En(json->GetParseError()),
+             string.c_str());
     delete json;
     json = NULL;
   }

@@ -60,6 +60,44 @@ class HssConnectionTest : public BaseTest
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
+        "<PreviousRegistrationState>NOT_REGISTERED</PreviousRegistrationState>"
+        "<IMSSubscription>"
+          "<ServiceProfile>"
+            "<PublicIdentity>"
+              "<Identity>sip:123@example.com</Identity>"
+            "</PublicIdentity>"
+            "<PublicIdentity>"
+              "<Identity>sip:456@example.com</Identity>"
+            "</PublicIdentity>"
+            "<InitialFilterCriteria>"
+              "<TriggerPoint>"
+                "<ConditionTypeCNF>0</ConditionTypeCNF>"
+                "<SPT>"
+                  "<ConditionNegated>0</ConditionNegated>"
+                  "<Group>0</Group>"
+                  "<Method>INVITE</Method>"
+                  "<Extension></Extension>"
+                "</SPT>"
+              "</TriggerPoint>"
+              "<ApplicationServer>"
+                "<ServerName>mmtel.narcissi.example.com</ServerName>"
+                "<DefaultHandling>0</DefaultHandling>"
+              "</ApplicationServer>"
+            "</InitialFilterCriteria>"
+          "</ServiceProfile>"
+        "</IMSSubscription>"
+        "<ChargingAddresses>"
+          "<CCF priority=\"1\">ccf1</CCF>"
+          "<CCF priority=\"2\">ccf2</CCF>"
+          "<ECF priority=\"2\">ecf2</ECF>"
+          "<ECF priority=\"1\">ecf1</ECF>"
+        "</ChargingAddresses>"
+      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42_rereg/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
+        "<PreviousRegistrationState>REGISTERED</PreviousRegistrationState>"
         "<IMSSubscription>"
           "<ServiceProfile>"
             "<PublicIdentity>"
@@ -410,7 +448,26 @@ TEST_F(HssConnectionTest, SimpleIfc)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
+  std::string prev_regstate;
+  std::deque<std::string> ccfs;
+  std::deque<std::string> ecfs;
+  _hss.update_registration_state_reg("pubid42", "", regstate, prev_regstate, "server_name", ifcs_map, uris, ccfs, ecfs, 0);
+  EXPECT_EQ("NOT_REGISTERED", prev_regstate);
+  EXPECT_EQ("REGISTERED", regstate);
+  EXPECT_FALSE(ifcs_map.empty());
+}
+
+TEST_F(HssConnectionTest, SimpleIfcReReg)
+{
+  AssociatedURIs uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  std::string prev_regstate;
+  std::deque<std::string> ccfs;
+  std::deque<std::string> ecfs;
+  _hss.update_registration_state_reg("pubid42_rereg", "", regstate, prev_regstate, "server_name", ifcs_map, uris, ccfs, ecfs, 0);
+  EXPECT_EQ("REGISTERED", prev_regstate);
+  EXPECT_EQ("REGISTERED", regstate);
   EXPECT_FALSE(ifcs_map.empty());
 }
 
@@ -419,11 +476,12 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
+  std::string prev_regstate;
   std::deque<std::string> ccfs;
   std::deque<std::string> actual_ccfs = {"ccf1", "ccf2"};
   std::deque<std::string> ecfs;
   std::deque<std::string> actual_ecfs = {"ecf1", "ecf2"};
-  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, ccfs, ecfs, 0);
+  _hss.update_registration_state_reg("pubid42", "", regstate, prev_regstate, "server_name", ifcs_map, uris, ccfs, ecfs, 0);
   EXPECT_EQ(actual_ccfs, ccfs);
   EXPECT_EQ(actual_ecfs, ecfs);
 }
@@ -444,7 +502,10 @@ TEST_F(HssConnectionTest, Barring)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
+  std::string prev_regstate;
+  std::deque<std::string> ccfs;
+  std::deque<std::string> ecfs;
+  _hss.update_registration_state_reg("pubid47", "", regstate, prev_regstate, "server_name", ifcs_map, uris, ccfs, ecfs, 0);
   EXPECT_EQ("REGISTERED", regstate);
   ASSERT_EQ(1u, uris.get_unbarred_uris().size());
   EXPECT_FALSE(uris.is_impu_barred("sip:123@example.com"));
@@ -635,12 +696,14 @@ TEST_F(HssConnectionTest, SimpleAliases)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
+  std::string prev_regstate;
   AssociatedURIs unused_uris;
   std::deque<std::string> unused_deque;
   _hss.update_registration_state("pubid46",
                                  "",
                                  HSSConnection::CALL,
                                  regstate,
+                                 prev_regstate,
                                  "server_name",
                                  ifcs_map,
                                  unused_uris,
@@ -661,12 +724,14 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
+  std::string prev_regstate;
   AssociatedURIs unused_uris;
   std::deque<std::string> unused_deque;
   HTTPCode rc = _hss.update_registration_state("public-needs-private",
                                                "a-private-id",
                                                HSSConnection::REG,
                                                regstate,
+                                               prev_regstate,
                                                "server_name",
                                                ifcs_map,
                                                unused_uris,

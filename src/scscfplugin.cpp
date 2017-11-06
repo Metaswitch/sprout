@@ -260,10 +260,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     analytics_logger,
                                     &auth_stats_tbls,
                                     opt.nonce_count_supported,
-                                    std::bind(&RegistrarSproutlet::expiry_for_binding,
-                                              _registrar_sproutlet,
-                                              std::placeholders::_1,
-                                              std::placeholders::_2));
+                                    opt.sub_max_expires);
       ok = ok && _auth_sproutlet->init();
       sproutlets.push_front(_auth_sproutlet);
     }
