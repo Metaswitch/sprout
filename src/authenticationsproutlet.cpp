@@ -1183,17 +1183,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // We're done with the IMPI object now so delete it.
   delete impi_obj; impi_obj = NULL;
 
-  // The message either has insufficient authentication information, or
-  // has failed authentication.  In either case, the message will be
-  // absorbed and responded to by the authentication module, so we need to
-  // add SAS markers so the trail will become searchable.
-  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
-  SAS::report_marker(start_marker);
-
-  // Add a SAS end marker
-  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
-  SAS::report_marker(end_marker);
-
   // Create an ACR for the message and pass the request to it.  Role is always
   // considered originating for a REGISTER request.
   ACR* acr = _authentication->_acr_factory->get_acr(trail(),
