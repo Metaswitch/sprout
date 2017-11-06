@@ -42,6 +42,17 @@ public:
     TIMEOUT
   };
 
+  enum class SubscriptionEvent {
+    CREATED,
+    REFRESHED,
+    UNCHANGED,
+    EXPIRED,
+    TERMINATED
+  };
+
+  typedef std::vector<SubscriptionEvent*> ClassifiedSubscriptions;
+
+
   /// @class SubscriberDataManager::ChronosTimerRequestSender
   ///
   /// Class responsible for sending any requests to Chronos about
@@ -235,7 +246,14 @@ private:
   void classify_bindings(const std::string& aor_id,
                          const SubscriberDataManager::EventTrigger& event_trigger,
                          AoRPair* aor_pair,
-                         ClassifiedBindings& classified_bindings);
+                         ClassifiedBindings& classified_bindings)
+
+  // Iterate over all original and current subscriptions in an AoR pair and
+  // classify them as CREATED, REFRESHED, UNCHANGED, EXPIRED or TERMINATED.
+  //
+  // TJW2_TODO: Comment here
+  void classify_subscriptions(AoRPair* aor_pair,
+                              ClassifiedSubscriptions& classified_subscriptions)
 
   // Iterate over a list of classified bindings, and emit registration logs for those
   // that are EXPIRED or SHORTENED.

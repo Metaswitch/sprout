@@ -47,6 +47,17 @@ void delete_bindings(ClassifiedBindings& cbs)
   cbs.clear();
 }
 
+/// Helper to delete vectors of ClassifiedSubscriptions safely
+void delete_subscriptions(ClassifiedSubscriptions& css)
+{
+  for (ClassifiedSubscription* cs: css)
+  {
+    delete cs;
+  }
+
+  css.clear();
+}
+
 /// Helper to map SDM EventTrigger to ContactEvent for Notify
 NotifyUtils::ContactEvent determine_contact_event(
                        const SubscriberDataManager::EventTrigger& event_trigger)
@@ -209,15 +220,23 @@ Store::Status SubscriberDataManager::set_aor_data(
   // we wait to find out how many NOTIFYs we're going to send then we'll have to
   // write back to memcached again.
 
-  // TJW2_TODO: Smart incrementing behaviour
-  for (AoR::Subscriptions::const_iterator current_sub =
-        aor_pair->get_current()->subscriptions().begin();
-       current_sub != aor_pair->get_current()->subscriptions().end();
-       ++current_sub)
+  ClassifiedSubscriptions classify_subscriptions;
+
+  // TJW2_TODO: Should this be primary only?
+  if (_primary_sdm)
   {
-    current_sub->second->_notify_cseq += 1;
+    classify_subscriptions(aor_pair, classify_subscriptions);
+
+    for (AoR::Subscriptions::const_iterator current_sub =
+          aor_pair->get_current()->subscriptions().begin();
+         current_sub != aor_pair->get_current()->subscriptions().end();
+         ++current_sub)
+    {
+      current_sub->second->_notify_cseq += 1;
+    }
   }
 
+  // TJW2_TODO: Smart incrementing behaviour
   Store::Status rc = _aor_store->set_aor_data(aor_id,
                                               aor_pair,
                                               max_expires - now,
@@ -228,6 +247,7 @@ Store::Status SubscriberDataManager::set_aor_data(
     // We were unable to write to the store - return to the caller and
     // send no further messages
     delete_bindings(classified_bindings);
+    delete_subscriptions(classified_subscriptions);
     return rc;
   }
 
@@ -249,6 +269,7 @@ Store::Status SubscriberDataManager::set_aor_data(
   }
 
   delete_bindings(classified_bindings);
+  delete_subscriptions(classified_subscriptions);
 
   return Store::Status::OK;
 }
@@ -338,6 +359,11 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
                             event);
     classified_bindings.push_back(binding_record);
   }
+}
+
+void SubscriberDataManager::classify_subscriptions(AoRPair* aor_pair,
+                                                   ClassifiedSubscriptions& classified_subscriptions)
+{
 }
 
 void SubscriberDataManager::log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings,

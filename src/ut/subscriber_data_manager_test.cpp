@@ -316,8 +316,6 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   EXPECT_EQ(1u, s1->_route_uris.size());
   EXPECT_EQ(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"), s1->_route_uris.front());
   EXPECT_EQ(now + 300, s1->_expires);
-  // TJW2_TODO: Investigate/remove
-  // EXPECT_EQ(3, aor_data1->get_current()->_notify_cseq);
 
   // Remove the subscription.
   aor_data1->get_current()->remove_subscription(std::string("1234"));
@@ -626,18 +624,12 @@ TEST_F(BasicSubscriberDataManagerTest, CopyTests)
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
   s1->_expires = now + 300;
 
-  // Set the NOTIFY CSeq value to 1.
-  // TJW2_TODO: Investigate/remove
-  //aor_data1->get_current()->_notify_cseq = 1;
-
   // Test AoR copy constructor.
   AoR* copy = new AoR(*aor_data1->get_current());
   EXPECT_EQ("AoRtimer", copy->_timer_id);
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
 
-  // TJW2_TODO: Investigate/remove
-  //EXPECT_EQ(1, copy->_notify_cseq);
   EXPECT_EQ((uint64_t)0, copy->_cas);
   EXPECT_EQ("5102175698@cw-ngv.com", copy->_uri);
   delete copy; copy = NULL;
@@ -649,8 +641,6 @@ TEST_F(BasicSubscriberDataManagerTest, CopyTests)
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
 
-  // TJW2_TODO: Investigate/remove
-  //EXPECT_EQ(1, copy->_notify_cseq);
   EXPECT_EQ((uint64_t)0, copy->_cas);
   EXPECT_EQ("5102175698@cw-ngv.com", copy->_uri);
   delete copy; copy = NULL;
@@ -836,7 +826,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, SemanticallyInvalidJson)
 
   EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(
-                    std::string("{\"bindings\": {}, \"subscriptions\" :{}, \"notify_cseq\": \"123\"}")),
+                    std::string("{\"bindings\": \"text\", \"subscriptions\" :{}}")),
                     SetArgReferee<3>(1), // CAS
                     Return(Store::OK)));
 
