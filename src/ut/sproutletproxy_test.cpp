@@ -592,6 +592,30 @@ public:
   }
 };
 
+class FakeSproutletURIForwarder : public CompositeSproutletTsx
+{
+public:
+  FakeSproutletURIForwarder(Sproutlet* sproutlet) :
+   CompositeSproutletTsx(sproutlet, static_cast<FakeSproutlet<FakeSproutletURIForwarder>*>(sproutlet)->_next_hop)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    // Regardless of what we receive, forward the request on using a Route
+    // header to route the message to the specified (external) URI.  This is
+    // used to test Tel URIs, which are not themselves routable.
+    string forwarding_uri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+    TRC_DEBUG("Forwarding to URI: %s", forwarding_uri.c_str());
+    pj_pool_t* pool = get_pool(req);
+    pjsip_route_hdr* route = pjsip_route_hdr_create(pool);
+    route->name_addr.uri = PJUtils::uri_from_string(forwarding_uri, pool, PJ_FALSE);
+    pjsip_msg_insert_first_hdr(req, (pjsip_hdr*)route);
+
+    send_request(req);
+  }
+};
+
 class FakeSproutletRestrict : public FakeSproutletTsxNextHop
 {
 public:
@@ -770,6 +794,8 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletBoundary>("boundary", 0, "sip:boundary.homedomain;transport=tcp", "", "", NULL, NULL, "boundary-nf", "restrict"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletForkErrors>("forkcheck", 0, "sip:forkcheck.homedomain;transport=tcp", "", "", NULL, NULL, "fork-nf", "forkerr"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletForkErrors>("forkerr", 0, "sip:forkerr.homedomain;transport=tcp", "", "", NULL, NULL, "fork-nf", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("teltest1", 44555, "sip:teltest1.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", "teltest2"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletURIForwarder>("teltest2", 0, "sip:teltest2.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", ""));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -2337,6 +2363,65 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
   EXPECT_EQ("sip:bob@proxy1.awaydomain:5060;transport=TCP", str_uri(tdata->msg->line.req.uri));
   EXPECT_EQ("", get_headers(tdata->msg, "Route"));
   EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, CompositeNetworkFunctionTelURI)
+{
+  // Tests passing a request through a Network Function composed of multiple
+  // sproutlets, when the request is routed by port (as there are no Route
+  // headers, and the Request URI is not a routable SIP URI - e.g. it is a Tel
+  // URI).
+  pjsip_tx_data* tdata;
+
+  // Create a TCP transport that will deliver inbound messages on the port
+  // 44555.  This port is owned by the teltest1 sproutlet, which forwards on to
+  // the teltest2 sproutlet, even though it doesn't have a routable SIP URI to
+  // hand.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        44555,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with no Route header, and a Tel URI.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "tel:8088341234";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._forwards = "100";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITEs.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the INVITE and send a 100 Trying.
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+  inject_msg(respond_to_txdata(req, 100));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(req, 200));
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
   free_txdata();
 
   // All done!
