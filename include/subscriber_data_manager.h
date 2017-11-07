@@ -42,17 +42,6 @@ public:
     TIMEOUT
   };
 
-  enum class SubscriptionEvent {
-    CREATED,
-    REFRESHED,
-    UNCHANGED,
-    EXPIRED,
-    TERMINATED
-  };
-
-  typedef std::vector<SubscriptionEvent*> ClassifiedSubscriptions;
-
-
   /// @class SubscriberDataManager::ChronosTimerRequestSender
   ///
   /// Class responsible for sending any requests to Chronos about
@@ -206,6 +195,32 @@ public:
                                      bool& all_bindings_expired = unused_bool);
 
 private:
+
+  enum class SubscriptionEvent {
+    CREATED,
+    REFRESHED,
+    UNCHANGED,
+    EXPIRED,
+    TERMINATED
+  };
+
+  struct ClassifiedSubscription {
+    ClassifiedSubscription(std::string id,
+                           AoR::Subscription* s,
+                           SubscriptionEvent event) :
+      _id(id),
+      _s(s),
+      _subscription_event(event)
+    {}
+
+    std::string _id;
+    AoR::Subscription* _s;
+    SubscriptionEvent _subscription_event;
+  };
+
+  typedef std::vector<ClassifiedSubscription*> ClassifiedSubscriptions;
+  void delete_subscriptions(ClassifiedSubscriptions& css);
+
   // Expire any out of date bindings in the current AoR
   //
   // @param aor_pair  The AoRPair to expire
@@ -246,14 +261,16 @@ private:
   void classify_bindings(const std::string& aor_id,
                          const SubscriberDataManager::EventTrigger& event_trigger,
                          AoRPair* aor_pair,
-                         ClassifiedBindings& classified_bindings)
+                         ClassifiedBindings& classified_bindings);
 
   // Iterate over all original and current subscriptions in an AoR pair and
   // classify them as CREATED, REFRESHED, UNCHANGED, EXPIRED or TERMINATED.
   //
   // TJW2_TODO: Comment here
   void classify_subscriptions(AoRPair* aor_pair,
-                              ClassifiedSubscriptions& classified_subscriptions)
+                              const SubscriberDataManager::EventTrigger& event_trigger,
+                              ClassifiedBindings& classified_bindings,
+                              ClassifiedSubscriptions& classified_subscriptions);
 
   // Iterate over a list of classified bindings, and emit registration logs for those
   // that are EXPIRED or SHORTENED.

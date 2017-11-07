@@ -48,7 +48,7 @@ void delete_bindings(ClassifiedBindings& cbs)
 }
 
 /// Helper to delete vectors of ClassifiedSubscriptions safely
-void delete_subscriptions(ClassifiedSubscriptions& css)
+void SubscriberDataManager::delete_subscriptions(ClassifiedSubscriptions& css)
 {
   for (ClassifiedSubscription* cs: css)
   {
@@ -220,13 +220,11 @@ Store::Status SubscriberDataManager::set_aor_data(
   // we wait to find out how many NOTIFYs we're going to send then we'll have to
   // write back to memcached again.
 
-  ClassifiedSubscriptions classify_subscriptions;
+  ClassifiedSubscriptions classified_subscriptions;
 
   // TJW2_TODO: Should this be primary only?
   if (_primary_sdm)
   {
-    classify_subscriptions(aor_pair, classify_subscriptions);
-
     for (AoR::Subscriptions::const_iterator current_sub =
           aor_pair->get_current()->subscriptions().begin();
          current_sub != aor_pair->get_current()->subscriptions().end();
@@ -247,7 +245,6 @@ Store::Status SubscriberDataManager::set_aor_data(
     // We were unable to write to the store - return to the caller and
     // send no further messages
     delete_bindings(classified_bindings);
-    delete_subscriptions(classified_subscriptions);
     return rc;
   }
 
@@ -269,7 +266,6 @@ Store::Status SubscriberDataManager::set_aor_data(
   }
 
   delete_bindings(classified_bindings);
-  delete_subscriptions(classified_subscriptions);
 
   return Store::Status::OK;
 }
@@ -362,8 +358,117 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
 }
 
 void SubscriberDataManager::classify_subscriptions(AoRPair* aor_pair,
+                                                   const SubscriberDataManager::EventTrigger& event_trigger,
+                                                   ClassifiedBindings& classified_bindings,
                                                    ClassifiedSubscriptions& classified_subscriptions)
 {
+  // We should have been given an empty classified_subscriptions vector, but
+  // clear it just in case
+  delete_subscriptions(classified_subscriptions);
+
+  // 1/2: Iterate over the subscriptions in the original AoR and classify those that
+  // aren't in the current AoR.
+
+  std::vector<std::string> missing_binding_uris;
+  for (ClassifiedBinding* cb : classified_bindings)
+  {
+    // TJW2_TODO: Extract to function
+    if (cb->_contact_event == NotifyUtils::ContactEvent::EXPIRED ||
+        cb->_contact_event == NotifyUtils::ContactEvent::DEACTIVATED ||
+        cb->_contact_event == NotifyUtils::ContactEvent::UNREGISTERED)
+    {
+      missing_binding_uris.push_back(cb->_b->_uri);
+    }
+  }
+
+  for (AoR::Subscriptions::const_iterator aor_orig_s =
+         aor_pair->get_orig()->subscriptions().begin();
+       aor_orig_s != aor_pair->get_orig()->subscriptions().end();
+       ++aor_orig_s)
+  {
+    AoR::Subscription* s = aor_orig_s->second;
+    std::string s_id = aor_orig_s->first;
+
+
+    // TJW2_TODO: What does this block do?
+    if (((std::find(missing_binding_uris.begin(),
+                   missing_binding_uris.end(),
+                   s->_req_uri)
+           != missing_binding_uris.end()))
+        && (event_trigger != SubscriberDataManager::EventTrigger::ADMIN))
+    {
+      // Binding is missing, and this event is not triggered by admin. The
+      // binding no longer exists due to user deregestration or timeout, so
+      // classify the subscription as EXPIRED.
+      TRC_DEBUG("Subscription %s classified as EXPIRED as binding %s has expired",
+                s_id.c_str(), (s->_req_uri).c_str());
+
+      ClassifiedSubscription* classified_subscription =
+        new ClassifiedSubscription(s_id, s, SubscriptionEvent::EXPIRED);
+
+      classified_subscriptions.push_back(classified_subscription);
+      continue;
+    }
+
+    // Is this subscription present in the new AoR?
+    AoR::Subscriptions::const_iterator aor_current =
+      aor_pair->get_current()->subscriptions().find(s_id);
+
+    // The subscription has been deleted, so classify it as TERMINATED.
+    if (aor_current == aor_pair->get_current()->subscriptions().end())
+    {
+      TRC_DEBUG("Subscription %s classified as TERMINATED", s_id.c_str());
+
+      ClassifiedSubscription* classified_subscription =
+        new ClassifiedSubscription(s_id, s, SubscriptionEvent::TERMINATED);
+
+      classified_subscriptions.push_back(classified_subscription);
+    }
+  }
+
+  // 2/2: Iterate over subscriptions in the current AoR and classify them.
+  for (AoR::Subscriptions::const_iterator current_sub =
+        aor_pair->get_current()->subscriptions().begin();
+      current_sub != aor_pair->get_current()->subscriptions().end();
+      ++current_sub)
+  {
+    AoR::Subscription* s = current_sub->second;
+    std::string s_id = current_sub->first;
+
+    // Find the subscription in the original AoR to determine if the current
+    // subscription has been created.
+    AoR::Subscriptions::const_iterator orig_sub =
+      aor_pair->get_orig()->subscriptions().find(s_id);
+
+    if (orig_sub == aor_pair->get_orig()->subscriptions().end())
+    {
+      // The subscription is not in the original AoR, so classify it as CREATED.
+      TRC_DEBUG("Subscription %s classified as CREATED", s_id.c_str());
+
+      ClassifiedSubscription* classified_subscription =
+        new ClassifiedSubscription(s_id, s, SubscriptionEvent::CREATED);
+
+      classified_subscriptions.push_back(classified_subscription);
+    }
+    else if (s->_refreshed)
+    {
+      TRC_DEBUG("Subscription %s classified as REFRESHED", s_id.c_str());
+
+      ClassifiedSubscription* classified_subscription =
+        new ClassifiedSubscription(s_id, s, SubscriptionEvent::REFRESHED);
+
+      classified_subscriptions.push_back(classified_subscription);
+    }
+    else
+    {
+      TRC_DEBUG("Subscription %s classified as UNCHANGED", s_id.c_str());
+
+      ClassifiedSubscription* classified_subscription =
+        new ClassifiedSubscription(s_id, s, SubscriptionEvent::UNCHANGED);
+
+      classified_subscriptions.push_back(classified_subscription);
+    }
+  }
 }
 
 void SubscriberDataManager::log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings,
