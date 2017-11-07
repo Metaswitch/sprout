@@ -2024,7 +2024,7 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
     // SAS log the error and response
     SAS::Event event(trail(), SASEvent::RX_FORK_ERROR, 0);
     event.add_static_param(fork_id);
-    event.add_var_param(fork_error_to_str(fork_error));
+    event.add_static_param(fork_error);
     event.add_static_param(status_code);
     SAS::report_event(event);
 
