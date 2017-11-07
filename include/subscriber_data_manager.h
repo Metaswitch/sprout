@@ -91,59 +91,6 @@ public:
                            SAS::TrailId trail);
   };
 
-  /// @class SubscriberDataManager::NotifySender
-  ///
-  /// Class responsible for sending any NOTIFYs about registration state
-  /// change
-  class NotifySender
-  {
-  public:
-    NotifySender();
-
-    virtual ~NotifySender();
-
-    /// Create and send any appropriate NOTIFYs
-    ///
-    /// @param aor_id              The AoR ID
-    /// @param associated_uris     The IMPUs associated with this IRS
-    /// @param aor_pair            The AoR pair to send NOTIFYs for
-    /// @param classified_bindings Classification of the bindings associated
-    ///                            with this AoR
-    /// @param now                 The current time
-    /// @param trail               SAS trail
-    void send_notifys(const std::string& aor_id,
-                      const EventTrigger& event_trigger,
-                      AoRPair* aor_pair,
-                      ClassifiedBindings classified_bindings,
-                      int now,
-                      SAS::TrailId trail);
-
-    /// SubscriberDataManager is the only class that can use NotifySender
-    friend class SubscriberDataManager;
-
-  private:
-    // Create and send any appropriate NOTIFYs for any expired subscriptions
-    //
-    // @param aor_id       The AoR ID
-    // @param associated_uris
-    //                     The IMPUs associated with this IRS
-    // @param aor_pair     The AoR pair to send NOTIFYs for
-    // @param binding_info_to_notify
-    //                     The list of bindings to include on the NOTIFY
-    // @param expired_binding_uris
-    //                     A list of URIs of expired bindings
-    // @param now          The current time
-    // @param trail        SAS trail
-    void send_notifys_for_expired_subscriptions(
-                                   const std::string& aor_id,
-                                   const EventTrigger& event_trigger,
-                                   AoRPair* aor_pair,
-                                   ClassifiedBindings binding_info_to_notify,
-                                   std::vector<std::string> missing_binding_uris,
-                                   int now,
-                                   SAS::TrailId trail);
-  };
-
   /// Tags to use when setting timers for nothing, for registration and for subscription.
   static const std::vector<std::string> TAGS_NONE;
   static const std::vector<std::string> TAGS_REG;
@@ -210,16 +157,54 @@ private:
                            SubscriptionEvent event) :
       _id(id),
       _s(s),
-      _subscription_event(event)
+      _subscription_event(event),
+      _notify_required(false),
+      _reasons()
     {}
 
     std::string _id;
     AoR::Subscription* _s;
     SubscriptionEvent _subscription_event;
+    bool _notify_required;
+    std::string _reasons;
   };
 
   typedef std::vector<ClassifiedSubscription*> ClassifiedSubscriptions;
   void delete_subscriptions(ClassifiedSubscriptions& css);
+
+  /// @class SubscriberDataManager::NotifySender
+  ///
+  /// Class responsible for sending any NOTIFYs about registration state
+  /// change
+  class NotifySender
+  {
+  public:
+    NotifySender();
+
+    virtual ~NotifySender();
+
+    /// Create and send any appropriate NOTIFYs
+    ///
+    /// @param aor_id                   The AoR ID
+    /// @param associated_uris          The IMPUs associated with this IRS
+    /// @param aor_pair                 The AoR pair to send NOTIFYs for
+    /// @param classified_bindings      Classification of the bindings associated
+    ///                                 with this AoR
+    /// @param classified_subscriptions Classification of the subscriptions
+    ///                                 associated with this AoR
+    /// @param now                      The current time
+    /// @param trail                    SAS trail
+    void send_notifys(const std::string& aor_id,
+                      const EventTrigger& event_trigger,
+                      AoRPair* aor_pair,
+                      ClassifiedBindings classified_bindings,
+                      ClassifiedSubscriptions classified_subscriptions,
+                      int now,
+                      SAS::TrailId trail);
+
+    /// SubscriberDataManager is the only class that can use NotifySender
+    friend class SubscriberDataManager;
+  };
 
   // Expire any out of date bindings in the current AoR
   //
@@ -267,8 +252,8 @@ private:
   // classify them as CREATED, REFRESHED, UNCHANGED, EXPIRED or TERMINATED.
   //
   // TJW2_TODO: Comment here
-  void classify_subscriptions(AoRPair* aor_pair,
-                              const SubscriberDataManager::EventTrigger& event_trigger,
+  void classify_subscriptions(const SubscriberDataManager::EventTrigger& event_trigger,
+                              AoRPair* aor_pair,
                               ClassifiedBindings& classified_bindings,
                               ClassifiedSubscriptions& classified_subscriptions);
 
