@@ -67,11 +67,16 @@ SipTest::SipTest(pjsip_module* module) :
   cwtest_completely_control_time();
 }
 
+void tx_data_dec_ref(pjsip_tx_data *tdata)
+{
+  pjsip_tx_data_dec_ref(tdata);
+}
+
 /// Runs after each test.
 SipTest::~SipTest()
 {
   _current_instance = NULL;
-  for_each(_out.begin(), _out.end(), pjsip_tx_data_dec_ref);
+  for_each(_out.begin(), _out.end(), tx_data_dec_ref);
   // This ensures the UTs clean up: that no test carries over any time it has
   // advanced and that any servers that have been added to the blacklist are
   // removed (and hence operational) by the next test.
