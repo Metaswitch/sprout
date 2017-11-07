@@ -275,12 +275,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id);;
 
-  // Add SAS markers to the trail attached to the message so the trail
-  // becomes searchable.
-  TRC_DEBUG("Report SAS start marker - trail (%llx)", trail());
-  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
-  SAS::report_marker(start_marker);
-
   // Query the HSS for the associated URIs.
   AssociatedURIs associated_uris = {};
   std::map<std::string, Ifcs> ifc_map;
@@ -880,9 +874,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   free_msg(clone_rsp);
   free_msg(req);
 
-  TRC_DEBUG("Report SAS end marker - trail (%llx)", trail());
-  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
-  SAS::report_marker(end_marker);
   delete aor_pair;
 }
 
