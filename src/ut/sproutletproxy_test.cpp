@@ -602,7 +602,9 @@ public:
 
   void on_rx_initial_request(pjsip_msg* req)
   {
-    // TODO HJS CONT
+    // Regardless of what we receive, forward the request on using a Route
+    // header to route the message to the specified (external) URI.  This is
+    // used to test Tel URIs, which are not themselves routable.
     string forwarding_uri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
     TRC_DEBUG("Forwarding to URI: %s", forwarding_uri.c_str());
     pj_pool_t* pool = get_pool(req);
