@@ -33,7 +33,7 @@ struct stack_data_struct
 {
   SIPResolver*         sipresolver;
 
-  pj_caching_pool      cp;
+  pj_pool_factory      pool_factory;
   pj_pool_t           *pool;
   pjsip_endpoint      *endpt;
   pj_thread_t         *pjsip_transport_thread;

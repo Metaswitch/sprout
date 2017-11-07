@@ -21,7 +21,7 @@ SproutletAppServerTsxHelper::SproutletAppServerTsxHelper(SproutletTsxHelper* hel
   _rr_param_value("")
 {
   // Create a small pool to hold the onward Route for the request.
-  _pool = pj_pool_create(&stack_data.cp.factory,
+  _pool = pj_pool_create(&stack_data.pool_factory,
                          "app-route",
                          1000,
                          1000,

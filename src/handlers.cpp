@@ -158,7 +158,7 @@ static bool get_reg_data(HSSConnection* hss,
 static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_str)
 {
   // Parse the SIP URI and get the username from it.
-  pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "handlers", 1024, 512, NULL);
+  pj_pool_t* tmp_pool = pj_pool_create(&stack_data.pool_factory, "handlers", 1024, 512, NULL);
   pjsip_uri* uri = PJUtils::uri_from_string(uri_str, tmp_pool);
 
   if (uri != NULL)

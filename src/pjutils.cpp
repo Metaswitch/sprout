@@ -2560,7 +2560,7 @@ std::set<pjmedia_type> PJUtils::get_media_types(const pjsip_msg *msg)
       (!pj_stricmp2(&msg->body->content_type.subtype, "sdp")))
   {
     // Parse the SDP, using a temporary pool.
-    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "Mmtel", 1024, 512, NULL);
+    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.pool_factory, "Mmtel", 1024, 512, NULL);
     pjmedia_sdp_session *sdp_sess;
     if (pjmedia_sdp_parse(tmp_pool, (char *)msg->body->data, msg->body->len, &sdp_sess) == PJ_SUCCESS)
     {

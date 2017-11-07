@@ -496,6 +496,30 @@ public:
   }
 };
 
+void raw_os_release_pool(pj_pool_factory *factory, pj_pool_t *pool)
+{
+  pj_pool_destroy_int(pool);  
+}
+
+void raw_os_dump_status(pj_pool_factory *factory, pj_bool_t detail)
+{
+  // Nothing to do.
+}
+
+void raw_os_pool_factory_init(pj_pool_factory* factory, pj_pool_factory_policy* policy)
+{
+  memset(factory, 0, sizeof(pj_pool_factory));
+  memcpy(&factory->policy, policy, sizeof(pj_pool_factory_policy));
+  factory->create_pool = &pj_pool_create_int;
+  factory->release_pool = &raw_os_release_pool;
+  factory->dump_status = &raw_os_dump_status;
+  // We don't set on_block_alloc or on_block_free - we don't need to track this.
+}
+
+void raw_os_pool_factory_term(pj_pool_factory* factory)
+{
+  // Nothing to do.
+}
 
 pj_status_t init_pjsip()
 {
@@ -513,9 +537,10 @@ pj_status_t init_pjsip()
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   // Must create a pool factory before we can allocate any memory.
-  pj_caching_pool_init(&stack_data.cp, &pj_pool_factory_default_policy, 0);
+  raw_os_pool_factory_init(&stack_data.pool_factory, &pj_pool_factory_default_policy);
+
   // Create the endpoint.
-  status = pjsip_endpt_create(&stack_data.cp.factory, NULL, &stack_data.endpt);
+  status = pjsip_endpt_create(&stack_data.pool_factory, NULL, &stack_data.endpt);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   // Init transaction layer.
@@ -523,7 +548,7 @@ pj_status_t init_pjsip()
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   // Create pool for the application
-  stack_data.pool = pj_pool_create(&stack_data.cp.factory,
+  stack_data.pool = pj_pool_create(&stack_data.pool_factory,
                                    "sprout-bono",
                                    4000,
                                    4000,
@@ -900,7 +925,7 @@ void term_pjsip()
 {
   pjsip_endpt_destroy(stack_data.endpt);
   pj_pool_release(stack_data.pool);
-  pj_caching_pool_destroy(&stack_data.cp);
+  raw_os_pool_factory_term(&stack_data.pool_factory);
   pj_shutdown();
 }
 
