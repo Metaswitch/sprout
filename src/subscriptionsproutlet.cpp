@@ -506,7 +506,7 @@ AoR::Subscription SubscriptionSproutletTsx::create_subscription(pjsip_msg* req, 
 
   // TODO: Should this be set to the value of the CSeq on the incoming
   // SUBSCRIBE?
-  subscription._notify_cseq = 0
+  subscription._notify_cseq = 0;
 
   return subscription;
 }
