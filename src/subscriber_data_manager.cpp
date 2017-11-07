@@ -152,6 +152,7 @@ Store::Status SubscriberDataManager::set_aor_data(
   // 1. Expire any old bindings/subscriptions.
   // 2. Log removed or shortened bindings
   // 3. Send any Chronos timer requests
+  // 4. Prepare to send NOTIFYs; increment CSeq values
   // 4. Write the data to memcached. If this fails, bail out here
   // 5. Log new or extended bindings
   // 6. Send any messages we were asked to by the caller
@@ -214,17 +215,10 @@ Store::Status SubscriberDataManager::set_aor_data(
   }
 
 
-  // TJW2_TODO: Update comment
-  // 4. Write the data to memcached. If this fails, bail out here
-
-  // Update the Notify CSeq on every active subscription, and write to store. We
-  // always update the cseq as it's safe to increment it unnecessarily, and if
-  // we wait to find out how many NOTIFYs we're going to send then we'll have to
-  // write back to memcached again.
-
+  // 4. Prepare to send NOTIFYs. Determine which subscriptions require
+  // notification, update subscription CSeqs, and log. We need to update the
+  // CSeqs before writing to the store.
   ClassifiedSubscriptions classified_subscriptions;
-  bool bindings_changed = false;
-  bool associated_uris_changed = false;
 
   if (_primary_sdm)
   {
@@ -233,79 +227,13 @@ Store::Status SubscriberDataManager::set_aor_data(
                            classified_bindings,
                            classified_subscriptions);
 
-    // Determine if any bindings have changed
-    // TJW2_TODO: Extract to function?
-    for (ClassifiedBinding* cb : classified_bindings)
-    {
-      if (cb->_contact_event != NotifyUtils::ContactEvent::REGISTERED)
-      {
-        bindings_changed = true;
-      }
-    }
-
-    // TJW2_TODO: Extract to function?
-    // Determine if the associated URIs have changed.
-    associated_uris_changed = (aor_pair->get_current()->_associated_uris !=
-                               aor_pair->get_orig()->_associated_uris);
-
-    // Determine which subscribers to notify, and increment the corresponding
-    // CSeq values.
-    for (ClassifiedSubscriptions::const_iterator csp = classified_subscriptions.begin();
-         csp != classified_subscriptions.end();
-         ++csp)
-    {
-      ClassifiedSubscription* cs = *csp;
-      cs->_reasons = "Reason(s): - ";
-
-      // If the bindings on this AoR have changed, notify all subscribers.
-      if (bindings_changed)
-      {
-        cs->_notify_required = true;
-        cs->_reasons += "Bindings changed - ";
-      }
-
-      // If the URIs associated with this AoR have changed, notify all
-      // subscribers.
-      if (associated_uris_changed)
-      {
-        cs->_notify_required = true;
-        cs->_reasons += "Associated URIs changed - ";
-      }
-
-      switch(cs->_subscription_event)
-      {
-      case SubscriptionEvent::CREATED:
-        cs->_notify_required = true;
-        cs->_reasons += "Subscription created - ";
-        break;
-      case SubscriptionEvent::REFRESHED:
-        cs->_notify_required = true;
-        cs->_reasons += "Subscription refreshed - ";
-        break;
-      case SubscriptionEvent::TERMINATED:
-        cs->_notify_required = true;
-        cs->_reasons += "Subscription terminated - ";
-        break;
-      case SubscriptionEvent::UNCHANGED:
-        break;
-      case SubscriptionEvent::EXPIRED:
-        // NOTIFYs should not be sent over an unregistered binding.
-        cs->_notify_required = false;
-        TRC_DEBUG("Subscription %s skipped as binding has expired", cs->_id.c_str());
-
-        SAS::Event event(trail, SASEvent::NO_NOTIFY_REMOVED_BINDING, 0);
-        event.add_var_param(cs->_s->_req_uri);
-        break;
-      }
-
-      // If a NOTIFY is required on this subscription, increment the CSeq.
-      if (cs->_notify_required)
-      {
-        cs->_s->_notify_cseq += 1;
-      }
-    }
+    prepare_subscriptions(aor_pair,
+                          classified_bindings,
+                          classified_subscriptions,
+                          trail);
   }
 
+  // 5. Write the data to memcached. If this fails, bail out here
   Store::Status rc = _aor_store->set_aor_data(aor_id,
                                               aor_pair,
                                               max_expires - now,
@@ -322,16 +250,14 @@ Store::Status SubscriberDataManager::set_aor_data(
 
   if (_primary_sdm)
   {
-    // 5. Log new / extended bindings
+    // 6. Log new / extended bindings
     if (_analytics != NULL)
     {
       log_new_or_extended_bindings(classified_bindings, now);
     }
 
-    // 6. Send any NOTIFYs
-    // TJW2_TODO: Update send_notifys method
+    // 7. Send any NOTIFYs
     _notify_sender->send_notifys(aor_id,
-                                 event_trigger,
                                  aor_pair,
                                  classified_bindings,
                                  classified_subscriptions,
@@ -447,7 +373,6 @@ void SubscriberDataManager::classify_subscriptions(const SubscriberDataManager::
   std::vector<std::string> missing_binding_uris;
   for (ClassifiedBinding* cb : classified_bindings)
   {
-    // TJW2_TODO: Extract to function
     if (cb->_contact_event == NotifyUtils::ContactEvent::EXPIRED ||
         cb->_contact_event == NotifyUtils::ContactEvent::DEACTIVATED ||
         cb->_contact_event == NotifyUtils::ContactEvent::UNREGISTERED)
@@ -465,11 +390,10 @@ void SubscriberDataManager::classify_subscriptions(const SubscriberDataManager::
     std::string s_id = aor_orig_s->first;
 
 
-    // TJW2_TODO: What does this block do?
-    if (((std::find(missing_binding_uris.begin(),
-                   missing_binding_uris.end(),
-                   s->_req_uri)
-           != missing_binding_uris.end()))
+    if ((std::find(missing_binding_uris.begin(),
+                    missing_binding_uris.end(),
+                    s->_req_uri)
+         != missing_binding_uris.end())
         && (event_trigger != SubscriberDataManager::EventTrigger::ADMIN))
     {
       // Binding is missing, and this event is not triggered by admin. The
@@ -542,6 +466,85 @@ void SubscriberDataManager::classify_subscriptions(const SubscriberDataManager::
         new ClassifiedSubscription(s_id, s, SubscriptionEvent::UNCHANGED);
 
       classified_subscriptions.push_back(classified_subscription);
+    }
+  }
+}
+
+void SubscriberDataManager::prepare_subscriptions(AoRPair* aor_pair,
+                                                  ClassifiedBindings& classified_bindings,
+                                                  ClassifiedSubscriptions& classified_subscriptions,
+                                                  SAS::TrailId trail)
+{
+  bool bindings_changed = false;
+  bool associated_uris_changed = false;
+
+  // Determine if any bindings have changed
+  for (ClassifiedBinding* cb : classified_bindings)
+  {
+    if (cb->_contact_event != NotifyUtils::ContactEvent::REGISTERED)
+    {
+      bindings_changed = true;
+    }
+  }
+
+  // Determine if the associated URIs have changed.
+  associated_uris_changed = (aor_pair->get_current()->_associated_uris !=
+                             aor_pair->get_orig()->_associated_uris);
+
+  // Determine which subscribers to notify, and increment the corresponding
+  // CSeq values.
+  for (ClassifiedSubscriptions::const_iterator csp = classified_subscriptions.begin();
+       csp != classified_subscriptions.end();
+       ++csp)
+  {
+    ClassifiedSubscription* cs = *csp;
+    cs->_reasons = "Reason(s): - ";
+
+    // If the bindings on this AoR have changed, notify all subscribers.
+    if (bindings_changed)
+    {
+      cs->_notify_required = true;
+      cs->_reasons += "Bindings changed - ";
+    }
+
+    // If the URIs associated with this AoR have changed, notify all
+    // subscribers.
+    if (associated_uris_changed)
+    {
+      cs->_notify_required = true;
+      cs->_reasons += "Associated URIs changed - ";
+    }
+
+    switch(cs->_subscription_event)
+    {
+    case SubscriptionEvent::CREATED:
+      cs->_notify_required = true;
+      cs->_reasons += "Subscription created - ";
+      break;
+    case SubscriptionEvent::REFRESHED:
+      cs->_notify_required = true;
+      cs->_reasons += "Subscription refreshed - ";
+      break;
+    case SubscriptionEvent::TERMINATED:
+      cs->_notify_required = true;
+      cs->_reasons += "Subscription terminated - ";
+      break;
+    case SubscriptionEvent::UNCHANGED:
+      break;
+    case SubscriptionEvent::EXPIRED:
+      // NOTIFYs should not be sent over an unregistered binding.
+      cs->_notify_required = false;
+      TRC_DEBUG("Subscription %s skipped as binding has expired", cs->_id.c_str());
+
+      SAS::Event event(trail, SASEvent::NO_NOTIFY_REMOVED_BINDING, 0);
+      event.add_var_param(cs->_s->_req_uri);
+      break;
+    }
+
+    // If a NOTIFY is required on this subscription, increment the CSeq.
+    if (cs->_notify_required)
+    {
+      cs->_s->_notify_cseq += 1;
     }
   }
 }
@@ -828,25 +831,12 @@ SubscriberDataManager::NotifySender::~NotifySender()
 
 void SubscriberDataManager::NotifySender::send_notifys(
                                const std::string& aor_id,
-                               const SubscriberDataManager::EventTrigger& event_trigger,
                                AoRPair* aor_pair,
                                ClassifiedBindings classified_bindings,
                                ClassifiedSubscriptions classified_subscriptions,
                                int now,
                                SAS::TrailId trail)
 {
-  std::vector<std::string> missing_binding_uris;
-
-  for (ClassifiedBinding* cb : classified_bindings)
-  {
-    if (cb->_contact_event == NotifyUtils::ContactEvent::EXPIRED ||
-        cb->_contact_event == NotifyUtils::ContactEvent::DEACTIVATED ||
-        cb->_contact_event == NotifyUtils::ContactEvent::UNREGISTERED)
-    {
-      missing_binding_uris.push_back(cb->_b->_uri);
-    }
-  }
-
   // The registration state to send is ACTIVE if we have at least one active binding,
   // otherwise TERMINATED.
   NotifyUtils::RegistrationState reg_state = (!aor_pair->get_current()->bindings().empty()) ?

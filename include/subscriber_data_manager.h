@@ -130,6 +130,7 @@ public:
   /// succeeds, this returns true.
   ///
   /// @param aor_id               The AoR to retrieve
+  /// @param event_trigger        The type of event triggering this function call
   /// @param associated_uris      The IMPUs associated with this IRS
   /// @param aor_pair             The AoR pair to set
   /// @param trail                SAS trail
@@ -166,7 +167,7 @@ private:
     AoR::Subscription* _s;
     SubscriptionEvent _subscription_event;
     bool _notify_required;
-    std::string _reasons;
+    std::string _reasons; // Stores reasons for requiring a notify (for logging)
   };
 
   typedef std::vector<ClassifiedSubscription*> ClassifiedSubscriptions;
@@ -195,7 +196,6 @@ private:
     /// @param now                      The current time
     /// @param trail                    SAS trail
     void send_notifys(const std::string& aor_id,
-                      const EventTrigger& event_trigger,
                       AoRPair* aor_pair,
                       ClassifiedBindings classified_bindings,
                       ClassifiedSubscriptions classified_subscriptions,
@@ -240,9 +240,10 @@ private:
   // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),
   // shortened ("SHORTENED") or unchanged ("REGISTERED").
   //
-  // @param aor_id                The AoR ID
-  // @param aor_pair              The AoR pair to compare and classify bindings for
-  // @param classified_bindings   Output vector of classified bindings
+  // @param aor_id              The AoR ID
+  // @param event_trigger       The type of event triggering this function call
+  // @param aor_pair            The AoR pair containing the bindings to classify
+  // @param classified_bindings Output vector of classified bindings
   void classify_bindings(const std::string& aor_id,
                          const SubscriberDataManager::EventTrigger& event_trigger,
                          AoRPair* aor_pair,
@@ -251,11 +252,28 @@ private:
   // Iterate over all original and current subscriptions in an AoR pair and
   // classify them as CREATED, REFRESHED, UNCHANGED, EXPIRED or TERMINATED.
   //
-  // TJW2_TODO: Comment here
+  // @param event_trigger            The type of event triggering this function call
+  // @param aor_pair                 The AoR pair containing the subscriptions to classify
+  // @param classified_bindings      The AoR's bindings, classified by classify_bindings
+  // @param classified_subscriptions Output vector of classified subscriptions
   void classify_subscriptions(const SubscriberDataManager::EventTrigger& event_trigger,
                               AoRPair* aor_pair,
                               ClassifiedBindings& classified_bindings,
                               ClassifiedSubscriptions& classified_subscriptions);
+
+  // Iterate over all classified subscriptions. For each subscription, determine
+  // if a NOTIFY should be sent - if so, increment the CSeq, flag the
+  // subscription, and store the reason for the NOTIFY.
+  //
+  // @param aor_pair                 The AoR pair containing the subscriptions to prepare
+  // @param classified_bindings      The AoR's bindings, classified by classify_bindings
+  // @param classified_subscriptions The AoR's subscriptions, classified by
+  //                                 classify_subscriptions
+  // @param trail                    The SAS TrailId
+  void prepare_subscriptions(AoRPair* aor_pair,
+                             ClassifiedBindings& classified_bindings,
+                             ClassifiedSubscriptions& classified_subscriptions,
+                             SAS::TrailId trail);
 
   // Iterate over a list of classified bindings, and emit registration logs for those
   // that are EXPIRED or SHORTENED.

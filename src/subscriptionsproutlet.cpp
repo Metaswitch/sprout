@@ -504,9 +504,9 @@ AoR::Subscription SubscriptionSproutletTsx::create_subscription(pjsip_msg* req, 
   subscription._refreshed = true;
   subscription._expires = now + expiry;
 
-
-  // TJW2_TODO: Should this be 1?
-  subscription._notify_cseq = ((pjsip_cseq_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CSEQ, NULL))->cseq;
+  // TODO: Should this be set to the value of the CSeq on the incoming
+  // SUBSCRIBE?
+  subscription._notify_cseq = 0
 
   return subscription;
 }
