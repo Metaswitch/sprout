@@ -1587,10 +1587,8 @@ BasicProxy::UACTsx::~UACTsx()
 
   if (_tdata != NULL)
   {
-    //LCOV_EXCL_START
     pjsip_tx_data_dec_ref(_tdata);
     _tdata = NULL;
-    //LCOV_EXCL_STOP
   }
 
   if ((_tsx != NULL) &&
