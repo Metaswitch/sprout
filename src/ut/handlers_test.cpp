@@ -31,7 +31,6 @@
 using namespace std;
 using ::testing::_;
 using ::testing::Return;
-using ::testing::NiceMock;
 using ::testing::InSequence;
 using ::testing::SetArgReferee;
 using ::testing::SaveArg;
@@ -71,10 +70,10 @@ class DeregistrationTaskTest : public SipTest
 
   void SetUp()
   {
-    _local_impi_store = new NiceMock<MockImpiStore>();
-    _remote_impi_store = new NiceMock<MockImpiStore>();
-    _httpstack = new NiceMock<MockHttpStack>();
-    _subscriber_data_manager = new NiceMock<MockSubscriberDataManager>();
+    _local_impi_store = new MockImpiStore();
+    _remote_impi_store = new MockImpiStore();
+    _httpstack = new MockHttpStack();
+    _subscriber_data_manager = new MockSubscriberDataManager();
     _hss = new FakeHSSConnection();
   }
 
