@@ -1062,8 +1062,9 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       pj_status_t status = pjsip_tsx_send_msg(_tsx, tdata);
       if (status != PJ_SUCCESS)
       {
-        TRC_ERROR("Failed to forward 1xx response: %s",
-                PJUtils::pj_status_to_string(status).c_str());
+        TRC_INFO("Failed to forward 1xx response: %s",
+                 PJUtils::pj_status_to_string(status).c_str());
+        pjsip_tx_data_dec_ref(tdata);
       }
     }
     else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 200))
@@ -1222,8 +1223,9 @@ void BasicProxy::UASTsx::on_final_response()
     pj_status_t status = pjsip_tsx_send_msg(_tsx, rsp);
     if (status != PJ_SUCCESS)
     {
-      TRC_ERROR("Failed to send final response: %s",
-                PJUtils::pj_status_to_string(status).c_str());
+      TRC_INFO("Failed to send final response: %s",
+               PJUtils::pj_status_to_string(status).c_str());
+      pjsip_tx_data_dec_ref(rsp);
     }
 
     if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
