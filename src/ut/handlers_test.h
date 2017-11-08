@@ -26,7 +26,6 @@
 #include "mock_hss_connection.h"
 #include "gtest/gtest.h"
 
-using ::testing::NiceMock;
 
 // Base class used for testing handlers with Mock SDMs.
 class TestWithMockSdms : public SipTest

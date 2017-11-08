@@ -130,7 +130,7 @@ public:
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
 
-    _hss_connection_observer = new NiceMock<MockHSSConnection>();
+    _hss_connection_observer = new MockHSSConnection();
     _hss_connection = new FakeHSSConnection(_hss_connection_observer);
 
     // Create the BGCF Sproutlet.
@@ -152,6 +152,12 @@ public:
                                                   &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                                   &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                                   "mmtel.homedomain");
+
+    // We don't care about this function call, but if gtest prints it out as
+    // uninteresting mock function call, a memory warning will be issued by
+    // valgrind. So put the expectation here to prevent that printing.
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillRepeatedly(Return(0));
   }
 
   ~SCSCFTestBase()
@@ -8705,6 +8711,7 @@ TEST_F(SCSCFTest, TestCallerNotBarred)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   list<HeaderMatcher> hdrs;
@@ -8731,6 +8738,7 @@ TEST_F(SCSCFTest, TestCalleeNotBarred)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
+
   SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -8774,6 +8782,7 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
+
   SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);

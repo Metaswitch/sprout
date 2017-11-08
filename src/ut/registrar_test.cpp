@@ -32,7 +32,6 @@
 using ::testing::MatchesRegex;
 using ::testing::_;
 using ::testing::Return;
-using ::testing::NiceMock;
 using ::testing::SaveArg;
 using ::testing::InSequence;
 using ::testing::SetArgReferee;
@@ -376,7 +375,7 @@ public:
   static void SetUpTestCase()
   {
     RegistrarTest::SetUpTestCase();
-    _hss_connection_observer = new NiceMock<MockHSSConnection>();
+    _hss_connection_observer = new MockHSSConnection();
     _observed_hss_connection = new FakeHSSConnection(_hss_connection_observer);
   }
 
