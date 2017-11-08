@@ -1269,7 +1269,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
         if (status != PJ_SUCCESS)
         {
           // LCOV_EXCL_START
-          TRC_INFO("Failed to send final response: %s",
+          TRC_INFO("Failed to send provisional response: %s",
                    PJUtils::pj_status_to_string(status).c_str());
 
           // pjsip_tsx_send_msg doesn't decrease the ref count on the tdata on
