@@ -1262,8 +1262,12 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
         pj_status_t status = pjsip_tsx_send_msg(_tsx, prov_rsp);
         if (status != PJ_SUCCESS)
         {
-          TRC_ERROR("Failed to send final response: %s",
-                    PJUtils::pj_status_to_string(status).c_str());
+          TRC_INFO("Failed to send final response: %s",
+                   PJUtils::pj_status_to_string(status).c_str());
+
+          // pjsip_tsx_send_msg doesn't decrease the ref count on the tdata on
+          // failure
+          pjsip_tx_data_dec_ref(prov_rsp);
         }
       }
     }
