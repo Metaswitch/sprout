@@ -1062,9 +1062,11 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       pj_status_t status = pjsip_tsx_send_msg(_tsx, tdata);
       if (status != PJ_SUCCESS)
       {
+        // LCOV_EXCL_START
         TRC_INFO("Failed to forward 1xx response: %s",
                  PJUtils::pj_status_to_string(status).c_str());
         pjsip_tx_data_dec_ref(tdata);
+        // LCOV_EXCL_STOP
       }
     }
     else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 200))
@@ -1223,9 +1225,11 @@ void BasicProxy::UASTsx::on_final_response()
     pj_status_t status = pjsip_tsx_send_msg(_tsx, rsp);
     if (status != PJ_SUCCESS)
     {
+      // LCOV_EXCL_START
       TRC_INFO("Failed to send final response: %s",
                PJUtils::pj_status_to_string(status).c_str());
       pjsip_tx_data_dec_ref(rsp);
+      // LCOV_EXCL_STOP
     }
 
     if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
@@ -1264,12 +1268,14 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
         pj_status_t status = pjsip_tsx_send_msg(_tsx, prov_rsp);
         if (status != PJ_SUCCESS)
         {
+          // LCOV_EXCL_START
           TRC_INFO("Failed to send final response: %s",
                    PJUtils::pj_status_to_string(status).c_str());
 
           // pjsip_tsx_send_msg doesn't decrease the ref count on the tdata on
           // failure
           pjsip_tx_data_dec_ref(prov_rsp);
+          // LCOV_EXCL_STOP
         }
       }
     }
@@ -1740,6 +1746,7 @@ void BasicProxy::UACTsx::send_request()
       }
       else if (status != PJ_SUCCESS)
       {
+        // LCOV_EXCL_START
         TRC_INFO("Failed to send stateful request: %s",
                  PJUtils::pj_status_to_string(status).c_str());
 
@@ -1749,6 +1756,7 @@ void BasicProxy::UACTsx::send_request()
         // That will have decided to retry the request if appropriate, and
         // increased the ref count on _tdata so we should decrease it here.
         pjsip_tx_data_dec_ref(_tdata);
+        // LCOV_EXCL_STOP
       }
 
       // We do not want to take any other actions on a failure returned from
