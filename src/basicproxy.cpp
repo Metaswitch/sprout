@@ -1734,14 +1734,20 @@ void BasicProxy::UACTsx::send_request()
       {
         start_timer_c();
       }
-
-      if (status != PJ_SUCCESS)
+      else if (status != PJ_SUCCESS)
       {
-        TRC_ERROR("Failed to send stateful request: %s",
-                  PJUtils::pj_status_to_string(status).c_str());
+        TRC_INFO("Failed to send stateful request: %s",
+                 PJUtils::pj_status_to_string(status).c_str());
+
+        // If we failed to send the message, the ref count on _tdata will not
+        // have been decreased, and we will have triggered a call into
+        // on_tsx_state already.
+        // That will have decided to retry the request if appropriate, and
+        // increased the ref count on _tdata so we should decrease it here.
+        pjsip_tx_data_dec_ref(_tdata);
       }
 
-      // We do not want to take any action on a failure returned from
+      // We do not want to take any other actions on a failure returned from
       // pjsip_tsx_send_msg, as it will have also triggered a call into
       // on_tsx_state. In the event of failure, this will, or already has
       // cause us to call into retry_request; we do not want to call into
