@@ -130,7 +130,7 @@ public:
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
 
-    _hss_connection_observer = new MockHSSConnection();
+    _hss_connection_observer = new NiceMock<MockHSSConnection>();
     _hss_connection = new FakeHSSConnection(_hss_connection_observer);
 
     // Create the BGCF Sproutlet.
@@ -2612,6 +2612,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);

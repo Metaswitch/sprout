@@ -215,6 +215,70 @@ protected:
 
 using TestingCommon::Message;
 
+TEST_F(ICSCFSproutletTest, RouteRegisterSCSCFBlacklisted)
+{
+  // Tests routing of REGISTER requests when the HSS responds with a blacklisted 
+  // S-CSCF name.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+  
+  // Add all but one S-CSCF to the blacklist (scscf1.homedomain is not blacklisted).
+  _icscf_sproutlet->_blacklisted_scscfs.insert("sip:scscf2.homedomain:5058;transport=TCP");
+  _icscf_sproutlet->_blacklisted_scscfs.insert("sip:scscf3.homedomain:5058;transport=TCP");
+  _icscf_sproutlet->_blacklisted_scscfs.insert("sip:scscf4.homedomain:5058;transport=TCP");
+  _icscf_sproutlet->_blacklisted_scscfs.insert("sip:scscf5.homedomain:5058;transport=TCP");
+ 
+  // Set up HSS response for user registration where a blacklisted S-CSCF is returned. Also set up the subsequent capabilities query.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
+  "{\"result-code\": 2001,"
+  " \"scscf\": \"sip:scscf5.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB",
+  "{\"result-code\": 2001,"
+  " \"scscf\": \"sip:scscf5.homedomain:5058;transport=TCP\"}");
+
+  // Inject a REGISTER request.
+  Message msg2;
+  msg2._first_hop = true;
+  msg2._method = "REGISTER";
+  msg2._requri = "sip:homedomain";
+  msg2._to = msg2._from;        // To header contains AoR in REGISTER requests.
+  msg2._via = tp->to_string(false);
+  msg2._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg2.get_request(), tp);
+
+  // REGISTER request should be forwarded to scscf1.homedomain as this is 
+  // the only S-CSCF that is not blacklisted.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r3("REGISTER");
+  r3.matches(tdata->msg);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher r4(200);
+  r4.matches(tdata->msg);
+
+  free_txdata();
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB");
+
+  delete tp;
+}
+
 TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
 {
   // Tests routing of REGISTER requests when the HSS responds with a server

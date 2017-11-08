@@ -17,6 +17,7 @@
 #include "pjutils.h"
 #include "pjsip.h"
 #include "pjsip_simple.h"
+#include "boost/algorithm/string_regex.hpp"
 
 #include <mutex>
 
@@ -591,6 +592,161 @@ public:
   }
 };
 
+class FakeSproutletURIForwarder : public CompositeSproutletTsx
+{
+public:
+  FakeSproutletURIForwarder(Sproutlet* sproutlet) :
+   CompositeSproutletTsx(sproutlet, static_cast<FakeSproutlet<FakeSproutletURIForwarder>*>(sproutlet)->_next_hop)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    // Regardless of what we receive, forward the request on using a Route
+    // header to route the message to the specified (external) URI.  This is
+    // used to test Tel URIs, which are not themselves routable.
+    string forwarding_uri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+    TRC_DEBUG("Forwarding to URI: %s", forwarding_uri.c_str());
+    pj_pool_t* pool = get_pool(req);
+    pjsip_route_hdr* route = pjsip_route_hdr_create(pool);
+    route->name_addr.uri = PJUtils::uri_from_string(forwarding_uri, pool, PJ_FALSE);
+    pjsip_msg_insert_first_hdr(req, (pjsip_hdr*)route);
+
+    send_request(req);
+  }
+};
+
+class FakeSproutletRestrict : public FakeSproutletTsxNextHop
+{
+public:
+  FakeSproutletRestrict(Sproutlet* sproutlet) :
+   FakeSproutletTsxNextHop(sproutlet)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    int allowed_state = BaseResolver::ALL_LISTS;
+
+    string hdr_state = get_headers(req, "X-Host-State");
+
+    if (!hdr_state.empty())
+    {
+      allowed_state = std::stoi(hdr_state.substr(14));
+    }
+
+    TRC_DEBUG("Forward on with allowed state restriction: %d", allowed_state);
+    send_request(req, allowed_state);
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    TRC_DEBUG("Got %d response", rsp->line.status.code);
+
+    ForkState state = fork_state(fork_id);
+    if (state.error_state != ForkErrorState::NONE)
+    {
+      // The downstream sproutlet hit an error.  Encode this by adding the
+      // error value to 700, to produce a unique status code to send upstream.
+      // This is just to allow the UTs to check on the error state result, we
+      // wouldn't expect real sproutlets to expose this internal error state.
+      TRC_DEBUG("Got error state: %d", state.error_state);
+      free_msg(rsp);
+      pjsip_msg* err_rsp =
+        create_response(original_request(),
+                        (pjsip_status_code)(700 + state.error_state));
+      send_response(err_rsp);
+    }
+    else
+    {
+      // Pass the response upstream
+      TRC_DEBUG("No error state");
+      send_response(rsp);
+    }
+  }
+};
+
+class FakeSproutletBoundary : public FakeSproutletTsxNextHop
+{
+public:
+  FakeSproutletBoundary(Sproutlet* sproutlet) :
+   FakeSproutletTsxNextHop(sproutlet)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    // Unconditionally restrict downstream attempts so that no addresses are
+    // acceptable.  This information must not be passed across network function
+    // boundaries, so should be ignored.
+    TRC_DEBUG("Forward on - no addrs allowed");
+    int allowed_state = 0;
+    send_request(req, allowed_state);
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    // There should be no error state passed back up to us from the next
+    // network function (such state should not cross network function
+    // boundaries).
+    TRC_DEBUG("Got %d response - check error", rsp->line.status.code);
+
+    ForkState state = fork_state(fork_id);
+    if (state.error_state != ForkErrorState::NONE)
+    {
+      // We've been passed an error across a network boundary - fail the test.
+      FAIL() << "Error passed across network function boundary";
+    }
+
+    send_response(rsp);
+  }
+};
+
+class FakeSproutletForkErrors : public FakeSproutletTsxNextHop
+{
+public:
+  FakeSproutletForkErrors(Sproutlet* sproutlet) :
+   FakeSproutletTsxNextHop(sproutlet)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    // Send two downstream requests, which we expect to fail in two separate
+    // ways.
+    TRC_DEBUG("Fork INVITE downstream");
+    send_request(req, 0);
+
+    pjsip_msg* orig_req = original_request();
+    send_request(orig_req, BaseResolver::ALL_LISTS);
+  }
+};
+
+class FakeSproutletForkCheck : public FakeSproutletTsxNextHop
+{
+public:
+  FakeSproutletForkCheck(Sproutlet* sproutlet) :
+   FakeSproutletTsxNextHop(sproutlet)
+  {
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    // As the downstream forks fail in two different ways, we should get an
+    // error state of NONE, as we can't usefully combine them.
+    TRC_DEBUG("Got %d response - check error state", rsp->line.status.code);
+
+    ForkState state = fork_state(fork_id);
+    if (state.error_state != ForkErrorState::NONE)
+    {
+      // We've been passed error state, when we expected none.
+      FAIL() << "Error state incorrectly passed upstream";
+    }
+
+    send_response(rsp);
+  }
+};
+
 class SproutletProxyTest : public SipTest
 {
 public:
@@ -629,6 +785,17 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("loop2", 0, "sip:loop2.homedomain;transport=tcp", "", "", NULL, NULL, "loop-nf", "loop1"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("composite1", 0, "sip:cmp1.homedomain;transport=tcp", "", "", NULL, NULL, "cmp-nf", "composite2"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("composite2", 0, "sip:cmp2.homedomain;transport=tcp", "", "", NULL, NULL, "cmp-nf", "fwd"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat1", 0, "sip:rep1.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", "repeat2"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat2", 0, "sip:rep2.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", "repeat"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat", 0, "sip:rep.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", "repeat3"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("repeat3", 0, "sip:rep3.homedomain;transport=tcp", "", "", NULL, NULL, "repeat", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletRestrict>("restrict", 0, "sip:restrict.homedomain;transport=tcp", "", "", NULL, NULL, "state-nf", "downstream"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false>>("downstream", 0, "sip:downstream.homedomain;transport=tcp", "", "", NULL, NULL, "state-nf", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletBoundary>("boundary", 0, "sip:boundary.homedomain;transport=tcp", "", "", NULL, NULL, "boundary-nf", "restrict"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletForkErrors>("forkcheck", 0, "sip:forkcheck.homedomain;transport=tcp", "", "", NULL, NULL, "fork-nf", "forkerr"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletForkErrors>("forkerr", 0, "sip:forkerr.homedomain;transport=tcp", "", "", NULL, NULL, "fork-nf", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("teltest1", 44555, "sip:teltest1.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", "teltest2"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletURIForwarder>("teltest2", 0, "sip:teltest2.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", ""));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -2160,6 +2327,12 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
             str_uri(req->msg->line.req.uri));
   EXPECT_EQ("Max-Forwards: 98", get_headers(req->msg, "Max-Forwards"));
   EXPECT_EQ("", get_headers(req->msg, "Route"));
+  vector<string> via_hdrs;
+  string via_str = get_headers(req->msg, "Via");
+  boost::algorithm::split_regex(via_hdrs, via_str, boost::regex("\r\n"));
+  EXPECT_EQ(3, via_hdrs.size());
+  EXPECT_THAT(via_hdrs[1], MatchesRegex("Via: SIP/2.0/TCP cmp-nf.sprout.homedomain.*"));
+
   inject_msg(respond_to_txdata(req, 100));
 
   // Send a 200 OK response.
@@ -2190,6 +2363,143 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
   EXPECT_EQ("sip:bob@proxy1.awaydomain:5060;transport=TCP", str_uri(tdata->msg->line.req.uri));
   EXPECT_EQ("", get_headers(tdata->msg, "Route"));
   EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, CompositeNetworkFunctionTelURI)
+{
+  // Tests passing a request through a Network Function composed of multiple
+  // sproutlets, when the request is routed by port (as there are no Route
+  // headers, and the Request URI is not a routable SIP URI - e.g. it is a Tel
+  // URI).
+  pjsip_tx_data* tdata;
+
+  // Create a TCP transport that will deliver inbound messages on the port
+  // 44555.  This port is owned by the teltest1 sproutlet, which forwards on to
+  // the teltest2 sproutlet, even though it doesn't have a routable SIP URI to
+  // hand.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        44555,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with no Route header, and a Tel URI.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "tel:8088341234";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._forwards = "100";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITEs.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the INVITE and send a 100 Trying.
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+  inject_msg(respond_to_txdata(req, 100));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(req, 200));
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, RepeatedNetworkFunction)
+{
+  // Tests passing a request through two network functions with the same name.
+  // We should still be able to detect the boundary between them, and add the
+  // internal Via header.  For testing purposes, we've mocked this up by having
+  // two separate network functions which report the same name.  In real
+  // situations it will be two instances of the same network function, which
+  // the call is routed through in complex ways.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the first Sproutlet in
+  // the first instance of the network function.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:repeat1.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITEs.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the INVITE and send a 100 Trying.  There should be three Via headers
+  // on the INVITE that coms out the other side (from top, to bottom):
+  //  - One from exiting the SPN
+  //  - One from the internal network function boundary
+  //  - One from the original sender
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+  EXPECT_EQ("sip:bob@proxy1.awaydomain:5060;transport=TCP",
+            str_uri(req->msg->line.req.uri));
+  EXPECT_EQ("", get_headers(req->msg, "Route"));
+  vector<string> via_hdrs;
+  string via_str = get_headers(req->msg, "Via");
+  boost::algorithm::split_regex(via_hdrs, via_str, boost::regex("\r\n"));
+  EXPECT_EQ(3, via_hdrs.size());
+  EXPECT_THAT(via_hdrs[1], MatchesRegex("Via: SIP/2.0/TCP repeat.sprout.homedomain.*"));
+
+  inject_msg(respond_to_txdata(req, 100));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(req, 200));
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.  It should contain just a single Via header (belonging
+  // to the original sender).
+  tdata = current_txdata();
+  RespMatcher(200).matches(tdata->msg);
+  via_hdrs.clear();
+  via_str = get_headers(tdata->msg, "Via");
+  boost::algorithm::split_regex(via_hdrs, via_str, boost::regex("\r\n"));
+  EXPECT_EQ(1, via_hdrs.size());
+  EXPECT_THAT(via_hdrs[0], MatchesRegex("Via: SIP/2.0/TCP 1.2.3.4.*"));
+  tp->expect_target(tdata);
   free_txdata();
 
   // All done!
@@ -2315,6 +2625,224 @@ TEST_F(SproutletProxyTest, LoopDetectionSproutletDepth)
   inject_msg(msg2.get_request(), tp);
 
   // The ACK should be discarded.
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, RestrictHostStateNone)
+{
+  // Tests passing a request through a Network Function that restricts the
+  // allowed host state of request targets, and having a downstream sproutlet
+  // fail to meet those restrictions.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the first restricting
+  // Sproutlet.  Include the internal UT header X-Host-State to indicate that
+  // the restrict sproutlet should not allow any address types.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg1._route = "Route: <sip:restrict.proxy1.homedomain;transport=TCP;lr>";
+  msg1._extra = "X-Host-State: 0";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and error response from restrict sproutlet.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the error response.  The restrict sproutlet makes up an error code
+  // by adding 700 to the index of the error state that it encountered.
+  int err_code = 700 + (int)ForkErrorState::NO_ADDRESSES;
+  tdata = current_txdata();
+  RespMatcher(err_code).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, RestrictHostStateTimeout)
+{
+  // Tests passing a request through a Network Function that restricts the
+  // allowed host state of request targets, and having a downstream sproutlet
+  // fail to meet those restrictions.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the first restricting
+  // Sproutlet.  Include the internal UT header X-Host-State to indicate that
+  // the restrict sproutlet can use only whitelisted addresses.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg1._route = "Route: <sip:restrict.proxy1.homedomain;transport=TCP;lr>";
+  msg1._extra = "X-Host-State: " + BaseResolver::WHITELISTED;
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the INVITE, but don't send any trying response (we're being
+  // unresponsive to trigger a timeout).
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+
+  // Advance time to make the call timeout
+  cwtest_advance_time_ms(33000L);
+  poll();
+
+  // Check the error response.  The restrict sproutlet makes up an error code
+  // by adding 700 to the index of the error state that it encountered.
+  ASSERT_EQ(1, txdata_count());
+  int err_code = 700 + (int)ForkErrorState::TIMEOUT;
+  tdata = current_txdata();
+  RespMatcher(err_code).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, RestrictHostBoundaryLimit)
+{
+  // Tests passing a request through a Network Function that restricts the
+  // allowed host state of request targets, and having that restriction
+  // discarded at the newtork function boundary.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the first network
+  // function.  This will restrict the allowed type to "no addresses", which
+  // the downstream sproutlet will ignore, because it is part of a separate
+  // network function.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg1._route = "Route: <sip:boundary.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and error response from restrict sproutlet.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the INVITE, but don't send any trying response (we're being
+  // unresponsive to trigger a timeout).
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+
+  // Advance time to make the call timeout
+  cwtest_advance_time_ms(33000L);
+  poll();
+
+  // Check the error response.  The restrict sproutlet makes up an error code
+  // by adding 700 to the index of the error state that it encountered.  The
+  // boundary sproutlet will have verified that the error state wasn't also
+  // passed upstream.
+  ASSERT_EQ(1, txdata_count());
+  int err_code = 700 + (int)ForkErrorState::TIMEOUT;
+  tdata = current_txdata();
+  RespMatcher(err_code).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, RestrictHostForkError)
+{
+  // Tests hitting multiple error states on multiple forks.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the first network
+  // function.  This will restrict the allowed type to "no addresses", which
+  // the downstream sproutlet will ignore, because it is part of a separate
+  // network function.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
+  msg1._route = "Route: <sip:forkcheck.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and error response from restrict sproutlet.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // One fork will be rejected at the transport layer (because no host state
+  // is acceptable).  The other will result in an INVITE, which we ignore, as
+  // we're being unresponsive.
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+
+  // Advance time to make the call timeout
+  cwtest_advance_time_ms(33000L);
+  poll();
+
+  // Check that we got the expected SIP response code.  The forkcheck sproutlet
+  // will have verified that it didn't get a single fork error result (as the
+  // forks didn't agree).
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(503).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
   ASSERT_EQ(0, txdata_count());
 
   delete tp;

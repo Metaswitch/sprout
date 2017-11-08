@@ -30,13 +30,25 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
     switch (http_code)
     {
       case HTTP_OK:
-        // LCOV_EXCL_START
         TRC_ERROR("Rejecting %s request following failure to register on the HSS: %s",
                   sip_msg_type, regstate.c_str());
 
-        st_code = PJSIP_SC_SERVER_TIMEOUT;
+        if (strcmp(sip_msg_type, "SUBSCRIBE") == 0)
+        {
+          // We successfully contacted Homestead, but the user wasn't registered
+          // TS 24.229 says:
+          // "if the Request-URI of the SUBSCRIBE request contains a URI for
+          // which currently no binding exists, then send a 480 (Temporarily
+          // Unavailable) response"
+          st_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+        }
+        else
+        {
+          // LCOV_EXCL_START
+          st_code = PJSIP_SC_SERVER_TIMEOUT;
+          // LCOV_EXCL_STOP
+        }
         break;
-        // LCOV_EXCL_STOP
 
       case HTTP_NOT_FOUND:
         // The client shouldn't retry when the subscriber isn't present in the

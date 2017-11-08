@@ -143,6 +143,7 @@ struct options
   bool                                 http_acr_logging;
   int                                  homestead_timeout;
   int                                  request_on_queue_timeout;
+  std::set<std::string>                blacklisted_scscfs;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
