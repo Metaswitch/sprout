@@ -348,8 +348,8 @@ static void usage(void)
        "                            the throttling code (default: 10.0))\n"
        "     --max-token-rate N     Maximum token refill rate of tokens in the token bucket (used by\n"
        "                            the throttling code (default: 0.0 - no maximum))\n"
-       "     --request-queue-timeout <msecs>
-       "                            Maximum time a request can be waiting to be processed before it \n"
+       "     --request-queue-timeout <msecs>\n"
+       "                            Maximum time a request can be waiting to be processed before it\n"
        "                            is rejected (used by the throttling code (default: 4000))\n"
        " -T  --http-address <server>\n"
        "                            Specify the HTTP bind address\n"
