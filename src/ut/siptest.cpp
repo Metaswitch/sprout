@@ -106,6 +106,7 @@ void SipTest::SetUpTestCase()
   stack_data.home_domains.insert("sprout.homedomain");
   stack_data.home_domains.insert("sprout-site2.homedomain");
   stack_data.default_home_domain = pj_str("homedomain");
+  stack_data.enable_orig_sip_to_tel_coerce = true;
   URIClassifier::home_domains.push_back(&stack_data.default_home_domain);
   URIClassifier::home_domains.push_back(&sprout_hostname);
   URIClassifier::home_domains.push_back(&sprout_site2_hostname);

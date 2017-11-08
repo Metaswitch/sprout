@@ -47,8 +47,7 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
-                               int network_function_port,
-                               std::set<std::string> blacklisted_scscfs) :
+                               int network_function_port) :
   Sproutlet(icscf_name,
             port,
             uri,
@@ -65,8 +64,7 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
   _enum_service(enum_service),
   _override_npdi(override_npdi),
   _bgcf_uri_str(bgcf_uri),
-  _network_function_port(network_function_port),
-  _blacklisted_scscfs(blacklisted_scscfs)
+  _network_function_port(network_function_port)
 {
   _session_establishment_tbl = SNMP::SuccessFailCountTable::create("icscf_session_establishment",
                                                                    "1.2.826.0.1.1578918.9.3.36");
@@ -100,6 +98,7 @@ bool ICSCFSproutlet::init()
 
   return init_success;
 }
+
 
 /// Creates a ICSCFSproutletTsx instance for performing I-CSCF service processing
 /// on a request.
@@ -276,8 +275,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
                                             impu,
                                             visited_network,
                                             auth_type,
-                                            emergency,
-                                            _icscf->_blacklisted_scscfs);
+                                            emergency);
 
   // We have a router, query it for an S-CSCF to use.
   pjsip_sip_uri* scscf_sip_uri = NULL;
@@ -509,7 +507,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // Originating request.
     TRC_DEBUG("Originating request");
     _originating = true;
-    impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(req));
+    impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(req, pool, trail()));
 
     SAS::Event event(trail(), SASEvent::ICSCF_RCVD_ORIG_NON_REG, 0);
     event.add_var_param(impu);

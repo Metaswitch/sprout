@@ -53,8 +53,7 @@ public:
                  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                  bool override_npdi,
-                 int network_function_port,
-                 std::set<std::string> blacklisted_scscfs = std::set<std::string>());
+                 int network_function_port);
 
   virtual ~ICSCFSproutlet();
 
@@ -130,9 +129,6 @@ private:
   /// Port owned by this network function, for purposes other than Sproutlet
   /// routing.
   int _network_function_port;
-
-  /// The list of blacklisted S-CSCFs
-  std::set<std::string> _blacklisted_scscfs;
 };
 
 

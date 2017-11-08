@@ -27,8 +27,7 @@ public:
               SCSCFSelector* scscf_selector,
               SAS::TrailId trail,
               ACR* acr,
-              int port,
-              std::set<std::string> blacklisted_scscfs = std::set<std::string>());
+              int port);
   virtual ~ICSCFRouter();
 
   int get_scscf(pj_pool_t* pool,
@@ -73,9 +72,6 @@ protected:
 
   /// The list of S-CSCFs already attempted for this request.
   std::vector<std::string> _attempted_scscfs;
-
-  /// The list of blacklisted S_CSCFs.
-  std::set<std::string> _blacklisted_scscfs;
 };
 
 
@@ -92,8 +88,7 @@ public:
                 const std::string& impu,
                 const std::string& visited_network,
                 const std::string& auth_type,
-                const bool& emergency,
-                std::set<std::string> blacklisted_scscfs = std::set<std::string>());
+                const bool& emergency);
   ~ICSCFUARouter();
 
 private:
@@ -128,8 +123,7 @@ public:
                  ACR* acr,
                  int port,
                  const std::string& impu,
-                 bool originating,
-                 std::set<std::string> blacklisted_scscfs = std::set<std::string>());
+                 bool originating);
   ~ICSCFLIRouter();
 
   /// Function to change the _impu we're looking up. This is used after
