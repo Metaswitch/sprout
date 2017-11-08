@@ -6626,6 +6626,32 @@ TEST_F(SCSCFTest, OriginatingExternal)
   msg.convert_routeset(out);
   free_txdata();
 
+  // Finally, set enforce_user_phone without setting user=phone on the PAI and check that the attempt to resend the INVITE
+  // fails (it will attempt the lookup on the SIP URI, not the equivalent Tel URI).  We only do coercion if user=phone
+  // is present, regardless of enforce_user_phone.
+  URIClassifier::enforce_user_phone = false;
+
+  SCSCFMessage msg2;
+  msg2._via = "10.99.88.11:12345";
+  msg2._to = "6505501234@ut.cw-ngv.com";
+  msg2._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  msg2._todomain = "";
+  msg2._route = "Route: <sip:sprout.homedomain;orig>";
+  msg2._requri = "sip:6505501234@ut.cw-ngv.com";
+  msg2._method = "INVITE";
+  inject_msg(msg2.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 and 404 go back to bono
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  out = current_txdata()->msg;
+  RespMatcher(404).matches(out);
+  free_txdata();
+
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
