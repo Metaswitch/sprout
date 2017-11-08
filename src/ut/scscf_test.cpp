@@ -130,7 +130,7 @@ public:
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
 
-    _hss_connection_observer = new MockHSSConnection();
+    _hss_connection_observer = new NiceMock<MockHSSConnection>();
     _hss_connection = new FakeHSSConnection(_hss_connection_observer);
 
     // Create the BGCF Sproutlet.
