@@ -1849,7 +1849,9 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
           status = pjsip_tsx_send_msg(_cancel_tsx, cancel);
           if (status != PJ_SUCCESS)
           {
+            //LCOV_EXCL_START
             pjsip_tx_data_dec_ref(cancel);
+            //LCOV_EXCL_STOP
           }
         }
 
