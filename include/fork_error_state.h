@@ -12,6 +12,8 @@
 #ifndef FORK_ERROR_STATE_H__
 #define FORK_ERROR_STATE_H__
 
+// If this enum is changed the corresponding "FORK_ERROR_TYPES" enum
+// in the SAS resource bundle has to be updated too.
 typedef enum {NONE, TIMEOUT, TRANSPORT_ERROR, NO_ADDRESSES} ForkErrorState;
 const char* const FORK_ERROR_STATE_VALUES[] = {
   "NONE", "TIMER", "TRANSPORT_ERROR", "NO_ADDRESSES"};
