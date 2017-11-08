@@ -39,11 +39,11 @@ class TestWithMockSdms : public SipTest
 
   virtual void SetUp()
   {
-    store = new NiceMock<MockSubscriberDataManager>();
-    remote_store1 = new NiceMock<MockSubscriberDataManager>();
-    remote_store2 = new NiceMock<MockSubscriberDataManager>();
-    mock_hss = new NiceMock<MockHSSConnection>();
-    stack = new NiceMock<MockHttpStack>();
+    store = new MockSubscriberDataManager();
+    remote_store1 = new MockSubscriberDataManager();
+    remote_store2 = new MockSubscriberDataManager();
+    mock_hss = new MockHSSConnection();
+    stack = new MockHttpStack();
   }
 
   virtual void TearDown()
