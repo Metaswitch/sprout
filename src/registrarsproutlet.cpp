@@ -1080,8 +1080,9 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
       if (!store_access_ok)
       {
         // This means that there was an error accessing the store. We don't hit
-        // this if we just fail to find any bindings.
-        TRC_ERROR("Store access error: Failed to get AoR binding for %s", aor.c_str());
+        // this if we just fail to find any bindings. This is already SAS logged
+        // at a lower level, so just drop a debug log.
+        TRC_DEBUG("Store access error: Failed to get AoR binding for %s", aor.c_str());
         break;
       }
       out_no_existing_bindings_found = out_no_existing_bindings_found && aor_pair->get_current()->bindings().empty();

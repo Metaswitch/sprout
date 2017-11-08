@@ -812,8 +812,9 @@ bool RegistrationUtils::get_aor_data(AoRPair** aor_pair,
       ((*aor_pair)->get_current() == NULL))
   {
     // Failed to get data for the AoR because there is no connection
-    // to the store.
-    TRC_ERROR("Store connection error.  Failed to get AoR binding for %s from store", aor_id.c_str());
+    // to the store. This will already have been SAS logged by the AoR store.
+    TRC_DEBUG("Store connection error.  Failed to get AoR binding for %s from store",
+              aor_id.c_str());
     return false;
   }
 
