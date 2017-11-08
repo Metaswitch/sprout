@@ -237,7 +237,7 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 
   if (pfix == NULL)
   {
-    TRC_WARNING("No matching number range %s from ENUM lookup", user.c_str());
+    TRC_INFO("No matching number range %s from ENUM lookup", user.c_str());
     SAS::Event event(trail, SASEvent::ENUM_INCOMPLETE, 0);
     event.add_var_param(user);
     SAS::report_event(event);

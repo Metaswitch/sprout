@@ -32,6 +32,48 @@
 class HSSConnection
 {
 public:
+  struct irs_query
+  {
+    std::string _public_id;
+    std::string _private_id;
+    std::string _req_type;
+    std::string _server_name;
+    std::string _wildcard;
+    bool _cache_allowed;
+
+    irs_query() : 
+      _public_id(""),
+      _private_id(""),
+      _req_type(""),
+      _server_name(""),
+      _wildcard(""),
+      _cache_allowed(true)
+   {
+   }
+  };
+
+  struct irs_info
+  {
+    std::string _regstate;
+    std::string _prev_regstate;
+    std::map<std::string, Ifcs> _service_profiles;
+    AssociatedURIs _associated_uris;
+    std::vector<std::string> _aliases;
+    std::deque<std::string> _ccfs;
+    std::deque<std::string> _ecfs;
+
+    irs_info() : 
+      _regstate(""),
+      _prev_regstate(""),
+      _service_profiles(),
+      _associated_uris({}),
+      _aliases(),
+      _ccfs(),
+      _ecfs()
+    {
+    }
+  };
+
   HSSConnection(const std::string& server,
                 HttpResolver* resolver,
                 LoadMonitor* load_monitor,
@@ -66,64 +108,12 @@ public:
                              rapidjson::Document*& object,
                              SAS::TrailId trail);
 
-  HTTPCode update_registration_state(const std::string& public_user_identity,
-                                     const std::string& private_user_identity,
-                                     const std::string& type,
-                                     std::string& regstate,
-                                     std::string& prev_regstate,
-                                     std::string server_name,
-                                     std::map<std::string, Ifcs >& service_profiles,
-                                     AssociatedURIs& associated_uris,
-                                     std::vector<std::string>& aliases,
-                                     std::deque<std::string>& ccfs,
-                                     std::deque<std::string>& ecfs,
-                                     bool cache_allowed,
-                                     const std::string& wildcard,
-                                     SAS::TrailId trail);
-  // Specific entry point for updates of type REG in order to support additional
-  // prev_regstate parameter without going over 10 parameter limit of gmock.
-  virtual HTTPCode update_registration_state_reg(const std::string& public_user_identity,
-                                                 const std::string& private_user_identity,
-                                                 std::string& regstate,
-                                                 std::string& prev_regstate,
-                                                 std::string server_name,
-                                                 std::map<std::string, Ifcs >& service_profiles,
-                                                 AssociatedURIs& associated_uris,
-                                                 std::deque<std::string>& ccfs,
-                                                 std::deque<std::string>& ecfs,
-                                                 SAS::TrailId trail);
-  HTTPCode update_registration_state(const std::string& public_user_identity,
-                                     const std::string& private_user_identity,
-                                     const std::string& type,
-                                     std::string& regstate,
-                                     std::string server_name,
-                                     std::map<std::string, Ifcs >& service_profiles,
-                                     AssociatedURIs& associated_uris,
-                                     SAS::TrailId trail);
-  virtual HTTPCode update_registration_state(const std::string& public_user_identity,
-                                             const std::string& private_user_identity,
-                                             const std::string& type,
-                                             std::string server_name,
-                                             SAS::TrailId trail);
-  virtual HTTPCode update_registration_state(const std::string& public_user_identity,
-                                             const std::string& private_user_identity,
-                                             const std::string& type,
-                                             std::string server_name,
-                                             std::map<std::string, Ifcs >& service_profiles,
-                                             AssociatedURIs& associated_uris,
+  virtual HTTPCode update_registration_state(const irs_query& irs_query,
+                                             irs_info& irs_info,
                                              SAS::TrailId trail);
 
-  HTTPCode get_registration_data(const std::string& public_user_identity,
-                                 std::string& regstate,
-                                 std::map<std::string, Ifcs >& service_profiles,
-                                 AssociatedURIs& associated_uris,
-                                 std::deque<std::string>& ccfs,
-                                 std::deque<std::string>& ecfs,
-                                 SAS::TrailId trail);
-  virtual HTTPCode get_registration_data(const std::string& public_user_identity,
-                                         std::string& regstate,
-                                         std::map<std::string, Ifcs >& service_profiles,
-                                         AssociatedURIs& associated_uris,
+  virtual HTTPCode get_registration_data(const std::string& public_id,
+                                         irs_info& irs_info,
                                          SAS::TrailId trail);
   rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
 
@@ -144,7 +134,7 @@ private:
                               SAS::TrailId trail);
   virtual long put_for_xml_object(const std::string& path,
                                   std::string body,
-                                  bool cache_allowed,
+                                  const bool& cache_allowed,
                                   rapidxml::xml_document<>*& root,
                                   SAS::TrailId trail);
 

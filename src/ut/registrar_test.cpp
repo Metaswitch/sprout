@@ -27,10 +27,12 @@
 #include "fakesnmp.hpp"
 #include "rapidxml/rapidxml.hpp"
 #include "mock_hss_connection.h"
+#include "hssconnection.h"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
 using ::testing::Return;
+using ::testing::SaveArg;
 using ::testing::InSequence;
 using ::testing::SetArgReferee;
 using ::testing::HasSubstr;
@@ -411,14 +413,21 @@ private:
   {
     // First registration OK.
     Message msg;
+    HSSConnection::irs_query irs_query;
 
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(DoAll(SaveArg<0>(&irs_query),
+                      Return(HTTP_OK)));
+    
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "");
 
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     pjsip_msg* out = current_txdata()->msg;
+
+    ASSERT_EQ(irs_query._public_id, "sip:6505550231@homedomain");
+    //TODO:ASSERT_EQ(irs_query._req_type, HSSConnection::REG);
+
     EXPECT_EQ(200, out->line.status.code);
     EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
     EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
@@ -430,9 +439,12 @@ private:
     msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
     msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
     msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_REGISTERED, "");
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -456,9 +468,11 @@ private:
     // Reregistration of first binding is OK but doesn't add a new one.
     msg0._unique += 1;
     msg = msg0;
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_REGISTERED, "");
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -480,9 +494,11 @@ private:
     msg0._unique += 1;
     msg = msg0;
     msg._contact_instance = "";
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_REGISTERED, "");
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -504,9 +520,11 @@ private:
 
     // Reregistering that yields no change.
     msg._unique += 1;
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_REGISTERED, "");
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -529,9 +547,11 @@ private:
     string save_contact = msg._contact;
     msg._unique += 1;
     msg._contact = "";
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_REGISTERED, "");
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -554,9 +574,11 @@ private:
     // Reregistering again with an updated cseq triggers an update of the binding.
     msg._unique += 1;
     msg._cseq = "16568";
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_REGISTERED, "");
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -581,9 +603,11 @@ private:
     msg._contact = "*";
     msg._contact_instance = "";
     msg._contact_params = "";
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_REGISTERED, "");
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -600,14 +624,17 @@ private:
     msg._contact = "*";
     msg._contact_instance = "";
     msg._contact_params = "";
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state_reg("sip:6505550231@homedomain", _, _, _, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK))
+      .WillOnce(DoAll(SaveArg<0>(&irs_query),
+                      Return(HTTP_OK)));
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_REGISTERED, "");
-    EXPECT_CALL(*_hss_connection_observer,
-                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::DEREG_USER, _, _)).WillOnce(Return(HTTP_OK));
     hss_connection()->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
+    ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_USER);
     out = current_txdata()->msg;
     EXPECT_EQ(200, out->line.status.code);
     EXPECT_EQ("OK", str_pj(out->line.status.reason));

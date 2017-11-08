@@ -24,6 +24,8 @@
 #include "mock_subscriber_data_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
+#include "gtest/gtest.h"
+
 
 // Base class used for testing handlers with Mock SDMs.
 class TestWithMockSdms : public SipTest

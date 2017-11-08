@@ -194,7 +194,7 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
 /// responsible for deleting the filled-in "root" pointer.
 HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
                                            std::string body,
-                                           bool cache_allowed,
+                                           const bool& cache_allowed,
                                            rapidxml::xml_document<>*& root,
                                            SAS::TrailId trail)
 {
@@ -309,25 +309,18 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
   }
 }
 
-bool decode_homestead_xml(const std::string public_user_identity,
+bool decode_homestead_xml(const std::string& public_id,
+                          HSSConnection::irs_info& irs_info,
                           std::shared_ptr<rapidxml::xml_document<> > root,
-                          std::string& regstate,      ///<[out] the value of the RegistrationState element.
-                          std::string& prev_regstate, ///<[out] the value of the PreviousRegistrationState element
-                                                      /// if present. The empty string otherwise.
-                          std::map<std::string, Ifcs >& ifcs_map,
-                          AssociatedURIs& associated_uris,
-                          std::vector<std::string>& aliases,
-                          std::deque<std::string>& ccfs,
-                          std::deque<std::string>& ecfs,
                           SIFCService* sifc_service,
-                          bool allowNoIMS,
+                          const bool& allowNoIMS,
                           SAS::TrailId trail)
 {
   if (!root.get())
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
     TRC_WARNING("Malformed HSS XML for %s - document couldn't be parsed",
-                public_user_identity.c_str());
+                public_id.c_str());
     return false;
   }
 
@@ -338,7 +331,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed Homestead XML for %s - no ClearwaterRegData element:\n%s",
-                public_user_identity.c_str(),
+                public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
@@ -350,14 +343,14 @@ bool decode_homestead_xml(const std::string public_user_identity,
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed Homestead XML for %s - no RegistrationState element:\n%s",
-                public_user_identity.c_str(),
+                public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
 
-  regstate = reg->value();
+  irs_info._regstate = reg->value();
 
-  if ((regstate == RegDataXMLUtils::STATE_NOT_REGISTERED) && (allowNoIMS))
+  if ((irs_info._regstate == RegDataXMLUtils::STATE_NOT_REGISTERED) && (allowNoIMS))
   {
     TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
@@ -367,7 +360,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   // Registration State in the message set prev_regstate to the empty
   // string.
   rapidxml::xml_node<>* prev_reg = cw->first_node(RegDataXMLUtils::PREVIOUS_REGISTRATION_STATE);
-  prev_regstate = (!prev_reg) ? "" : prev_reg->value();
+  irs_info._prev_regstate = (!prev_reg) ? "" : prev_reg->value();
 
   rapidxml::xml_node<>* imss = cw->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 
@@ -376,24 +369,24 @@ bool decode_homestead_xml(const std::string public_user_identity,
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
-                public_user_identity.c_str(),
+                public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
 
-  if (!SproutXmlUtils::parse_ims_subscription(public_user_identity,
+  if (!SproutXmlUtils::parse_ims_subscription(public_id,
                                               root,
                                               imss,
-                                              ifcs_map,
-                                              associated_uris,
-                                              aliases,
+                                              irs_info._service_profiles,
+                                              irs_info._associated_uris,
+                                              irs_info._aliases,
                                               sifc_service,
                                               trail))
   {
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     TRC_WARNING("Malformed HSS XML for %s:\n%s",
-                public_user_identity.c_str(),
+                public_id.c_str(),
                 sp_str.c_str());
     return false;
   }
@@ -402,7 +395,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (charging_addrs_node)
   {
-    parse_charging_addrs_node(charging_addrs_node, ccfs, ecfs);
+    parse_charging_addrs_node(charging_addrs_node, irs_info._ccfs, irs_info._ecfs);
   }
   return true;
 }
@@ -415,151 +408,27 @@ bool decode_homestead_xml(const std::string public_user_identity,
 // Returns the HTTP code from Homestead - callers should check that
 // this is HTTP_OK before relying on the output parameters.
 
-HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
-                                                  const std::string& private_user_identity,
-                                                  const std::string& type,
-                                                  std::string& regstate,
-                                                  std::string server_name,
-                                                  std::map<std::string, Ifcs >& ifcs_map,
-                                                  AssociatedURIs& associated_uris,
-                                                  SAS::TrailId trail)
-{
-  std::vector<std::string> unused_aliases;
-  std::deque<std::string> unused_ccfs;
-  std::deque<std::string> unused_ecfs;
-  std::string unused_prev_regstate;
-  return update_registration_state(public_user_identity,
-                                   private_user_identity,
-                                   type,
-                                   regstate,
-                                   unused_prev_regstate,
-                                   server_name,
-                                   ifcs_map,
-                                   associated_uris,
-                                   unused_aliases,
-                                   unused_ccfs,
-                                   unused_ecfs,
-                                   true,
-                                   "",
-                                   trail);
-}
-
-HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
-                                                  const std::string& private_user_identity,
-                                                  const std::string& type,
-                                                  std::string server_name,
-                                                  std::map<std::string, Ifcs >& ifcs_map,
-                                                  AssociatedURIs& associated_uris,
-                                                  SAS::TrailId trail)
-{
-  std::string unused_regstate;
-  std::string unused_prev_regstate;
-  std::vector<std::string> unused_aliases;
-  std::deque<std::string> unused_ccfs;
-  std::deque<std::string> unused_ecfs;
-  return update_registration_state(public_user_identity,
-                                   private_user_identity,
-                                   type,
-                                   unused_regstate,
-                                   unused_prev_regstate,
-                                   server_name,
-                                   ifcs_map,
-                                   associated_uris,
-                                   unused_aliases,
-                                   unused_ccfs,
-                                   unused_ecfs,
-                                   true,
-                                   "",
-                                   trail);
-}
-
-HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
-                                                  const std::string& private_user_identity,
-                                                  const std::string& type,
-                                                  std::string server_name,
-                                                  SAS::TrailId trail)
-{
-  std::map<std::string, Ifcs > ifcs_map;
-  AssociatedURIs associated_uris = {};
-  std::string unused_regstate;
-  std::string unused_prev_regstate;
-  std::vector<std::string> unused_aliases;
-  std::deque<std::string> unused_ccfs;
-  std::deque<std::string> unused_ecfs;
-  return update_registration_state(public_user_identity,
-                                   private_user_identity,
-                                   type,
-                                   unused_regstate,
-                                   unused_prev_regstate,
-                                   server_name,
-                                   ifcs_map,
-                                   associated_uris,
-                                   unused_aliases,
-                                   unused_ccfs,
-                                   unused_ecfs,
-                                   true,
-                                   "",
-                                   trail);
-}
-
-// Specific entry point for updates of type REG in order to support additional
-// prev_regstate parameter without going over 10 parameter limit of gmock.
-HTTPCode HSSConnection::update_registration_state_reg(const std::string& public_user_identity,
-                                                      const std::string& private_user_identity,
-                                                      std::string& regstate,
-                                                      std::string& prev_regstate,
-                                                      std::string server_name,
-                                                      std::map<std::string, Ifcs >& ifcs_map,
-                                                      AssociatedURIs& associated_uris,
-                                                      std::deque<std::string>& ccfs,
-                                                      std::deque<std::string>& ecfs,
-                                                      SAS::TrailId trail)
-{
-  std::vector<std::string> unused_aliases;
-  return update_registration_state(public_user_identity,
-                                   private_user_identity,
-                                   HSSConnection::REG,
-                                   regstate,
-                                   prev_regstate,
-                                   server_name,
-                                   ifcs_map,
-                                   associated_uris,
-                                   unused_aliases,
-                                   ccfs,
-                                   ecfs,
-                                   true,
-                                   "",
-                                   trail);
-}
-
-HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
-                                                  const std::string& private_user_identity,
-                                                  const std::string& type,
-                                                  std::string& regstate,
-                                                  std::string& prev_regstate,
-                                                  std::string server_name,
-                                                  std::map<std::string, Ifcs >& ifcs_map,
-                                                  AssociatedURIs& associated_uris,
-                                                  std::vector<std::string>& aliases,
-                                                  std::deque<std::string>& ccfs,
-                                                  std::deque<std::string>& ecfs,
-                                                  bool cache_allowed,
-                                                  const std::string& wildcard,
+HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
+                                                  irs_info& irs_info,
                                                   SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_CHECK_STATE, 0);
-  event.add_var_param(public_user_identity);
-  event.add_var_param(private_user_identity);
-  event.add_var_param(type);
+  event.add_var_param(irs_query._public_id);
+  event.add_var_param(irs_query._private_id);
+  event.add_var_param(irs_query._req_type);
   SAS::report_event(event);
 
-  std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
-  if (!private_user_identity.empty())
+  std::string path = "/impu/" +
+                     Utils::url_escape(irs_query._public_id) +
+                     "/reg-data";
+
+  if (!irs_query._private_id.empty())
   {
-    path += "?private_id=" + Utils::url_escape(private_user_identity);
+    path += "?private_id=" +
+            Utils::url_escape(irs_query._private_id);
   }
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
@@ -568,15 +437,23 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  std::string json_wildcard =
-        (wildcard != "") ? ", \"wildcard_identity\": \"" + wildcard + "\"" : "";
-  std::string req_body = "{\"reqtype\": \"" + type + "\"" +
-                          ", \"server_name\": \"" + server_name + "\"" +
-                          json_wildcard +
-                          "}";
+  std::string json_wildcard = (irs_query._wildcard != "") ?
+    ", \"wildcard_identity\": \"" +
+    irs_query._wildcard +
+    "\""
+    : "";
+
+  std::string req_body = "{\"reqtype\": \"" +
+                         irs_query._req_type +
+                         "\"" +
+                         ", \"server_name\": \"" +
+                         irs_query._server_name +
+                         "\"" +
+                         json_wildcard +
+                         "}";
   HTTPCode http_code = put_for_xml_object(path,
                                           req_body,
-                                          cache_allowed,
+                                          irs_query._cache_allowed,
                                           root_underlying_ptr,
                                           trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
@@ -601,55 +478,29 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
     TRC_ERROR("Could not get subscriber data from HSS");
     return http_code;
   }
-
-  return decode_homestead_xml(public_user_identity,
+  return decode_homestead_xml(irs_query._public_id,
+                              irs_info,
                               root,
-                              regstate,
-                              prev_regstate,
-                              ifcs_map,
-                              associated_uris,
-                              aliases,
-                              ccfs,
-                              ecfs,
                               _sifc_service,
                               false,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
-HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
-                                              std::string& regstate,
-                                              std::map<std::string, Ifcs >& ifcs_map,
-                                              AssociatedURIs& associated_uris,
-                                              SAS::TrailId trail)
-{
-  std::deque<std::string> unused_ccfs;
-  std::deque<std::string> unused_ecfs;
-  return get_registration_data(public_user_identity,
-                               regstate,
-                               ifcs_map,
-                               associated_uris,
-                               unused_ccfs,
-                               unused_ecfs,
-                               trail);
-}
 
-HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
-                                              std::string& regstate,
-                                              std::map<std::string, Ifcs >& ifcs_map,
-                                              AssociatedURIs& associated_uris,
-                                              std::deque<std::string>& ccfs,
-                                              std::deque<std::string>& ecfs,
+HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
+                                              irs_info& irs_info,
                                               SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
-  std::string unused_prev_regstate;
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_GET_REG, 0);
-  event.add_var_param(public_user_identity);
+  event.add_var_param(public_id);
   SAS::report_event(event);
 
-  std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
+  std::string path = "/impu/" +
+                     Utils::url_escape(public_id) +
+                     "/reg-data";
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
@@ -683,16 +534,9 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   // Return whether the XML was successfully decoded. The XML can be decoded and
   // not return any iFCs (when the subscriber isn't registered), so a successful
   // response shouldn't be taken as a guarantee of iFCs.
-  std::vector<std::string> unused_aliases;
-  return decode_homestead_xml(public_user_identity,
+  return decode_homestead_xml(public_id,
+                              irs_info,
                               root,
-                              regstate,
-                              unused_prev_regstate,
-                              ifcs_map,
-                              associated_uris,
-                              unused_aliases,
-                              ccfs,
-                              ecfs,
                               _sifc_service,
                               true,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
