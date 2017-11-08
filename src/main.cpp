@@ -348,6 +348,9 @@ static void usage(void)
        "                            the throttling code (default: 10.0))\n"
        "     --max-token-rate N     Maximum token refill rate of tokens in the token bucket (used by\n"
        "                            the throttling code (default: 0.0 - no maximum))\n"
+       "     --request-queue-timeout <msecs>
+       "                            Maximum time a request can be waiting to be processed before it \n"
+       "                            is rejected (used by the throttling code (default: 4000))\n"
        " -T  --http-address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http-port <port>     Specify the HTTP bind port\n"
@@ -1732,8 +1735,8 @@ int main(int argc, char* argv[])
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
-  opt.request_on_queue_timeout = 4000; // TODO decide on actual default
-
+  opt.request_on_queue_timeout = 4000;
+  
   status = init_logging_options(argc, argv, &opt);
 
   if (status != PJ_SUCCESS)
@@ -2106,7 +2109,7 @@ int main(int argc, char* argv[])
   }
 
   // Initialise the OPTIONS handling module.
-  status = init_options();
+  init_options();
 
   if (opt.hss_server != "")
   {
