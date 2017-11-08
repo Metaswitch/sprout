@@ -215,7 +215,13 @@ void DeregistrationTask::run()
     return;
   }
 
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 2u);
+  SAS::report_marker(start_marker);
+
   rc = handle_request();
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 2u);
+  SAS::report_marker(end_marker);
 
   send_http_reply(rc);
   delete this;
@@ -618,6 +624,9 @@ void GetCachedDataTask::run()
     return;
   }
 
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 3u);
+  SAS::report_marker(start_marker);
+
   // Extract the IMPU that has been requested. The URL is of the form
   //
   //   /impu/<public ID>/<element>
@@ -639,6 +648,10 @@ void GetCachedDataTask::run()
                                        trail()))
   {
     send_http_reply(HTTP_SERVER_ERROR);
+
+    SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
+    SAS::report_marker(end_marker);
+
     delete this;
     return;
   }
@@ -649,6 +662,10 @@ void GetCachedDataTask::run()
   {
     send_http_reply(HTTP_NOT_FOUND);
     delete aor_pair; aor_pair = NULL;
+
+    SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
+    SAS::report_marker(end_marker);
+
     delete this;
     return;
   }
@@ -660,6 +677,10 @@ void GetCachedDataTask::run()
   send_http_reply(HTTP_OK);
 
   delete aor_pair; aor_pair = NULL;
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
+  SAS::report_marker(end_marker);
+
   delete this;
   return;
 }
@@ -726,6 +747,9 @@ void DeleteImpuTask::run()
     return;
   }
 
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 4u);
+  SAS::report_marker(start_marker);
+
   // Extract the IMPU that has been requested. The URL is of the form
   //
   //   /impu/<public ID>
@@ -787,6 +811,9 @@ void DeleteImpuTask::run()
     sc = HTTP_SERVER_ERROR;
   }
   send_http_reply(sc);
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 4u);
+  SAS::report_marker(end_marker);
 
   delete this;
   return;

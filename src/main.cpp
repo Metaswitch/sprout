@@ -141,6 +141,7 @@ enum OptionTypes
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
   OPT_HOMESTEAD_TIMEOUT,
+  OPT_BLACKLISTED_SCSCFS
 };
 
 
@@ -230,6 +231,7 @@ const static struct pj_getopt_option long_opt[] =
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
+  { "blacklisted-scscfs",           required_argument, 0, OPT_BLACKLISTED_SCSCFS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -446,6 +448,7 @@ static void usage(void)
        "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
        "                            to SAS\n"
        "     --homestead-timeout    The timeout in ms to use on HTTP requests to Homestead\n"
+       "     --blacklisted-scscfs   List of URIs of blacklisted S-CSCFs\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1011,6 +1014,17 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_BLACKLISTED_SCSCFS:
+      {
+        std::vector<std::string> blacklisted_scscfs;
+        Utils::split_string(std::string(pj_optarg), ',', blacklisted_scscfs, 0, false);
+        options->blacklisted_scscfs.clear();
+        options->blacklisted_scscfs.insert(blacklisted_scscfs.begin(), blacklisted_scscfs.end());
+        TRC_INFO("%d blacklisted S-CSCF URIs passed on the command line: %s",
+                  options->blacklisted_scscfs.size(), pj_optarg);
+      }   
+      break;
+      
     case OPT_DNS_SERVER:
       options->dns_servers.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->dns_servers, 0, false);
