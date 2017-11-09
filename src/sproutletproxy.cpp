@@ -593,6 +593,8 @@ bool SproutletProxy::timer_running(pj_timer_entry* tentry)
 }
 
 
+std::atomic_int SproutletProxy::UASTsx::_num_instances(0);
+
 SproutletProxy::UASTsx::TimerCallback::TimerCallback(pj_timer_entry* timer) :
   _timer_entry(timer)
 {
@@ -614,7 +616,9 @@ SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   _timers(),
   _pending_timers()
 {
-  TRC_VERBOSE("Sproutlet Proxy transaction (%p) created", this);
+  int instances = ++_num_instances;
+  TRC_DEBUG("Sproutlet Proxy transaction (%p) created. There are now %d instances",
+            this, instances);
 }
 
 
@@ -645,7 +649,9 @@ SproutletProxy::UASTsx::~UASTsx()
     SAS::report_marker(flush);
   }
 
-  TRC_VERBOSE("Sproutlet Proxy transaction (%p) destroyed", this);
+  int instances = --_num_instances;
+  TRC_DEBUG("Sproutlet Proxy transaction (%p) destroyed. There are now %d instances",
+            this, instances);
 }
 
 
@@ -1090,7 +1096,16 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
       int st_code = rsp->msg->line.status.code;
       set_trail(rsp, trail());
       on_tx_response(rsp);
-      pjsip_tsx_send_msg(_tsx, rsp);
+
+      pj_status_t status = pjsip_tsx_send_msg(_tsx, rsp);
+
+      if (status != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("Failed to send tx response: %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
+      }
 
       if (st_code >= PJSIP_SC_OK)
       {

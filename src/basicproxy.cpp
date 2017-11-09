@@ -1059,7 +1059,14 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
 
       // Forward response with the UAS transaction.
       on_tx_response(tdata);
-      pjsip_tsx_send_msg(_tsx, tdata);
+      pj_status_t status = pjsip_tsx_send_msg(_tsx, tdata);
+      if (status != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("Failed to forward 1xx response: %s",
+                PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
+      }
     }
     else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 200))
     {
@@ -1214,7 +1221,14 @@ void BasicProxy::UASTsx::on_final_response()
     set_trail(rsp, trail());
     pjsip_tx_data_invalidate_msg(rsp);
     on_tx_response(rsp);
-    pjsip_tsx_send_msg(_tsx, rsp);
+    pj_status_t status = pjsip_tsx_send_msg(_tsx, rsp);
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START
+      TRC_ERROR("Failed to send final response: %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      // LCOV_EXCL_STOP
+    }
 
     if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
         (st_code == 200))
@@ -1249,7 +1263,14 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
       {
         set_trail(prov_rsp, trail());
         on_tx_response(prov_rsp);
-        pjsip_tsx_send_msg(_tsx, prov_rsp);
+        pj_status_t status = pjsip_tsx_send_msg(_tsx, prov_rsp);
+        if (status != PJ_SUCCESS)
+        {
+          // LCOV_EXCL_START
+          TRC_ERROR("Failed to send final response: %s",
+                    PJUtils::pj_status_to_string(status).c_str());
+          // LCOV_EXCL_STOP
+        }
       }
     }
     else if (_final_rsp != NULL)
@@ -1720,6 +1741,14 @@ void BasicProxy::UACTsx::send_request()
         start_timer_c();
       }
 
+      if (status != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("Failed to send stateful request: %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
+      }
+
       // We do not want to take any action on a failure returned from
       // pjsip_tsx_send_msg, as it will have also triggered a call into
       // on_tsx_state. In the event of failure, this will, or already has
@@ -2129,7 +2158,8 @@ bool BasicProxy::UACTsx::retry_request()
         // through to the end.  Must decrement the reference count on the
         // request as pjsip_tsx_send_msg won't do it if it fails.
         // LCOV_EXCL_START
-        TRC_INFO("Failed to send retry");
+        TRC_INFO("Failed to send retry: %s",
+                 PJUtils::pj_status_to_string(status).c_str());
         pjsip_tx_data_dec_ref(_tdata);
         _proxy->unbind_transaction(_tsx);
         _tsx = original_tsx;

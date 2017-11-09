@@ -103,6 +103,7 @@ enum OptionTypes
   OPT_MAX_TOKENS,
   OPT_INIT_TOKEN_RATE,
   OPT_MIN_TOKEN_RATE,
+  OPT_MAX_TOKEN_RATE,
   OPT_CASS_TARGET_LATENCY_US,
   OPT_EXCEPTION_MAX_TTL,
   OPT_MAX_SESSION_EXPIRES,
@@ -141,8 +142,9 @@ enum OptionTypes
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
   OPT_HOMESTEAD_TIMEOUT,
-  OPT_BLACKLISTED_SCSCFS,
-  OPT_ORIG_SIP_TO_TEL_COERCE
+  OPT_ORIG_SIP_TO_TEL_COERCE,
+  OPT_REQUEST_ON_QUEUE_TIMEOUT,
+  OPT_BLACKLISTED_SCSCFS
 };
 
 
@@ -200,6 +202,7 @@ const static struct pj_getopt_option long_opt[] =
   { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
   { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
+  { "max-token-rate",               required_argument, 0, OPT_MAX_TOKEN_RATE},
   { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
@@ -232,6 +235,7 @@ const static struct pj_getopt_option long_opt[] =
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
+  { "request-on-queue-timeout",     required_argument, 0, OPT_REQUEST_ON_QUEUE_TIMEOUT},
   { "blacklisted-scscfs",           required_argument, 0, OPT_BLACKLISTED_SCSCFS},
   { "enable-orig-sip-to-tel-coerce",no_argument,       0, OPT_ORIG_SIP_TO_TEL_COERCE},
   { NULL,                           0,                 0, 0}
@@ -346,6 +350,11 @@ static void usage(void)
        "                            the throttling code (default: 100.0))\n"
        "     --min-token-rate N     Minimum token refill rate of tokens in the token bucket (used by\n"
        "                            the throttling code (default: 10.0))\n"
+       "     --max-token-rate N     Maximum token refill rate of tokens in the token bucket (used by\n"
+       "                            the throttling code (default: 0.0 - no maximum))\n"
+       "     --request-queue-timeout <msecs>\n"
+       "                            Maximum time a request can be waiting to be processed before it\n"
+       "                            is rejected (used by the throttling code (default: 4000))\n"
        " -T  --http-address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http-port <port>     Specify the HTTP bind port\n"
@@ -880,19 +889,18 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_INIT_TOKEN_RATE:
-      {
-        VALIDATE_INT_PARAM_NON_ZERO(options->init_token_rate,
-                                    init_token_rate,
-                                    Initial token rate);
-      }
+      options->init_token_rate = std::stof(std::string(pj_optarg));
+      TRC_INFO("Initial token rate set to %s", pj_optarg);
       break;
 
     case OPT_MIN_TOKEN_RATE:
-      {
-        VALIDATE_INT_PARAM_NON_ZERO(options->min_token_rate,
-                                    min_token_rate,
-                                    Minimum token rate);
-      }
+      options->min_token_rate = std::stof(std::string(pj_optarg));
+      TRC_INFO("Minimum token rate set to %s", pj_optarg);
+      break;
+
+    case OPT_MAX_TOKEN_RATE:
+      options->max_token_rate = std::stof(std::string(pj_optarg));
+      TRC_INFO("Maximum token rate set to %s", pj_optarg);
       break;
 
     case 'W':
@@ -1027,9 +1035,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         options->blacklisted_scscfs.insert(blacklisted_scscfs.begin(), blacklisted_scscfs.end());
         TRC_INFO("%d blacklisted S-CSCF URIs passed on the command line: %s",
                   options->blacklisted_scscfs.size(), pj_optarg);
-      }   
+      }
       break;
-      
+
     case OPT_DNS_SERVER:
       options->dns_servers.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->dns_servers, 0, false);
@@ -1311,6 +1319,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
           TRC_ERROR("Invalid value for listen_port: %s", pj_optarg);
           return -1;
         }
+      }
+      break;
+
+    case OPT_REQUEST_ON_QUEUE_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->request_on_queue_timeout,
+                           request_on_queue_timeout,
+                           Maximum time (in ms) a request can wait to be processed);
       }
       break;
 
@@ -1712,6 +1728,7 @@ int main(int argc, char* argv[])
   opt.max_tokens = 1000;
   opt.init_token_rate = 100.0;
   opt.min_token_rate = 10.0;
+  opt.max_token_rate = 0.0;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1743,6 +1760,7 @@ int main(int argc, char* argv[])
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
   opt.enable_orig_sip_to_tel_coerce = false;
+  opt.request_on_queue_timeout = 4000;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -2012,6 +2030,7 @@ int main(int argc, char* argv[])
                                  opt.max_tokens,          // Maximum token bucket size.
                                  opt.init_token_rate,     // Initial token fill rate (per sec).
                                  opt.min_token_rate,      // Minimum token fill rate (per sec).
+                                 opt.max_token_rate,      // Maximum token fill rate (per sec).
                                  token_rate_table,        // Statistics table for token rate.
                                  smoothed_latency_scalar, // Statistics scalar for current latency.
                                  target_latency_scalar,   // Statistics scalar for target latency.
@@ -2116,7 +2135,7 @@ int main(int argc, char* argv[])
   }
 
   // Initialise the OPTIONS handling module.
-  status = init_options();
+  init_options();
 
   if (opt.hss_server != "")
   {
@@ -2328,16 +2347,16 @@ int main(int argc, char* argv[])
     }
   }
 
-  init_common_sip_processing(load_monitor,
-                             requests_counter,
-                             overload_counter,
+  init_common_sip_processing(requests_counter,
                              hc);
 
   init_thread_dispatcher(opt.worker_threads,
                          latency_table,
                          queue_size_table,
+                         overload_counter,
                          load_monitor,
-                         exception_handler);
+                         exception_handler,
+                         opt.request_on_queue_timeout);
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.

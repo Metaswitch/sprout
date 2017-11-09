@@ -16,7 +16,6 @@ src/sip_connection_pool.cpp
 src/pjutils.cpp
 src/callservices.cpp
 src/stack.cpp
-src/thread_dispatcher.cpp
 src/websockets.cpp
 src/dnsresolver.cpp
 src/flowtable.cpp

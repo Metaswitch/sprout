@@ -17,24 +17,140 @@ extern "C" {
 #include <pjsip.h>
 }
 
+#include "pjutils.h"
 #include "load_monitor.h"
 #include "snmp_event_accumulator_table.h"
 #include "snmp_event_accumulator_by_scope_table.h"
 #include "exception_handler.h"
+#include "snmp_counter_by_scope_table.h"
+#include "eventq.h"
 
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* latency_tbl_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_tbl_arg,
+                                   SNMP::CounterByScopeTable* overload_counter_arg,
                                    LoadMonitor* load_monitor_arg,
-                                   ExceptionHandler* exception_handler_arg);
+                                   ExceptionHandler* exception_handler_arg,
+                                   unsigned long request_on_queue_timeout);
 
 void unregister_thread_dispatcher(void);
 
 pj_status_t start_worker_threads();
-pj_status_t stop_worker_threads();
+void stop_worker_threads();
+
+pjsip_module* get_mod_thread_dispatcher();
+
+// A SipEvent on the queue is either a SIP message or a callback
+enum SipEventType { MESSAGE, CALLBACK };
+
+// Allowable priority levels for SIP events. Levels with lower values correspond
+// to higher priorities.
+namespace SipEventPriorityLevel
+{
+  const int NORMAL_PRIORITY = 1;
+  const int HIGH_PRIORITY = 0;
+} //namespace SipPriorityLevel
+
+union SipEventData
+{
+  pjsip_rx_data* rdata;
+  PJUtils::Callback* callback;
+};
+
+struct SipEvent
+{
+  // The type of the event
+  SipEventType type;
+
+  // The event's priority - a lower value corresponds to a higher priority level
+  int priority;
+
+  // A stop watch for tracking latency and determining the length of time the
+  // message has been on the queue
+  Utils::StopWatch stop_watch;
+
+  // The event data itself
+  SipEventData event_data;
+
+  SipEvent() : type(MESSAGE), priority(0) {}
+
+  // Compares two SipEvents. Returns true if rhs is 'larger' than lhs, where
+  // 'larger' SipEvents are those that should be processed earlier.
+  static bool compare(SipEvent lhs, SipEvent rhs)
+  {
+    if (lhs.priority != rhs.priority)
+    {
+      // Higher priority SipEvents, that is, SipEvents with a lower priority
+      // level, are 'larger'
+      return lhs.priority > rhs.priority;
+    }
+    else
+    {
+      // At the same priority level, older SipEvents are 'larger'
+      unsigned long lhs_us = 0;
+      unsigned long rhs_us = 0;
+
+      if (!lhs.stop_watch.read(lhs_us) || !rhs.stop_watch.read(rhs_us))
+      {
+        // We're extremely unlikely to end up in this case, but we try to cope
+        // with it as well as possible
+        TRC_ERROR("Failed to read stopwatch.");
+        return false;
+      }
+
+      return lhs_us < rhs_us;
+    }
+  }
+};
+
+// Internal method exposed for testing purposes. Pops a single element off the
+// event queue and processes it. If the queue is empty, waits until either an
+// element is added to the queue or the queue is terminated.
+// Returns true if an element was processed, and false if the queue was
+// terminated.
+bool process_queue_element();
 
 // Add a Callback object to the queue, to be run on a worker thread.
 // This MUST be called from the main PJSIP transport thread.
 void add_callback_to_queue(PJUtils::Callback*);
+
+// Implements eventq::Backend as a std::priority_queue of SipEvent structs.
+class PriorityEventQueueBackend : public eventq<SipEvent>::Backend
+{
+public:
+
+  PriorityEventQueueBackend() : _queue(SipEvent::compare) {}
+  virtual ~PriorityEventQueueBackend() {}
+
+  virtual const SipEvent& front()
+  {
+    return _queue.top();
+  }
+
+  virtual bool empty()
+  {
+    return _queue.empty();
+  }
+
+  virtual int size()
+  {
+    return _queue.size();
+  }
+
+  virtual void push(const SipEvent& value)
+  {
+    _queue.push(value);
+  }
+
+  virtual void pop()
+  {
+    _queue.pop();
+  }
+
+  // SipEvents are compared using operator()
+  std::priority_queue<SipEvent,
+                      std::deque<SipEvent>,
+                      std::function<bool(SipEvent, SipEvent)> > _queue;
+};
 
 #endif
