@@ -169,6 +169,20 @@ TEST_F(ThreadDispatcherTest, NeverRejectOptionsTest)
   process_queue_element();
 }
 
+// On recieving a SUBSCRIBE message, the thread dispatcher should not call into
+// the load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectSubscribeTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "SUBSCRIBE";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
 // On recieving a SIP response, the thread dispatcher should not call into the
 // load monitor - it should process the request regardless of load.
 TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
