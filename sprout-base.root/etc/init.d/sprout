@@ -1,4 +1,6 @@
-#! /bin/sh
+#! /bin/bash
+# Use bash as the interpreter as we need more ulimit options than the default
+# shell provides.
 
 # @file sprout.init.d
 #
@@ -56,10 +58,10 @@ log_directory=/var/log/$NAME
 setup_environment()
 {
         export MIBS=""
-        export LD_LIBRARY_PATH=/usr/share/clearwater/sprout/lib
         ulimit -Hn 1000000
         ulimit -Sn 1000000
         ulimit -c unlimited
+        ulimit -r 1 # Allow sprout threads to use realtime priorities.
         # enable gdb to dump a parent sprout process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
 }
@@ -89,6 +91,10 @@ get_settings()
 
         # Enable no-ENUM TEL URI translation fallback by default for backwards compatibility
         default_tel_uri_translation="Y"
+
+        # Enable the treatment of originating SIP "user=phone" URIs (that corresponding to global 
+        # phone numbers) as though they were Tel URIs for Identity purposes by default.
+        enable_orig_sip_to_tel_coerce="Y"
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
@@ -170,12 +176,14 @@ get_daemon_args()
         [ "$apply_fallback_ifcs" != "Y" ] || apply_fallback_ifcs_arg="--apply-fallback-ifcs"
         [ "$reject_if_no_matching_ifcs" != "Y" ] || reject_if_no_matching_ifcs_arg="--reject-if-no-matching-ifcs"
         [ "$http_acr_logging" != "Y" ] || http_acr_logging_arg="--http-acr-logging"
+        [ "$enable_orig_sip_to_tel_coerce" != "Y" ] || enable_orig_sip_to_tel_coerce_arg="--enable-orig-sip-to-tel-coerce"
 
-        [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
+        [ -z "$sprout_target_latency_us" ] || target_latency_us_arg="--target-latency-us=$sprout_target_latency_us"
         [ -z "$cass_target_latency_us" ] || cass_target_latency_us_arg="--cass-target-latency-us=$cass_target_latency_us"
-        [ -z "$max_tokens" ] || max_tokens_arg="--max-tokens=$max_tokens"
-        [ -z "$init_token_rate" ] || init_token_rate_arg="--init-token-rate=$init_token_rate"
-        [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
+        [ -z "$sprout_max_tokens" ] || max_tokens_arg="--max-tokens=$max_tokens"
+        [ -z "$sprout_init_token_rate" ] || init_token_rate_arg="--init-token-rate=$sprout_init_token_rate"
+        [ -z "$sprout_min_token_rate" ] || min_token_rate_arg="--min-token-rate=$sprout_min_token_rate"
+        [ -z "$sprout_max_token_rate" ] || max_token_rate_arg="--max-token-rate=$sprout_max_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
         [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
         [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
@@ -183,6 +191,7 @@ get_daemon_args()
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
         [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
         [ -z "$dummy_app_server" ] || dummy_app_server_arg="--dummy-app-server=$dummy_app_server"
+        [ -z "$sprout_request_on_queue_timeout" ] || request_on_queue_timeout_arg="--request-on-queue-timeout=$sprout_request_on_queue_timeout"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -214,6 +223,7 @@ get_daemon_args()
                      $max_tokens_arg
                      $init_token_rate_arg
                      $min_token_rate_arg
+                     $max_token_rate_arg
                      $authentication_arg
                      $user_phone_arg
                      $sas_signaling_if_arg
@@ -226,6 +236,8 @@ get_daemon_args()
                      $override_npdi_arg
                      $exception_max_ttl_arg
                      $force_3pr_body_arg
+                     $enable_orig_sip_to_tel_coerce_arg
+                     $request_on_queue_timeout_arg
                      --http-address=$local_ip
                      --http-port=9888
                      --analytics=$log_directory

@@ -1,6 +1,7 @@
-/usr/share/clearwater/clearwater-config-manager/scripts/remove_shared_ifcs_xml /usr/bin/cw-remove_shared_ifcs_xml
-/usr/share/clearwater/clearwater-config-manager/scripts/remove_fallback_ifcs_xml /usr/bin/cw-remove_fallback_ifcs_xml
 /usr/share/clearwater/clearwater-config-manager/scripts/validate_shared_ifcs_xml /usr/bin/cw-validate_shared_ifcs_xml
 /usr/share/clearwater/clearwater-config-manager/scripts/validate_fallback_ifcs_xml /usr/bin/cw-validate_fallback_ifcs_xml
 /usr/share/clearwater/clearwater-config-manager/scripts/display_shared_ifcs /usr/bin/cw-display_shared_ifcs
 /usr/share/clearwater/clearwater-config-manager/scripts/display_fallback_ifcs /usr/bin/cw-display_fallback_ifcs
+
+/usr/share/clearwater/clearwater-config-manager/scripts/remove_shared_ifcs_xml /usr/sbin/cw-remove_shared_ifcs_xml
+/usr/share/clearwater/clearwater-config-manager/scripts/remove_fallback_ifcs_xml /usr/sbin/cw-remove_fallback_ifcs_xml

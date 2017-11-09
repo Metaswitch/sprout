@@ -116,6 +116,7 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                       opt.max_tokens,
                                       opt.init_token_rate,
                                       opt.min_token_rate,
+                                      opt.max_token_rate,
                                       exception_handler,
                                       http_resolver,
                                       opt.memento_notify_url);

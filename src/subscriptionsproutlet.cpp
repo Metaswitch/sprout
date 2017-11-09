@@ -300,6 +300,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   event.add_var_param(public_id);
   SAS::report_event(event);
 
+  HSSConnection::irs_info irs_info;
+
   // Check if the contact header is present. If it isn't, we want to abort
   // processing before going any further, to avoid unnecessary work.
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
@@ -313,22 +315,10 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     return;
   }
 
-  // Query the HSS for the associated URIs.
-  AssociatedURIs associated_uris = {};
-  std::map<std::string, Ifcs> ifc_map;
-
-  // Subscriber must have already registered to be making a subscribe
-  std::string state;
-  std::deque<std::string> ccfs;
-  std::deque<std::string> ecfs;
   HTTPCode http_code = _subscription->_hss->get_registration_data(public_id,
-                                                               state,
-                                                               ifc_map,
-                                                               associated_uris,
-                                                               ccfs,
-                                                               ecfs,
-                                                               trail_id);
-  st_code = determine_hss_sip_response(http_code, state, "SUBSCRIBE");
+                                                                  irs_info,
+                                                                  trail_id);
+  st_code = determine_hss_sip_response(http_code, irs_info._regstate, "SUBSCRIBE");
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -350,7 +340,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // should already have been rejected for the subscriber being unregistered,
   // but we handle the error case where it isn't.
   std::string aor;
-  if (!associated_uris.get_default_impu(aor, false))
+  if (!irs_info._associated_uris.get_default_impu(aor, false))
   {
     pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
     send_response(rsp);
@@ -370,12 +360,12 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   Store::Status status = update_subscription_in_stores(_subscription,
                                                        new_subscription,
                                                        aor,
-                                                       &associated_uris,
+                                                       &(irs_info._associated_uris),
                                                        req,
                                                        public_id,
                                                        acr,
-                                                       ccfs,
-                                                       ecfs);
+                                                       irs_info._ccfs,
+                                                       irs_info._ecfs);
 
   if (_subscription->_analytics != NULL)
   {
@@ -403,8 +393,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     // response containing the charging addresses returned by the HSS.
     PJUtils::add_pcfa_header(rsp,
                              get_pool(rsp),
-                             ccfs,
-                             ecfs,
+                             irs_info._ccfs,
+                             irs_info._ecfs,
                              false);
 
     // Pass the response to the ACR.

@@ -257,7 +257,9 @@ pj_str_t PJUtils::domain_from_uri(const std::string& uri_str, pj_pool_t* pool)
 }
 
 /// Determine the served user for originating requests.
-pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg)
+pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg, 
+                                     pj_pool_t* pool, 
+                                     SAS::TrailId trail)
 {
   // The served user for originating requests is determined from the
   // P-Served-User or P-Asserted-Identity headers.  For extra compatibility,
@@ -294,6 +296,31 @@ pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg)
     TRC_DEBUG("From header %p", PJSIP_MSG_FROM_HDR(msg));
     uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(msg)->uri);
     TRC_DEBUG("Served user from From header (%p)", uri);
+  }
+
+  if (stack_data.enable_orig_sip_to_tel_coerce &&
+      (uri != NULL) && 
+      PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // Determine whether this originating SIP URI is to be treated as a Tel URI
+    URIClass uri_class = URIClassifier::classify_uri(uri);
+    pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
+
+    if (uri_class == GLOBAL_PHONE_NUMBER)
+    {
+      TRC_DEBUG("Change originating URI from SIP URI to tel URI");
+      std::string old_uri_str = uri_to_string(PJSIP_URI_IN_OTHER, uri);
+      uri = PJUtils::translate_sip_uri_to_tel_uri(sip_uri, pool);
+      std::string new_uri_str = uri_to_string(PJSIP_URI_IN_OTHER, uri);
+
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::ORIG_SIP_TO_TEL, 0);
+        event.add_var_param(old_uri_str);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+      }
+    }
   }
 
   return uri;
@@ -407,7 +434,11 @@ std::string PJUtils::extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_u
   return impi;
 }
 
-void PJUtils::get_impi_and_impu(pjsip_msg* req, std::string& impi_out, std::string& impu_out)
+void PJUtils::get_impi_and_impu(pjsip_msg* req, 
+                                std::string& impi_out, 
+                                std::string& impu_out, 
+                                pj_pool_t* pool, 
+                                SAS::TrailId trail)
 {
   pjsip_authorization_hdr* auth_hdr;
   pjsip_uri* impu_uri;
@@ -423,7 +454,7 @@ void PJUtils::get_impi_and_impu(pjsip_msg* req, std::string& impi_out, std::stri
   {
     // Retrieve the IMPU for a non-REGISTER request by determining the originating served user, and
     // the IMPI from the Proxy-Authorization header.
-    impu_uri = orig_served_user(req);
+    impu_uri = orig_served_user(req, pool, trail);
 
     auth_hdr = (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(req,
                                                                   PJSIP_H_PROXY_AUTHORIZATION,

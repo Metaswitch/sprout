@@ -68,6 +68,7 @@ case "$1" in
 
         setup_user
         setup_logging
+        setcap 'cap_sys_nice=eip' /usr/share/clearwater/bin/sprout
         [ ! -x /usr/share/clearwater/bin/clearwater-logging-update ] || /usr/share/clearwater/bin/clearwater-logging-update
         add_section /etc/security/limits.conf sprout /etc/security/limits.conf.sprout
         /usr/share/clearwater/infrastructure/scripts/sprout.monit
