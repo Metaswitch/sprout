@@ -413,7 +413,7 @@ pj_status_t NotifyUtils::create_subscription_notify(
     state = NotifyUtils::SubscriptionState::TERMINATED;
   }
 
-  int cseq = s -> _notify_cseq;
+  int cseq = s->_notify_cseq;
 
   pj_status_t status = NotifyUtils::create_notify(tdata_notify,
                                                   s,

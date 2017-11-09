@@ -148,23 +148,24 @@ private:
     CREATED,
     REFRESHED,
     UNCHANGED,
+    SHORTENED,
     EXPIRED,
     TERMINATED
   };
 
   struct ClassifiedSubscription {
     ClassifiedSubscription(std::string id,
-                           AoR::Subscription* s,
+                           AoR::Subscription* subscription,
                            SubscriptionEvent event) :
       _id(id),
-      _s(s),
+      _subscription(subscription),
       _subscription_event(event),
       _notify_required(false),
       _reasons()
     {}
 
     std::string _id;
-    AoR::Subscription* _s;
+    AoR::Subscription* _subscription;
     SubscriptionEvent _subscription_event;
     bool _notify_required;
     std::string _reasons; // Stores reasons for requiring a notify (for logging)
@@ -187,7 +188,6 @@ private:
     /// Create and send any appropriate NOTIFYs
     ///
     /// @param aor_id                   The AoR ID
-    /// @param associated_uris          The IMPUs associated with this IRS
     /// @param aor_pair                 The AoR pair to send NOTIFYs for
     /// @param classified_bindings      Classification of the bindings associated
     ///                                 with this AoR
@@ -250,7 +250,8 @@ private:
                          ClassifiedBindings& classified_bindings);
 
   // Iterate over all original and current subscriptions in an AoR pair and
-  // classify them as CREATED, REFRESHED, UNCHANGED, EXPIRED or TERMINATED.
+  // classify them as CREATED, REFRESHED, UNCHANGED, SHORTENED, EXPIRED or
+  // TERMINATED.
   //
   // @param event_trigger            The type of event triggering this function call
   // @param aor_pair                 The AoR pair containing the subscriptions to classify
