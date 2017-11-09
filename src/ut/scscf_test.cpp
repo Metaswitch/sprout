@@ -6626,7 +6626,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   msg.convert_routeset(out);
   free_txdata();
 
-  // Finally, set enforce_user_phone without setting user=phone on the PAI and check that the attempt to resend the INVITE
+  // Finally, clear enforce_user_phone without setting user=phone on the PAI and check that the attempt to resend the INVITE
   // fails (it will attempt the lookup on the SIP URI, not the equivalent Tel URI).  We only do coercion if user=phone
   // is present, regardless of enforce_user_phone.
   URIClassifier::enforce_user_phone = false;
