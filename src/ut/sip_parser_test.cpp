@@ -1088,13 +1088,25 @@ TEST_F(SipParserTest, ResourcePriority)
   parse_rxdata(rdata);
 
   pj_str_t header_name = pj_str("Resource-Priority");
-  pjsip_hdr* hdr =
-      (pjsip_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
-                                             &header_name,
-                                             NULL);
-  EXPECT_NE(hdr, (pjsip_hdr*)NULL);
-  pjsip_hdr* clone = (pjsip_hdr*)hdr->vptr->clone(clone_pool, (void*)hdr);
-  pjsip_hdr* sclone = (pjsip_hdr*)hdr->vptr->shallow_clone(clone_pool, (void*)clone);
+  pjsip_generic_array_hdr* hdr =
+      (pjsip_generic_array_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                               &header_name,
+                                                               NULL);
+  EXPECT_NE(hdr, (pjsip_generic_array_hdr*)NULL);
+  EXPECT_EQ(hdr->count, 2);
+  EXPECT_PJEQ(hdr->values[0], "dsn.flash");
+  EXPECT_PJEQ(hdr->values[1], "wps.4");
+
+  pjsip_generic_array_hdr* clone = (pjsip_generic_array_hdr*)hdr->vptr->clone(clone_pool, (void*)hdr);
+  EXPECT_EQ(clone->count, 2);
+  EXPECT_PJEQ(clone->values[0], "dsn.flash");
+  EXPECT_PJEQ(clone->values[1], "wps.4");
+
+  pjsip_generic_array_hdr* sclone = (pjsip_generic_array_hdr*)hdr->vptr->shallow_clone(clone_pool, (void*)clone);
+  EXPECT_EQ(sclone->count, 2);
+  EXPECT_PJEQ(sclone->values[0], "dsn.flash");
+  EXPECT_PJEQ(sclone->values[1], "wps.4");
+
   pj_pool_release(main_pool);
 
   char buf[1024];

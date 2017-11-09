@@ -17,8 +17,6 @@ extern "C" {
 #include <pjsip/print_util.h>
 }
 
-#include <vector>
-
 // Main entry point
 pj_status_t register_custom_headers();
 
@@ -72,13 +70,6 @@ typedef struct pjsip_reject_contact_hdr {
   PJSIP_DECL_HDR_MEMBER(struct pjsip_reject_contact_hdr);
   pjsip_param feature_set;
 } pjsip_reject_contact_hdr;
-
-typedef std::pair<pj_str_t, pj_str_t> namespace_priority;
-
-typedef struct pjsip_resource_priority_hdr {
-  PJSIP_DECL_HDR_MEMBER(struct pjsip_resource_priority_hdr);
-  std::vector<namespace_priority> namespace_priorities;
-} pjsip_resource_priority_hdr;
 
 /// Utility functions (parse, create, init, clone, print_on)
 
@@ -154,11 +145,7 @@ int pjsip_accept_contact_hdr_print_on(void* hdr, char* buf, pj_size_t len);
 
 // Resource-Priority
 pjsip_hdr* parse_hdr_resource_priority(pjsip_parse_ctx* ctx);
-pjsip_resource_priority_hdr* pjsip_resource_priority_hdr_create(pj_pool_t* pool);
-pjsip_resource_priority_hdr* pjsip_resource_priority_hdr_init(pj_pool_t* pool, void* mem);
-void* pjsip_resource_priority_hdr_clone(pj_pool_t* pool, const void* o);
-void* pjsip_resource_priority_hdr_shallow_clone(pj_pool_t* pool, const void* o);
-int pjsip_resource_priority_hdr_print_on(void* hdr, char* buf, pj_size_t len);
+pjsip_generic_array_hdr* pjsip_resource_priority_hdr_create(pj_pool_t* pool);
 // TODO: Spec question: Do we need to support the Accept-Priority header? If so,
 // then it has basically exactly the same syntax as the Resource-Priority header
 
