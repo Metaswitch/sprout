@@ -339,12 +339,12 @@ public:
 // 'Larger' SipEvents are returned sooner by the priority queue.
 TEST_F(SipEventQueueTest, PriorityOrdering)
 {
-  // Lower the priority of e2
+  // Raise the priority of e2
   e2.priority = 1;
 
-  // e1 should be 'larger' than e2
-  EXPECT_TRUE(SipEvent::compare(e2, e1));
-  EXPECT_TRUE(SipEvent::compare(e2, e1));
+  // e2 should be 'larger' than e1
+  EXPECT_TRUE(SipEvent::compare(e1, e2));
+  EXPECT_TRUE(SipEvent::compare(e1, e2));
 }
 
 // Test that older SipEvents are 'larger' than newer ones at the same priority
@@ -364,23 +364,23 @@ TEST_F(SipEventQueueTest, TimeOrdering)
 // Test that SipEvents are ordered by priority before time.
 TEST_F(SipEventQueueTest, PriorityAndTimeOrdering)
 {
-  // Lower the priority of e2
+  // Raise the priority of e2
   e2.priority = 1;
 
-  // Set e2 to be older than e1
+  // Set e1 to be older than e2
   e1.stop_watch.start();
   cwtest_advance_time_ms(1);
   e2.stop_watch.start();
 
-  // e1 should be 'larger' than e2
-  EXPECT_TRUE(SipEvent::compare(e2, e1));
-  EXPECT_TRUE(SipEvent::compare(e2, e1));
+  // e2 should be 'larger' than e1
+  EXPECT_TRUE(SipEvent::compare(e1, e2));
+  EXPECT_TRUE(SipEvent::compare(e1, e2));
 }
 
 // Test that higher priority SipEvents are returned before lower priority ones.
 TEST_F(SipEventQueueTest, QueuePriorityOrdering)
 {
-  // Lower the priority of e2
+  // Raise the priority of e2
   e2.priority = 1;
 
   q->push(e2);
@@ -388,12 +388,12 @@ TEST_F(SipEventQueueTest, QueuePriorityOrdering)
 
   SipEvent e;
 
-  // e1 is higher priority, so should be returned first
+  // e2 is higher priority, so should be returned first
   q->pop(e);
-  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
+  EXPECT_EQ(e2.event_data.rdata, e.event_data.rdata);
 
   q->pop(e);
-  EXPECT_EQ(e2.priority, e.priority);
+  EXPECT_EQ(e1.priority, e.priority);
 }
 
 // Test that older SipEvents are returned before newer ones at the same priority
@@ -421,10 +421,10 @@ TEST_F(SipEventQueueTest, QueueTimeOrdering)
 // Test that SipEvents are returned from the queue in priority, then time, order.
 TEST_F(SipEventQueueTest, QueuePriorityAndTimeOrdering)
 {
-  // Lower the priority of e2
+  // Raise the priority of e2
   e2.priority = 1;
 
-  // Set e2 to be older than e1
+  // Set e1 to be older than e2
   e1.stop_watch.start();
   cwtest_advance_time_ms(1);
   e2.stop_watch.start();
@@ -434,10 +434,10 @@ TEST_F(SipEventQueueTest, QueuePriorityAndTimeOrdering)
 
   SipEvent e;
 
-  // e1 is higher priority, so should be returned first despite e2 being older
-  q->pop(e);
-  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
-
+  // e2 is higher priority, so should be returned first despite e1 being older
   q->pop(e);
   EXPECT_EQ(e2.event_data.rdata, e.event_data.rdata);
+
+  q->pop(e);
+  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
 }
