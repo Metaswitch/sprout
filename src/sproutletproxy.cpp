@@ -1069,10 +1069,12 @@ void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
 {
   enter_context();
 
-  _pending_timers.erase(tentry);
-  TimerCallbackData* tdata = (TimerCallbackData*)tentry->user_data;
-  tdata->sproutlet_wrapper->on_timer_pop((TimerID)tentry, tdata->context);
-  schedule_requests();
+  if (_pending_timers.erase(tentry) != 0)
+  {
+    TimerCallbackData* tdata = (TimerCallbackData*)tentry->user_data;
+    tdata->sproutlet_wrapper->on_timer_pop((TimerID)tentry, tdata->context);
+    schedule_requests();
+  }
 
   exit_context();
 }
