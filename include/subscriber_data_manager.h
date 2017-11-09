@@ -172,7 +172,7 @@ private:
   };
 
   typedef std::vector<ClassifiedSubscription*> ClassifiedSubscriptions;
-  void delete_subscriptions(ClassifiedSubscriptions& css);
+  void delete_subscriptions(ClassifiedSubscriptions& classified_subscriptions);
 
   /// @class SubscriberDataManager::NotifySender
   ///
