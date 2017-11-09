@@ -26,6 +26,7 @@ extern "C" {
 #include "sas.h"
 #include "sipresolver.h"
 #include "enumservice.h"
+#include "rphservice.h"
 #include "uri_classifier.h"
 #include "acr.h"
 
@@ -376,17 +377,12 @@ bool is_param_in_top_route(const pjsip_msg* req,
 /// @param hdr        - The header to add
 void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
 
-/// TODO: Design question.
-/// This function is an initial stab at trying to get the priority of a
-/// message - I expect the actual implementation to be different (i.e. needs
-/// to pull in configuration, should the priority just be an int, should this
-/// even be in pjutils...).
-
 /// Gets the priority of a message, based on the Resource-Priority headers.
 ///
 /// @param msg        - The message to determine the priority of.
-/// @return           - The priority (just as an int currently)
-int get_priority_of_message(const pjsip_msg* msg);
+/// @return           - The priority
+int get_priority_of_message(const pjsip_msg* msg,
+                            RPHService* rph_service);
 
 } // namespace PJUtils
 

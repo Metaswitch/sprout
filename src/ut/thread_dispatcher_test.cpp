@@ -14,6 +14,7 @@
 #include "test_interposer.hpp"
 #include "testingcommon.h"
 #include "mockloadmonitor.hpp"
+#include "mock_rph_service.h"
 #include "mock_pjsip_module.h"
 #include "siptest.hpp"
 #include "stack.h"
@@ -51,6 +52,7 @@ public:
                            NULL,
                            NULL,
                            &load_monitor,
+                           &rph_service,
                            NULL,
                            REQUEST_ON_QUEUE_TIMEOUT_MS);
     mod_thread_dispatcher = get_mod_thread_dispatcher();
@@ -110,6 +112,7 @@ public:
 
   StrictMock<MockPJSipModule>* mod_mock;
   MockLoadMonitor load_monitor;
+  MockRPHService rph_service;
   pjsip_module* mod_thread_dispatcher;
   pjsip_process_rdata_param rp;
 };

@@ -298,6 +298,29 @@
                     "action": "Correct the configuration file at /etc/clearwater/fallback_ifcs.xml and upload it."
                 }
             ]
+        },
+        {
+            "index": 1013,
+            "name": "SPROUT_RPH_STATUS",
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The configuration file for RPH support is valid.",
+                    "description": "sprout: The configuration file for RPH support is valid.",
+                    "cause": "The configuration file at /etc/clearwater/rph.json is valid.",
+                    "effect": "The S-CSCF can correctly prioritize messages with the Resource-Priority header.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "There is at least one invalid entry in the configuration file for RPH support.",
+                    "description": "sprout: The configuration file for RPH support is invalid.",
+                    "cause": "The configuration file at /etc/clearwater/rph.json has at least one invalid entry.",
+                    "effect": "The S-CSCF will not be able to correctly prioritize messages with the Resource-Priority header.",
+                    "action": "Correct the configuration file at /etc/clearwater/rph.json and upload it."
+                }
+            ]
         }
     ]
 }

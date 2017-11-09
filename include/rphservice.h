@@ -24,7 +24,7 @@ class RPHService
 {
 public:
   RPHService(Alarm* alarm,
-              std::string configuration = "./rph.json");
+             std::string configuration = "./rph.json");
   virtual ~RPHService();
 
   /// Updates the RPH configuration.

@@ -207,7 +207,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        curl_interposer.cpp \
                        testingcommon.cpp \
                        thread_dispatcher_test.cpp \
-                       rphservice_test.cpp
+                       rphservice_test.cpp \
+                       mock_rph_service.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include

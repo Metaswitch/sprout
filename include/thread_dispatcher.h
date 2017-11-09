@@ -19,6 +19,7 @@ extern "C" {
 
 #include "pjutils.h"
 #include "load_monitor.h"
+#include "rphservice.h"
 #include "snmp_event_accumulator_table.h"
 #include "snmp_event_accumulator_by_scope_table.h"
 #include "exception_handler.h"
@@ -30,6 +31,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_tbl_arg,
                                    SNMP::CounterByScopeTable* overload_counter_arg,
                                    LoadMonitor* load_monitor_arg,
+                                   RPHService* rph_service_arg,
                                    ExceptionHandler* exception_handler_arg,
                                    unsigned long request_on_queue_timeout);
 
@@ -47,8 +49,22 @@ enum SipEventType { MESSAGE, CALLBACK };
 // to higher priorities.
 namespace SipEventPriorityLevel
 {
-  const int NORMAL_PRIORITY = 1;
-  const int HIGH_PRIORITY = 0;
+  const int NORMAL_PRIORITY = 0;
+  const int HIGH_PRIORITY_1 = 1;
+  const int HIGH_PRIORITY_2 = 2;
+  const int HIGH_PRIORITY_3 = 3;
+  const int HIGH_PRIORITY_4 = 4;
+  const int HIGH_PRIORITY_5 = 5;
+  const int HIGH_PRIORITY_6 = 6;
+  const int HIGH_PRIORITY_7 = 7;
+  const int HIGH_PRIORITY_8 = 8;
+  const int HIGH_PRIORITY_9 = 9;
+  const int HIGH_PRIORITY_10 = 10;
+  const int HIGH_PRIORITY_11 = 11;
+  const int HIGH_PRIORITY_12 = 12;
+  const int HIGH_PRIORITY_13 = 13;
+  const int HIGH_PRIORITY_14 = 14;
+  const int HIGH_PRIORITY_15 = 15;
 } //namespace SipPriorityLevel
 
 union SipEventData
@@ -80,9 +96,9 @@ struct SipEvent
   {
     if (lhs.priority != rhs.priority)
     {
-      // Higher priority SipEvents, that is, SipEvents with a lower priority
+      // Higher priority SipEvents, that is, SipEvents with a higher priority
       // level, are 'larger'
-      return lhs.priority > rhs.priority;
+      return lhs.priority < rhs.priority;
     }
     else
     {

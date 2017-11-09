@@ -1672,6 +1672,7 @@ int main(int argc, char* argv[])
   CommunicationMonitor* astaire_comm_monitor = NULL;
   CommunicationMonitor* remote_astaire_comm_monitor = NULL;
   CommunicationMonitor* ralf_comm_monitor = NULL;
+  RPHService* rph_service = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, signal_handler);
@@ -2175,6 +2176,13 @@ int main(int argc, char* argv[])
     enum_service = new DummyEnumService(opt.home_domain);
   }
 
+  // Create RPH service.
+  TRC_STATUS("Setting up RPH service");
+  rph_service = new RPHService(new Alarm(alarm_manager,
+                                         "sprout",
+                                         AlarmDef::SPROUT_RPH_STATUS,
+                                         AlarmDef::CRITICAL));
+
   if (opt.pcscf_enabled)
   {
     // Create an ACR factory for the P-CSCF.
@@ -2343,6 +2351,7 @@ int main(int argc, char* argv[])
                          queue_size_table,
                          overload_counter,
                          load_monitor,
+                         rph_service,
                          exception_handler,
                          opt.request_on_queue_timeout);
 
@@ -2534,6 +2543,7 @@ int main(int argc, char* argv[])
   delete hss_connection;
   delete fifc_service;
   delete sifc_service;
+  delete rph_service;
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;

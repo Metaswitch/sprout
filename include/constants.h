@@ -117,9 +117,6 @@ const pj_str_t STR_MMFTARGET = pj_str((char*)"mmftarget");
 const pj_str_t STR_MMFSCOPE = pj_str((char*)"mmfscope");
 
 /// Constants for Resource-Priority
-/// TODO - Spec question: Are the values in this header completely fixed by the RFC? Or
-/// can users define their own namespaces/values, so that we have to support configuration
-/// for that?
 const pj_str_t STR_RESOURCE_PRIORITY = pj_str((char*)"Resource-Priority");
 const pj_str_t STR_ACCEPT_RESOURCE_PRIORITY = pj_str((char*)"Accept-Resource-Priority");
 const pj_str_t STR_DRSN = pj_str((char*)"drsn");

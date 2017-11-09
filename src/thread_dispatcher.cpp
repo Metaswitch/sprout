@@ -70,6 +70,8 @@ static SNMP::EventAccumulatorByScopeTable* queue_size_table = NULL;
 
 static LoadMonitor* load_monitor = NULL;
 
+static RPHService* rph_service = NULL;
+
 static SNMP::CounterByScopeTable* overload_counter = NULL;
 
 static ExceptionHandler* exception_handler = NULL;
@@ -288,8 +290,16 @@ int worker_thread(void* p)
 
 // Returns true if the SIP message should always be processed, regardless of
 // overload, and false otherwise.
-static bool ignore_load_monitor(pjsip_rx_data* rdata)
+static bool ignore_load_monitor(pjsip_rx_data* rdata,
+                                int priority)
 {
+  // If a request has anything other than normal priority, we will bypass the
+  // load monitor
+  if (priority > SipEventPriorityLevel::NORMAL_PRIORITY)
+  {
+    return true;
+  }
+
   // The type of a message is either REQUEST or RESPONSE; we only check the load
   // monitor for REQUEST messages
   if (rdata->msg_info.msg->type != PJSIP_REQUEST_MSG)
@@ -328,10 +338,13 @@ static int get_rx_msg_priority(pjsip_rx_data* rdata)
   if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG &&
       rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD)
   {
-    return SipEventPriorityLevel::HIGH_PRIORITY;
+    return SipEventPriorityLevel::HIGH_PRIORITY_15;
   }
 
-  return SipEventPriorityLevel::NORMAL_PRIORITY;
+  // Determine the prioritiy of the request based on any Resource-Priority
+  // headers. This function call returns the default priority if the message
+  // does not require prioritization.
+  return PJUtils::get_priority_of_message(rdata->msg_info.msg, rph_service);
 }
 
 static pj_status_t reject_with_retry_header(pjsip_rx_data* rdata,
@@ -395,8 +408,10 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::Event event(trail, SASEvent::BEGIN_THREAD_DISPATCHER, 0);
   SAS::report_event(event);
 
+  int priority = get_rx_msg_priority(rdata);
+
   // Check whether the request should be rejected due to overload
-  if (!(ignore_load_monitor(rdata)) &&
+  if (!(ignore_load_monitor(rdata, priority)) &&
       !(load_monitor->admit_request(trail)))
   {
     reject_rx_msg_overload(rdata, trail);
@@ -455,7 +470,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   qe.type = MESSAGE;
 
   // Set the message priority and log to SAS
-  qe.priority = get_rx_msg_priority(clone_rdata);
+  qe.priority = priority;
   TRC_DEBUG("Queuing cloned received message %p for worker threads with priority %d",
             clone_rdata, qe.priority);
   SAS::Event priority_event(trail, SASEvent::THREAD_DISPATCHER_SET_PRIORITY_LEVEL, 0);
@@ -478,6 +493,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_table_arg,
                                    SNMP::CounterByScopeTable* overload_counter_arg,
                                    LoadMonitor* load_monitor_arg,
+                                   RPHService* rph_service_arg,
                                    ExceptionHandler* exception_handler_arg,
                                    unsigned long request_on_queue_timeout_ms_arg)
 {
@@ -492,6 +508,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   latency_table = latency_table_arg;
   queue_size_table = queue_size_table_arg;
   load_monitor = load_monitor_arg;
+  rph_service = rph_service_arg;
   overload_counter = overload_counter_arg;
   exception_handler = exception_handler_arg;
   request_on_queue_timeout_us = request_on_queue_timeout_ms_arg * 1000;
