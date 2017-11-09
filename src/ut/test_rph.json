@@ -1,0 +1,63 @@
+{
+  "priority_blocks" : [
+    { "priority" : 1,
+      "rph_values" : ["wps.4", "ets.4"]
+    },
+    {
+      "priority" : 2,
+      "rph_values" : []
+    },
+    {
+      "priority" : 3,
+      "rph_values" : ["wps.3", "ets.3"]
+    },
+    {
+      "priority" : 4,
+      "rph_values" : []
+    },
+    {
+      "priority" : 5,
+      "rph_values" : ["wps.2", "ets.2"]
+    },
+    {
+      "priority" : 6,
+      "rph_values" : []
+    },
+    {
+      "priority" : 7,
+      "rph_values" : ["wps.1", "ets.1"]
+    },
+    {
+      "priority" : 8,
+      "rph_values" : []
+    },
+    {
+      "priority" : 9,
+      "rph_values" : ["wps.0", "ets.0"]
+    },
+    {
+      "priority" : 10,
+      "rph_values" : ["dsn.flash-override"]
+    },
+    {
+      "priority" : 11,
+      "rph_values" : []
+    },
+    {
+      "priority" : 12,
+      "rph_values" : []
+    },
+    {
+      "priority" : 13,
+      "rph_values" : ["drsn.flash-override"]
+    },
+    {
+      "priority" : 14,
+      "rph_values" : []
+    },
+    {
+      "priority" : 15,
+      "rph_values" : ["drsn.flash-override-override"]
+    }
+  ]
+}

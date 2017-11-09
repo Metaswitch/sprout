@@ -98,7 +98,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          event_statistic_accumulator.cpp \
                          aor.cpp \
                          astaire_aor_store.cpp \
-                         sprout_xml_utils.cpp
+                         sprout_xml_utils.cpp \
+                         rphservice.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -205,7 +206,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        test_interposer.cpp \
                        curl_interposer.cpp \
                        testingcommon.cpp \
-                       thread_dispatcher_test.cpp
+                       thread_dispatcher_test.cpp \
+                       rphservice_test.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include
