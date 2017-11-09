@@ -109,7 +109,7 @@ public:
   }
 
   StrictMock<MockPJSipModule>* mod_mock;
-  MockLoadMonitor load_monitor;
+  ::testing::StrictMock<MockLoadMonitor> load_monitor;
   pjsip_module* mod_thread_dispatcher;
   pjsip_process_rdata_param rp;
 };
