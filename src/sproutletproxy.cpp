@@ -1098,15 +1098,14 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
       int st_code = rsp->msg->line.status.code;
       set_trail(rsp, trail());
       on_tx_response(rsp);
-
       pj_status_t status = pjsip_tsx_send_msg(_tsx, rsp);
 
       if (status != PJ_SUCCESS)
       {
-        // LCOV_EXCL_START
-        TRC_ERROR("Failed to send tx response: %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-        // LCOV_EXCL_STOP
+        TRC_INFO("Failed to send UASTsx message: %s",
+                 PJUtils::pj_status_to_string(status).c_str());
+        // pjsip_tsx_send_msg only decreases the ref count on success
+        pjsip_tx_data_dec_ref(rsp);
       }
 
       if (st_code >= PJSIP_SC_OK)
