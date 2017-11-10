@@ -107,6 +107,7 @@ struct options
   int                                  max_tokens;
   float                                init_token_rate;
   float                                min_token_rate;
+  float                                max_token_rate;
   int                                  cass_target_latency_us;
   int                                  exception_max_ttl;
   int                                  sip_blacklist_duration;
@@ -141,7 +142,9 @@ struct options
   std::string                          dummy_app_server;
   bool                                 http_acr_logging;
   int                                  homestead_timeout;
+  int                                  request_on_queue_timeout;
   std::set<std::string>                blacklisted_scscfs;
+  bool                                 enable_orig_sip_to_tel_coerce;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

@@ -35,13 +35,10 @@ extern "C" {
 #include "utils.h"
 #include "custom_headers.h"
 #include "utils.h"
-#include "load_monitor.h"
 #include "health_checker.h"
 #include "uri_classifier.h"
 
 static SNMP::CounterByScopeTable* requests_counter = NULL;
-static SNMP::CounterByScopeTable* overload_counter = NULL;
-static LoadMonitor* load_monitor = NULL;
 static HealthChecker* health_checker = NULL;
 
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
@@ -312,51 +309,8 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
   // Do logging.
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
-  SAS::TrailId trail = get_trail(rdata);
 
   requests_counter->increment();
-
-  // Check whether the request should be processed
-  if (!(load_monitor->admit_request(trail)) &&
-      (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
-      (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
-  {
-    // Discard non-ACK requests if there are no available tokens.
-    // Respond statelessly with a 503 Service Unavailable, including a
-    // Retry-After header with a zero length timeout.
-    TRC_DEBUG("Rejected request due to overload");
-
-    // LCOV_EXCL_START - can't meaningfully verify SAS in UT
-    SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
-    SAS::report_marker(start_marker);
-
-    SAS::Event event(trail, SASEvent::SIP_OVERLOAD, 0);
-    event.add_static_param(load_monitor->get_target_latency());
-    event.add_static_param(load_monitor->get_current_latency());
-    event.add_static_param(load_monitor->get_rate_limit());
-    SAS::report_event(event);
-
-    SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
-    SAS::report_marker(end_marker);
-
-    // LCOV_EXCL_STOP
-
-    pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_SERVICE_UNAVAILABLE,
-                               NULL,
-                               (pjsip_hdr*)retry_after,
-                               NULL);
-
-    // We no longer terminate TCP connections on overload as the shutdown has
-    // to wait for existing transactions to end and therefore it takes too
-    // long to get feedback to the downstream node.  We expect downstream nodes
-    // to rebalance load if possible triggered by receipt of the 503 responses.
-
-    overload_counter->increment();
-    return PJ_TRUE;
-  }
 
   // If a message has parse errors, reject it (if it's a request other than ACK)
   // or drop it (if it's a response or an ACK request).
@@ -426,19 +380,14 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 
 pj_status_t
-init_common_sip_processing(LoadMonitor* load_monitor_arg,
-                           SNMP::CounterByScopeTable* requests_counter_arg,
-                           SNMP::CounterByScopeTable* overload_counter_arg,
+init_common_sip_processing(SNMP::CounterByScopeTable* requests_counter_arg,
                            HealthChecker* health_checker_arg)
 {
   // Register the stack modules.
   pjsip_endpt_register_module(stack_data.endpt, &mod_common_processing);
   stack_data.sas_logging_module_id = mod_common_processing.id;
 
-  overload_counter = overload_counter_arg;
   requests_counter = requests_counter_arg;
-
-  load_monitor = load_monitor_arg;
 
   health_checker = health_checker_arg;
 

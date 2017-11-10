@@ -127,24 +127,6 @@ private:
                       const std::string& binding_id,
                       SAS::TrailId trail);
 
-  /// Read data for a public user identity from the HSS. Returns the HTTP result
-  /// code obtained from homestead.
-  long read_hss_data(const std::string& public_id,
-                     const std::string& private_id,
-                     const std::string& req_type,
-                     const std::string& scscf_uri,
-                     bool cache_allowed,
-                     bool& registered,
-                     bool& barred,
-                     std::string& default_uri,
-                     std::vector<std::string>& uris,
-                     std::vector<std::string>& aliases,
-                     Ifcs& ifcs,
-                     std::deque<std::string>& ccfs,
-                     std::deque<std::string>& ecfs,
-                     const std::string& wildcard,
-                     SAS::TrailId trail);
-
   /// Record that communication with an AS failed.
   ///
   /// @param uri               - The URI of the AS.
@@ -308,6 +290,12 @@ private:
   /// the HSS. Returns the HTTP result code received from homestead.
   long get_data_from_hss(std::string public_id);
 
+  /// Read data for a public user identity from the HSS. Returns the HTTP result
+  /// code obtained from homestead.
+  long read_hss_data(const HSSConnection::irs_query& irs_query,
+                     HSSConnection::irs_info& irs_info,
+                     SAS::TrailId trail);
+
   /// Look up the registration state for the given public ID, using the
   /// per-transaction cache if possible (and caching them and the iFC otherwise).
   bool is_user_registered(std::string public_id);
@@ -385,11 +373,8 @@ private:
   bool _registered;
   bool _barred;
   std::string _default_uri;
-  std::vector<std::string> _uris;
-  std::vector<std::string> _aliases;
   Ifcs _ifcs;
-  std::deque<std::string> _ccfs;
-  std::deque<std::string> _ecfs;
+  HSSConnection::irs_info _irs_info;
 
   /// ACRs used where the S-CSCF will only process a single transaction (no
   /// AsChain is created).  There are two cases where this might be true:
