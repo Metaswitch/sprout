@@ -1094,6 +1094,8 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
 
       if (status != PJ_SUCCESS)
       {
+        TRC_INFO("Failed to send UASTsx message: %s",
+                 PJUtils::pj_status_to_string(status).c_str());
         // pjsip_tsx_send_msg only decreases the ref count on success
         pjsip_tx_data_dec_ref(rsp);
       }
