@@ -84,7 +84,7 @@ protected:
     virtual void process_tsx_request(pjsip_rx_data* rdata);
 
     /// Handle a received CANCEL request.
-    virtual void process_cancel_request(pjsip_rx_data* rdata);
+    virtual void process_cancel_request(pjsip_rx_data* rdata, const std::string& reason);
 
     /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
@@ -92,7 +92,8 @@ protected:
 
     /// Notification that an client transaction is not responding.
     virtual void on_client_not_responding(UACTsx* uac_tsx,
-                                          ForkErrorState fork_error);
+                                          ForkErrorState fork_error,
+                                          const std::string& reason);
 
     /// Notification that a response is being transmitted on this transaction.
     virtual void on_tx_response(pjsip_tx_data* tdata);
@@ -107,7 +108,9 @@ protected:
     virtual void on_tsx_state(pjsip_event* event);
 
     /// Cancels all pending UAC transactions associated with this UAS transaction.
-    virtual void cancel_pending_uac_tsx(int st_code, bool dissociate_uac);
+    virtual void cancel_pending_uac_tsx(int st_code,
+                                        const std::string& reason,
+                                        bool dissociate_uac);
 
     /// Enters this transaction's context.  While in the transaction's
     /// context, it will not be destroyed.  Whenever enter_context is called,
@@ -255,7 +258,7 @@ protected:
 
     /// Cancels the pending transaction, using the specified status code in the
     /// Reason header.
-    virtual void cancel_pending_tsx(int st_code);
+    virtual void cancel_pending_tsx(int st_code, const std::string& reason);
 
     /// Attempts a retry of the request.
     virtual bool retry_request();

@@ -145,7 +145,7 @@ protected:
     virtual void process_tsx_request(pjsip_rx_data* rdata);
 
     /// Handle a received CANCEL request.
-    virtual void process_cancel_request(pjsip_rx_data* rdata);
+    virtual void process_cancel_request(pjsip_rx_data* rdata, const std::string& reason);
 
     /// Handle a timer pop.
     static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
@@ -157,7 +157,8 @@ protected:
 
     /// Notification that an client transaction is not responding.
     virtual void on_client_not_responding(UACTsx* uac_tsx,
-                                          ForkErrorState fork_error);
+                                          ForkErrorState fork_error,
+                                          const std::string& reason);
 
     virtual void on_tsx_state(pjsip_event* event);
 
@@ -197,7 +198,9 @@ protected:
 
     void tx_cancel(SproutletWrapper* sproutlet,
                    int fork_id,
-                   pjsip_tx_data* cancel);
+                   pjsip_tx_data* cancel,
+                   int st_code,
+                   const std::string& reason);
 
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
@@ -322,8 +325,8 @@ public:
                              const std::string& status_text="");
   int send_request(pjsip_msg*& req, int allowed_host_state);
   void send_response(pjsip_msg*& rsp);
-  void cancel_fork(int fork_id, int reason=0);
-  void cancel_pending_forks(int reason=0);
+  void cancel_fork(int fork_id, int st_code = 0, std::string reason = "");
+  void cancel_pending_forks(int st_code = 0, std::string reason = "");
   const ForkState& fork_state(int fork_id);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
@@ -349,8 +352,8 @@ private:
   void rx_response(pjsip_tx_data* rsp,
                    int fork_id,
                    ForkErrorState error_state=ForkErrorState::NONE);
-  void rx_cancel(pjsip_tx_data* cancel);
-  void rx_error(int status_code);
+  void rx_cancel(pjsip_tx_data* cancel, const std::string& reason);
+  void rx_error(int status_code, const std::string& reason);
   void rx_fork_error(ForkErrorState fork_error, int fork_id);
   void on_timer_pop(TimerID id, void* context);
   void register_tdata(pjsip_tx_data* tdata);
@@ -433,7 +436,8 @@ private:
     ForkState state;
     pjsip_tx_data* req;
     bool pending_cancel;
-    int cancel_reason;
+    int cancel_st_code;
+    std::string cancel_reason;
   } ForkStatus;
   std::vector<ForkStatus> _forks;
 

@@ -1141,7 +1141,7 @@ void MmtelTsx::on_timer_expiry(void* context)
   // try a redirect.
   TRC_INFO("CDIV on no answer timer expired");
   _no_reply_timer = 0;
-  cancel_fork(_late_redirect_fork_id);
+  cancel_fork(_late_redirect_fork_id, 0, "CDIV no answer timer expired");
   if (!apply_cdiv_on_rsp(NULL,
                          _media_conditions | simservs::Rule::CONDITION_NO_ANSWER,
                          PJSIP_SC_TEMPORARILY_UNAVAILABLE))
