@@ -172,6 +172,37 @@ TEST_F(ThreadDispatcherTest, NeverRejectOptionsTest)
   process_queue_element();
 }
 
+// On recieving an ACK message, the thread dispatcher should not call into
+// the load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectAckTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "ACK";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+// On recieving a prioritized INVITE message, the thread dispatcher should not
+// call into the load monitor - it should process the request regardless of
+// load.
+TEST_F(ThreadDispatcherTest, NeverRejectPrioritizedInviteTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "INVITE";
+  msg._extra = "Resource-Priority: wps.0";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(rph_service, lookup_priority("wps.0")).WillOnce(Return(11));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
 // On recieving a SIP response, the thread dispatcher should not call into the
 // load monitor - it should process the request regardless of load.
 TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)

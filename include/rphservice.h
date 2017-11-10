@@ -31,7 +31,7 @@ public:
   void update_rph();
 
   /// Lookup the priority of an RPH value.
-  int lookup_priority(std::string rph_value);
+  virtual int lookup_priority(std::string rph_value);
 
 private:
   Alarm* _alarm;
