@@ -913,6 +913,7 @@ void RegistrarSproutletTsx::update_bindings_from_req(AoRPair* aor_pair,      ///
       // Wildcard contact, which can only be used to clear all bindings for
       // the AoR (and only if the expiry is 0). It won't clear any emergency
       // bindings
+      TRC_DEBUG("Clearing all non-emergency bindings");
       aor_pair->get_current()->clear(false);
       break;
     }
@@ -945,6 +946,9 @@ void RegistrarSproutletTsx::update_bindings_from_req(AoRPair* aor_pair,      ///
         // Either this is a new binding, has come from a restarted device, or
         // is an update to an existing binding.
         binding->_uri = contact_uri;
+
+        TRC_DEBUG("Updating binding %s for contact %s",
+                  binding_id.c_str(), contact_uri.c_str());
 
         // TODO Examine Via header to see if we're the first hop
         // TODO Only if we're not the first hop, check that the top path header has "ob" parameter
@@ -1001,14 +1005,24 @@ void RegistrarSproutletTsx::update_bindings_from_req(AoRPair* aor_pair,      ///
 
         // If the new expiry is less than the current expiry, and it's an emergency registration,
         // don't update the expiry time
-        if ((binding->_expires >= now + expiry) && (binding->_emergency_registration))
+        int new_expiry = now + expiry;
+
+        if ((binding->_expires >= new_expiry) && (binding->_emergency_registration))
         {
           TRC_DEBUG("Don't reduce expiry time for an emergency registration");
         }
         else
         {
-          binding->_expires = now + expiry;
+          TRC_DEBUG("Setting new expiry for %s to %d", binding_id.c_str(), new_expiry);
+          binding->_expires = new_expiry;
         }
+      }
+      else
+      {
+        TRC_DEBUG("Skipping binding %s for contact %s - (CSeq: %d v %d, CID: %s == %s)",
+                  binding_id.c_str(), contact_uri.c_str(),
+                  cseq, binding->_cseq,
+                  cid.c_str(), binding->_cid.c_str());
       }
     }
     contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact->next);
