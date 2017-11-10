@@ -296,22 +296,22 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
       if (aor_orig_b_match->second->_expires < aor_current_b.second->_expires)
       {
         TRC_DEBUG("Binding %s in AoR %s has been refreshed",
-                aor_current_b.first.c_str(),
-                aor_id.c_str());
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::REFRESHED;
       }
       else if (aor_orig_b_match->second->_expires > aor_current_b.second->_expires)
       {
         TRC_DEBUG("Binding %s in AoR %s has been shortened",
-                aor_current_b.first.c_str(),
-                aor_id.c_str());
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::SHORTENED;
       }
       else
       {
         TRC_DEBUG("Binding %s in AoR %s is unchanged",
-                aor_current_b.first.c_str(),
-                aor_id.c_str());
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::REGISTERED;
       }
     }
