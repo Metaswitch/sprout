@@ -22,7 +22,8 @@ public:
   MockRPHService();
   virtual ~MockRPHService();
 
-  MOCK_METHOD1(lookup_priority, int(std::string rph_value));
+  MOCK_METHOD2(lookup_priority, int(std::string rph_value,
+                                    SAS::TrailId trail));
 };
 
 #endif

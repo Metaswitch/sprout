@@ -31,7 +31,8 @@ public:
   void update_rph();
 
   /// Lookup the priority of an RPH value.
-  virtual int lookup_priority(std::string rph_value);
+  virtual int lookup_priority(std::string rph_value,
+                              SAS::TrailId trail);
 
 private:
   Alarm* _alarm;

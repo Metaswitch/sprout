@@ -151,6 +151,7 @@ void RPHService::update_rph()
 
   // At this point, we're definitely going to override the RPH map we currently have so,
   // take the lock and update the map.
+  TRC_STATUS("RPH configuration successfully updated");
   boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
   _rph_map = new_rph_map;
 
@@ -159,7 +160,8 @@ void RPHService::update_rph()
   clear_alarm();
 }
 
-int RPHService::lookup_priority(std::string rph_value)
+int RPHService::lookup_priority(std::string rph_value,
+                                SAS::TrailId trail)
 {
   int priority = 0;
 
@@ -168,10 +170,19 @@ int RPHService::lookup_priority(std::string rph_value)
 
   // Lookup the key in the map. If it doesn't exist, we will return the default
   // priority of 0.
+  TRC_DEBUG("Looking up priority of RPH value \"%s\"", rph_value.c_str());
   std::map<std::string, int>::iterator result = _rph_map.find(rph_value);
   if (result != _rph_map.end())
   {
     priority = result->second;
+  }
+  else
+  {
+    // We received a message with an unknown RPH value.
+    TRC_WARNING("An unknown RPH value \"%s\" was received on an incoming message",
+                rph_value.c_str());
+    SAS::Event event(trail, SASEvent::RPH_UNKNOWN_VALUE, 0);
+    event.add_var_param(rph_value);
   }
 
   return priority;

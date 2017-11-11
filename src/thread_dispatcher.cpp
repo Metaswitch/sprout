@@ -173,6 +173,7 @@ bool process_queue_element()
             SAS::report_marker(start_marker);
 
             SAS::Event event(trail, SASEvent::SIP_TOO_LONG_IN_QUEUE, 0);
+            event.add_static_param(qe.priority);
             event.add_static_param(latency_us/1000);
             event.add_static_param(request_on_queue_timeout_us/1000);
             SAS::report_event(event);
@@ -288,15 +289,23 @@ int worker_thread(void* p)
 }
 // LCOV_EXCL_STOP
 
+static void log_bypass_load_monitor(SAS::TrailId trail)
+{
+  SAS::Event event(trail, SASEvent::SIP_BYPASS_LOAD_MONITOR, 0);
+  SAS::report_event(event);
+}
+
 // Returns true if the SIP message should always be processed, regardless of
 // overload, and false otherwise.
 static bool ignore_load_monitor(pjsip_rx_data* rdata,
-                                int priority)
+                                int priority,
+                                SAS::TrailId trail)
 {
   // If a request has anything other than normal priority, we will bypass the
   // load monitor
   if (priority > SipEventPriorityLevel::NORMAL_PRIORITY)
   {
+    log_bypass_load_monitor(trail);
     return true;
   }
 
@@ -304,6 +313,7 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
   // monitor for REQUEST messages
   if (rdata->msg_info.msg->type != PJSIP_REQUEST_MSG)
   {
+    log_bypass_load_monitor(trail);
     return true;
   }
 
@@ -314,6 +324,7 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
   {
     // TODO
     // LCOV_EXCL_START
+    log_bypass_load_monitor(trail);
     return true;
     // LCOV_EXCL_STOP
   }
@@ -324,6 +335,7 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
   pjsip_method_e method_id = rdata->msg_info.msg->line.req.method.id;
   if (method_id == PJSIP_ACK_METHOD || method_id == PJSIP_OPTIONS_METHOD)
   {
+    log_bypass_load_monitor(trail);
     return true;
   }
 
@@ -331,7 +343,8 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
 }
 
 // Determines the priority value of a SIP message based on its method.
-static int get_rx_msg_priority(pjsip_rx_data* rdata)
+static int get_rx_msg_priority(pjsip_rx_data* rdata,
+                               SAS::TrailId trail)
 {
   // Monit probes Sprout using OPTIONS polls, so these are prioritised to
   // prevent Monit killing Sprout during overload.
@@ -344,7 +357,7 @@ static int get_rx_msg_priority(pjsip_rx_data* rdata)
   // Determine the prioritiy of the request based on any Resource-Priority
   // headers. This function call returns the default priority if the message
   // does not require prioritization.
-  return PJUtils::get_priority_of_message(rdata->msg_info.msg, rph_service);
+  return PJUtils::get_priority_of_message(rdata->msg_info.msg, rph_service, trail);
 }
 
 static pj_status_t reject_with_retry_header(pjsip_rx_data* rdata,
@@ -408,10 +421,10 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::Event event(trail, SASEvent::BEGIN_THREAD_DISPATCHER, 0);
   SAS::report_event(event);
 
-  int priority = get_rx_msg_priority(rdata);
+  int priority = get_rx_msg_priority(rdata, trail);
 
   // Check whether the request should be rejected due to overload
-  if (!(ignore_load_monitor(rdata, priority)) &&
+  if (!(ignore_load_monitor(rdata, priority, trail)) &&
       !(load_monitor->admit_request(trail)))
   {
     reject_rx_msg_overload(rdata, trail);

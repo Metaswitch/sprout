@@ -196,7 +196,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectPrioritizedInviteTest)
   msg._extra = "Resource-Priority: wps.0";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(rph_service, lookup_priority("wps.0")).WillOnce(Return(11));
+  EXPECT_CALL(rph_service, lookup_priority("wps.0", _)).WillOnce(Return(11));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
