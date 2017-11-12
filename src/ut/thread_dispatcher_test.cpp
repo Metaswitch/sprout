@@ -197,7 +197,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectPrioritizedInviteTest)
   msg._extra = "Resource-Priority: wps.0";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(rph_service, lookup_priority("wps.0", _)).WillOnce(Return(11));
+  EXPECT_CALL(rph_service, lookup_priority("wps.0", _)).WillOnce(Return(SIPEventPriorityLevel::HIGH_PRIORITY_11));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
@@ -372,7 +372,7 @@ public:
 TEST_F(SipEventQueueTest, PriorityOrdering)
 {
   // Raise the priority of e2
-  e2.priority = 1;
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_1;
 
   // e2 should be 'larger' than e1
   EXPECT_TRUE(SipEvent::compare(e1, e2));
@@ -397,7 +397,7 @@ TEST_F(SipEventQueueTest, TimeOrdering)
 TEST_F(SipEventQueueTest, PriorityAndTimeOrdering)
 {
   // Raise the priority of e2
-  e2.priority = 1;
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_1;
 
   // Set e1 to be older than e2
   e1.stop_watch.start();
@@ -413,7 +413,7 @@ TEST_F(SipEventQueueTest, PriorityAndTimeOrdering)
 TEST_F(SipEventQueueTest, QueuePriorityOrdering)
 {
   // Raise the priority of e2
-  e2.priority = 1;
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_1;
 
   q->push(e2);
   q->push(e1);
@@ -454,7 +454,7 @@ TEST_F(SipEventQueueTest, QueueTimeOrdering)
 TEST_F(SipEventQueueTest, QueuePriorityAndTimeOrdering)
 {
   // Raise the priority of e2
-  e2.priority = 1;
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_1;
 
   // Set e1 to be older than e2
   e1.stop_watch.start();

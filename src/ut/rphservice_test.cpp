@@ -102,21 +102,21 @@ TEST_F(RPHServiceTest, ValidRPHFile)
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_rph.json"));
 
   // Check that the map is correctly populated.
-  EXPECT_EQ(rph.lookup_priority("wps.4", 0), 1);
-  EXPECT_EQ(rph.lookup_priority("ets.4", 0), 1);
-  EXPECT_EQ(rph.lookup_priority("wps.3", 0), 3);
-  EXPECT_EQ(rph.lookup_priority("ets.3", 0), 3);
-  EXPECT_EQ(rph.lookup_priority("wps.2", 0), 5);
-  EXPECT_EQ(rph.lookup_priority("ets.2", 0), 5);
-  EXPECT_EQ(rph.lookup_priority("wps.1", 0), 7);
-  EXPECT_EQ(rph.lookup_priority("ets.1", 0), 7);
-  EXPECT_EQ(rph.lookup_priority("wps.0", 0), 9);
-  EXPECT_EQ(rph.lookup_priority("ets.0", 0), 9);
-  EXPECT_EQ(rph.lookup_priority("dsn.flash-override", 0), 10);
-  EXPECT_EQ(rph.lookup_priority("drsn.flash-override", 0), 13);
-  EXPECT_EQ(rph.lookup_priority("drsn.flash-override-override", 0), 15);
+  EXPECT_EQ(rph.lookup_priority("wps.4", 0), SIPEventPriorityLevel::HIGH_PRIORITY_1);
+  EXPECT_EQ(rph.lookup_priority("ets.4", 0), SIPEventPriorityLevel::HIGH_PRIORITY_1);
+  EXPECT_EQ(rph.lookup_priority("wps.3", 0), SIPEventPriorityLevel::HIGH_PRIORITY_3);
+  EXPECT_EQ(rph.lookup_priority("ets.3", 0), SIPEventPriorityLevel::HIGH_PRIORITY_3);
+  EXPECT_EQ(rph.lookup_priority("wps.2", 0), SIPEventPriorityLevel::HIGH_PRIORITY_5);
+  EXPECT_EQ(rph.lookup_priority("ets.2", 0), SIPEventPriorityLevel::HIGH_PRIORITY_5);
+  EXPECT_EQ(rph.lookup_priority("wps.1", 0), SIPEventPriorityLevel::HIGH_PRIORITY_7);
+  EXPECT_EQ(rph.lookup_priority("ets.1", 0), SIPEventPriorityLevel::HIGH_PRIORITY_7);
+  EXPECT_EQ(rph.lookup_priority("wps.0", 0), SIPEventPriorityLevel::HIGH_PRIORITY_9);
+  EXPECT_EQ(rph.lookup_priority("ets.0", 0), SIPEventPriorityLevel::HIGH_PRIORITY_9);
+  EXPECT_EQ(rph.lookup_priority("dsn.flash-override", 0), SIPEventPriorityLevel::HIGH_PRIORITY_10);
+  EXPECT_EQ(rph.lookup_priority("drsn.flash-override", 0), SIPEventPriorityLevel::HIGH_PRIORITY_13);
+  EXPECT_EQ(rph.lookup_priority("drsn.flash-override-override", 0), SIPEventPriorityLevel::HIGH_PRIORITY_15);
 
   // Check that if we lookup an known RPH value, that we get back the default
-  // priority, 0.
-  EXPECT_EQ(rph.lookup_priority("unknown", 0), 0);
+  // priority.
+  EXPECT_EQ(rph.lookup_priority("unknown", 0), SIPEventPriorityLevel::NORMAL_PRIORITY);
 }

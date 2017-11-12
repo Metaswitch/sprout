@@ -2657,11 +2657,11 @@ void PJUtils::add_top_header(pjsip_msg* msg, pjsip_hdr* hdr)
   }
 }
 
-int PJUtils::get_priority_of_message(const pjsip_msg* msg,
-                                     RPHService* rph_service,
-                                     SAS::TrailId trail)
+SIPEventPriorityLevel PJUtils::get_priority_of_message(const pjsip_msg* msg,
+                                                       RPHService* rph_service,
+                                                       SAS::TrailId trail)
 {
-  int priority = 0;
+  SIPEventPriorityLevel priority = SIPEventPriorityLevel::NORMAL_PRIORITY;
 
   // Pull out all the Resource-Priority headers, and all the values within the
   // headers. For each value, get the priority of that value. The final
@@ -2688,7 +2688,7 @@ int PJUtils::get_priority_of_message(const pjsip_msg* msg,
     for (unsigned ii = 0; ii < hdr->count; ++ii)
     {
       std::string rph_value = pj_str_to_string(&hdr->values[ii]);
-      int temp_pri = rph_service->lookup_priority(rph_value, trail);
+      SIPEventPriorityLevel temp_pri = rph_service->lookup_priority(rph_value, trail);
       priority = (temp_pri > priority) ? temp_pri : priority;
     }
   }

@@ -344,12 +344,12 @@ static void log_bypass_load_monitor(SAS::TrailId trail)
 // Returns true if the SIP message should always be processed, regardless of
 // overload, and false otherwise.
 static bool ignore_load_monitor(pjsip_rx_data* rdata,
-                                int priority,
+                                SIPEventPriorityLevel priority,
                                 SAS::TrailId trail)
 {
   // If a request has anything other than normal priority, we will bypass the
   // load monitor
-  if (priority > SipEventPriorityLevel::NORMAL_PRIORITY)
+  if (priority > SIPEventPriorityLevel::NORMAL_PRIORITY)
   {
     log_bypass_load_monitor(trail);
     return true;
@@ -389,15 +389,15 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
 }
 
 // Determines the priority value of a SIP message based on its method.
-static int get_rx_msg_priority(pjsip_rx_data* rdata,
-                               SAS::TrailId trail)
+static SIPEventPriorityLevel get_rx_msg_priority(pjsip_rx_data* rdata,
+                                                 SAS::TrailId trail)
 {
   // Monit probes Sprout using OPTIONS polls, so these are prioritised to
   // prevent Monit killing Sprout during overload.
   if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG &&
       rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD)
   {
-    return SipEventPriorityLevel::HIGH_PRIORITY_15;
+    return SIPEventPriorityLevel::HIGH_PRIORITY_15;
   }
 
   // Determine the prioritiy of the request based on any Resource-Priority
@@ -467,7 +467,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::Event event(trail, SASEvent::BEGIN_THREAD_DISPATCHER, 0);
   SAS::report_event(event);
 
-  int priority = get_rx_msg_priority(rdata, trail);
+  SIPEventPriorityLevel priority = get_rx_msg_priority(rdata, trail);
 
   // Check whether the request should be rejected due to overload
   if (!(ignore_load_monitor(rdata, priority, trail)) &&
@@ -675,7 +675,7 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   qe.event_data.callback = cb;
   // This maintains the previous behaviour with respect to callbacks, but in
   // future we may want to look at prioritizing them
-  qe.priority = SipEventPriorityLevel::NORMAL_PRIORITY;
+  qe.priority = SIPEventPriorityLevel::NORMAL_PRIORITY;
 
   // Track the current queue size
   if (queue_size_table)

@@ -17,6 +17,7 @@
 #include <boost/thread.hpp>
 
 #include "updater.h"
+#include "sip_event_priority.h"
 #include "sas.h"
 #include "alarm.h"
 
@@ -31,13 +32,13 @@ public:
   void update_rph();
 
   /// Lookup the priority of an RPH value.
-  virtual int lookup_priority(std::string rph_value,
-                              SAS::TrailId trail);
+  virtual SIPEventPriorityLevel lookup_priority(std::string rph_value,
+                                                SAS::TrailId trail);
 
 private:
   Alarm* _alarm;
   std::string _configuration;
-  std::map<std::string, int> _rph_map;
+  std::map<std::string, SIPEventPriorityLevel> _rph_map;
   Updater<void, RPHService>* _updater;
 
   // Mark as mutable to flag that this can be modified without affecting the

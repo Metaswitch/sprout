@@ -78,7 +78,7 @@ void RPHService::update_rph()
   rapidjson::Document doc;
   doc.Parse<0>(rph_str.c_str());
 
-  std::map<std::string, int> new_rph_map;
+  std::map<std::string, SIPEventPriorityLevel> new_rph_map;
 
   if (doc.HasParseError())
   {
@@ -117,7 +117,7 @@ void RPHService::update_rph()
         extract_json_string_array(*pb_it, JSON_RPH_VALUES, rph_values);
         for (std::string rph_value: rph_values)
         {
-          if (new_rph_map.insert(std::make_pair(rph_value, priority)).second == false)
+          if (new_rph_map.insert(std::make_pair(rph_value, (SIPEventPriorityLevel)priority)).second == false)
           {
             TRC_ERROR("Attempted to insert an RPH value into the map that already exists");
             CL_SPROUT_RPH_FILE_INVALID.log();
@@ -160,10 +160,10 @@ void RPHService::update_rph()
   clear_alarm();
 }
 
-int RPHService::lookup_priority(std::string rph_value,
-                                SAS::TrailId trail)
+SIPEventPriorityLevel RPHService::lookup_priority(std::string rph_value,
+                                                  SAS::TrailId trail)
 {
-  int priority = 0;
+  SIPEventPriorityLevel priority = SIPEventPriorityLevel::NORMAL_PRIORITY;
 
   // Take a read lock on the mutex in RAII style
   boost::shared_lock<boost::shared_mutex> read_lock(_sets_rw_lock);
@@ -171,7 +171,7 @@ int RPHService::lookup_priority(std::string rph_value,
   // Lookup the key in the map. If it doesn't exist, we will return the default
   // priority of 0.
   TRC_DEBUG("Looking up priority of RPH value \"%s\"", rph_value.c_str());
-  std::map<std::string, int>::iterator result = _rph_map.find(rph_value);
+  std::map<std::string, SIPEventPriorityLevel>::iterator result = _rph_map.find(rph_value);
   if (result != _rph_map.end())
   {
     priority = result->second;

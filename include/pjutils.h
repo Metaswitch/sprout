@@ -386,9 +386,9 @@ void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
 /// @trail             - The SAS trail ID.
 ///
 /// @return            - The priority of the message.
-int get_priority_of_message(const pjsip_msg* msg,
-                            RPHService* rph_service,
-                            SAS::TrailId trail);
+SIPEventPriorityLevel get_priority_of_message(const pjsip_msg* msg,
+                                              RPHService* rph_service,
+                                              SAS::TrailId trail);
 
 } // namespace PJUtils
 

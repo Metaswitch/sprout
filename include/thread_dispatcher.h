@@ -25,6 +25,7 @@ extern "C" {
 #include "snmp_success_fail_count_by_priority_and_scope_table.h"
 #include "exception_handler.h"
 #include "snmp_counter_by_scope_table.h"
+#include "sip_event_priority.h"
 #include "eventq.h"
 
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
@@ -47,28 +48,6 @@ pjsip_module* get_mod_thread_dispatcher();
 // A SipEvent on the queue is either a SIP message or a callback
 enum SipEventType { MESSAGE, CALLBACK };
 
-// Allowable priority levels for SIP events. Levels with lower values correspond
-// to higher priorities.
-namespace SipEventPriorityLevel
-{
-  const int NORMAL_PRIORITY = 0;
-  const int HIGH_PRIORITY_1 = 1;
-  const int HIGH_PRIORITY_2 = 2;
-  const int HIGH_PRIORITY_3 = 3;
-  const int HIGH_PRIORITY_4 = 4;
-  const int HIGH_PRIORITY_5 = 5;
-  const int HIGH_PRIORITY_6 = 6;
-  const int HIGH_PRIORITY_7 = 7;
-  const int HIGH_PRIORITY_8 = 8;
-  const int HIGH_PRIORITY_9 = 9;
-  const int HIGH_PRIORITY_10 = 10;
-  const int HIGH_PRIORITY_11 = 11;
-  const int HIGH_PRIORITY_12 = 12;
-  const int HIGH_PRIORITY_13 = 13;
-  const int HIGH_PRIORITY_14 = 14;
-  const int HIGH_PRIORITY_15 = 15;
-} //namespace SipPriorityLevel
-
 union SipEventData
 {
   pjsip_rx_data* rdata;
@@ -81,7 +60,7 @@ struct SipEvent
   SipEventType type;
 
   // The event's priority - a lower value corresponds to a higher priority level
-  int priority;
+  SIPEventPriorityLevel priority;
 
   // A stop watch for tracking latency and determining the length of time the
   // message has been on the queue
@@ -90,7 +69,7 @@ struct SipEvent
   // The event data itself
   SipEventData event_data;
 
-  SipEvent() : type(MESSAGE), priority(0) {}
+  SipEvent() : type(MESSAGE), priority(SIPEventPriorityLevel::NORMAL_PRIORITY) {}
 
   // Compares two SipEvents. Returns true if rhs is 'larger' than lhs, where
   // 'larger' SipEvents are those that should be processed earlier.
