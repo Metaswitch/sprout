@@ -1925,6 +1925,7 @@ int main(int argc, char* argv[])
 
   SNMP::EventAccumulatorByScopeTable* latency_table;
   SNMP::EventAccumulatorByScopeTable* queue_size_table;
+  SNMP::SuccessFailCountByPriorityAndScopeTable* queue_success_fail_table;
   SNMP::CounterByScopeTable* requests_counter;
   SNMP::CounterByScopeTable* overload_counter;
 
@@ -1949,6 +1950,8 @@ int main(int argc, char* argv[])
                                                                ".1.2.826.0.1.1578918.9.2.2");
     queue_size_table = SNMP::EventAccumulatorByScopeTable::create("bono_queue_size",
                                                                   ".1.2.826.0.1.1578918.9.2.6");
+    queue_success_fail_table = SNMP::SuccessFailCountByPriorityAndScopeTable::create("bono_queue_success_fail",
+                                                                                     ".1.2.826.0.1.1578918.9.2.7");
     requests_counter = SNMP::CounterByScopeTable::create("bono_incoming_requests",
                                                          ".1.2.826.0.1.1578918.9.2.4");
     overload_counter = SNMP::CounterByScopeTable::create("bono_rejected_overload",
@@ -1960,6 +1963,8 @@ int main(int argc, char* argv[])
                                                                ".1.2.826.0.1.1578918.9.3.1");
     queue_size_table = SNMP::EventAccumulatorByScopeTable::create("sprout_queue_size",
                                                                   ".1.2.826.0.1.1578918.9.3.8");
+    queue_success_fail_table = SNMP::SuccessFailCountByPriorityAndScopeTable::create("sprout_queue_success_fail",
+                                                                                     ".1.2.826.0.1.1578918.9.3.22");
     requests_counter = SNMP::CounterByScopeTable::create("sprout_incoming_requests",
                                                          ".1.2.826.0.1.1578918.9.3.6");
     overload_counter = SNMP::CounterByScopeTable::create("sprout_rejected_overload",
@@ -2349,6 +2354,7 @@ int main(int argc, char* argv[])
   init_thread_dispatcher(opt.worker_threads,
                          latency_table,
                          queue_size_table,
+                         queue_success_fail_table,
                          overload_counter,
                          load_monitor,
                          rph_service,

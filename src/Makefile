@@ -107,6 +107,7 @@ sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_ip_count_table.cpp \
                   snmp_success_fail_count_table.cpp \
                   snmp_success_fail_count_by_request_type_table.cpp \
+                  snmp_success_fail_count_by_priority_and_scope_table.cpp \
                   snmp_event_accumulator_table.cpp \
                   snmp_event_accumulator_by_scope_table.cpp \
                   snmp_scalar_by_scope_table.cpp \

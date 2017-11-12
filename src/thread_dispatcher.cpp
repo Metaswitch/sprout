@@ -67,6 +67,7 @@ static int num_worker_threads = 1;
 
 static SNMP::EventAccumulatorByScopeTable* latency_table = NULL;
 static SNMP::EventAccumulatorByScopeTable* queue_size_table = NULL;
+static SNMP::SuccessFailCountByPriorityAndScopeTable* queue_success_fail_table = NULL;
 
 static LoadMonitor* load_monitor = NULL;
 
@@ -161,6 +162,13 @@ bool process_queue_element()
         if ((latency_us > (request_on_queue_timeout_us)) &&
             (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG))
         {
+          // This request is about to be dropped so increment the number of
+          // failures for items put on the queue for a worker thread.
+          if (queue_success_fail_table)
+          {
+            queue_success_fail_table->increment_failures(qe.priority); // LCOV_EXCL_LINE
+          }
+
           if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
           {
             // Discard non-ACK requests if the request has been on the queue for
@@ -187,6 +195,15 @@ bool process_queue_element()
         }
         else
         {
+          // At this point we are about to hand this message over to a worker
+          // thread. The queue has done its job, and any failures from now are
+          // on the worker thread, so increment the number of successes for items
+          // put on the queue for a worker thread.
+          if (queue_success_fail_table)
+          {
+            queue_success_fail_table->increment_successes(qe.priority); // LCOV_EXCL_LINE
+          }
+
           CW_TRY
           {
             pjsip_endpt_process_rx_data(stack_data.endpt,
@@ -251,6 +268,19 @@ bool process_queue_element()
           }
         }
       }
+      else
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("No rx_data found for message");
+
+        // Increment the number of failures for items put on the queue for a worker
+        // thread.
+        if (queue_success_fail_table)
+        {
+          queue_success_fail_table->increment_failures(qe.priority);
+        }
+        //LCOV_EXCL_STOP
+      }
     }
     else
     {
@@ -259,11 +289,27 @@ bool process_queue_element()
       cb->run();
       delete cb; cb = nullptr;
       TRC_DEBUG("Ran callback %p", cb);
+
+      // Increment the number of successes for items put on the queue for a worker
+      // thread.
+      if (queue_success_fail_table)
+      {
+        queue_success_fail_table->increment_successes(qe.priority); // LCOV_EXCL_LINE
+      }
     }
   }
   else
   {
-    TRC_DEBUG("Unable to process queue element: queue has been terminated"); // LCOV_EXCL_LINE
+    // LCOV_EXCL_START
+    TRC_DEBUG("Unable to process queue element: queue has been terminated");
+
+    // Increment the number of failures for items put on the queue for a worker
+    // thread.
+    if (queue_success_fail_table)
+    {
+      queue_success_fail_table->increment_failures(qe.priority);
+    }
+    //LCOV_EXCL_STOP
   }
 
   return rc;
@@ -495,6 +541,11 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   {
     queue_size_table->accumulate(sip_event_queue.size()); // LCOV_EXCL_LINE
   }
+  // Increment the number of items put on the queue for a worker thread.
+  if (queue_success_fail_table)
+  {
+    queue_success_fail_table->increment_attempts(qe.priority); // LCOV_EXCL_LINE
+  }
   sip_event_queue.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
@@ -504,6 +555,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* latency_table_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_table_arg,
+                                   SNMP::SuccessFailCountByPriorityAndScopeTable* queue_success_fail_table_arg,
                                    SNMP::CounterByScopeTable* overload_counter_arg,
                                    LoadMonitor* load_monitor_arg,
                                    RPHService* rph_service_arg,
@@ -520,6 +572,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   num_worker_threads = num_worker_threads_arg;
   latency_table = latency_table_arg;
   queue_size_table = queue_size_table_arg;
+  queue_success_fail_table = queue_success_fail_table_arg;
   load_monitor = load_monitor_arg;
   rph_service = rph_service_arg;
   overload_counter = overload_counter_arg;
@@ -580,6 +633,13 @@ void stop_worker_threads()
        qe != remaining_elts.end();
        ++qe)
   {
+    // Increment the number of failures for items put on the queue for a worker
+    // thread.
+    if (queue_success_fail_table)
+    {
+      queue_success_fail_table->increment_failures(qe->priority);
+    }
+
     if (qe->type == MESSAGE)
     {
       pjsip_rx_data_free_cloned(qe->event_data.rdata);
@@ -621,6 +681,11 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   if (queue_size_table)
   {
     queue_size_table->accumulate(sip_event_queue.size()); // LCOV_EXCL_LINE
+  }
+  // Increment the number of items put on the queue for a worker thread.
+  if (queue_success_fail_table)
+  {
+    queue_success_fail_table->increment_attempts(qe.priority); // LCOV_EXCL_LINE
   }
 
   // Add the SipEvent

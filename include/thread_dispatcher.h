@@ -22,6 +22,7 @@ extern "C" {
 #include "rphservice.h"
 #include "snmp_event_accumulator_table.h"
 #include "snmp_event_accumulator_by_scope_table.h"
+#include "snmp_success_fail_count_by_priority_and_scope_table.h"
 #include "exception_handler.h"
 #include "snmp_counter_by_scope_table.h"
 #include "eventq.h"
@@ -29,6 +30,7 @@ extern "C" {
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* latency_tbl_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_tbl_arg,
+                                   SNMP::SuccessFailCountByPriorityAndScopeTable* queue_success_fail_table_arg,
                                    SNMP::CounterByScopeTable* overload_counter_arg,
                                    LoadMonitor* load_monitor_arg,
                                    RPHService* rph_service_arg,

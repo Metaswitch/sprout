@@ -51,6 +51,7 @@ public:
                            NULL,
                            NULL,
                            NULL,
+                           NULL,
                            &load_monitor,
                            &rph_service,
                            NULL,
