@@ -71,7 +71,6 @@ void Ifc::ifc_error(std::string error,
   event.add_var_param(server_name);
   event.add_var_param(error);
   SAS::report_event(event);
-  throw xml_error(error.c_str());
 }
 
 // Test if the SPT matches. Ignores grouping and negation, and just
@@ -312,17 +311,15 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
       ifc_error("Request URI service point trigger should include hostport only",
                   server_name, SASEvent::IFC_UNUSUAL, 0, trail);
     }
-    else
+    
+    req_uri_regex = boost::regex(req_uri,
+                                 boost::regex_constants::no_except);
+    if (req_uri_regex.status())
     {
-      req_uri_regex = boost::regex(req_uri,
-                                   boost::regex_constants::no_except);
-      if (req_uri_regex.status())
-      {
-        ifc_error("Invalid regular expression in Request URI service point trigger",
-                    server_name, SASEvent::IFC_INVALID, 0, trail);
-      }
-      ret = boost::regex_search(test_string, req_uri_regex);
+      ifc_error("Invalid regular expression in Request URI service point trigger",
+                  server_name, SASEvent::IFC_INVALID, 0, trail);
     }
+      ret = boost::regex_search(test_string, req_uri_regex);
   }
   else if (strcmp(RegDataXMLUtils::SESSION_DESCRIPTION, name) == 0)
   {
@@ -506,11 +503,11 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     std::string ifc_match_result = "";
     if (cnf)
     {
-      ifc_match_result = "For each group, OR all SPT match conditions";
+      ifc_match_result = "For each group, OR all SPT condition match results.\n";
     }
     else
     {
-      ifc_match_result = "For each group, AND all SPT match conditions";
+      ifc_match_result = "For each group, AND all SPT condition match results.\n";
     }
 
     for (xml_node<>* spt = trigger->first_node(RegDataXMLUtils::SPT);
@@ -541,11 +538,11 @@ bool Ifc::filter_matches(const SessionCase& session_case,
 
         if (spt_matched)
         {
-          ifc_match_result.append("SPT in group ").append(std::to_string(group_id)).append(" is matched.");
+          ifc_match_result.append("  SPT in group ").append(std::to_string(group_id)).append(" is matched.\n");
         }
         else
         {
-          ifc_match_result.append("SPT in group ").append(std::to_string(group_id)).append(" is not matched.");
+          ifc_match_result.append("  SPT in group ").append(std::to_string(group_id)).append(" is not matched.\n");
         }
 
         if (groups.find(group_id) == groups.end())
@@ -570,11 +567,11 @@ bool Ifc::filter_matches(const SessionCase& session_case,
                 group->second ? "matched" : "not matched");
       if (group->second)
       {
-        ifc_match_result.append("Overall result group ").append(std::to_string(group->first)).append(" is matched.");
+        ifc_match_result.append("Overall result group ").append(std::to_string(group->first)).append(" is matched.\n");
       }
       else
       {
-        ifc_match_result.append("Overall result group ").append(std::to_string(group->first)).append(" is not matched.");
+        ifc_match_result.append("Overall result group ").append(std::to_string(group->first)).append(" is not matched.\n");
       }
 
       ret = cnf ? (ret && group->second) : (ret || group->second);
@@ -582,11 +579,11 @@ bool Ifc::filter_matches(const SessionCase& session_case,
 
     if (cnf)
     {
-      ifc_match_result = "AND result from all group to determine overall iFC match";
+      ifc_match_result.append("\nAND result from all group to determine overall iFC match.\n");
     }
     else
     {
-      ifc_match_result = "OR result from all group to determine overall iFC match";
+      ifc_match_result.append("\nOR result from all group to determine overall iFC match.\n");
     }
 
     if (ret)
