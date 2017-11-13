@@ -296,9 +296,12 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
       // Emergency bindings are excluded from notifications.
       if (aor_orig_b.second->_emergency_registration)
       {
+        // TJW2 TODO: Unit test?
+        // LCOV_EXCL_START
         TRC_DEBUG("Not sending notifications for emergency binding %s",
                   aor_orig_b.first.c_str());
         continue;
+        // LCOV_EXCL_STOP
       }
 
       TRC_DEBUG("Binding %s is missing from current AoR", aor_orig_b.first.c_str());

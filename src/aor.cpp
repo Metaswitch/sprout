@@ -430,7 +430,9 @@ void AoR::Subscription::from_json(const rapidjson::Value& s_obj)
   }
 
   JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, _expires);
-  JSON_GET_INT_MEMBER(s_obj, JSON_NOTIFY_CSEQ, _notify_cseq);
+
+  _notify_cseq = AoR::Subscription::CSEQ_NOT_FOUND_IN_MEMCACHED;
+  JSON_SAFE_GET_INT_MEMBER(s_obj, JSON_NOTIFY_CSEQ, _notify_cseq);
 }
 
 // Utility function to return the expiry time of the binding or subscription due

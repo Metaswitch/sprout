@@ -217,12 +217,20 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
          ++subscriptions_it)
     {
       TRC_DEBUG("  Subscription: %s", subscriptions_it->name.GetString());
-      AoR::Subscription* s = aor->get_subscription(subscriptions_it->name.GetString());
+      AoR::Subscription* subscription = aor->get_subscription(subscriptions_it->name.GetString());
 
       JSON_ASSERT_OBJECT(subscriptions_it->value);
       const rapidjson::Value& s_obj = subscriptions_it->value;
 
-      s->from_json(s_obj);
+      subscription->from_json(s_obj);
+
+      // The NOTIFY Cseq counter used to be stored on the AoR. To smooth the
+      // upgrade to storing the counter on the Subscription, we provide
+      // backwards compatibility.
+      if (subscription->_notify_cseq == AoR::Subscription::CSEQ_NOT_FOUND_IN_MEMCACHED)
+      {
+        JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, subscription->_notify_cseq); // LCOV_EXCL_LINE
+      }
     }
 
     if (doc.HasMember(JSON_ASSOCIATED_URIS))

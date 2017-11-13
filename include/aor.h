@@ -134,6 +134,8 @@ public:
   class Subscription
   {
   public:
+    static const int CSEQ_NOT_FOUND_IN_MEMCACHED = -1;
+
     Subscription(): _refreshed(false), _notify_cseq(0) {};
 
     /// The Contact URI for the subscription dialog (used as the Request URI
