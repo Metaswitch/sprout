@@ -45,6 +45,7 @@ TEST_F(RPHServiceTest, NoRPHFile)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_non_existent_rph.json"));
   EXPECT_TRUE(log.contains("No RPH configuration (file ut/test_non_existent_rph.json does not exist)"));
+  EXPECT_TRUE(rph._rph_map.empty());
 }
 
 TEST_F(RPHServiceTest, EmptyRPHFile)
@@ -53,6 +54,7 @@ TEST_F(RPHServiceTest, EmptyRPHFile)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_empty_rph.json"));
   EXPECT_TRUE(log.contains("Failed to read RPH configuration data from ut/test_empty_rph.json"));
+  EXPECT_TRUE(rph._rph_map.empty());
 }
 
 TEST_F(RPHServiceTest, InvalidRPHFile)
@@ -62,6 +64,7 @@ TEST_F(RPHServiceTest, InvalidRPHFile)
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_invalid_rph.json"));
   EXPECT_TRUE(log.contains("Failed to read RPH configuration data: {"));
   EXPECT_TRUE(log.contains("Error: Missing a name for object member."));
+  EXPECT_TRUE(rph._rph_map.empty());
 }
 
 TEST_F(RPHServiceTest, NoPriorityBlocksRPHFile)
@@ -70,6 +73,7 @@ TEST_F(RPHServiceTest, NoPriorityBlocksRPHFile)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_no_priority_blocks_rph.json"));
   EXPECT_TRUE(log.contains("Badly formed RPH configuration data - missing priority_blocks array"));
+  EXPECT_TRUE(rph._rph_map.empty());
 }
 
 TEST_F(RPHServiceTest, NonIntegerPriorityRPHFile)
@@ -78,6 +82,7 @@ TEST_F(RPHServiceTest, NonIntegerPriorityRPHFile)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_non_integer_priority_rph.json"));
   EXPECT_TRUE(log.contains("Badly formed RPH priority block (hit error at rphservice.cpp:106"));
+  EXPECT_TRUE(rph._rph_map.empty());
 }
 
 TEST_F(RPHServiceTest, InvalidPriorityRPHFile)
@@ -86,6 +91,7 @@ TEST_F(RPHServiceTest, InvalidPriorityRPHFile)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_invalid_priority_rph.json"));
   EXPECT_TRUE(log.contains("RPH value block contains a priority not in the range 1-15"));
+  EXPECT_TRUE(rph._rph_map.empty());
 }
 
 TEST_F(RPHServiceTest, DuplicatedValueRPHFile)
@@ -94,6 +100,7 @@ TEST_F(RPHServiceTest, DuplicatedValueRPHFile)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_duplicated_value_rph.json"));
   EXPECT_TRUE(log.contains("Attempted to insert an RPH value into the map that already exists"));
+  EXPECT_TRUE(rph._rph_map.empty());
 }
 
 TEST_F(RPHServiceTest, ValidRPHFile)
@@ -119,4 +126,23 @@ TEST_F(RPHServiceTest, ValidRPHFile)
   // Check that if we lookup an known RPH value, that we get back the default
   // priority.
   EXPECT_EQ(rph.lookup_priority("unknown", 0), SIPEventPriorityLevel::NORMAL_PRIORITY);
+}
+
+TEST_F(RPHServiceTest, BadlyOrderedRPHFile)
+{
+  CapturingTestLogger log;
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  RPHService rph(_mock_alarm, string(UT_DIR).append("/test_badly_ordered_rph.json"));
+  EXPECT_TRUE(log.contains("RPH value \"wps.0\" has lower priority than a lower priority RPH value from the same namespace"));
+  EXPECT_TRUE(rph._rph_map.empty());
+}
+
+TEST_F(RPHServiceTest, UnknownValueRPHFile)
+{
+  CapturingTestLogger log;
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  RPHService rph(_mock_alarm, string(UT_DIR).append("/test_unknown_value_rph.json"));
+  EXPECT_TRUE(log.contains("RPH configuration contains unknown RPH value \"foo\""));
+  EXPECT_TRUE(log.contains("RPH configuration contains unknown RPH value \"bar\""));
+  EXPECT_TRUE(rph._rph_map.empty());
 }

@@ -1964,7 +1964,7 @@ int main(int argc, char* argv[])
     queue_size_table = SNMP::EventAccumulatorByScopeTable::create("sprout_queue_size",
                                                                   ".1.2.826.0.1.1578918.9.3.8");
     queue_success_fail_table = SNMP::SuccessFailCountByPriorityAndScopeTable::create("sprout_queue_success_fail",
-                                                                                     ".1.2.826.0.1.1578918.9.3.22");
+                                                                                     ".1.2.826.0.1.1578918.9.3.43");
     requests_counter = SNMP::CounterByScopeTable::create("sprout_incoming_requests",
                                                          ".1.2.826.0.1.1578918.9.3.6");
     overload_counter = SNMP::CounterByScopeTable::create("sprout_rejected_overload",

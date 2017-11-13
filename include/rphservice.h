@@ -21,6 +21,15 @@
 #include "sas.h"
 #include "alarm.h"
 
+static std::vector<std::vector<std::string>> RPH_NAMESPACES =
+{
+  {"wps.4", "wps.3", "wps.2", "wps.1", "wps.0"},
+  {"ets.4", "ets.3", "ets.2", "ets.1", "ets.0"},
+  {"q735.4", "q735.3", "q735.2", "q735.1", "q735.0"},
+  {"dsn.routine", "dsn.priority", "dsn.immediate", "dsn.flash", "dsn.flash-override"},
+  {"drsn.routine", "drsn.priority", "drsn.immediate", "drsn.flash", "drsn.flash-override", "drsn.flash-override-override"}
+};
+
 class RPHService
 {
 public:
