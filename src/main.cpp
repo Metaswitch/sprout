@@ -142,6 +142,7 @@ enum OptionTypes
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
   OPT_HOMESTEAD_TIMEOUT,
+  OPT_ORIG_SIP_TO_TEL_COERCE,
   OPT_REQUEST_ON_QUEUE_TIMEOUT,
   OPT_BLACKLISTED_SCSCFS
 };
@@ -236,6 +237,7 @@ const static struct pj_getopt_option long_opt[] =
   { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
   { "request-on-queue-timeout",     required_argument, 0, OPT_REQUEST_ON_QUEUE_TIMEOUT},
   { "blacklisted-scscfs",           required_argument, 0, OPT_BLACKLISTED_SCSCFS},
+  { "enable-orig-sip-to-tel-coerce",no_argument,       0, OPT_ORIG_SIP_TO_TEL_COERCE},
   { NULL,                           0,                 0, 0}
 };
 
@@ -393,6 +395,9 @@ static void usage(void)
        "     --sip-tcp-send-timeout <milliseconds>\n"
        "                            The amount of time to wait for data sent on a SIP TCP connection to be\n"
        "                            acknowledged by the peer.\n"
+       "     --enable-orig-sip-to-tel-coerce\n"
+       "                            Whether to treat originating SIP URIs that correspond to global phone\n"
+       "                            numbers as Tel URIs.\n"
        "     --dns-timeout <milliseconds>\n"
        "                            The amount of time to wait for a DNS response (default: 200)n"
        "     --session-continued-timeout <milliseconds>\n"
@@ -1213,6 +1218,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Switching to TCP is disabled");
       break;
 
+    case OPT_ORIG_SIP_TO_TEL_COERCE:
+      options->enable_orig_sip_to_tel_coerce = true;
+      TRC_INFO("Treatment of user=phone orig SIP URIs as Tel URIs enabled");
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1714,7 +1724,7 @@ int main(int argc, char* argv[])
   opt.max_call_list_length = 0;
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
-  opt.target_latency_us = 100000;
+  opt.target_latency_us = 10000;
   opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 1000;
   opt.init_token_rate = 100.0;
@@ -1729,8 +1739,8 @@ int main(int argc, char* argv[])
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
   opt.astaire_blacklist_duration = AstaireResolver::DEFAULT_BLACKLIST_DURATION;
-  opt.sip_tcp_connect_timeout = 2000;
-  opt.sip_tcp_send_timeout = 2000;
+  opt.sip_tcp_connect_timeout = 1800;
+  opt.sip_tcp_send_timeout = 1800;
   opt.dns_timeout = DnsCachedResolver::DEFAULT_TIMEOUT;
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
@@ -1750,6 +1760,7 @@ int main(int argc, char* argv[])
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
   opt.homestead_timeout = 750;
+  opt.enable_orig_sip_to_tel_coerce = false;
   opt.request_on_queue_timeout = 4000;
 
   status = init_logging_options(argc, argv, &opt);
@@ -2081,7 +2092,8 @@ int main(int argc, char* argv[])
                       opt.sip_tcp_send_timeout,
                       quiescing_mgr,
                       opt.billing_cdf,
-                      sproutlet_uris);
+                      sproutlet_uris,
+                      opt.enable_orig_sip_to_tel_coerce);
 
   if (status != PJ_SUCCESS)
   {

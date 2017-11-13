@@ -144,6 +144,7 @@ struct options
   int                                  homestead_timeout;
   int                                  request_on_queue_timeout;
   std::set<std::string>                blacklisted_scscfs;
+  bool                                 enable_orig_sip_to_tel_coerce;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

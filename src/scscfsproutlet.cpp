@@ -489,7 +489,9 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                                            PJSIP_H_PROXY_AUTHORIZATION,
                                                            NULL);
       _impi = PJUtils::extract_username(proxy_auth_hdr,
-                                        PJUtils::orig_served_user(req));
+                                        PJUtils::orig_served_user(req, 
+                                                                  get_pool(req), 
+                                                                  trail()));
     }
   }
 
@@ -1300,7 +1302,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
 
   if (_session_case->is_originating())  // (includes orig-cdiv)
   {
-    uri = PJUtils::orig_served_user(msg);
+    uri = PJUtils::orig_served_user(msg, get_pool(msg), trail());
   }
   else
   {

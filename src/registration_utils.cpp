@@ -830,6 +830,9 @@ bool RegistrationUtils::get_aor_data(AoRPair** aor_pair,
       std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
       AoRPair* local_backup_aor_pair = NULL;
 
+      TRC_INFO("Failed to find binding for %s in local store - checking remote stores",
+               aor_id.c_str());
+
       while ((it != backup_sdms.end()) && (!found_binding))
       {
         if ((*it)->has_servers())

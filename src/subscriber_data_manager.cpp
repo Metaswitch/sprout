@@ -209,6 +209,11 @@ Store::Status SubscriberDataManager::set_aor_data(
   // how many NOTIFYs we're going to send then we'll have to write back to
   // memcached again
   aor_pair->get_current()->_notify_cseq++;
+
+  TRC_DEBUG("Writing AoR %s to store with updated CSeq %d",
+            aor_id.c_str(),
+            aor_pair->get_current()->_notify_cseq);
+
   Store::Status rc = _aor_store->set_aor_data(aor_id,
                                               aor_pair,
                                               max_expires - now,
@@ -218,6 +223,8 @@ Store::Status SubscriberDataManager::set_aor_data(
   {
     // We were unable to write to the store - return to the caller and
     // send no further messages
+    TRC_INFO("Failed to write bindings to store for %s",
+             aor_id.c_str());
     delete_bindings(classified_bindings);
     return rc;
   }
@@ -261,6 +268,9 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
                               aor_orig_b.second,
                               determine_contact_event(event_trigger));
       classified_bindings.push_back(binding_record);
+      TRC_DEBUG("Binding %s in AoR %s is no longer present (e.g. has expired)",
+                aor_orig_b.first.c_str(),
+                aor_id.c_str());
     }
   }
 
@@ -275,7 +285,9 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
 
     if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
     {
-      // Binding is new
+      TRC_DEBUG("Binding %s in AoR %s is new",
+                aor_current_b.first.c_str(),
+                aor_id.c_str());
       event = NotifyUtils::ContactEvent::CREATED;
     }
     else
@@ -283,17 +295,23 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
       // The binding is in both AoRs. Check if the expiry time has changed at all
       if (aor_orig_b_match->second->_expires < aor_current_b.second->_expires)
       {
-        // Binding has been refreshed
+        TRC_DEBUG("Binding %s in AoR %s has been refreshed",
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::REFRESHED;
       }
       else if (aor_orig_b_match->second->_expires > aor_current_b.second->_expires)
       {
-        // Binding has been shortened
+        TRC_DEBUG("Binding %s in AoR %s has been shortened",
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::SHORTENED;
       }
       else
       {
-        // Binding unchanged
+        TRC_DEBUG("Binding %s in AoR %s is unchanged",
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::REGISTERED;
       }
     }
@@ -678,6 +696,11 @@ void SubscriberDataManager::NotifySender::send_notifys(
         binding_info_to_notify.push_back(bni);
       }
     }
+    else
+    {
+      TRC_DEBUG("Not sending notifications for emergency binding %s",
+                b_id.c_str());
+    }
   }
 
   // Check if the associated URIs have changed. If so, will need to send a NOTIFY.
@@ -698,13 +721,11 @@ void SubscriberDataManager::NotifySender::send_notifys(
   // If the bindings have changed, or the Associated URIs has changed,
   // then send NOTIFYs to all subscribers; otherwise, only send them
   // when the subscription has been created or updated.
-  for (AoR::Subscriptions::const_iterator current_sub =
-        aor_pair->get_current()->subscriptions().begin();
-      current_sub != aor_pair->get_current()->subscriptions().end();
-      ++current_sub)
+  for (const AoR::Subscriptions::value_type& current_sub :
+        aor_pair->get_current()->subscriptions())
   {
-    AoR::Subscription* subscription = current_sub->second;
-    std::string s_id = current_sub->first;
+    AoR::Subscription* subscription = current_sub.second;
+    const std::string& s_id = current_sub.first;
 
     // Find the subscription in the original AoR to determine if the current subscription
     // has been created.
@@ -782,6 +803,18 @@ void SubscriberDataManager::NotifySender::send_notifys(
           // LCOV_EXCL_STOP
         }
       }
+      else
+      {
+        // LCOV_EXCL_START
+        TRC_DEBUG("Failed to send notify: %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
+      }
+    }
+    else
+    {
+      TRC_DEBUG("Not sending NOTIFY for subscription %s",
+                s_id.c_str());
     }
   }
 
