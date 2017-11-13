@@ -1723,7 +1723,7 @@ int main(int argc, char* argv[])
   opt.max_call_list_length = 0;
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
-  opt.target_latency_us = 100000;
+  opt.target_latency_us = 10000;
   opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 1000;
   opt.init_token_rate = 100.0;
@@ -1738,8 +1738,8 @@ int main(int argc, char* argv[])
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
   opt.astaire_blacklist_duration = AstaireResolver::DEFAULT_BLACKLIST_DURATION;
-  opt.sip_tcp_connect_timeout = 2000;
-  opt.sip_tcp_send_timeout = 2000;
+  opt.sip_tcp_connect_timeout = 1800;
+  opt.sip_tcp_send_timeout = 1800;
   opt.dns_timeout = DnsCachedResolver::DEFAULT_TIMEOUT;
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;

@@ -308,11 +308,16 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
-  // Always accept ACK and OPTIONS requests. Monit probes Sprout using OPTIONS
-  // polls, so these are allowed through the load monitor to prevent Monit
-  // killing Sprout during overload.
-  pjsip_method_e method_id = rdata->msg_info.msg->line.req.method.id;
-  if (method_id == PJSIP_ACK_METHOD || method_id == PJSIP_OPTIONS_METHOD)
+  // Always accept OPTIONS, ACK and SUBSCRIBE requests.
+  // -  Monit probes Sprout using OPTIONS polls, so these are allowed through
+  //    the load monitor to prevent Monit killing Sprout during overload.
+  // -  There is no way to reject an ACK, so always allow them.
+  // -  SUBSCRIBE flows are effectively follow on work from having allowed a
+  //    subscriber to register.
+  const pjsip_method& method = rdata->msg_info.msg->line.req.method;
+  if ((pjsip_method_cmp(&method, pjsip_get_options_method()) == 0) ||
+      (pjsip_method_cmp(&method, pjsip_get_ack_method()) == 0) ||
+      (pjsip_method_cmp(&method, pjsip_get_subscribe_method()) == 0))
   {
     return true;
   }

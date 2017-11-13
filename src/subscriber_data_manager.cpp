@@ -243,6 +243,8 @@ Store::Status SubscriberDataManager::set_aor_data(
   {
     // We were unable to write to the store - return to the caller and
     // send no further messages
+    TRC_INFO("Failed to write bindings to store for %s",
+             aor_id.c_str());
     delete_bindings(classified_bindings);
     delete_subscriptions(classified_subscriptions);
     return rc;
@@ -274,7 +276,8 @@ Store::Status SubscriberDataManager::set_aor_data(
 void SubscriberDataManager::classify_bindings(const std::string& aor_id,
                                               const SubscriberDataManager::EventTrigger& event_trigger,
                                               AoRPair* aor_pair,
-                                              ClassifiedBindings& classified_bindings)
+                                              ClassifiedBindings& classified_bindings
+                                              )
 {
   // We should have been given an empty classified_bindings vector, but clear
   // it just in case
@@ -285,22 +288,28 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   for (std::pair<std::string, AoR::Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
-    // Emergency bindings are excluded from notifications.
-    if (aor_orig_b.second->_emergency_registration)
-    {
-      continue;
-    }
-
     // Determine if this binding is not in the current AoR.
     if (aor_pair->get_current()->bindings().find(aor_orig_b.first) ==
         aor_pair->get_current()->bindings().end())
     {
+
+      // Emergency bindings are excluded from notifications.
+      if (aor_orig_b.second->_emergency_registration)
+      {
+        TRC_DEBUG("Not sending notifications for emergency binding %s",
+                  aor_orig_b.first.c_str());
+        continue;
+      }
+
       TRC_DEBUG("Binding %s is missing from current AoR", aor_orig_b.first.c_str());
       ClassifiedBinding* binding_record =
         new ClassifiedBinding(aor_orig_b.first,
                               aor_orig_b.second,
                               determine_contact_event(event_trigger));
       classified_bindings.push_back(binding_record);
+      TRC_DEBUG("Binding %s in AoR %s is no longer present (e.g. has expired)",
+                aor_orig_b.first.c_str(),
+                aor_id.c_str());
     }
   }
 
@@ -309,9 +318,12 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   for (std::pair<std::string, AoR::Binding*> aor_current_b :
          aor_pair->get_current()->bindings())
   {
+
     // Emergency bindings are excluded from notifications.
     if (aor_current_b.second->_emergency_registration)
     {
+      TRC_DEBUG("Not sending notifications for emergency binding %s",
+                aor_current_b.first.c_str());
       continue;
     }
 
@@ -323,7 +335,9 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
     if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
     {
       // The binding is only in the current AoR, so has been CREATED
-      TRC_DEBUG("Binding %s has been CREATED", aor_current_b.first.c_str());
+      TRC_DEBUG("Binding %s in AoR %s has been CREATED",
+                aor_current_b.first.c_str(),
+                aor_id.c_str());
       event = NotifyUtils::ContactEvent::CREATED;
     }
     else
@@ -332,20 +346,26 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
       if (aor_orig_b_match->second->_expires < aor_current_b.second->_expires)
       {
         // The expires value has increased, so the binding has been REFRESHED
-        TRC_DEBUG("Binding %s has been REFRESHED", aor_current_b.first.c_str());
+        TRC_DEBUG("Binding %s in AoR %s has been REFRESHED",
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::REFRESHED;
       }
       else if (aor_orig_b_match->second->_expires > aor_current_b.second->_expires)
       {
         // The expires value has decreased, so the binding has been SHORTENED
-        TRC_DEBUG("Binding %s has been SHORTENED", aor_current_b.first.c_str());
+        TRC_DEBUG("Binding %s in AoR %s has been SHORTENED",
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::SHORTENED;
       }
       else
       {
         // The expires value has not changed, so the binding has been
         // (re)REGISTERED
-        TRC_DEBUG("Binding %s has been REGISTERED", aor_current_b.first.c_str());
+        TRC_DEBUG("Binding %s in AoR %s is unchanged",
+                  aor_current_b.first.c_str(),
+                  aor_id.c_str());
         event = NotifyUtils::ContactEvent::REGISTERED;
       }
     }
@@ -515,11 +535,8 @@ void SubscriberDataManager::prepare_subscriptions(AoRPair* aor_pair,
 
   // Determine which subscribers to notify, and increment the corresponding
   // CSeq values.
-  for (ClassifiedSubscriptions::const_iterator csp = classified_subscriptions.begin();
-       csp != classified_subscriptions.end();
-       ++csp)
+  for (ClassifiedSubscription* classified_subscription : classified_subscriptions)
   {
-    ClassifiedSubscription* classified_subscription = *csp;
     classified_subscription->_reasons = "Reason(s): - ";
 
     // If the bindings on this AoR have changed, notify all subscribers.
@@ -569,6 +586,9 @@ void SubscriberDataManager::prepare_subscriptions(AoRPair* aor_pair,
     if (classified_subscription->_notify_required)
     {
       classified_subscription->_subscription->_notify_cseq += 1;
+      TRC_DEBUG("Writing subscription %s to store with updated CSeq %d",
+                classified_subscription->_id.c_str(),
+                classified_subscription->_subscription->_notify_cseq);
     }
   }
 }
@@ -871,11 +891,8 @@ void SubscriberDataManager::NotifySender::send_notifys(
   // If the bindings have changed, or the Associated URIs has changed,
   // then send NOTIFYs to all subscribers; otherwise, only send them
   // when the subscription has been created or updated.
-  for (ClassifiedSubscriptions::const_iterator csp = classified_subscriptions.begin();
-      csp != classified_subscriptions.end();
-      ++csp)
+  for (ClassifiedSubscription* classified_subscription : classified_subscriptions)
   {
-    ClassifiedSubscription* classified_subscription = *csp;
 
     if (classified_subscription->_notify_required)
     {
@@ -931,11 +948,24 @@ void SubscriberDataManager::NotifySender::send_notifys(
           SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
           std::string error_msg = "Failed to send NOTIFY - error: " +
                                         PJUtils::pj_status_to_string(status);
+          TRC_DEBUG(error_msg.c_str());
           event.add_var_param(error_msg);
           SAS::report_event(event);
           // LCOV_EXCL_STOP
         }
       }
+      else
+      {
+        // LCOV_EXCL_START
+        TRC_DEBUG("Failed to create notify: %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
+      }
+    }
+    else
+    {
+      TRC_DEBUG("Not sending NOTIFY for subscription %s",
+                classified_subscription->_id.c_str());
     }
   }
 }

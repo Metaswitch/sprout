@@ -1075,10 +1075,12 @@ void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
 {
   enter_context();
 
-  _pending_timers.erase(tentry);
-  TimerCallbackData* tdata = (TimerCallbackData*)tentry->user_data;
-  tdata->sproutlet_wrapper->on_timer_pop((TimerID)tentry, tdata->context);
-  schedule_requests();
+  if (_pending_timers.erase(tentry) != 0)
+  {
+    TimerCallbackData* tdata = (TimerCallbackData*)tentry->user_data;
+    tdata->sproutlet_wrapper->on_timer_pop((TimerID)tentry, tdata->context);
+    schedule_requests();
+  }
 
   exit_context();
 }
@@ -1096,15 +1098,14 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
       int st_code = rsp->msg->line.status.code;
       set_trail(rsp, trail());
       on_tx_response(rsp);
-
       pj_status_t status = pjsip_tsx_send_msg(_tsx, rsp);
 
       if (status != PJ_SUCCESS)
       {
-        // LCOV_EXCL_START
-        TRC_ERROR("Failed to send tx response: %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-        // LCOV_EXCL_STOP
+        TRC_INFO("Failed to send UASTsx message: %s",
+                 PJUtils::pj_status_to_string(status).c_str());
+        // pjsip_tsx_send_msg only decreases the ref count on success
+        pjsip_tx_data_dec_ref(rsp);
       }
 
       if (st_code >= PJSIP_SC_OK)
@@ -2020,6 +2021,13 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
                                                   status_code,
                                                   NULL,
                                                   &rsp);
+
+    // SAS log the error and response
+    SAS::Event event(trail(), SASEvent::RX_FORK_ERROR, 0);
+    event.add_static_param(fork_id);
+    event.add_static_param(fork_error);
+    event.add_static_param(status_code);
+    SAS::report_event(event);
 
     // This counts as a final response, so mark the fork as terminated and
     // decrement the number of pending responses.
