@@ -196,6 +196,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // We're unable to get the IMPU from the message - reject it now
     SAS::Event event(trail(), SASEvent::ICSCF_INVALID_IMPU, 0);
+    event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri));
     SAS::report_event(event);
 
     pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
@@ -522,13 +523,14 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     TRC_DEBUG("Originating request");
     _originating = true;
 
-    pj_bool_t status = PJUtils::valid_public_id_from_uri(
-                        PJUtils::orig_served_user(req, pool, trail()), impu);
+    pjsip_uri* orig_uri = PJUtils::orig_served_user(req, pool, trail());
+    pj_bool_t status = PJUtils::valid_public_id_from_uri(orig_uri, impu);
 
     if (!status)
     {
       // We're unable to get the IMPU from the message - reject it now
       SAS::Event event(trail(), SASEvent::ICSCF_INVALID_IMPU, 1);
+      event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, orig_uri));
       SAS::report_event(event);
 
       pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
@@ -566,13 +568,14 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       }
     }
 
-    pj_bool_t status =
-        PJUtils::valid_public_id_from_uri(PJUtils::term_served_user(req), impu);
+    pjsip_uri* term_uri = PJUtils::term_served_user(req);
+    pj_bool_t status = PJUtils::valid_public_id_from_uri(term_uri, impu);
 
     if (!status)
     {
       // We're unable to get the IMPU from the message - reject it now
       SAS::Event event(trail(), SASEvent::ICSCF_INVALID_IMPU, 2);
+      event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, term_uri));
       SAS::report_event(event);
 
       pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
@@ -680,6 +683,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
             {
               // We're unable to get the IMPU from the message - reject it now
               SAS::Event event(trail(), SASEvent::ICSCF_INVALID_IMPU, 3);
+              event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri));
               SAS::report_event(event);
 
               pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
