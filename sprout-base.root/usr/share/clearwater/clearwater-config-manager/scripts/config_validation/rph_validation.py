@@ -53,10 +53,8 @@ except subprocess.CalledProcessError as exc:
         print line
     sys.exit(1)
 
-# If we have reached this point, the config file exists, and has been validated
-# against the schema, so we can load the schema and config file, and parse the
-# config file, with confidence.
-schema = json.load(open(schema_file))
+# If we have reached this point, the config file exists and has been validated
+# against the schema, so we can load and parse the config file with confidence.
 raw_config = json.load(open(config_file))
 
 parsed_config = {}
