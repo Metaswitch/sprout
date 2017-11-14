@@ -59,7 +59,7 @@ struct SipEvent
   // The type of the event
   SipEventType type;
 
-  // The event's priority - a lower value corresponds to a higher priority level
+  // The event's priority - a higher value corresponds to a higher priority level
   SIPEventPriorityLevel priority;
 
   // A stop watch for tracking latency and determining the length of time the

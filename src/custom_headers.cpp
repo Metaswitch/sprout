@@ -1451,7 +1451,8 @@ pjsip_generic_array_hdr* pjsip_resource_priority_hdr_create(pj_pool_t *pool)
 
 pjsip_hdr* parse_hdr_resource_priority(pjsip_parse_ctx* ctx)
 {
-  // The Resource-Priority header has the following ABNF:
+  // The Resource-Priority header has the following ABNF (as defined in RFC 4412
+  // section 3.1):
   //
   //    Resource-Priority  = "Resource-Priority" HCOLON
   //                         r-value *(COMMA r-value)

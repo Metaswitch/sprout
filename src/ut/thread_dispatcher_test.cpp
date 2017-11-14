@@ -233,6 +233,22 @@ TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
   process_queue_element();
 }
 
+// On recieving an in-dialog request, the thread dispatcher should not call into
+// the load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectInDialogTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "UPDATE";
+  msg._in_dialog = true;
+
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
 // Queued callbacks should be run then destroyed.
 TEST_F(ThreadDispatcherTest, CallbackTest)
 {
@@ -427,7 +443,7 @@ TEST_F(SipEventQueueTest, PriorityAndTimeOrdering)
 TEST_F(SipEventQueueTest, QueuePriorityOrdering)
 {
   // Raise the priority of e2
-  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_1;
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_10;
 
   q->push(e2);
   q->push(e1);

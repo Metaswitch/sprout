@@ -314,9 +314,9 @@
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "There is at least one invalid entry in the configuration file for RPH support.",
-                    "description": "sprout: The configuration file for RPH support is invalid.",
-                    "cause": "The configuration file at /etc/clearwater/rph.json has at least one invalid entry.",
+                    "details": "The configuration file for RPH support is either missing, or invalid.",
+                    "description": "sprout: The configuration file for RPH support is missing or invalid.",
+                    "cause": "The configuration file at /etc/clearwater/rph.json is missing or has at least one invalid entry.",
                     "effect": "The S-CSCF will not be able to correctly prioritize messages with the Resource-Priority header.",
                     "action": "Correct the configuration file at /etc/clearwater/rph.json and upload it."
                 }

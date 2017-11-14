@@ -335,9 +335,21 @@ int worker_thread(void* p)
 }
 // LCOV_EXCL_STOP
 
-static void log_bypass_load_monitor(SAS::TrailId trail)
+enum IGNORE_LOAD_MONITOR_REASON
+{
+  OPTIONS=0,
+  RESOURCE_PRIORITY,
+  RESPONSE,
+  IN_DIALOG,
+  ACK,
+  SUBSCRIBE
+};
+
+static void log_ignore_load_monitor(SAS::TrailId trail,
+                                    IGNORE_LOAD_MONITOR_REASON reason)
 {
   SAS::Event event(trail, SASEvent::SIP_BYPASS_LOAD_MONITOR, 0);
+  event.add_static_param(reason);
   SAS::report_event(event);
 }
 
@@ -347,11 +359,25 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
                                 SIPEventPriorityLevel priority,
                                 SAS::TrailId trail)
 {
+  const pjsip_method& method = rdata->msg_info.msg->line.req.method;
+
   // If a request has anything other than normal priority, we will bypass the
-  // load monitor
+  // load monitor.
+  //
+  // Monit probes Sprout using OPTIONS polls, so these are given higher priority
+  // to prevent Monit killing Sprout during overload.
   if (priority > SIPEventPriorityLevel::NORMAL_PRIORITY)
   {
-    log_bypass_load_monitor(trail);
+    // If this was an OPTIONS poll, we should log appropriately.
+    if (pjsip_method_cmp(&method, pjsip_get_options_method()) == 0)
+    {
+      log_ignore_load_monitor(trail, OPTIONS);
+    }
+    else
+    {
+      log_ignore_load_monitor(trail, RESOURCE_PRIORITY);
+    }
+
     return true;
   }
 
@@ -359,7 +385,7 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
   // monitor for REQUEST messages
   if (rdata->msg_info.msg->type != PJSIP_REQUEST_MSG)
   {
-    log_bypass_load_monitor(trail);
+    log_ignore_load_monitor(trail, RESPONSE);
     return true;
   }
 
@@ -368,25 +394,22 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
   pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
   if ((to_hdr != NULL) && (to_hdr->tag.slen != 0))
   {
-    // TODO
-    // LCOV_EXCL_START
-    log_bypass_load_monitor(trail);
+    log_ignore_load_monitor(trail, IN_DIALOG);
     return true;
-    // LCOV_EXCL_STOP
   }
 
-  // Always accept OPTIONS, ACK and SUBSCRIBE requests.
-  // -  Monit probes Sprout using OPTIONS polls, so these are allowed through
-  //    the load monitor to prevent Monit killing Sprout during overload.
+  // Always accept ACK and SUBSCRIBE requests.
   // -  There is no way to reject an ACK, so always allow them.
   // -  SUBSCRIBE flows are effectively follow on work from having allowed a
   //    subscriber to register.
-  const pjsip_method& method = rdata->msg_info.msg->line.req.method;
-  if ((pjsip_method_cmp(&method, pjsip_get_options_method()) == 0) ||
-      (pjsip_method_cmp(&method, pjsip_get_ack_method()) == 0) ||
-      (pjsip_method_cmp(&method, pjsip_get_subscribe_method()) == 0))
+  if (pjsip_method_cmp(&method, pjsip_get_ack_method()) == 0)
   {
-    log_bypass_load_monitor(trail);
+    log_ignore_load_monitor(trail, ACK);
+    return true;
+  }
+  else if (pjsip_method_cmp(&method, pjsip_get_subscribe_method()) == 0)
+  {
+    log_ignore_load_monitor(trail, SUBSCRIBE);
     return true;
   }
 

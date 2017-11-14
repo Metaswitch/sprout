@@ -21,6 +21,8 @@
 #include "sas.h"
 #include "alarm.h"
 
+/// These vector contains the 5 IANA namespaces which are defined in RFC 4412
+/// section 12.6.
 static std::vector<std::vector<std::string>> RPH_NAMESPACES =
 {
   {"wps.4", "wps.3", "wps.2", "wps.1", "wps.0"},

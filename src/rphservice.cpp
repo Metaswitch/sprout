@@ -33,7 +33,7 @@ RPHService::RPHService(Alarm* alarm,
   _configuration(configuration),
   _updater(NULL)
 {
-  // Create an updater to keep the shared iFC sets configured appropriately.
+  // Create an updater to keep the RPH values configured appropriately.
   _updater = new Updater<void, RPHService>
                                 (this, std::mem_fun(&RPHService::update_rph));
 }
@@ -41,6 +41,7 @@ RPHService::RPHService(Alarm* alarm,
 RPHService::~RPHService()
 {
   delete _updater; _updater = NULL;
+  _rph_map.clear();
   delete _alarm; _alarm = NULL;
 }
 
@@ -215,12 +216,11 @@ void RPHService::update_rph()
 
   // At this point, we're definitely going to override the RPH map we currently have so,
   // take the lock and update the map.
-  TRC_STATUS("RPH configuration successfully updated");
   boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
   _rph_map = new_rph_map;
 
-
-  // We've successfully uploaded RPH configuration so clear the alarm.
+  // We've successfully uploaded RPH configuration so log and clear the alarm.
+  TRC_STATUS("RPH configuration successfully updated");
   clear_alarm();
 }
 
@@ -242,8 +242,11 @@ SIPEventPriorityLevel RPHService::lookup_priority(std::string rph_value,
   }
   else
   {
-    // We received a message with an unknown RPH value.
-    TRC_WARNING("An unknown RPH value \"%s\" was received on an incoming message",
+    // We received a message with an unknown RPH value. This could be because:
+    //  - It is not defined in the IANA namespace.
+    //  - It is not assigned a priority value in the rph.json file.
+    TRC_WARNING("An unknown RPH value \"%s\" was received on an incoming message."
+                " This message will be handled, but will not be prioritized.",
                 rph_value.c_str());
     SAS::Event event(trail, SASEvent::RPH_UNKNOWN_VALUE, 0);
     event.add_var_param(rph_value);

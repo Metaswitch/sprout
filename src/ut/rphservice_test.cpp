@@ -81,7 +81,7 @@ TEST_F(RPHServiceTest, NonIntegerPriorityRPHFile)
   CapturingTestLogger log;
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_non_integer_priority_rph.json"));
-  EXPECT_TRUE(log.contains("Badly formed RPH priority block (hit error at rphservice.cpp:106"));
+  EXPECT_TRUE(log.contains("Badly formed RPH priority block (hit error at"));
   EXPECT_TRUE(rph._rph_map.empty());
 }
 
@@ -123,7 +123,7 @@ TEST_F(RPHServiceTest, ValidRPHFile)
   EXPECT_EQ(rph.lookup_priority("drsn.flash-override", 0), SIPEventPriorityLevel::HIGH_PRIORITY_13);
   EXPECT_EQ(rph.lookup_priority("drsn.flash-override-override", 0), SIPEventPriorityLevel::HIGH_PRIORITY_15);
 
-  // Check that if we lookup an known RPH value, that we get back the default
+  // Check that if we lookup an unknown RPH value, that we get back the default
   // priority.
   EXPECT_EQ(rph.lookup_priority("unknown", 0), SIPEventPriorityLevel::NORMAL_PRIORITY);
 }
