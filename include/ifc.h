@@ -100,11 +100,17 @@ private:
                           std::string server_name,
                           SAS::TrailId trail);
 
-  static void ifc_error(std::string error,
-                        std::string server_name,
-                        int sas_event_id,
-                        int instance_id,
-                        SAS::TrailId trail);
+  static void handle_invalid_ifc(std::string error,
+                                 std::string server_name,
+                                 int sas_event_id,
+                                 int instance_id,
+                                 SAS::TrailId trail);
+
+  static void handle_unusual_ifc(std::string error,
+                                 std::string server_name,
+                                 int sas_event_id,
+                                 int instance_id,
+                                 SAS::TrailId trail);
 
   rapidxml::xml_node<>* _ifc;
   std::string _server_name;
