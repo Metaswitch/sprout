@@ -206,6 +206,12 @@ std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
   }
 }
 
+pj_bool_t PJUtils::valid_public_id_from_uri(const pjsip_uri* uri, std::string& impu)
+{
+  impu = public_id_from_uri(uri);
+  return (impu == "") ? PJ_FALSE : PJ_TRUE;
+}
+
 // Determine the default private ID for a public ID contained in a URI.  This
 // is calculated as specified by the 3GPP specs by effectively stripping the
 // scheme.
@@ -257,8 +263,8 @@ pj_str_t PJUtils::domain_from_uri(const std::string& uri_str, pj_pool_t* pool)
 }
 
 /// Determine the served user for originating requests.
-pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg, 
-                                     pj_pool_t* pool, 
+pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg,
+                                     pj_pool_t* pool,
                                      SAS::TrailId trail)
 {
   // The served user for originating requests is determined from the
@@ -299,7 +305,7 @@ pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg,
   }
 
   if (stack_data.enable_orig_sip_to_tel_coerce &&
-      (uri != NULL) && 
+      (uri != NULL) &&
       PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     // Determine whether this originating SIP URI is to be treated as a Tel URI
@@ -434,14 +440,15 @@ std::string PJUtils::extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_u
   return impi;
 }
 
-void PJUtils::get_impi_and_impu(pjsip_msg* req, 
-                                std::string& impi_out, 
-                                std::string& impu_out, 
-                                pj_pool_t* pool, 
-                                SAS::TrailId trail)
+pj_bool_t PJUtils::get_impi_and_impu(pjsip_msg* req,
+                                     std::string& impi_out,
+                                     std::string& impu_out,
+                                     pj_pool_t* pool,
+                                     SAS::TrailId trail)
 {
   pjsip_authorization_hdr* auth_hdr;
   pjsip_uri* impu_uri;
+
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
     impu_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(req)->uri);
@@ -461,8 +468,8 @@ void PJUtils::get_impi_and_impu(pjsip_msg* req,
                                                                   NULL);
   }
 
-  impu_out = PJUtils::public_id_from_uri(impu_uri);
   impi_out = PJUtils::extract_username(auth_hdr, impu_uri);
+  return PJUtils::valid_public_id_from_uri(impu_uri, impu_out);
 }
 
 /// Adds a P-Asserted-Identity header to the message.

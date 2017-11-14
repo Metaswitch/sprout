@@ -190,7 +190,19 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   // Get the public identity from the To: header.
   pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(req);
   pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri);
-  impu = PJUtils::public_id_from_uri(to_uri);
+  pj_bool_t status = PJUtils::valid_public_id_from_uri(to_uri, impu);
+
+  if (!status)
+  {
+    // We're unable to get the IMPU from the message - reject it now
+    SAS::Event event(trail(), SASEvent::ICSCF_INVALID_IMPU, 0);
+    SAS::report_event(event);
+
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
+    send_response(rsp);
+    free_msg(req);
+    return;
+  }
 
   SAS::Event reg_event(trail(), SASEvent::ICSCF_RCVD_REGISTER, 0);
   reg_event.add_var_param(impu);
@@ -509,7 +521,21 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // Originating request.
     TRC_DEBUG("Originating request");
     _originating = true;
-    impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(req, pool, trail()));
+
+    pj_bool_t status = PJUtils::valid_public_id_from_uri(
+                        PJUtils::orig_served_user(req, pool, trail()), impu);
+
+    if (!status)
+    {
+      // We're unable to get the IMPU from the message - reject it now
+      SAS::Event event(trail(), SASEvent::ICSCF_INVALID_IMPU, 1);
+      SAS::report_event(event);
+
+      pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
+      send_response(rsp);
+      free_msg(req);
+      return;
+    }
 
     SAS::Event event(trail(), SASEvent::ICSCF_RCVD_ORIG_NON_REG, 0);
     event.add_var_param(impu);
@@ -540,7 +566,20 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       }
     }
 
-    impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(req));
+    pj_bool_t status =
+        PJUtils::valid_public_id_from_uri(PJUtils::term_served_user(req), impu);
+
+    if (!status)
+    {
+      // We're unable to get the IMPU from the message - reject it now
+      SAS::Event event(trail(), SASEvent::ICSCF_INVALID_IMPU, 2);
+      SAS::report_event(event);
+
+      pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
+      send_response(rsp);
+      free_msg(req);
+      return;
+    }
 
     SAS::Event event(trail(), SASEvent::ICSCF_RCVD_TERM_NON_REG, 0);
     event.add_var_param(impu);
@@ -634,7 +673,21 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                  req->line.req.uri) != PJ_SUCCESS)
           {
             // The URI has changed, so make sure we do a LIR lookup on it.
-            impu = PJUtils::public_id_from_uri(req->line.req.uri);
+            pj_bool_t status =
+                     PJUtils::valid_public_id_from_uri(req->line.req.uri, impu);
+
+            if (!status)
+            {
+              // We're unable to get the IMPU from the message - reject it now
+              SAS::Event event(trail(), SASEvent::ICSCF_INVALID_IMPU, 3);
+              SAS::report_event(event);
+
+              pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
+              send_response(rsp);
+              free_msg(req);
+              return;
+            }
+
             ((ICSCFLIRouter *)_router)->change_impu(impu);
           }
 
