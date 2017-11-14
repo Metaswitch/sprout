@@ -408,9 +408,9 @@ bool decode_homestead_xml(const std::string& public_id,
 // Returns the HTTP code from Homestead - callers should check that
 // this is HTTP_OK before relying on the output parameters.
 
-HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
-                                                  irs_info& irs_info,
-                                                  SAS::TrailId trail)
+HTTPCode HSSConnection::put_homestead_xml(const irs_query& irs_query,
+                                          std::shared_ptr<rapidxml::xml_document<>>& root,
+                                          SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -432,11 +432,9 @@ HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
   }
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
-  // Needs to be a shared pointer - multiple Ifcs objects will need a reference
-  // to it, so we want to delete the underlying document when they all go out
-  // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
+
   std::string json_wildcard = (irs_query._wildcard != "") ?
     ", \"wildcard_identity\": \"" +
     irs_query._wildcard +
@@ -451,12 +449,14 @@ HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
                          "\"" +
                          json_wildcard +
                          "}";
+
   HTTPCode http_code = put_for_xml_object(path,
                                           req_body,
                                           irs_query._cache_allowed,
                                           root_underlying_ptr,
                                           trail);
-  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+
+  root.reset(root_underlying_ptr);
 
   unsigned long latency_us = 0;
 
@@ -476,16 +476,31 @@ HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
     // the subscriber on the HSS or been unable to communicate with
     // the HSS successfully. In either case we should fail.
     TRC_ERROR("Could not get subscriber data from HSS");
-    return http_code;
   }
-  return decode_homestead_xml(irs_query._public_id,
+  return http_code;
+}
+
+HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
+                                                  irs_info& irs_info,
+                                                  SAS::TrailId trail)
+{
+  // Needs to be a shared pointer - multiple Ifcs objects will need a reference
+  // to it, so we want to delete the underlying pointer when they all go out
+  // of scope.
+  std::shared_ptr<rapidxml::xml_document<>> root;
+
+  HTTPCode http_code = put_homestead_xml(irs_query, root, trail);
+  if (http_code == HTTP_OK)
+  {
+    http_code = decode_homestead_xml(irs_query._public_id,
                               irs_info,
                               root,
                               _sifc_service,
                               false,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
+  }
+  return http_code;
 }
-
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
                                               irs_info& irs_info,
