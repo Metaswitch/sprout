@@ -6,7 +6,6 @@
     }
   },
 
-
   "properties": {
     "priority_blocks": {
       "type": "array",

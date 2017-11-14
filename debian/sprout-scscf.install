@@ -10,6 +10,9 @@ modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/validate_fallb
 modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/display_shared_ifcs /usr/share/clearwater/clearwater-config-manager/scripts
 modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/display_fallback_ifcs /usr/share/clearwater/clearwater-config-manager/scripts
 modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/config_validation/* /usr/share/clearwater/clearwater-config-manager/scripts/config_validation
-
 modules/clearwater-etcd-plugins/clearwater_config_access/shared_ifcs_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
 modules/clearwater-etcd-plugins/clearwater_config_access/fallback_ifcs_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
+
+# Install the RPH plugins
+modules/clearwater-etcd-plugins/clearwater_config_manager/rph_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
+modules/clearwater-etcd-plugins/clearwater_config_access/rph_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
