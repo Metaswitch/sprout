@@ -67,7 +67,7 @@ void Ifc::handle_invalid_ifc(std::string error,
                              int instance_id,
                              SAS::TrailId trail)
 {
-  TRC_DEBUG("Skipping invalid iFC for %s: %s", server_name.c_str(), error.c_str());
+  TRC_INFO("Skipping invalid iFC for %s: %s", server_name.c_str(), error.c_str());
   SAS::Event event(trail, sas_event_id, instance_id);
   event.add_var_param(server_name);
   event.add_var_param(error);
@@ -81,7 +81,7 @@ void Ifc::handle_unusual_ifc(std::string error,
                              int instance_id,
                              SAS::TrailId trail)
 {
-  TRC_DEBUG("Unusual iFC for %s: %s", server_name.c_str(), error.c_str());
+  TRC_INFO("Unusual iFC for %s: %s", server_name.c_str(), error.c_str());
   SAS::Event event(trail, sas_event_id, instance_id);
   event.add_var_param(server_name);
   event.add_var_param(error);
@@ -203,7 +203,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     if (!spt_header)
     {
       handle_invalid_ifc("Missing Header element for SIPHeader service point trigger",
-                  server_name, SASEvent::IFC_INVALID, 0, trail);
+                         server_name, SASEvent::IFC_INVALID, 0, trail);
     }
 
     header_regex = boost::regex(XMLUtils::get_text_or_cdata(spt_header),
@@ -212,7 +212,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     if (header_regex.status())
     {
       handle_invalid_ifc("Invalid regular expression in Header element for SIPHeader service point trigger",
-                  server_name, SASEvent::IFC_INVALID, 0, trail);
+                         server_name, SASEvent::IFC_INVALID, 0, trail);
     }
 
     for (header = msg->hdr.next; header != &msg->hdr; header = header->next)
@@ -235,7 +235,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
             if (content_regex.status())
             {
               handle_invalid_ifc("Invalid regular expression in Content element for SIPHeader service point trigger",
-                          server_name, SASEvent::IFC_INVALID, 0, trail);
+                                 server_name, SASEvent::IFC_INVALID, 0, trail);
             }
           }
 
@@ -324,7 +324,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
         (req_uri.compare(0, 4, "tel:") == 0))
     {
       handle_unusual_ifc("Request URI should be a regex that matches either on "
-                         "the hostport of a SIP URI) or a telephone number.",
+                         "the hostport of a SIP URI or a telephone number.",
                          server_name, SASEvent::IFC_UNUSUAL, 0, trail);
     }
     
@@ -333,7 +333,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     if (req_uri_regex.status())
     {
       handle_invalid_ifc("Invalid regular expression in Request URI service point trigger",
-                  server_name, SASEvent::IFC_INVALID, 0, trail);
+                         server_name, SASEvent::IFC_INVALID, 0, trail);
     }
       ret = boost::regex_search(test_string, req_uri_regex);
   }
@@ -587,6 +587,17 @@ bool Ifc::filter_matches(const SessionCase& session_case,
   }
   catch (xml_error err)
   {
+    // Generic SAS event is logged to make it clear that this iFC is being
+    // skipped since it is invalid. In most cases, a specific SAS event
+    // detailing the exact error will already have been logged as well.
+    // It's needed to catch xml_error raised by utility modules rather than our
+    // code.
+    std::string err_str = "iFC evaluation error: " + std::string(err.what());
+    TRC_ERROR(err_str.c_str());
+    SAS::Event event(trail, SASEvent::INVALID_IFC_IGNORED, 0);
+    event.add_var_param(std::string(err.what()));
+    SAS::report_event(event);
+
     return false;
   }
 }
