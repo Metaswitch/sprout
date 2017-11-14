@@ -60,7 +60,6 @@ schema = json.load(open(schema_file))
 raw_config = json.load(open(config_file))
 
 parsed_config = {}
-error_list = []
 
 encountered_priorities = []
 for priority_block in raw_config[PRIORITY_BLOCKS]:
