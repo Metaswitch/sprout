@@ -51,9 +51,13 @@ public:
     _mock_alarm = new MockAlarm(_am);
     _mock_error_log = new MockLog2();
     _mock_ok_log = new MockLog1();
+
+    EXPECT_CALL(*_mock_alarm, clear());
+
     _comm_tracker = new AsCommunicationTracker(_mock_alarm,
                                                _mock_error_log,
                                                _mock_ok_log);
+    _am->alarm_re_raiser()->_condition->block_till_waiting();
   }
 
   void TearDown()

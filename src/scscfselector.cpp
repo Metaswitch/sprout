@@ -279,8 +279,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   // There are multiple S-CSCFs that match on all mandatory capabilities, the highest number of optional
   // capabilities, and the highest priority. Select one using a weighted random choice.
   srand(time(NULL));
-  int random;
-  random = rand() % sum;
+  int random = (sum != 0) ? rand() % sum : 0;
 
   int index = 0;
   int accumulator = matches[index].weight;
