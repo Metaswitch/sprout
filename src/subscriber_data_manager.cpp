@@ -219,18 +219,15 @@ Store::Status SubscriberDataManager::set_aor_data(
   // CSeqs before writing to the store.
   ClassifiedSubscriptions classified_subscriptions;
 
-  if (_primary_sdm)
-  {
-    classify_subscriptions(event_trigger,
-                           aor_pair,
-                           classified_bindings,
-                           classified_subscriptions);
+  classify_subscriptions(event_trigger,
+                         aor_pair,
+                         classified_bindings,
+                         classified_subscriptions);
 
-    prepare_subscriptions(aor_pair,
-                          classified_bindings,
-                          classified_subscriptions,
-                          trail);
-  }
+  prepare_subscriptions(aor_pair,
+                        classified_bindings,
+                        classified_subscriptions,
+                        trail);
 
   // 5. Write the data to memcached. If this fails, bail out here
   Store::Status rc = _aor_store->set_aor_data(aor_id,

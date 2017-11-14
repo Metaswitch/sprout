@@ -229,17 +229,13 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
       // The NOTIFY Cseq counter used to be stored on the AoR. To smooth the
       // upgrade to storing the counter on the Subscription, we provide
       // backwards compatibility.
-      if (READ_LEGACY_CSEQ)
+      if (READ_LEGACY_CSEQ ||
+          subscription->_notify_cseq == AoR::Subscription::CSEQ_NOT_FOUND_IN_MEMCACHED)
       {
         int notify_cseq = 0;
         JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, notify_cseq);
-
-        if (subscription->_notify_cseq == AoR::Subscription::CSEQ_NOT_FOUND_IN_MEMCACHED ||
-            subscription->_notify_cseq < notify_cseq)
-        {
-          // TJW2 TODO: Test?
-          subscription->_notify_cseq = notify_cseq; // LCOV_EXCL_LINE
-        }
+        subscription->_notify_cseq = std::max(subscription->_notify_cseq,
+                                              notify_cseq);
       }
     }
 
