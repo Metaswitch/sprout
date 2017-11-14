@@ -85,7 +85,7 @@ void add_pvni(pjsip_tx_data* tdata, pj_str_t* network_id);
 void add_asserted_identity(pjsip_msg* msg, pj_pool_t* pool, const std::string& aid, const pj_str_t& display_name);
 void add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid);
 
-pj_bool_t get_impi_and_impu(pjsip_msg* req, std::string& impi_out, std::string& impu_out, pj_pool_t* pool, SAS::TrailId trail);
+void get_impi_and_impu(pjsip_msg* req, std::string& impi_out, std::string& impu_out, pj_pool_t* pool, SAS::TrailId trail);
 
 pjsip_uri* next_hop(pjsip_msg* msg);
 

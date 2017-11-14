@@ -440,11 +440,11 @@ std::string PJUtils::extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_u
   return impi;
 }
 
-pj_bool_t PJUtils::get_impi_and_impu(pjsip_msg* req,
-                                     std::string& impi_out,
-                                     std::string& impu_out,
-                                     pj_pool_t* pool,
-                                     SAS::TrailId trail)
+void PJUtils::get_impi_and_impu(pjsip_msg* req,
+                                std::string& impi_out,
+                                std::string& impu_out,
+                                pj_pool_t* pool,
+                                SAS::TrailId trail)
 {
   pjsip_authorization_hdr* auth_hdr;
   pjsip_uri* impu_uri;
@@ -468,8 +468,8 @@ pj_bool_t PJUtils::get_impi_and_impu(pjsip_msg* req,
                                                                   NULL);
   }
 
+  impu_out = PJUtils::public_id_from_uri(impu_uri);
   impi_out = PJUtils::extract_username(auth_hdr, impu_uri);
-  return PJUtils::valid_public_id_from_uri(impu_uri, impu_out);
 }
 
 /// Adds a P-Asserted-Identity header to the message.
