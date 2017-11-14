@@ -42,6 +42,7 @@ config_file = sys.argv[2]
 
 error_list = []
 
+# Validate the config file against the schema.
 try:
     subprocess.check_output(['python', JSON_GENERIC_VALIDATE, schema_file,
                              config_file], stderr=subprocess.STDOUT)
