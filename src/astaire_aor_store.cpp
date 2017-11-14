@@ -16,6 +16,8 @@
 #include "rapidjson/error/en.h"
 #include "sproutsasevent.h"
 
+static const bool READ_LEGACY_CSEQ = true;
+static const bool WRITE_LEGACY_CSEQ = true;
 
 AstaireAoRStore::AstaireAoRStore(Store* store) : AoRStore()
 {
@@ -227,9 +229,17 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
       // The NOTIFY Cseq counter used to be stored on the AoR. To smooth the
       // upgrade to storing the counter on the Subscription, we provide
       // backwards compatibility.
-      if (subscription->_notify_cseq == AoR::Subscription::CSEQ_NOT_FOUND_IN_MEMCACHED)
+      if (READ_LEGACY_CSEQ)
       {
-        JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, subscription->_notify_cseq); // LCOV_EXCL_LINE
+        int notify_cseq = 0;
+        JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, notify_cseq);
+
+        if (subscription->_notify_cseq == AoR::Subscription::CSEQ_NOT_FOUND_IN_MEMCACHED ||
+            subscription->_notify_cseq < notify_cseq)
+        {
+          // TJW2 TODO: Test?
+          subscription->_notify_cseq = notify_cseq; // LCOV_EXCL_LINE
+        }
       }
     }
 
@@ -297,7 +307,18 @@ std::string AstaireAoRStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_
     writer.String(JSON_ASSOCIATED_URIS);
     aor_data->_associated_uris.to_json(writer);
 
-    // Notify Cseq flag
+    if(WRITE_LEGACY_CSEQ)
+    {
+      int notify_cseq = 0;
+      for (AoR::Subscriptions::const_iterator it = aor_data->subscriptions().begin();
+           it != aor_data->subscriptions().end();
+           ++it)
+      {
+        notify_cseq = std::max(notify_cseq, it->second->_notify_cseq);
+      }
+      writer.String(JSON_NOTIFY_CSEQ); writer.Int(notify_cseq);
+    }
+
     writer.String(JSON_TIMER_ID); writer.String(aor_data->_timer_id.c_str());
     writer.String(JSON_SCSCF_URI); writer.String(aor_data->_scscf_uri.c_str());
   }

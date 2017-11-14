@@ -153,9 +153,8 @@ Store::Status SubscriberDataManager::set_aor_data(
   // 2. Log removed or shortened bindings
   // 3. Send any Chronos timer requests
   // 4. Prepare to send NOTIFYs; increment CSeq values
-  // 4. Write the data to memcached. If this fails, bail out here
-  // 5. Log new or extended bindings
-  // 6. Send any messages we were asked to by the caller
+  // 5. Write the data to memcached. If this fails, bail out here
+  // 6. Log new or extended bindings
   // 7. Send any NOTIFYs
   //
   // This ordering is important to ensure that we don't send
