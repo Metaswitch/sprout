@@ -168,8 +168,8 @@ bool process_queue_element()
       pjsip_rx_data* rdata = qe.event_data.rdata;
 
       // Create an IO hook that pauses the stopwatch while blocked on IO.
-      Utils::IOHook io_hook(std::bind(pause_stopwatch, qe.stop_watch, std::placeholders::_1),
-                            std::bind(resume_stopwatch, qe.stop_watch, std::placeholders::_1));
+      Utils::IOHook io_hook(std::bind(pause_stopwatch, std::ref(qe.stop_watch), std::placeholders::_1),
+                            std::bind(resume_stopwatch, std::ref(qe.stop_watch), std::placeholders::_1));
 
       if (rdata)
       {
