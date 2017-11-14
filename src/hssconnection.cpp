@@ -1,4 +1,4 @@
-/**
+ /**
  * @file hssconnection.cpp HSSConnection class methods.
  *
  * Copyright (C) Metaswitch Networks 2017
@@ -309,16 +309,20 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
   }
 }
 
+bool determine_ims_present(const std::string& req_type)
+{
+  return (req_type == HSSConnection::REG || req_type == HSSConnection::CALL);
+}
+
 bool decode_homestead_xml(const std::string& public_id,
                           HSSConnection::irs_info& irs_info,
-                          std::shared_ptr<rapidxml::xml_document<> > root,
+                          const std::shared_ptr<rapidxml::xml_document<> > root,
                           SIFCService* sifc_service,
-                          const bool& allowNoIMS,
+                          const bool& IMSPresent,
                           SAS::TrailId trail)
 {
   if (!root.get())
   {
-    // If get_xml_object has not returned a document, there must have been a parsing error.
     TRC_WARNING("Malformed HSS XML for %s - document couldn't be parsed",
                 public_id.c_str());
     return false;
@@ -350,52 +354,47 @@ bool decode_homestead_xml(const std::string& public_id,
 
   irs_info._regstate = reg->value();
 
-  if ((irs_info._regstate == RegDataXMLUtils::STATE_NOT_REGISTERED) && (allowNoIMS))
+  if ((IMSPresent) || (irs_info._regstate != RegDataXMLUtils::STATE_NOT_REGISTERED))
   {
-    TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
-    return true;
-  }
+    printf("\nfinding ims\n");
+    rapidxml::xml_node<>* prev_reg = cw->first_node(RegDataXMLUtils::PREVIOUS_REGISTRATION_STATE);
+    irs_info._prev_regstate = (!prev_reg) ? "" : prev_reg->value();
 
-  // Look for the Previous Registration State.  If there is no Previous
-  // Registration State in the message set prev_regstate to the empty
-  // string.
-  rapidxml::xml_node<>* prev_reg = cw->first_node(RegDataXMLUtils::PREVIOUS_REGISTRATION_STATE);
-  irs_info._prev_regstate = (!prev_reg) ? "" : prev_reg->value();
+    rapidxml::xml_node<>* imss = cw->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 
-  rapidxml::xml_node<>* imss = cw->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
+    if (!imss)
+    {
+      std::string sp_str;
+      rapidxml::print(std::back_inserter(sp_str), *root, 0);
+      TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
+                  public_id.c_str(),
+                  sp_str.c_str());
+      return false;
+    }
 
-  if (!imss)
-  {
-    std::string sp_str;
-    rapidxml::print(std::back_inserter(sp_str), *root, 0);
-    TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
-                public_id.c_str(),
-                sp_str.c_str());
-    return false;
-  }
+    if (!SproutXmlUtils::parse_ims_subscription(public_id,
+                                                root,
+                                                imss,
+                                                irs_info._service_profiles,
+                                                irs_info._associated_uris,
+                                                irs_info._aliases,
+                                                sifc_service,
+                                                trail))
+    {
+      std::string sp_str;
+      rapidxml::print(std::back_inserter(sp_str), *root, 0);
+      TRC_WARNING("Malformed HSS XML for %s:\n%s",
+                  public_id.c_str(),
+                  sp_str.c_str());
+      return false;
+    }
 
-  if (!SproutXmlUtils::parse_ims_subscription(public_id,
-                                              root,
-                                              imss,
-                                              irs_info._service_profiles,
-                                              irs_info._associated_uris,
-                                              irs_info._aliases,
-                                              sifc_service,
-                                              trail))
-  {
-    std::string sp_str;
-    rapidxml::print(std::back_inserter(sp_str), *root, 0);
-    TRC_WARNING("Malformed HSS XML for %s:\n%s",
-                public_id.c_str(),
-                sp_str.c_str());
-    return false;
-  }
+    rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
 
-  rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
-
-  if (charging_addrs_node)
-  {
-    parse_charging_addrs_node(charging_addrs_node, irs_info._ccfs, irs_info._ecfs);
+    if (charging_addrs_node)
+    {
+      parse_charging_addrs_node(charging_addrs_node, irs_info._ccfs, irs_info._ecfs);
+    }
   }
   return true;
 }
@@ -412,9 +411,6 @@ HTTPCode HSSConnection::put_homestead_xml(const irs_query& irs_query,
                                           std::shared_ptr<rapidxml::xml_document<>>& root,
                                           SAS::TrailId trail)
 {
-  Utils::StopWatch stopWatch;
-  stopWatch.start();
-
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_CHECK_STATE, 0);
   event.add_var_param(irs_query._public_id);
   event.add_var_param(irs_query._private_id);
@@ -450,15 +446,16 @@ HTTPCode HSSConnection::put_homestead_xml(const irs_query& irs_query,
                          json_wildcard +
                          "}";
 
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
   HTTPCode http_code = put_for_xml_object(path,
                                           req_body,
                                           irs_query._cache_allowed,
                                           root_underlying_ptr,
                                           trail);
+  unsigned long latency_us = 0;
 
   root.reset(root_underlying_ptr);
-
-  unsigned long latency_us = 0;
 
   // Only accumulate the latency if we haven't already applied a
   // penalty
@@ -472,9 +469,9 @@ HTTPCode HSSConnection::put_homestead_xml(const irs_query& irs_query,
 
   if (http_code != HTTP_OK)
   {
-    // If get_xml_object has returned a HTTP error code, we have either not found
+    // We have either not found
     // the subscriber on the HSS or been unable to communicate with
-    // the HSS successfully. In either case we should fail.
+    // the HSS successfully.
     TRC_ERROR("Could not get subscriber data from HSS");
   }
   return http_code;
@@ -492,7 +489,30 @@ HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
   HTTPCode http_code = put_homestead_xml(irs_query, root, trail);
   if (http_code == HTTP_OK)
   {
+    bool IMSPresent = determine_ims_present(irs_query._req_type);
     http_code = decode_homestead_xml(irs_query._public_id,
+                              irs_info,
+                              root,
+                              _sifc_service,
+                              IMSPresent,
+                              trail) ? HTTP_OK : HTTP_SERVER_ERROR;
+  }
+  return http_code;
+}
+
+HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
+                                                  irs_info& irs_info,
+                                                  SAS::TrailId trail)
+{
+  // Needs to be a shared pointer - multiple Ifcs objects will need a reference
+  // to it, so we want to delete the underlying pointer when they all go out
+  // of scope.
+  std::shared_ptr<rapidxml::xml_document<>> root;
+
+  HTTPCode http_code = get_homestead_xml(public_id, root, trail);
+  if (http_code == HTTP_OK)
+  {
+  http_code = decode_homestead_xml(public_id,
                               irs_info,
                               root,
                               _sifc_service,
@@ -502,13 +522,10 @@ HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
   return http_code;
 }
 
-HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
-                                              irs_info& irs_info,
+HTTPCode HSSConnection::get_homestead_xml(const std::string& public_id,
+                                          std::shared_ptr<rapidxml::xml_document<>>& root,
                                               SAS::TrailId trail)
 {
-  Utils::StopWatch stopWatch;
-  stopWatch.start();
-
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_GET_REG, 0);
   event.add_var_param(public_id);
   SAS::report_event(event);
@@ -518,14 +535,17 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
                      "/reg-data";
 
   TRC_DEBUG("Making Homestead request for %s", path.c_str());
-  rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
 
-  // Needs to be a shared pointer - multiple Ifcs objects will need a reference
-  // to it, so we want to delete the underlying document when they all go out
-  // of scope.
-  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  rapidxml::xml_document<>* root_underlying_ptr = NULL;
+
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+  HTTPCode http_code = get_xml_object(path, 
+                                      root_underlying_ptr, 
+                                      trail);
   unsigned long latency_us = 0;
+
+  root.reset(root_underlying_ptr);
 
   // Only accumulate the latency if we haven't already applied a
   // penalty
@@ -543,18 +563,9 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
     // the subscriber on the HSS or been unable to communicate with
     // the HSS successfully. In either case we should fail.
     TRC_ERROR("Could not get subscriber data from HSS");
-    return http_code;
   }
 
-  // Return whether the XML was successfully decoded. The XML can be decoded and
-  // not return any iFCs (when the subscriber isn't registered), so a successful
-  // response shouldn't be taken as a guarantee of iFCs.
-  return decode_homestead_xml(public_id,
-                              irs_info,
-                              root,
-                              _sifc_service,
-                              true,
-                              trail) ? HTTP_OK : HTTP_SERVER_ERROR;
+  return http_code;
 }
 
 
