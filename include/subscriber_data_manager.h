@@ -24,6 +24,7 @@
 #include "sas.h"
 #include "analyticslogger.h"
 #include "associated_uris.h"
+#include "hssconnection.h"
 
 // We need to declare the parts of NotifyUtils needed below to avoid a
 // circular dependency between this and notify_utils.h
@@ -152,11 +153,13 @@ public:
   /// @param aor_store          - Pointer to the underlying data store interface.
   /// @param chronos_connection - Chronos connection used to set timers for
   ///                             expiring registrations and subscriptions.
+  /// @param hss_connection     - HSS connection used to update registration state.
   /// @param analytics_logger   - AnalyticsLogger for reporting registration events.
   /// @param is_primary         - Whether the underlying data store is the local
   ///                             store or remote
   SubscriberDataManager(AoRStore* aor_store,
                         ChronosConnection* chronos_connection,
+                        HSSConnection* hss_connection,
                         AnalyticsLogger* analytics_logger,
                         bool is_primary);
 
@@ -246,6 +249,7 @@ private:
                                     int now);
 
   static bool unused_bool;
+  HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;
   AoRStore* _aor_store;
   ChronosTimerRequestSender* _chronos_timer_request_sender;

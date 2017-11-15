@@ -74,8 +74,10 @@ NotifyUtils::ContactEvent determine_contact_event(
 /// SubscriberDataManager Methods
 SubscriberDataManager::SubscriberDataManager(AoRStore* aor_store,
                                              ChronosConnection* chronos_connection,
+                                             HSSConnection* hss_connection,
                                              AnalyticsLogger* analytics_logger,
                                              bool is_primary) :
+  _hss_connection(hss_connection),
   _primary_sdm(is_primary)
 {
   _aor_store = aor_store;

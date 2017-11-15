@@ -2252,6 +2252,7 @@ int main(int argc, char* argv[])
   // SDMs.
   local_sdm = new SubscriberDataManager(local_aor_store,
                                         chronos_connection,
+                                        hss_connection,
                                         analytics_logger,
                                         true);
 
@@ -2261,6 +2262,7 @@ int main(int argc, char* argv[])
   {
     SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
                                                                   chronos_connection,
+                                                                  hss_connection,
                                                                   NULL,
                                                                   false);
     remote_sdms.push_back(remote_sdm);

@@ -30,6 +30,7 @@
 #include "mock_store.h"
 #include "mock_analytics_logger.h"
 #include "analyticslogger.h"
+#include "mock_hss_connection.h"
 
 using ::testing::_;
 using ::testing::DoAll;
@@ -52,11 +53,13 @@ class BasicSubscriberDataManagerTest : public SipTest
   BasicSubscriberDataManagerTest()
   {
     _chronos_connection = new FakeChronosConnection();
+    _hss_connection = new MockHSSConnection();
     _datastore = new LocalStore();
     _aor_store = new AstaireAoRStore(_datastore);
     _analytics_logger = new MockAnalyticsLogger();
     _store = new SubscriberDataManager(_aor_store,
                                        _chronos_connection,
+                                       _hss_connection,
                                        _analytics_logger,
                                        true);
   }
@@ -79,6 +82,7 @@ class BasicSubscriberDataManagerTest : public SipTest
     delete _store; _store = NULL;
     delete _aor_store; _aor_store = NULL;
     delete _datastore; _datastore = NULL;
+    delete _hss_connection; _hss_connection = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
   }
@@ -87,6 +91,7 @@ class BasicSubscriberDataManagerTest : public SipTest
   // be accessed in the individual tests using the this pointer (e.g. use
   // `this->store` rather than `_store`).
   FakeChronosConnection* _chronos_connection;
+  MockHSSConnection* _hss_connection;
   LocalStore* _datastore;
   AstaireAoRStore* _aor_store;
   SubscriberDataManager* _store;
@@ -781,6 +786,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   void SetUp()
   {
     _chronos_connection = new FakeChronosConnection();
+    _hss_connection = new MockHSSConnection();
     _datastore = new MockStore();
     _aor_store = new AstaireAoRStore(_datastore);
     _analytics_logger = new AnalyticsLogger();
@@ -788,6 +794,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
     {
       _store = new SubscriberDataManager(_aor_store,
                                          _chronos_connection,
+                                         _hss_connection,
                                          _analytics_logger,
                                          true);
     }
@@ -798,11 +805,13 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
     delete _aor_store; _aor_store = NULL;
+    delete _hss_connection; _hss_connection = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
   }
 
   FakeChronosConnection* _chronos_connection;
+  MockHSSConnection* _hss_connection;
   MockStore* _datastore;
   AstaireAoRStore* _aor_store;
   SubscriberDataManager* _store;
@@ -870,11 +879,13 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   SubscriberDataManagerChronosRequestsTest()
   {
     _chronos_connection = new MockChronosConnection("chronos");
+    _hss_connection = new MockHSSConnection();
     _datastore = new LocalStore();
     _aor_store = new AstaireAoRStore(_datastore);
     _analytics_logger = new AnalyticsLogger();
     _store = new SubscriberDataManager(_aor_store,
                                        _chronos_connection,
+                                       _hss_connection,
                                        _analytics_logger,
                                        true);
   }
@@ -884,11 +895,13 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
     delete _aor_store; _aor_store = NULL;
+    delete _hss_connection; _hss_connection = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
   }
 
   MockChronosConnection* _chronos_connection;
+  MockHSSConnection* _hss_connection;
   LocalStore* _datastore;
   AstaireAoRStore* _aor_store;
   SubscriberDataManager* _store;

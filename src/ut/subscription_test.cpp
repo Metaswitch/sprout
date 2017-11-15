@@ -44,14 +44,14 @@ public:
     add_host_mapping("sprout.example.com", "10.8.8.1");
 
     _chronos_connection = new FakeChronosConnection();
+    _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, _hss_connection, NULL, true);
     _remote_data_store = new LocalStore();
     _remote_aor_store = new AstaireAoRStore(_remote_data_store);
-    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, NULL, false);
+    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, _hss_connection, NULL, false);
     _analytics = new MockAnalyticsLogger();
-    _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "");
@@ -873,7 +873,7 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
-// Check data contention in a remote store 
+// Check data contention in a remote store
 TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
 {
   // Add the base AoR to the remote store
@@ -1664,9 +1664,9 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
-    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, _hss_connection, NULL, true);
+    _analytics = new AnalyticsLogger();
     _acr_factory = new ACRFactory();
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "");

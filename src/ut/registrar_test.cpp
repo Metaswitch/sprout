@@ -169,15 +169,15 @@ public:
     SipTest::SetScscfUri("sip:scscf.sprout.homedomain:5058;transport=TCP");
 
     _chronos_connection = new FakeChronosConnection();
+    _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, _hss_connection, NULL, true);
     _remote_data_store = new LocalStore();
     _remote_aor_store = new AstaireAoRStore(_remote_data_store);
-    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, NULL, false);
+    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, _hss_connection, NULL, false);
     _remote_sdms = {_remote_sdm};
     _acr_factory = new ACRFactory();
-    _hss_connection = new FakeHSSConnection();
     _fifc_service = new FIFCService(NULL, string(UT_DIR).append("/test_registrar_fifc.xml"));
   }
 
@@ -418,7 +418,7 @@ private:
     EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
       .WillOnce(DoAll(SaveArg<0>(&irs_query),
                       Return(HTTP_OK)));
-    
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "");
 
     inject_msg(msg.get());
@@ -657,8 +657,9 @@ class SDMNoBindings : public SubscriberDataManager
 public:
   SDMNoBindings(AoRStore* aor_store,
                 ChronosConnection* chronos_connection,
+                HSSConnection* hss_connection,
                 bool is_primary) :
-    SubscriberDataManager(aor_store, chronos_connection, NULL, is_primary)
+    SubscriberDataManager(aor_store, chronos_connection, hss_connection, NULL, is_primary)
   {
   }
 
@@ -692,7 +693,7 @@ public:
 
     _remote_data_store_no_bindings = new LocalStore();
     _remote_aor_store_no_bindings = new AstaireAoRStore(_remote_data_store_no_bindings);
-    _remote_sdm_no_bindings = new SDMNoBindings((AoRStore*)_remote_aor_store_no_bindings, _chronos_connection, false);
+    _remote_sdm_no_bindings = new SDMNoBindings((AoRStore*)_remote_aor_store_no_bindings, _chronos_connection, _observed_hss_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
 
     if (_sdm)
@@ -701,7 +702,7 @@ public:
       _sdm = NULL;
     }
 
-    _sdm = new SDMNoBindings((AoRStore*)_local_aor_store, _chronos_connection, true);
+    _sdm = new SDMNoBindings((AoRStore*)_local_aor_store, _chronos_connection, _observed_hss_connection, true);
   }
 
   RegistrarTestRemoteSDM() : RegistrarObservedHssTest()
@@ -3305,8 +3306,8 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _hss_connection = new FakeHSSConnection();
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, _hss_connection, NULL, true);
     _acr_factory = new ACRFactory();
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");

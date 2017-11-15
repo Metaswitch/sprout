@@ -12,7 +12,7 @@
 #include "mock_subscriber_data_manager.h"
 
 MockSubscriberDataManager::MockSubscriberDataManager() :
-  SubscriberDataManager(NULL, NULL, NULL, true)
+  SubscriberDataManager(NULL, NULL, NULL, NULL, true)
 {}
 
 MockSubscriberDataManager::~MockSubscriberDataManager()

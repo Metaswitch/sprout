@@ -86,7 +86,7 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, _hss_connection, NULL, true);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -6503,7 +6503,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 }
 
 
-// Test originating AS handling for request to external URI.  Check that 
+// Test originating AS handling for request to external URI.  Check that
 // originating "user=phone" SIP URIs are looked up using the equivalent Tel URI
 TEST_F(SCSCFTest, OriginatingExternal)
 {
@@ -9416,7 +9416,7 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
     SCSCFTestBase::SetUpTestCase();
     _remote_data_store = new LocalStore();
     _remote_aor_store = new AstaireAoRStore(_remote_data_store);
-    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, NULL, true);
+    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, _hss_connection, NULL, true);
   }
   static void TearDownTestCase()
   {

@@ -45,7 +45,7 @@ public:
     _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, _hss_connection, NULL, true);
     _ifc_handler = new IfcHandler();
   }
 
