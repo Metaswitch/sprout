@@ -714,7 +714,6 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
       irs_info._associated_uris.clear_uris();
       irs_info._associated_uris.add_uri(aor, false);
     }
-  printf("\n11111111111111\n");
   }
 
   std::string scscf_uri;
@@ -737,7 +736,6 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
     if (http_code == HTTP_OK)
     {
-    printf("\n22222222222222\n");
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
       deregister_with_application_servers(irs_info._service_profiles[aor],

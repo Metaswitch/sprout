@@ -1,4 +1,4 @@
- /**
+/**
  * @file hssconnection.cpp HSSConnection class methods.
  *
  * Copyright (C) Metaswitch Networks 2017
@@ -318,7 +318,7 @@ bool decode_homestead_xml(const std::string& public_id,
                           HSSConnection::irs_info& irs_info,
                           const std::shared_ptr<rapidxml::xml_document<> > root,
                           SIFCService* sifc_service,
-                          const bool& IMSPresent,
+                          const bool& IMSExpected,
                           SAS::TrailId trail)
 {
   if (!root.get())
@@ -354,48 +354,56 @@ bool decode_homestead_xml(const std::string& public_id,
 
   irs_info._regstate = reg->value();
 
-  if ((IMSPresent) || (irs_info._regstate != RegDataXMLUtils::STATE_NOT_REGISTERED))
+  rapidxml::xml_node<>* prev_reg = cw->first_node(RegDataXMLUtils::PREVIOUS_REGISTRATION_STATE);
+  irs_info._prev_regstate = (!prev_reg) ? "" : prev_reg->value();
+
+  rapidxml::xml_node<>* imss = cw->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
+
+  // IMS Subscription element may not be present on some request.
+  if (!imss)
   {
-    printf("\nfinding ims\n");
-    rapidxml::xml_node<>* prev_reg = cw->first_node(RegDataXMLUtils::PREVIOUS_REGISTRATION_STATE);
-    irs_info._prev_regstate = (!prev_reg) ? "" : prev_reg->value();
-
-    rapidxml::xml_node<>* imss = cw->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
-
-    if (!imss)
+    std::string sp_str;
+    rapidxml::print(std::back_inserter(sp_str), *root, 0);
+    if (IMSExpected)
     {
-      std::string sp_str;
-      rapidxml::print(std::back_inserter(sp_str), *root, 0);
       TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
                   public_id.c_str(),
                   sp_str.c_str());
       return false;
     }
-
-    if (!SproutXmlUtils::parse_ims_subscription(public_id,
-                                                root,
-                                                imss,
-                                                irs_info._service_profiles,
-                                                irs_info._associated_uris,
-                                                irs_info._aliases,
-                                                sifc_service,
-                                                trail))
+    else
     {
-      std::string sp_str;
-      rapidxml::print(std::back_inserter(sp_str), *root, 0);
-      TRC_WARNING("Malformed HSS XML for %s:\n%s",
-                  public_id.c_str(),
-                  sp_str.c_str());
-      return false;
-    }
-
-    rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
-
-    if (charging_addrs_node)
-    {
-      parse_charging_addrs_node(charging_addrs_node, irs_info._ccfs, irs_info._ecfs);
+      TRC_INFO("In HSS XML for %s, there is no IMSSubscription element:\n%s",
+               public_id.c_str(),
+               sp_str.c_str());
+      return true;
     }
   }
+
+  // If IMS Subscription is present, failure to parse it indicate real error.
+  if (!SproutXmlUtils::parse_ims_subscription(public_id,
+                                              root,
+                                              imss,
+                                              irs_info._service_profiles,
+                                              irs_info._associated_uris,
+                                              irs_info._aliases,
+                                              sifc_service,
+                                              trail))
+  {
+    std::string sp_str;
+    rapidxml::print(std::back_inserter(sp_str), *root, 0);
+    TRC_WARNING("Malformed HSS XML for %s:\n%s",
+                public_id.c_str(),
+                sp_str.c_str());
+    return false;
+  }
+
+  rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
+  if (charging_addrs_node)
+  {
+    parse_charging_addrs_node(charging_addrs_node, irs_info._ccfs, irs_info._ecfs);
+  }
+
   return true;
 }
 
@@ -469,9 +477,8 @@ HTTPCode HSSConnection::put_homestead_xml(const irs_query& irs_query,
 
   if (http_code != HTTP_OK)
   {
-    // We have either not found
-    // the subscriber on the HSS or been unable to communicate with
-    // the HSS successfully.
+    // We have either not found the subscriber on the HSS, or been unable to 
+    // communicate with the HSS successfully.
     TRC_ERROR("Could not get subscriber data from HSS");
   }
   return http_code;
@@ -491,11 +498,11 @@ HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
   {
     bool IMSPresent = determine_ims_present(irs_query._req_type);
     http_code = decode_homestead_xml(irs_query._public_id,
-                              irs_info,
-                              root,
-                              _sifc_service,
-                              IMSPresent,
-                              trail) ? HTTP_OK : HTTP_SERVER_ERROR;
+                                     irs_info,
+                                     root,
+                                     _sifc_service,
+                                     IMSPresent,
+                                     trail) ? HTTP_OK : HTTP_SERVER_ERROR;
   }
   return http_code;
 }
@@ -512,12 +519,12 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
   HTTPCode http_code = get_homestead_xml(public_id, root, trail);
   if (http_code == HTTP_OK)
   {
-  http_code = decode_homestead_xml(public_id,
-                              irs_info,
-                              root,
-                              _sifc_service,
-                              false,
-                              trail) ? HTTP_OK : HTTP_SERVER_ERROR;
+    http_code = decode_homestead_xml(public_id,
+                                     irs_info,
+                                     root,
+                                     _sifc_service,
+                                     false,
+                                     trail) ? HTTP_OK : HTTP_SERVER_ERROR;
   }
   return http_code;
 }
@@ -559,9 +566,8 @@ HTTPCode HSSConnection::get_homestead_xml(const std::string& public_id,
 
   if (http_code != HTTP_OK)
   {
-    // If get_xml_object has returned a HTTP error code, we have either not found
-    // the subscriber on the HSS or been unable to communicate with
-    // the HSS successfully. In either case we should fail.
+    // We have either not found the subscriber on the HSS, or been unable to 
+    // communicate with the HSS successfully.
     TRC_ERROR("Could not get subscriber data from HSS");
   }
 
