@@ -29,7 +29,8 @@
         "additionalProperties": false
       },
       "additionalItems": false,
-      "maxItems": 15
+      "maxItems": 15,
+      "uniqueItems": true
     }
   },
   "maxProperties": 1,
