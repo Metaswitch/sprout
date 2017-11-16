@@ -124,30 +124,29 @@ static void resume_stopwatch(Utils::StopWatch& s, const std::string& reason)
 
 static void dump_message_details(pjsip_rx_data* rdata)
 {
-  if (rdata != NULL)
+  TRC_WARNING("SAS Trail: %llu", get_trail(rdata));
+
+  if (rdata->msg_info.cid != NULL)
   {
-    if (rdata->msg_info.cid != NULL)
-    {
-      TRC_ERROR("Call-Id: %.*s (maybe)",
+    TRC_WARNING("Call-Id: %.*s",
                 ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
                 ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
-    }
-    if (rdata->msg_info.cseq != NULL)
-    {
-      TRC_ERROR("CSeq: %ld %.*s (maybe)",
+  }
+  if (rdata->msg_info.cseq != NULL)
+  {
+    TRC_WARNING("CSeq: %ld %.*s",
                 ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
                 ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
                 ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
-    }
+  }
 
-    pjsip_via_hdr* via = (pjsip_via_hdr*)rdata->msg_info.via;
+  pjsip_via_hdr* via = (pjsip_via_hdr*)rdata->msg_info.via;
 
-    if (via != NULL)
-    {
-      TRC_ERROR("Via: %.*s (maybe)",
+  if (via != NULL)
+  {
+    TRC_WARNING("Via: %.*s",
                 via->branch_param.slen,
                 via->branch_param.ptr);
-    }
   }
 }
 
@@ -227,7 +226,7 @@ bool process_queue_element()
           {
             // Dump details about the exception.  Be defensive about reading these
             // as we don't know much about the state we're in.
-            TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
+            TRC_ERROR("Hit exception handling message in worker thread. Details of probable cause follow");
             dump_message_details(rdata);
 
             // Make a 500 response to the rdata with a retry-after header of
