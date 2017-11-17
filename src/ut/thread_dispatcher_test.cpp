@@ -25,6 +25,7 @@ using ::testing::StrictMock;
 using ::testing::_;
 using ::testing::ResultOf;
 using ::testing::Expectation;
+using ::testing::InvokeWithoutArgs;
 
 // Should be at least 5 to avoid causing problems with some of the UTs
 static const int REQUEST_ON_QUEUE_TIMEOUT_MS = 10;
@@ -122,6 +123,27 @@ TEST_F(ThreadDispatcherTest, StandardInviteTest)
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+TEST_F(ThreadDispatcherTest, SlowInviteTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "INVITE";
+
+  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+
+  // Slow responses get logged out by a different path, where slow means
+  // that > 50 * target latency
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(DoAll(
+    InvokeWithoutArgs([](){ cwtest_advance_time_ms(6000); }),
+    Return(PJ_TRUE)));
+
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(10));
+
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
