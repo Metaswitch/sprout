@@ -296,7 +296,7 @@ void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
   // Report the correlator as a SAS marker, if it exists.
   if (auth_challenge->get_correlator() != "")
   {
-    SAS::Marker marker(trail, MARKED_ID_GENERIC_CORRELATOR, 1u);
+    SAS::Marker marker(trail, MARKED_ID_GENERIC_CORRELATOR, 3u);
     marker.add_var_param(auth_challenge->get_correlator());
     SAS::report_marker(marker, SAS::Marker::Scope::Trace);
   }
