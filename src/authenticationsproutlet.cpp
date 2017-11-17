@@ -670,6 +670,17 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // Digest authentication).
     hdr->scheme = STR_DIGEST;
     pj_pool_t* rsp_pool = get_pool(rsp);
+    pj_create_random_string(buf, sizeof(buf));
+    pj_strdup(rsp_pool, &hdr->challenge.digest.opaque, &random);
+
+    // Log the opaque value to SAS to enable us to correlate this challenge
+    // with the subsequent transaction containing the challenge response.
+    std::string opaque;
+    opaque.assign(buf, sizeof(buf));
+    TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
+    SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 1u);
+    opaque_marker.add_var_param(opaque);
+    SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
 
     ImpiStore::AuthChallenge* auth_challenge;
     if (av->is_aka())
@@ -686,8 +697,6 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       hdr->challenge.digest.algorithm = ((aka->akaversion == 2) ? STR_AKAV2_MD5 : STR_AKAV1_MD5);
 
       pj_strdup2(rsp_pool, &hdr->challenge.digest.nonce, aka->nonce.c_str());
-      pj_create_random_string(buf, sizeof(buf));
-      pj_strdup(rsp_pool, &hdr->challenge.digest.opaque, &random);
       hdr->challenge.digest.qop = STR_AUTH;
       hdr->challenge.digest.stale = stale;
 
@@ -770,8 +779,6 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       pj_create_random_string(buf, sizeof(buf));
       nonce.assign(buf, sizeof(buf));
       pj_strdup(rsp_pool, &hdr->challenge.digest.nonce, &random);
-      pj_create_random_string(buf, sizeof(buf));
-      pj_strdup(rsp_pool, &hdr->challenge.digest.opaque, &random);
       pj_strdup2(rsp_pool, &hdr->challenge.digest.qop, digest->qop.c_str());
       hdr->challenge.digest.stale = stale;
 
@@ -786,11 +793,10 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // Add the header to the message.
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)hdr);
 
-    // Store the branch parameter in memcached for correlation purposes
-    pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_VIA, NULL);
-    auth_challenge->set_correlator((via_hdr != NULL) ?
-                                   PJUtils::pj_str_to_string(&via_hdr->branch_param) :
-                                   "");
+    // Store the opaque value that we generated in the IMPI store.  This is
+    // needed if the challenge times out so that the SAS trace there can be
+    // correlated with the one for this initial REGISTER.
+    auth_challenge->set_correlator(opaque);
 
     // Add the IMPU to the challenge
     auth_challenge->set_impu(impu_for_hss);
@@ -978,6 +984,19 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     unsigned long nonce_count = pj_strtoul2(&credentials->nc, NULL, 16);
     nonce_count = (nonce_count == 0) ? 1 : nonce_count;
 
+    // If this is the first response to the challenge then log the value of
+    // opaque to SAS as a marker. We also do this when we challenge the initial
+    // REGISTER and in this way the two transactions (the challenge and the
+    // challenge response) get correlated in SAS.
+    if (nonce_count == 1)
+    {
+      std::string opaque = PJUtils::pj_str_to_string(&credentials->opaque);
+      TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
+      SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 1u);
+      opaque_marker.add_var_param(opaque);
+      SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
+    }
+
     if ((auth_challenge != NULL) && (auth_challenge->get_nonce_count() > 1))
     {
       // A nonce count > 1 is supplied. Check that it is acceptable. If it is
@@ -1011,14 +1030,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
     if (status == PJ_SUCCESS)
     {
-      // We're about to do the authentication check. If this is the first
-      // response to a challenge correlate it to the flow that issued the
-      // challenge in the first place.
-      if ((auth_challenge != NULL) && (nonce_count == 1))
-      {
-        correlate_trail_to_challenge(auth_challenge, trail());
-      }
-
       // Request contains a response to a previous challenge, so pass it to
       // the authentication module to verify.
       TRC_DEBUG("Verify authentication information in request");
@@ -1246,7 +1257,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       PJUtils::get_impi_and_impu(req,
                                  irs_query._private_id,
                                  irs_query._public_id,
-                                 get_pool(req), 
+                                 get_pool(req),
                                  trail());
       _authentication->_hss->update_registration_state(irs_query,
                                                        unused_irs_info,

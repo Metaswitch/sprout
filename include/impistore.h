@@ -429,7 +429,7 @@ protected:
   static rapidjson::Document* json_from_string(const std::string& string);
 };
 
-// Utility function - retrieves the "corrlator" field from the give challenge
+// Utility function - retrieves the "corrlator" field from the given challenge
 // and raises a correlating transaction marker in the given trail.
 void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
                                   SAS::TrailId trail);
