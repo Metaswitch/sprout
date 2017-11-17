@@ -67,12 +67,14 @@ void Ifc::handle_invalid_ifc(std::string error,
                              int instance_id,
                              SAS::TrailId trail)
 {
-  TRC_INFO("Skipping invalid iFC for %s: %s", server_name.c_str(), error.c_str());
+  TRC_ERROR("Skip processing invalid iFC for %s: %s", 
+            server_name.c_str(), 
+            error.c_str());
   SAS::Event event(trail, sas_event_id, instance_id);
   event.add_var_param(server_name);
   event.add_var_param(error);
   SAS::report_event(event);
-  throw xml_error(error.c_str());
+  throw ifc_error();
 }
 
 void Ifc::handle_unusual_ifc(std::string error,
@@ -81,7 +83,9 @@ void Ifc::handle_unusual_ifc(std::string error,
                              int instance_id,
                              SAS::TrailId trail)
 {
-  TRC_INFO("Unusual iFC for %s: %s", server_name.c_str(), error.c_str());
+  TRC_INFO("Continue processing unusual iFC for %s: %s", 
+           server_name.c_str(), 
+           error.c_str());
   SAS::Event event(trail, sas_event_id, instance_id);
   event.add_var_param(server_name);
   event.add_var_param(error);
@@ -93,8 +97,8 @@ void Ifc::handle_unusual_ifc(std::string error,
 // @return true if the SPT matches, false if not
 // @throw xml_error if there is a problem evaluating the trigger.
 bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
-                      const bool& is_registered,               //< The registration state
-                      const bool& is_initial_registration,
+                      const bool is_registered,               //< The registration state
+                      const bool is_initial_registration,
                       pjsip_msg* msg,                   //< The message being matched
                       xml_node<>* spt,                  //< The Service Point Trigger node
                       std::string ifc_str,
@@ -431,8 +435,8 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 //
 // @return true if the message matches, false if not.
 bool Ifc::filter_matches(const SessionCase& session_case,
-                         const bool& is_registered,
-                         const bool& is_initial_registration,
+                         const bool is_registered,
+                         const bool is_initial_registration,
                          pjsip_msg* msg,
                          SAS::TrailId trail) const
 {
@@ -587,17 +591,20 @@ bool Ifc::filter_matches(const SessionCase& session_case,
   }
   catch (xml_error err)
   {
-    // Generic SAS event is logged to make it clear that this iFC is being
-    // skipped since it is invalid. In most cases, a specific SAS event
-    // detailing the exact error will already have been logged as well.
-    // It's needed to catch xml_error raised by utility modules rather than our
-    // code.
-    std::string err_str = "iFC evaluation error: " + std::string(err.what());
+    // Generic SAS event to log skipping iFC due to syntactic error in parsing
+    // XML, most likely thrown by utility libraries. 
+    std::string err_str = "iFC XML is syntactically invalid: " 
+      + std::string(err.what());
     TRC_ERROR(err_str.c_str());
     SAS::Event event(trail, SASEvent::INVALID_IFC_IGNORED, 0);
     event.add_var_param(std::string(err.what()));
     SAS::report_event(event);
-
+    return false;
+  }
+  catch (ifc_error err)
+  {
+    // Skip processing iFC due to semantic error. Specific SAS event and
+    // TRC_ERROR is logged by handle_invalid_ifc.
     return false;
   }
 }

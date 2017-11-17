@@ -83,17 +83,30 @@ public:
       rapidxml::xml_document<>* ifc_doc);
 
   bool filter_matches(const SessionCase& session_case,
-                      const bool& is_registered,
-                      const bool& is_initial_registration,
+                      const bool is_registered,
+                      const bool is_initial_registration,
                       pjsip_msg* msg,
                       SAS::TrailId trail) const;
 
   AsInvocation as_invocation() const;
 
 private:
+
+class ifc_error : public std::exception
+{
+public:
+  ifc_error()
+  {
+  }
+
+  virtual ~ifc_error() throw ()
+  {
+  }
+};
+
   static bool spt_matches(const SessionCase& session_case,
-                          const bool& is_registered,
-                          const bool& is_initial_registration,
+                          const bool is_registered,
+                          const bool is_initial_registration,
                           pjsip_msg *msg,
                           rapidxml::xml_node<>* spt,
                           std::string ifc_str,
