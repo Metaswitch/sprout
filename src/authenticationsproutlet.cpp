@@ -997,7 +997,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       std::string opaque = PJUtils::pj_str_to_string(&credentials->opaque);
       TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
-      SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 1u);
+      SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 2u);
       opaque_marker.add_var_param(opaque);
       SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
     }
