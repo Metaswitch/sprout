@@ -182,6 +182,7 @@ public:
     EXPECT_NE(challenge, (void *)NULL);
     std::string correlator = challenge->get_correlator();
     EXPECT_EQ(correlator, expected_correlator);
+    delete impi;
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.
