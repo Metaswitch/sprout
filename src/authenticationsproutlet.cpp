@@ -796,6 +796,11 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // Store the opaque value that we generated in the IMPI store.  This is
     // needed if the challenge times out so that the SAS trace there can be
     // correlated with the one for this initial REGISTER.
+    // Note we aren't dependent on this to correlate the challenged REGISTER
+    // transaction and the transaction containing the challenge response
+    // because we use the opaque value from the SIP messages directly (meaning
+    // that transactions get correlated even in the case of IMPI store
+    // unavailability.
     auth_challenge->set_correlator(opaque);
 
     // Add the IMPU to the challenge
