@@ -33,6 +33,7 @@ extern "C" {
 #include "test_interposer.hpp"
 #include "md5.h"
 #include "fakesnmp.hpp"
+#include "mock_sas.h"
 
 using namespace std;
 using namespace std;
@@ -106,10 +107,13 @@ public:
                             "0.0.0.0",
                             5060);
 
+    mock_sas_collect_messages(true);
   }
 
   void TearDown()
   {
+    mock_sas_collect_messages(false);
+
     pjsip_tsx_layer_dump(true);
 
     // Terminate all transactions
@@ -150,6 +154,34 @@ public:
     // All the AKA tests use the same challenge so flush the data store after
     // each test to avoid tests interacting.
     _local_data_store->flush_all();
+  }
+
+  /// Check that we logged a GENERIC_CORRELATOR to SAS.
+  void check_sas_correlator(std::string value, bool present=true)
+  {
+    bool found_value = false;
+    std::vector<MockSASMessage*> markers = mock_sas_find_marker_multiple(MARKED_ID_GENERIC_CORRELATOR);
+    for (MockSASMessage* marker : markers)
+    {
+      EXPECT_EQ(marker->var_params.size(), 1u);
+      if (marker->var_params[0] == value)
+      {
+        found_value = true;
+        break;
+      }
+    }
+    EXPECT_EQ(found_value, present);
+  }
+
+  // Chech that the AV for an IMPI in the ImpiStore has a particular stored
+  // correlator.
+  void check_impi_store_correlator(std::string impi_id, std::string nonce, std::string expected_correlator)
+  {
+    ImpiStore::Impi* impi = _impi_store->get_impi(impi_id, 0L);
+    ImpiStore::AuthChallenge* challenge = impi->get_auth_challenge(nonce);
+    EXPECT_NE(challenge, (void *)NULL);
+    std::string correlator = challenge->get_correlator();
+    EXPECT_EQ(correlator, expected_correlator);
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.
@@ -760,6 +792,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
   // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
 
+
   // Set up the HSS response for the AV query using a default private user identity.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
@@ -784,6 +817,16 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
   EXPECT_EQ("MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value to SAS as a GENERIC_CORRELATOR.
+  // This is needed so that SAS can correlate this transaction with the
+  // subsequent challenge response below.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   // Send a new REGISTER request with an authentication header including the
   // response.
   AuthenticationMessage msg2("REGISTER");
@@ -802,6 +845,10 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
+
+  // Check that we logged the same opaque value to SAS as on the challenge so
+  // that the transactions get correlated in SAS.
+  check_sas_correlator(auth_params["opaque"]);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -1097,6 +1144,16 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   EXPECT_EQ("MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value to SAS as a GENERIC_CORRELATOR.
+  // This is needed so that SAS can correlate this transaction with the
+  // subsequent challenge response below.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   // Send a new REGISTER request with an authentication header including a
   // bad response.
   AuthenticationMessage msg2("REGISTER");
@@ -1118,6 +1175,10 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures);
   free_txdata();
+
+  // Check that we logged the same opaque value to SAS as on the challenge so
+  // that the transactions get correlated in SAS.
+  check_sas_correlator(auth_params["opaque"]);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -1497,6 +1558,16 @@ void BaseAuthenticationTest::TestAKAAuthSuccess(char* key)
   EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value to SAS as a GENERIC_CORRELATOR.
+  // This is needed so that SAS can correlate this transaction with the
+  // subsequent challenge response below.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   // Send a new REGISTER request with an authentication header including the
   // response.
   AuthenticationMessage msg2("REGISTER");
@@ -1515,6 +1586,10 @@ void BaseAuthenticationTest::TestAKAAuthSuccess(char* key)
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
+
+  // Check that we logged the same opaque value to SAS as on the challenge so
+  // that the transactions get correlated in SAS.
+  check_sas_correlator(auth_params["opaque"]);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -1588,6 +1663,16 @@ TEST_F(AuthenticationTest, AKAv2AuthSuccess)
   EXPECT_EQ("AKAv2-MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value to SAS as a GENERIC_CORRELATOR.
+  // This is needed so that SAS can correlate this transaction with the
+  // subsequent challenge response below.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   // Send a new REGISTER request with an authentication header including the
   // response.
   AuthenticationMessage msg2("REGISTER");
@@ -1606,6 +1691,10 @@ TEST_F(AuthenticationTest, AKAv2AuthSuccess)
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
+
+  // Check that we logged the same opaque value to SAS as on the challenge so
+  // that the transactions get correlated in SAS.
+  check_sas_correlator(auth_params["opaque"]);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka2?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -1647,6 +1736,16 @@ TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
   EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value to SAS as a GENERIC_CORRELATOR.
+  // This is needed so that SAS can correlate this transaction with the
+  // subsequent challenge response below.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   // Send a new REGISTER request with an authentication header including the
   // response.
   AuthenticationMessage msg2("REGISTER");
@@ -1666,6 +1765,10 @@ TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
+
+  // Check that we logged the same opaque value to SAS as on the challenge so
+  // that the transactions get correlated in SAS.
+  check_sas_correlator(auth_params["opaque"]);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -1707,6 +1810,16 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
   EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value to SAS as a GENERIC_CORRELATOR.
+  // This is needed so that SAS can correlate this transaction with the
+  // subsequent challenge response below.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   // Send a new REGISTER request with an authentication header including the
   // response.
   AuthenticationMessage msg2("REGISTER");
@@ -1722,6 +1835,11 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
+
+  // Check that we logged the same opaque value to SAS as on the challenge so
+  // that the transactions get correlated in SAS.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
 
   // Advance time to just before the binding is due to expire. The auth module
   // should still know about the challenge so a re-REGISTER with a higher nonce
@@ -1743,6 +1861,10 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
+
+  // Check that we didn't log the opaque value to SAS.  We only want the first
+  // challenge response to get correlated with the challenge.
+  check_sas_correlator(auth_params["opaque"], false);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -1785,6 +1907,16 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value to SAS as a GENERIC_CORRELATOR.
+  // This is needed so that SAS can correlate this transaction with the
+  // subsequent challenge response below.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   // Send a new REGISTER request with an authentication header with an incorrect
   // response.
   AuthenticationMessage msg2("REGISTER");
@@ -1806,6 +1938,10 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures);
   free_txdata();
+
+  // Check that we logged the same opaque value to SAS as on the challenge so
+  // that the transactions get correlated in SAS.
+  check_sas_correlator(auth_params["opaque"]);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -1844,6 +1980,19 @@ TEST_F(AuthenticationTest, AKAAuthFailStale)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
+
+  // Check that we logged the opaque values from both the response and the
+  // challenge to SAS as GENERIC CORRELATORS.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  check_sas_correlator(auth_params["opaque"]);
+  check_sas_correlator("123123");
+
+  // Also check that we wrote the opaque value from the challenge to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures);
   free_txdata();
@@ -1889,6 +2038,16 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value to SAS as a GENERIC_CORRELATOR.
+  // This is needed so that SAS can correlate this transaction with the
+  // subsequent challenge response below.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
   // Set up a second HSS response for the resync query from the authentication
   // module.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&resync-auth=87654321876543218765499td9td9td9td9td9td&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
@@ -1925,6 +2084,10 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
+  // Check that we logged the opaque value from the request to SAS as a
+  // GENERIC_CORRELATOR marker.
+  check_sas_correlator(auth_params["opaque"]);
+
   // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
   auth = get_headers(tdata->msg, "WWW-Authenticate");
   auth_params.clear();
@@ -1935,6 +2098,15 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   EXPECT_EQ("auth", auth_params["qop"]);
   EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
   free_txdata();
+
+  // Check that we logged the opaque value from the new challenge to SAS as a
+  // GENERIC_CORRELATOR too.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
 
   // Send a new REGISTER request with an authentication header with a correct
   // response to the second challenge.
@@ -1951,6 +2123,10 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
+
+  // Check that we logged the opaque value from the response to SAS as a
+  // GENERIC_CORRELATOR marker.
+  check_sas_correlator(auth_params["opaque"]);
 
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
@@ -2290,6 +2466,16 @@ TEST_F(AuthenticationTest, StoreFailsWhenCheckingAuthResponse)
   EXPECT_EQ("MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Check that we logged the opaque value from the challenge to SAS as a
+  // GENERIC_CORRELATOR.
+  check_sas_correlator(auth_params["opaque"]);
+  mock_sas_discard_messages();
+
+  // Also check that we wrote the opaque value to the IMPI Store as the
+  // correlator.
+  check_impi_store_correlator("6505550001@homedomain", auth_params["nonce"], auth_params["opaque"]);
+
+
   // Send a new REGISTER request with an authentication header including the
   // response. Simulate a store failure during this request.
   _local_data_store->force_error();
@@ -2310,6 +2496,10 @@ TEST_F(AuthenticationTest, StoreFailsWhenCheckingAuthResponse)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(500).matches(tdata->msg);
+
+  // Check that we logged the same opaque value to SAS as on the challenge so
+  // that the transactions get correlated in SAS.
+  check_sas_correlator(auth_params["opaque"]);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
