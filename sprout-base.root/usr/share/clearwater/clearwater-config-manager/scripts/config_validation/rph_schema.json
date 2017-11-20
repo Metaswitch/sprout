@@ -2,7 +2,7 @@
   "definitions": {
     "Namespace.Priority-Value": {
       "type": "string",
-      "enum": ["drsn.routine", "drsn.priority", "drsn.immediate", "drsn.flash", "drsn.flash-override", "drsn.flash-override-override", "dsn.routine", "dsn.priority", "dsn.immediate", "dsn.flash", "dsn.flash-override", "q735.4", "q735.3", "q735.2", "q735.1", "q735.0", "ets.4", "ets.3", "ets.2", "ets.1", "ets.0", "wps.4", "wps.3", "wps.2", "wps.1", "wps.0"]
+      "pattern": ".+\\..+"
     }
   },
 
