@@ -1286,7 +1286,6 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _send_requests(),
   _send_responses(),
   _pending_sends(0),
-  _pending_responses(0),
   _best_rsp(NULL),
   _complete(false),
   _process_actions_entered(0),
@@ -1687,8 +1686,7 @@ void SproutletWrapper::cancel_fork(int fork_id, int reason)
   }
 }
 
-void SproutletWrapper::cancel_pending_forks(int reason,
-                                            bool require_response)
+void SproutletWrapper::cancel_pending_forks(int reason)
 {
   for (size_t ii = 0; ii < _forks.size(); ++ii)
   {
@@ -1702,20 +1700,6 @@ void SproutletWrapper::cancel_pending_forks(int reason,
         TRC_VERBOSE("%s cancelling fork %d, reason = %d", _id.c_str(), ii, reason);
         _forks[ii].pending_cancel = true;
         _forks[ii].cancel_reason = reason;
-
-        // If this function was called after an AS failed to respond, we want to
-        // mark the fork contacting the AS as not requiring a response.
-        // Otherwise no response will be sent upstream until all retries to the
-        // AS have timed out, even though we have already given up on, and
-        // cancelled, that fork.
-        if (!require_response)
-        {
-          --_pending_responses;
-          // This fork may never receive a message, however it still could, as
-          // the UACTsx is still active. Set a flag to mark this, so the
-          // Sproutlet is not deleted yet.
-          _forks[ii].uactsx_still_active = true;
-        }
       }
     }
   }
@@ -1939,22 +1923,13 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
   {
     // Final response, so mark the fork as completed and decrement the number
     // of pending responses.
-    // However, if the flag to mark that a UACTsx is active is set, this means
-    // the number of pending responses has already been decremented. In this
-    // case don't decrement the number of pending responses again, but do unset
-    // the flag (as the UACTsx has received a final response so another isn't
-    // expected).
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
     pjsip_tx_data_dec_ref(_forks[fork_id].req);
     _forks[fork_id].req = NULL;
     TRC_VERBOSE("%s received final response %s on fork %d, state = %s",
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
-    if (!_forks[fork_id].uactsx_still_active)
-    {
-      --_pending_responses;
-    }
-    _forks[fork_id].uactsx_still_active = false;
+    _forks[fork_id].pending_response = false;
 
     if ((_sproutlet != NULL) &&
       (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
@@ -2022,18 +1997,10 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
 
     // This counts as a final response, so mark the fork as terminated and
     // decrement the number of pending responses.
-    // If the flag to mark that a UACTsx is active is set, this means the number
-    // of pending responses has already been decremented. In this case don't
-    // decrement the number of pending responses again, but do unset the flag
-    // (as the UACTsx has received a final response so another isn't expected).
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
     pjsip_tx_data_dec_ref(_forks[fork_id].req);
     _forks[fork_id].req = NULL;
-    if (!_forks[fork_id].uactsx_still_active)
-    {
-      --_pending_responses;
-    }
-    _forks[fork_id].uactsx_still_active = false;
+    _forks[fork_id].pending_response = false;
 
     if (status == PJ_SUCCESS)
     {
@@ -2100,7 +2067,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
 
   if ((!_complete) &&
       (_best_rsp != NULL) &&
-      (_pending_sends + _pending_responses == 0))
+      (_pending_sends + count_pending_response() == 0))
   {
     // There are no pending responses and no new forked requests waiting to
     // be sent, and the Sproutlet has sent at least one final response, so
@@ -2149,22 +2116,10 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   // delete this SproutletWrapper once more (if it's appropriate to do so).
   _process_actions_entered--;
 
-  // Determine if a UACTsx that could receive a message for one of the forks is
-  // still present (in which case the Sproutlet cannot be destroyed yet).
-  bool active_uactsx_present = false;
-  for (size_t ii = 0; ii < _forks.size(); ++ii)
-  {
-    if (_forks[ii].uactsx_still_active)
-    {
-      active_uactsx_present = true;
-    }
-  }
-
   if ((_complete) &&
-      (_pending_responses == 0) &&
+      (count_pending_response() == 0) &&
       (_pending_timers.empty()) &&
-      (_process_actions_entered == 0) &&
-      (!active_uactsx_present))
+      (_process_actions_entered == 0))
   {
     // Sproutlet has sent a final response, has no downstream forks waiting
     // a response, and has no pending timers, so should destroy itself.
@@ -2260,6 +2215,19 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
   }
 }
 
+int SproutletWrapper::count_pending_response()
+{
+  int forks_pending_response = 0;
+  for (size_t ii = 0; ii < _forks.size(); ++ii)
+  {
+    if (_forks[ii].pending_response)
+    {
+      ++forks_pending_response;
+    }
+  }
+  return forks_pending_response;
+}
+
 void SproutletWrapper::tx_request(SproutletProxy::SendRequest req,
                                   int fork_id)
 {
@@ -2274,7 +2242,7 @@ void SproutletWrapper::tx_request(SproutletProxy::SendRequest req,
     // state for determining when we can legally send CANCEL requests so using
     // CALLING in all cases is fine).
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_CALLING;
-    ++_pending_responses;
+    _forks[fork_id].pending_response = true;
 
     // Store a reference to the request.
     TRC_DEBUG("%s store reference to non-ACK request %s on fork %d",

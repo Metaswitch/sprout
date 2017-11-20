@@ -40,7 +40,7 @@ public:
   MOCK_METHOD2(send_request, int(pjsip_msg*&, int));
   MOCK_METHOD1(send_response, void(pjsip_msg*&));
   MOCK_METHOD2(cancel_fork, void(int, int));
-  MOCK_METHOD2(cancel_pending_forks, void(int, bool));
+  MOCK_METHOD1(cancel_pending_forks, void(int));
   MOCK_METHOD1(fork_state, const ForkState&(int));
   MOCK_METHOD1(free_msg, void(pjsip_msg*&));
   MOCK_METHOD1(get_pool, pj_pool_t*(const pjsip_msg*));
