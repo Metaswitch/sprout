@@ -284,6 +284,7 @@ namespace TestingCommon
     void convert_routeset(pjsip_msg*);
     std::string get_request();
     std::string get_response();
+    std::string get_call_id();
   };
 
 }

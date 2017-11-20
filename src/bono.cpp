@@ -923,7 +923,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   {
     // See if we have a service route for the served user of the request.
     TRC_DEBUG("Request received on authentication flow - check for Service-Route");
-    pjsip_uri* served_user = PJUtils::orig_served_user(tdata->msg);
+    pjsip_uri* served_user = PJUtils::orig_served_user(tdata->msg, tdata->pool, 0);
     if (served_user != NULL)
     {
       std::string user = PJUtils::public_id_from_uri(served_user);

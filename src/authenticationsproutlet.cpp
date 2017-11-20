@@ -591,7 +591,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // This is either a REGISTER, or a request that Sprout should authenticate
     // by treating it like a REGISTER. Get the Authentication Vector from the
     // HSS.
-    PJUtils::get_impi_and_impu(req, impi, impu_for_hss);
+    PJUtils::get_impi_and_impu(req, impi, impu_for_hss, get_pool(req), trail());
     TRC_DEBUG("Get AV from HSS for impi=%s impu=%s",
               impi.c_str(), impu_for_hss.c_str());
 
@@ -1183,17 +1183,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // We're done with the IMPI object now so delete it.
   delete impi_obj; impi_obj = NULL;
 
-  // The message either has insufficient authentication information, or
-  // has failed authentication.  In either case, the message will be
-  // absorbed and responded to by the authentication module, so we need to
-  // add SAS markers so the trail will become searchable.
-  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
-  SAS::report_marker(start_marker);
-
-  // Add a SAS end marker
-  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
-  SAS::report_marker(end_marker);
-
   // Create an ACR for the message and pass the request to it.  Role is always
   // considered originating for a REGISTER request.
   ACR* acr = _authentication->_acr_factory->get_acr(trail(),
@@ -1248,15 +1237,20 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       // Notify Homestead and the HSS that this authentication attempt
       // has definitively failed.
-      std::string impi;
-      std::string impu;
 
-      PJUtils::get_impi_and_impu(req, impi, impu);
-      _authentication->_hss->update_registration_state(impu,
-                                                  impi,
-                                                  HSSConnection::AUTH_FAIL,
-                                                  _scscf_uri,
-                                                  trail());
+      HSSConnection::irs_query irs_query;
+      irs_query._req_type = HSSConnection::AUTH_FAIL;
+      irs_query._server_name = _scscf_uri;
+      HSSConnection::irs_info unused_irs_info;
+
+      PJUtils::get_impi_and_impu(req,
+                                 irs_query._private_id,
+                                 irs_query._public_id,
+                                 get_pool(req), 
+                                 trail());
+      _authentication->_hss->update_registration_state(irs_query,
+                                                       unused_irs_info,
+                                                       trail());
     }
 
     if (_authentication->_analytics != NULL)

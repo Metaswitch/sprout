@@ -53,22 +53,9 @@ public:
   void delete_rc(const std::string& url);
   bool url_was_requested(const std::string& url, const std::string& body);
 
-  HTTPCode update_registration_state(const std::string&,
-                                     const std::string&,
-                                     const std::string&,
-                                     std::string,
-                                     SAS::TrailId);
-
-  HTTPCode update_registration_state_reg(const std::string& public_user_identity,
-                                         const std::string& private_user_identity,
-                                         std::string& regstate,
-                                         std::string& prev_regstate,
-                                         std::string server_name,
-                                         std::map<std::string, Ifcs >& service_profiles,
-                                         AssociatedURIs& associated_uris,
-                                         std::deque<std::string>& ccfs,
-                                         std::deque<std::string>& ecfs,
-                                         SAS::TrailId trail);
+  HTTPCode update_registration_state(const HSSConnection::irs_query& irs_query,
+                                     HSSConnection::irs_info& irs_info,
+                                     SAS::TrailId trail);
 
 private:
   void set_impu_result_internal(const std::string&,
@@ -82,7 +69,7 @@ private:
   long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);
   long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
   long get_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
-  long put_for_xml_object(const std::string& path, std::string body, bool cache_allowed, rapidxml::xml_document<>*& root, SAS::TrailId trail);
+  long put_for_xml_object(const std::string& path, std::string body, const bool& cache_allowed, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   // Map of URL/body pair to result
   typedef std::pair<std::string, std::string> UrlBody;

@@ -23,37 +23,14 @@ public:
   MockHSSConnection();
   virtual ~MockHSSConnection();
 
-  MOCK_METHOD5(update_registration_state,
-               HTTPCode(const std::string& public_user_identity,
-                        const std::string& private_user_identity,
-                        const std::string& type,
-                        std::string server_name,
+  MOCK_METHOD3(update_registration_state,
+               HTTPCode(const HSSConnection::irs_query& irs_query,
+                        HSSConnection::irs_info& irs_info,
                         SAS::TrailId trail));
-  MOCK_METHOD7(update_registration_state,
-               HTTPCode(const std::string& public_user_identity,
-                        const std::string& private_user_identity,
-                        const std::string& type,
-                        std::string server_name,
-                        std::map<std::string, Ifcs >& service_profiles,
-                        AssociatedURIs& associated_uris,
-                        SAS::TrailId trail));
-  MOCK_METHOD10(update_registration_state_reg,
-                HTTPCode(const std::string& public_user_identity,
-                         const std::string& private_user_identity,
-                         std::string& regstate,
-                         std::string& prev_regstate,
-                         std::string server_name,
-                         std::map<std::string, Ifcs >& ifcs_map,
-                         AssociatedURIs& associated_uris,
-                         std::deque<std::string>& ccfs,
-                         std::deque<std::string>& ecfs,
-                         SAS::TrailId trail));
 
-  MOCK_METHOD5(get_registration_data,
-               HTTPCode(const std::string& public_user_identity,
-                        std::string& regstate,
-                        std::map<std::string, Ifcs >& ifcs_map,
-                        AssociatedURIs& associated_uris,
+  MOCK_METHOD3(get_registration_data,
+               HTTPCode(const std::string& public_id,
+                        HSSConnection::irs_info& irs_info,
                         SAS::TrailId trail));
 
 };

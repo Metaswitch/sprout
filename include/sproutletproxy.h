@@ -256,6 +256,10 @@ protected:
     /// The UASTsx will persist while there are pending timers.
     std::set<pj_timer_entry*> _pending_timers;
 
+    /// Count of the number of UASTsx objects currently active. Used for
+    /// debugging purposes.
+    static std::atomic_int _num_instances;
+
     friend class SproutletWrapper;
   };
 
@@ -340,8 +344,11 @@ public:
   const std::string& get_network_function() const { return _this_network_func; };
 
 private:
-  void rx_request(pjsip_tx_data* req);
-  void rx_response(pjsip_tx_data* rsp, int fork_id);
+  void rx_request(pjsip_tx_data* req,
+                  int allowed_host_state=BaseResolver::ALL_LISTS);
+  void rx_response(pjsip_tx_data* rsp,
+                   int fork_id,
+                   ForkErrorState error_state=ForkErrorState::NONE);
   void rx_cancel(pjsip_tx_data* cancel);
   void rx_error(int status_code);
   void rx_fork_error(ForkErrorState fork_error, int fork_id);
@@ -358,6 +365,7 @@ private:
   int compare_sip_sc(int sc1, int sc2);
   bool is_uri_local(const pjsip_uri*) const;
   void log_inter_sproutlet(pjsip_tx_data* tdata, bool downstream);
+  ForkErrorState get_error_state() const;
 
   SproutletProxy* _proxy;
 
@@ -435,6 +443,12 @@ private:
   /// SproutletWrapper (and the SproutletTsx it wraps) won't be deleted
   /// until all these timers have popped or been cancelled.
   std::set<TimerID> _pending_timers;
+
+  // The allowed host state for outbound requests from the sproutlet wrapped by
+  // this wrapper.  If there are no addresses of the appropriate state (e.g.
+  // whitelisted), then a 503 response will be internally generated, and the
+  // error state will be set to indicate that there were no matching addresses.
+  int _allowed_host_state;
 
   SAS::TrailId _trail_id;
 

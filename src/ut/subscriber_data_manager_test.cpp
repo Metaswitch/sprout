@@ -35,6 +35,7 @@ using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::AtLeast;
 
 /// Fixture for BasicSubscriberDataManagerTest.
 class BasicSubscriberDataManagerTest : public SipTest
@@ -298,7 +299,7 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) subscription_created"));
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: Reason(s): - At least one subscription has been created"));
 
   // Read the record back in and check the subscription is still in place.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
@@ -379,7 +380,7 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed subscription_created changed_associated_uris"));
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: Reason(s): - At least one binding has changed - At least one subscription has been created - The associated URIs have changed"));
 
   // Get AoR record
   aor_data1 = this->_store->get_aor_data(std::string("5102175691@cw-ngv.com"), 0);
@@ -429,7 +430,7 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
 
   EXPECT_EQ(1u, wildcard_map.size());
 
-  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) changed_associated_uris"));
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: Reason(s): - The associated URIs have changed -"));
 
   // Clear Associated URIs
   au.clear_uris();
@@ -444,6 +445,9 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
 // the endpoint then a NOTIFY isn't sent.
 TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 {
+  // We're not testing analytics in this UT, so we don't care about any calls to it.
+  EXPECT_CALL(*(this->_analytics_logger), registration(_,_,_,_)).Times(AtLeast(0));
+
   CapturingTestLogger log;
   AoR::Binding* b0;
   AoR::Binding* b1;
@@ -538,7 +542,7 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   bool rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
-  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed subscription_created"));
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: Reason(s): - At least one binding has changed - At least one subscription has been created -"));
 
   // Get AoR record, remove first pair of binding and subscription at the same
   // time.
@@ -547,7 +551,7 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   aor_data1->get_current()->remove_subscription(std::string("1234"));
 
-  // Write AoR record back to store with ADMIN. This would simulate the 
+  // Write AoR record back to store with ADMIN. This would simulate the
   // behaviour of admin deregistration via Sprout/HSS.
   rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0, all_bindings_expired);
   EXPECT_TRUE(rc);
@@ -556,7 +560,7 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   // Use log to check a NOTIFY has been sent to the removed binding about its
   // deregistration; this makes the test quite fragile, but there isn't a way to
   // check for the NOTIFY itself.
-  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed"));
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: Reason(s): - At least one binding has changed"));
   EXPECT_TRUE(log.contains("The subscription 1234 has been terminated, send final NOTIFY"));
 
   // Get AoR record, remove second pair of binding and subscription at the same
@@ -566,17 +570,17 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   aor_data1->get_current()->remove_binding(std::string("urn:uuid:0-0000-0000-0000-b4dd32817622:1"));
   aor_data1->get_current()->remove_subscription(std::string("5678"));
 
-  // Write AoR record back to store with TIMEOUT. This would simulate the 
+  // Write AoR record back to store with TIMEOUT. This would simulate the
   // behaviour of an expired binding that subscribed to its own registration.
   rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::TIMEOUT, aor_data1, 0, all_bindings_expired);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  // Use log to check that expiry of an endpoint that subscribe to its own 
+  // Use log to check that expiry of an endpoint that subscribe to its own
   // registration state will skip such NOTIFY.
   // This makes the test quite fragile, but there isn't a way to
   // check for the NOTIFY itself.
-  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 5678: reason(s) bindings_changed"));
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: Reason(s): - At least one binding has changed"));
   EXPECT_TRUE(log.contains("Skip expired subscription 5678 as the binding sip:5678@5678 has expired"));
 }
 
@@ -743,7 +747,7 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed subscription_created changed_associated_uris"));
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: Reason(s): - At least one binding has changed - At least one subscription has been created - The associated URIs have changed"));
 
   // Advance the time by 101 seconds and read the record back from the store.
   // The first binding should have expired.
