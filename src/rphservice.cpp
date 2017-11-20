@@ -148,7 +148,7 @@ void RPHService::update_rph()
 
   //  Check that RPH values are well ordered. This block of code loops through
   //  each IANA namespace from the low priority RPH values to the high priority
-  //  ones. If a value is set it checks that all values of higher priorities are
+  //  ones. If a value is set it checks that all values of higher priority are
   //  given higher priorites.
   for (std::vector<std::string> nspace : RPH_NAMESPACES)
   {
@@ -182,36 +182,6 @@ void RPHService::update_rph()
         priority = new_rph_map.find(*nspace_it)->second;
       }
     }
-  }
-
-  // Check that there are no unknown RPH values. The easiest way to do this is
-  // to duplicate the map, remove any known RPH values and check that the map is
-  // empty.
-  std::map<std::string, SIPEventPriorityLevel> new_rph_map_clone = new_rph_map;
-  for (std::vector<std::string> nspace : RPH_NAMESPACES)
-  {
-    for (std::string value : nspace)
-    {
-      std::map<std::string, SIPEventPriorityLevel>::iterator it = new_rph_map_clone.find(value);
-      if (it != new_rph_map_clone.end())
-      {
-        new_rph_map_clone.erase(it);
-      }
-    }
-  }
-
-  if (!new_rph_map_clone.empty())
-  {
-    for (std::map<std::string, SIPEventPriorityLevel>::iterator it = new_rph_map_clone.begin();
-         it != new_rph_map_clone.end();
-         ++it)
-    {
-      TRC_ERROR("RPH configuration contains unknown RPH value \"%s\"", it->first.c_str());
-    }
-
-    CL_SPROUT_RPH_FILE_INVALID.log();
-    set_alarm();
-    return;
   }
 
   // At this point, we're definitely going to override the RPH map we currently have so,

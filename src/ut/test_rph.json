@@ -13,7 +13,7 @@
     },
     {
       "priority" : 4,
-      "rph_values" : []
+      "rph_values" : ["foo"]
     },
     {
       "priority" : 5,

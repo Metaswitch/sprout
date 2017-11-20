@@ -1,7 +1,0 @@
-{
-  "priority_blocks" : [
-      { "priority" : 10,
-        "rph_values" : ["foo", "bar"]
-      }
-    ]
-}

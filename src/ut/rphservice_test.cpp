@@ -113,6 +113,7 @@ TEST_F(RPHServiceTest, ValidRPHFile)
   EXPECT_EQ(rph.lookup_priority("ets.4", 0), SIPEventPriorityLevel::HIGH_PRIORITY_1);
   EXPECT_EQ(rph.lookup_priority("wps.3", 0), SIPEventPriorityLevel::HIGH_PRIORITY_3);
   EXPECT_EQ(rph.lookup_priority("ets.3", 0), SIPEventPriorityLevel::HIGH_PRIORITY_3);
+  EXPECT_EQ(rph.lookup_priority("foo", 0), SIPEventPriorityLevel::HIGH_PRIORITY_4);
   EXPECT_EQ(rph.lookup_priority("wps.2", 0), SIPEventPriorityLevel::HIGH_PRIORITY_5);
   EXPECT_EQ(rph.lookup_priority("ets.2", 0), SIPEventPriorityLevel::HIGH_PRIORITY_5);
   EXPECT_EQ(rph.lookup_priority("wps.1", 0), SIPEventPriorityLevel::HIGH_PRIORITY_7);
@@ -134,15 +135,5 @@ TEST_F(RPHServiceTest, BadlyOrderedRPHFile)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_badly_ordered_rph.json"));
   EXPECT_TRUE(log.contains("RPH value \"wps.0\" has lower priority than a lower priority RPH value from the same namespace"));
-  EXPECT_TRUE(rph._rph_map.empty());
-}
-
-TEST_F(RPHServiceTest, UnknownValueRPHFile)
-{
-  CapturingTestLogger log;
-  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
-  RPHService rph(_mock_alarm, string(UT_DIR).append("/test_unknown_value_rph.json"));
-  EXPECT_TRUE(log.contains("RPH configuration contains unknown RPH value \"foo\""));
-  EXPECT_TRUE(log.contains("RPH configuration contains unknown RPH value \"bar\""));
   EXPECT_TRUE(rph._rph_map.empty());
 }
