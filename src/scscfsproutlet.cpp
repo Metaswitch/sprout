@@ -2128,6 +2128,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
     cancel_pending_forks();
+    mark_forks_as_timed_out();
 
     if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {

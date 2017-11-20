@@ -1722,6 +1722,21 @@ void SproutletWrapper::cancel_pending_forks(int reason)
   }
 }
 
+void SproutletWrapper::mark_forks_as_timed_out()
+{
+  for (size_t ii = 0; ii < _forks.size(); ++ii)
+  {
+    if ((_forks[ii].state.tsx_state != PJSIP_TSX_STATE_NULL) &&
+        (_forks[ii].state.tsx_state != PJSIP_TSX_STATE_TERMINATED))
+    {
+      if (_forks[ii].req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
+      {
+        _forks[ii].timed_out = true;
+      }
+    }
+  }
+}
+
 const ForkState& SproutletWrapper::fork_state(int fork_id)
 {
   if (fork_id < (int)_forks.size())
@@ -2100,7 +2115,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
 
   if ((!_complete) &&
       (_best_rsp != NULL) &&
-      (_pending_sends + count_pending_response() == 0))
+      (_pending_sends + count_pending_actionable_response() == 0))
   {
     // There are no pending responses and no new forked requests waiting to
     // be sent, and the Sproutlet has sent at least one final response, so
@@ -2259,6 +2274,23 @@ int SproutletWrapper::count_pending_response()
     }
   }
   return forks_pending_response;
+}
+
+int SproutletWrapper::count_pending_actionable_response()
+{
+  // This is forks which are pending a response, and which haven't timed out.
+  // (Since if they have timed out, then any response received from them will be
+  // ignored.)
+  int forks_pending_actionable_response = 0;
+  for (size_t ii = 0; ii < _forks.size(); ++ii)
+  {
+    if (_forks[ii].pending_response &&
+        _forks[ii].timed_out)
+    {
+      ++forks_pending_actionable_response;
+    }
+  }
+  return forks_pending_actionable_response;
 }
 
 void SproutletWrapper::tx_request(SproutletProxy::SendRequest req,

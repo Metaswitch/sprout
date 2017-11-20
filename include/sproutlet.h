@@ -292,6 +292,9 @@ public:
   ///
   virtual void cancel_pending_forks(int reason=0) = 0;
 
+  /// Marks all pending forked requests as timed out.
+  virtual void mark_forks_as_timed_out() = 0;
+
   /// Returns the current status of a downstream fork, including the
   /// transaction state and whether a timeout or transport error has been
   /// detected on the fork.
@@ -627,6 +630,10 @@ protected:
   ///
   void cancel_pending_forks(int reason=0)
     {_helper->cancel_pending_forks(reason);}
+
+  /// Marks all pending forks as timed out.
+  void mark_forks_as_timed_out()
+    {_helper->mark_forks_as_timed_out();}
 
   /// Returns the current status of a downstream fork, including the
   /// transaction state and whether a timeout or transport error has been
