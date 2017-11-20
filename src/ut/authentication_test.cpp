@@ -179,7 +179,7 @@ public:
   {
     ImpiStore::Impi* impi = _impi_store->get_impi(impi_id, 0L);
     ImpiStore::AuthChallenge* challenge = impi->get_auth_challenge(nonce);
-    EXPECT_NE(challenge, (void *)NULL);
+    EXPECT_NE(challenge, nullptr);
     std::string correlator = challenge->get_correlator();
     EXPECT_EQ(correlator, expected_correlator);
     delete impi;
@@ -792,7 +792,6 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
 {
   // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
-
 
   // Set up the HSS response for the AV query using a default private user identity.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
@@ -1982,13 +1981,15 @@ TEST_F(AuthenticationTest, AKAAuthFailStale)
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
 
-  // Check that we logged the opaque values from both the response and the
-  // challenge to SAS as GENERIC CORRELATORS.
+  // Check that we logged the opaque value from the new challenge to SAS as
+  // GENERIC CORRELATORS, but NOT the opaque value from the response -- this
+  // had the wrong nonce and so we don't consider it to correlate with a
+  // previous challenge.
   std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
   std::map<std::string, std::string> auth_params;
   parse_www_authenticate(auth, auth_params);
   check_sas_correlator(auth_params["opaque"]);
-  check_sas_correlator("123123");
+  check_sas_correlator("123123", false);
 
   // Also check that we wrote the opaque value from the challenge to the IMPI Store as the
   // correlator.

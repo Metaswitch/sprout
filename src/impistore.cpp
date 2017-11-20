@@ -1,4 +1,4 @@
-/**
+  /**
  * @file impistore.cpp Implementation of store for IMPI data
  *
  * Copyright (C) Metaswitch Networks 2017
@@ -297,6 +297,7 @@ void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
   if (auth_challenge->get_correlator() != "")
   {
     SAS::Marker marker(trail, MARKED_ID_GENERIC_CORRELATOR, 3u);
+    marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
     marker.add_var_param(auth_challenge->get_correlator());
     SAS::report_marker(marker, SAS::Marker::Scope::Trace);
   }

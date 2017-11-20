@@ -679,6 +679,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     opaque.assign(buf, sizeof(buf));
     TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
     SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 1u);
+    opaque_marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
     opaque_marker.add_var_param(opaque);
     SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
 
@@ -793,14 +794,16 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // Add the header to the message.
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)hdr);
 
-    // Store the opaque value that we generated in the IMPI store.  This is
-    // needed if the challenge times out so that the SAS trace there can be
-    // correlated with the one for this initial REGISTER.
+    // Store the opaque value that we generated in the IMPI store.  This means
+    // that if the challenge times out we can log the same opaque marker to SAS
+    // there in order to correlate the SAS trail for the timeout with the SAS
+    // trail generated for this initial REGISTER.
+    //
     // Note we aren't dependent on this to correlate the challenged REGISTER
     // transaction and the transaction containing the challenge response
     // because we use the opaque value from the SIP messages directly (meaning
     // that transactions get correlated even in the case of IMPI store
-    // unavailability.
+    // unavailability).
     auth_challenge->set_correlator(opaque);
 
     // Add the IMPU to the challenge
@@ -989,19 +992,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     unsigned long nonce_count = pj_strtoul2(&credentials->nc, NULL, 16);
     nonce_count = (nonce_count == 0) ? 1 : nonce_count;
 
-    // If this is the first response to the challenge then log the value of
-    // opaque to SAS as a marker. We also do this when we challenge the initial
-    // REGISTER and in this way the two transactions (the challenge and the
-    // challenge response) get correlated in SAS.
-    if (nonce_count == 1)
-    {
-      std::string opaque = PJUtils::pj_str_to_string(&credentials->opaque);
-      TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
-      SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 2u);
-      opaque_marker.add_var_param(opaque);
-      SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
-    }
-
     if ((auth_challenge != NULL) && (auth_challenge->get_nonce_count() > 1))
     {
       // A nonce count > 1 is supplied. Check that it is acceptable. If it is
@@ -1031,6 +1021,29 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
       }
+    }
+
+    // If this is the first response to the challenge then log the value of
+    // opaque to SAS as a marker. We also do this when we challenge the initial
+    // REGISTER and in this way the two transactions (the challenge and the
+    // challenge response) get correlated in SAS.
+    //
+    // We have to be slightly careful how we determine whether this is the first
+    // response. If we just check that the nonce_count in the request is 1 then
+    // if someone spams us with REGISTERs that have a nonce_count of 1 we will
+    // try and correlate them all, ultimately ending up with an unloadable SAS
+    // trace. So instead we use the nonce_count from the IMPI store. But we
+    // also want to correlate REGISTERs that might be valid initial responses in
+    // the case where the IMPIStore is unavailable.
+    if ((impi_obj == NULL) ||
+        ((auth_challenge != NULL) && (auth_challenge->get_nonce_count() == 1)))
+    {
+      std::string opaque = PJUtils::pj_str_to_string(&credentials->opaque);
+      TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
+      SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 2u);
+      opaque_marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
+      opaque_marker.add_var_param(opaque);
+      SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
     }
 
     if (status == PJ_SUCCESS)
