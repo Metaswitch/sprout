@@ -3760,7 +3760,9 @@ TEST_F(ICSCFSproutletTest, ICSCFHandlesUrnUriTerm)
   msg1._route = "Route: <sip:homedomain>";
   inject_msg(msg1.get_request(), tp);
 
-  // Check that the MESSAGE is rejected
+  // As the message is terminating the I-CSCF will attempt to route based on
+  // the ReqURI - as this in an invalid URI to route on the MESSAGE should
+  // be rejected.
   tdata = current_txdata();
   RespMatcher(400).matches(tdata->msg);
   tp->expect_target(tdata);
@@ -3790,7 +3792,9 @@ TEST_F(ICSCFSproutletTest, ICSCFHandlesOrigInvalid)
   msg1._route = "Route: <sip:homedomain;orig>";
   inject_msg(msg1.get_request(), tp);
 
-  // Check that the MESSAGE is rejected
+  // As the message is originating the I-CSCF will attempt to get the subscriber
+  // details based on the P-Served-User - as this an invalid URI to be in the
+  // the HSS the MESSAGE should be rejected.
   tdata = current_txdata();
   RespMatcher(400).matches(tdata->msg);
   tp->expect_target(tdata);
@@ -3820,7 +3824,9 @@ TEST_F(ICSCFSproutletTest, ICSCFHandlesRegInvalid)
   msg1._route = "Route: <sip:homedomain>";
   inject_msg(msg1.get_request(), tp);
 
-  // Check that the MESSAGE is rejected
+  // As this is a REGISTER the I-CSCF will attempt to get the subscriber
+  // details based on the To header - as this an invalid URI to be in the
+  // the HSS the MESSAGE should be rejected.
   tdata = current_txdata();
   RespMatcher(400).matches(tdata->msg);
   tp->expect_target(tdata);
@@ -3851,7 +3857,8 @@ TEST_F(ICSCFSproutletTest, ICSCFHandlesEnumInvalid)
   msg1._route = "Route: <sip:homedomain>";
   inject_msg(msg1.get_request(), tp);
 
-  // Check that the MESSAGE is rejected
+  // The ENUM rule means that the MESSAGE should be routed to urn:services:sos
+  // - as this is an invalid URI to route on the MESSAGE should be rejected.
   tdata = current_txdata();
   RespMatcher(400).matches(tdata->msg);
   tp->expect_target(tdata);
