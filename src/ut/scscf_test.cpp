@@ -3802,6 +3802,9 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
   poll();
 
   // Now the AS finally responds with a 200 OK.
+  // As a 408 response has already been sent upstream, this 200 OK shouldn't be
+  // passed on. Also, since the AS is not currently trying, no CANCEL will be
+  // sent to the AS either.
   inject_msg(respond_to_txdata(inv_for_as, 200), &tpAS1);
 
   // Check no other messages are pending.
@@ -3989,7 +3992,10 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 
 
 // Test that after a 100 Trying is received from an AS, the request isn't timed
-// out after 2s.
+// out after 2 secs (which is the default timeout for an AS when Default
+// Handling is set to Session Terminated) with a 408, and instead a CANCEL is
+// sent after waiting for 3 mins (min timeout for INVITE generating a final
+// response).
 TEST_F(SCSCFTest, TimoutExtendedByProofOfLife)
 {
   // Register an endpoint to act as the callee.
@@ -4007,8 +4013,7 @@ TEST_F(SCSCFTest, TimoutExtendedByProofOfLife)
                                    "UNREGISTERED",
                                    subscription.return_sub());
 
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("501")));
+//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4044,40 +4049,42 @@ TEST_F(SCSCFTest, TimoutExtendedByProofOfLife)
   // AS responds with 100 Trying.
   inject_msg(respond_to_txdata(inv_for_as, 100), &tpAS1);
 
-  // Advance some time.
+  // Advance some time (more than 2s).
   cwtest_advance_time_ms(6000);
   poll();
 
   // Check no timeout has been sent upstream.
   ASSERT_EQ(0, txdata_count());
 
-  // Tested the important bit - now just finish off the flow.
+  // Advance 3 mins and 1 millisec so that the INVITE will time out.
+  cwtest_advance_time_ms(180001);
+  poll();
 
-  // AS responds with a random error 501.
-  inject_msg(respond_to_txdata(inv_for_as, 501), &tpAS1);
-
-  // Send the error upstream, and send an ACK to the AS.
-  ASSERT_EQ(2, txdata_count());
-
+  // At this point we should have sent a CANCEL to the AS, as the INVITE has
+  // timed out.
+  ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
-  RespMatcher(501).matches(out);
-  tpCaller.expect_target(current_txdata(), true);
-  free_txdata();
-
-  out = current_txdata()->msg;
-  ReqMatcher("ACK").matches(out);
+  ReqMatcher("CANCEL");
   tpAS1.expect_target(current_txdata(), true);
   free_txdata();
 
-  // Caller ACKS error.
-  msg._method = "ACK";
-  inject_msg(msg.get_request(), &tpCaller);
+  // Advance time for 32 secs and 1 millisec so that the time period in which we
+  // will wait for a response to a CANCEL has timed out.
+  cwtest_advance_time_ms(32001);
+  poll();
+
+  // At this point we should have sent a 487 error upstream, to show the request
+  // has been terminated with a CANCEL.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(487).matches(out);
+  tpCaller.expect_target(current_txdata(), true);
+  free_txdata();
 
   // Check no other messages pending.
   poll();
   ASSERT_EQ(0, txdata_count());
 }
-
 
 
 TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
