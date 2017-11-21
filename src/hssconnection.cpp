@@ -309,7 +309,7 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
   }
 }
 
-bool determine_ims_present(const std::string& req_type)
+bool is_ims_expected(const std::string& req_type)
 {
   return (req_type == HSSConnection::REG || req_type == HSSConnection::CALL);
 }
@@ -496,20 +496,20 @@ HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
   HTTPCode http_code = put_homestead_xml(irs_query, root, trail);
   if (http_code == HTTP_OK)
   {
-    bool IMSPresent = determine_ims_present(irs_query._req_type);
+    bool IMSExpected = is_ims_expected(irs_query._req_type);
     http_code = decode_homestead_xml(irs_query._public_id,
                                      irs_info,
                                      root,
                                      _sifc_service,
-                                     IMSPresent,
+                                     IMSExpected,
                                      trail) ? HTTP_OK : HTTP_SERVER_ERROR;
   }
   return http_code;
 }
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
-                                                  irs_info& irs_info,
-                                                  SAS::TrailId trail)
+                                              irs_info& irs_info,
+                                              SAS::TrailId trail)
 {
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
   // to it, so we want to delete the underlying pointer when they all go out
@@ -531,7 +531,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_id,
 
 HTTPCode HSSConnection::get_homestead_xml(const std::string& public_id,
                                           std::shared_ptr<rapidxml::xml_document<>>& root,
-                                              SAS::TrailId trail)
+                                          SAS::TrailId trail)
 {
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_GET_REG, 0);
   event.add_var_param(public_id);

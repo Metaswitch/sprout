@@ -138,11 +138,11 @@ private:
                                   rapidxml::xml_document<>*& root,
                                   SAS::TrailId trail);
   HTTPCode put_homestead_xml(const irs_query& irs_query,
-                                          std::shared_ptr<rapidxml::xml_document<>>& root,
-                                          SAS::TrailId trail);
+                             std::shared_ptr<rapidxml::xml_document<>>& root,
+                             SAS::TrailId trail);
   HTTPCode get_homestead_xml(const std::string& public_id,
-                                          std::shared_ptr<rapidxml::xml_document<>>& root,
-                                          SAS::TrailId trail);
+                             std::shared_ptr<rapidxml::xml_document<>>& root,
+                             SAS::TrailId trail);
 
   HttpConnection* _http;
   SNMP::EventAccumulatorTable* _latency_tbl;
