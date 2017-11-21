@@ -118,7 +118,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     {
       if (strcmp(name, RegDataXMLUtils::EXTENSION) == 0)
       {
-        handle_invalid_ifc("Missing class for service point trigger", server_name, SASEvent::IFC_INVALID, 0, trail);
+        handle_invalid_ifc("Missing class for service point trigger", server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
       }
       else
       {
@@ -129,7 +129,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 
   if (!node)
   {
-    handle_invalid_ifc("Missing class for service point trigger", server_name, SASEvent::IFC_INVALID, 0, trail);
+    handle_invalid_ifc("Missing class for service point trigger", server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
   }
 
   // Now interpret the node depending on its class.
@@ -207,7 +207,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     if (!spt_header)
     {
       handle_invalid_ifc("Missing Header element for SIPHeader service point trigger",
-                         server_name, SASEvent::IFC_INVALID, 0, trail);
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     header_regex = boost::regex(XMLUtils::get_text_or_cdata(spt_header),
@@ -216,7 +216,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     if (header_regex.status())
     {
       handle_invalid_ifc("Invalid regular expression in Header element for SIPHeader service point trigger",
-                         server_name, SASEvent::IFC_INVALID, 0, trail);
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     for (header = msg->hdr.next; header != &msg->hdr; header = header->next)
@@ -239,7 +239,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
             if (content_regex.status())
             {
               handle_invalid_ifc("Invalid regular expression in Content element for SIPHeader service point trigger",
-                                 server_name, SASEvent::IFC_INVALID, 0, trail);
+                                 server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
             }
           }
 
@@ -337,7 +337,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     if (req_uri_regex.status())
     {
       handle_invalid_ifc("Invalid regular expression in Request URI service point trigger",
-                         server_name, SASEvent::IFC_INVALID, 0, trail);
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
       ret = boost::regex_search(test_string, req_uri_regex);
   }
@@ -352,7 +352,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     if (!spt_line)
     {
       handle_invalid_ifc("Missing Line element for SessionDescription service point trigger",
-                         server_name, SASEvent::IFC_INVALID, 0, trail);
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     line_regex = boost::regex(XMLUtils::get_text_or_cdata(spt_line),
@@ -360,7 +360,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     if (line_regex.status())
     {
       handle_invalid_ifc("Invalid regular expression in Line element for Session Description service point trigger",
-                         server_name, SASEvent::IFC_INVALID, 0, trail);
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     // Check if the message body is SDP.
@@ -394,7 +394,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                 if (content_regex.status())
                 {
                   handle_invalid_ifc("Invalid regular expression in Content element for Session Description service point trigger",
-                                     server_name, SASEvent::IFC_INVALID, 0, trail);
+                                     server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
                 }
               }
 
@@ -454,14 +454,14 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     if (as == NULL)
     {
       handle_invalid_ifc("iFC missing ApplicationServer element", server_name, 
-                         SASEvent::IFC_INVALID_NOAS, 0, trail);
+                         SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     server_name = XMLUtils::get_first_node_value(as, RegDataXMLUtils::SERVER_NAME);
     if (server_name.empty())
     {
       handle_invalid_ifc("iFC has no ServerName", server_name, 
-                         SASEvent::IFC_INVALID_NOAS, 0, trail);
+                         SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     xml_node<>* profile_part_indicator = _ifc->first_node(RegDataXMLUtils::PROFILE_PART_INDICATOR);
@@ -596,7 +596,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     std::string err_str = "iFC XML is syntactically invalid: " 
       + std::string(err.what());
     TRC_ERROR(err_str.c_str());
-    SAS::Event event(trail, SASEvent::INVALID_IFC_IGNORED, 0);
+    SAS::Event event(trail, SASEvent::INVALID_XML_IGNORED, 0);
     event.add_var_param(std::string(err.what()));
     SAS::report_event(event);
     return false;
