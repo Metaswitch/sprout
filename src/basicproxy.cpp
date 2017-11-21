@@ -1803,8 +1803,10 @@ void BasicProxy::UACTsx::send_request()
 
       if (_current_server.is_set())
       {
+        // LCOV_EXCL_START - don't expect failure to send messages in UT
         fork_error = ForkErrorState::TRANSPORT_ERROR;
         reason = "Unexpected failure to send request to peer";
+        // LCOV_EXCL_STOP
       }
       else
       {
