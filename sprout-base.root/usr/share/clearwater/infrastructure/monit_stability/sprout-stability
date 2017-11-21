@@ -1,0 +1,61 @@
+#!/bin/sh
+
+# @file sprout-stability
+#
+# Copyright (C) Metaswitch Networks 2017
+# If license terms are provided to you in a COPYING file in the root directory
+# of the source code repository by which you are accessing this code, then
+# the license outlined in that COPYING file applies to your use.
+# Otherwise no rights are granted except for those provided to you by
+# Metaswitch Networks in a separate written agreement.
+
+# Used for monitoring the stability of the sprout process.
+
+PROCESS_NAME="sprout"
+
+GRACE_PERIOD=20
+ABORT_PERIOD=60
+USAGE="Usage: $PROCESS_NAME-stability {check|reset}"
+ABORT_FLAG_NAME="$PROCESS_NAME-aborting-flag"
+
+if [ -z "$1" ]; then
+  method="check"
+else
+  method=$1
+fi
+
+# Returns 1 if the process has not been running for at least the grace period,
+# or the abort flag is set (and has not timed out).
+check_stability() {
+  /usr/share/clearwater/bin/check-stability /var/run/$PROCESS_NAME/$PROCESS_NAME.pid $GRACE_PERIOD $ABORT_FLAG_NAME $ABORT_PERIOD
+}
+
+# Clears the abort flag - should be called when (re)starting the process.
+reset_stability() {
+  /usr/share/clearwater/bin/cw-flag clear $ABORT_FLAG_NAME
+}
+
+aborted_stability() {
+  /usr/share/clearwater/bin/cw-flag set $ABORT_FLAG_NAME
+}
+
+case "$method" in
+
+  check)
+    check_stability
+    exit $?
+    ;;
+
+  reset)
+    reset_stability
+    ;;
+
+  aborted)
+    aborted_stability
+    ;;
+
+  *)
+    echo $USAGE
+    ;;
+
+esac
