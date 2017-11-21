@@ -31,7 +31,7 @@ check program sprout_stability with path /usr/share/clearwater/infrastructure/mo
   group sprout
   depends on sprout_process
 
-  if status != 0 then exec "/bin/bash -c 'echo -n unstable >&2'"
+  if status != 0 for 99 cycles then exec "/bin/bash -c 'echo -n unstable >&2'"
 
 # Clear any alarms if the process has been running long enough.
 check program sprout_uptime with path /usr/share/clearwater/infrastructure/monit_uptime/check-sprout-uptime
