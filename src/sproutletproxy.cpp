@@ -1722,7 +1722,7 @@ void SproutletWrapper::cancel_pending_forks(int reason)
   }
 }
 
-void SproutletWrapper::mark_forks_as_timed_out()
+void SproutletWrapper::mark_pending_forks_as_timed_out()
 {
   for (size_t ii = 0; ii < _forks.size(); ++ii)
   {
@@ -2115,7 +2115,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
 
   if ((!_complete) &&
       (_best_rsp != NULL) &&
-      (_pending_sends + count_pending_actionable_response() == 0))
+      (_pending_sends + count_pending_actionable_responses() == 0))
   {
     // There are no pending responses and no new forked requests waiting to
     // be sent, and the Sproutlet has sent at least one final response, so
@@ -2165,7 +2165,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   _process_actions_entered--;
 
   if ((_complete) &&
-      (count_pending_response() == 0) &&
+      (count_pending_responses() == 0) &&
       (_pending_timers.empty()) &&
       (_process_actions_entered == 0))
   {
@@ -2183,8 +2183,8 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
 
   if (_complete)
   {
-    // We've already sent a final response upstream (a 200 OK) so discard
-    // this response.
+    // We've already sent a final response upstream (a 200 OK or 408 timeout) so
+    // discard this response.
     TRC_DEBUG("Discard stale response %s (%s)",
               pjsip_tx_data_get_info(rsp), rsp->obj_name);
     deregister_tdata(rsp);
@@ -2263,7 +2263,8 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
   }
 }
 
-int SproutletWrapper::count_pending_response()
+// Counts the number of forks that are pending a response.
+int SproutletWrapper::count_pending_responses()
 {
   int forks_pending_response = 0;
   for (size_t ii = 0; ii < _forks.size(); ++ii)
@@ -2276,16 +2277,16 @@ int SproutletWrapper::count_pending_response()
   return forks_pending_response;
 }
 
-int SproutletWrapper::count_pending_actionable_response()
+// Counts the number of forks that are pending a response, and have not been
+// marked as timed out (which means any response they send will not be
+// acted on).
+int SproutletWrapper::count_pending_actionable_responses()
 {
-  // This is forks which are pending a response, and which haven't timed out.
-  // (Since if they have timed out, then any response received from them will be
-  // ignored.)
   int forks_pending_actionable_response = 0;
   for (size_t ii = 0; ii < _forks.size(); ++ii)
   {
     if (_forks[ii].pending_response &&
-        _forks[ii].timed_out)
+        !_forks[ii].timed_out)
     {
       ++forks_pending_actionable_response;
     }

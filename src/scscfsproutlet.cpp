@@ -489,8 +489,8 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                                            PJSIP_H_PROXY_AUTHORIZATION,
                                                            NULL);
       _impi = PJUtils::extract_username(proxy_auth_hdr,
-                                        PJUtils::orig_served_user(req, 
-                                                                  get_pool(req), 
+                                        PJUtils::orig_served_user(req,
+                                                                  get_pool(req),
                                                                   trail()));
     }
   }
@@ -2128,7 +2128,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
     cancel_pending_forks();
-    mark_forks_as_timed_out();
+    mark_pending_forks_as_timed_out();
 
     if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {

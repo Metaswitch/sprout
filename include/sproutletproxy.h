@@ -324,7 +324,7 @@ public:
   void send_response(pjsip_msg*& rsp);
   void cancel_fork(int fork_id, int reason=0);
   void cancel_pending_forks(int reason=0);
-  void mark_forks_as_timed_out();
+  void mark_pending_forks_as_timed_out();
   const ForkState& fork_state(int fork_id);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
@@ -359,8 +359,8 @@ private:
 
   void process_actions(bool complete_after_actions);
   void aggregate_response(pjsip_tx_data* rsp);
-  int count_pending_response();
-  int count_pending_actionable_response();
+  int count_pending_responses();
+  int count_pending_actionable_responses();
   void tx_request(SproutletProxy::SendRequest req, int fork_id);
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);

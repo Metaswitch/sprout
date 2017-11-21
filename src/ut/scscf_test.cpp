@@ -3988,6 +3988,98 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 }
 
 
+// Test that after a 100 Trying is received from an AS, the request isn't timed
+// out after 2s.
+TEST_F(SCSCFTest, TimoutExtendedByProofOfLife)
+{
+  // Register an endpoint to act as the callee.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Set up an application server for the caller. It's default handling is set
+  // to session terminated.
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
+
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("501")));
+
+  TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+
+  // Caller sends INVITE.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to caller.
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
+
+  // INVITE passed on to AS.
+  // Save off the INVITE, as it is needed later on in the test.
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  pjsip_tx_data* inv_for_as = pop_txdata();
+
+  // AS responds with 100 Trying.
+  inject_msg(respond_to_txdata(inv_for_as, 100), &tpAS1);
+
+  // Advance some time.
+  cwtest_advance_time_ms(6000);
+  poll();
+
+  // Check no timeout has been sent upstream.
+  ASSERT_EQ(0, txdata_count());
+
+  // Tested the important bit - now just finish off the flow.
+
+  // AS responds with a random error 501.
+  inject_msg(respond_to_txdata(inv_for_as, 501), &tpAS1);
+
+  // Send the error upstream, and send an ACK to the AS.
+  ASSERT_EQ(2, txdata_count());
+
+  out = current_txdata()->msg;
+  RespMatcher(501).matches(out);
+  tpCaller.expect_target(current_txdata(), true);
+  free_txdata();
+
+  out = current_txdata()->msg;
+  ReqMatcher("ACK").matches(out);
+  tpAS1.expect_target(current_txdata(), true);
+  free_txdata();
+
+  // Caller ACKS error.
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpCaller);
+
+  // Check no other messages pending.
+  poll();
+  ASSERT_EQ(0, txdata_count());
+}
+
+
+
 TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
 {
   // Disable the liveness timer for session terminated ASs.
@@ -6853,7 +6945,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 }
 
 
-// Test originating AS handling for request to external URI.  Check that 
+// Test originating AS handling for request to external URI.  Check that
 // originating "user=phone" SIP URIs are looked up using the equivalent Tel URI
 TEST_F(SCSCFTest, OriginatingExternal)
 {
