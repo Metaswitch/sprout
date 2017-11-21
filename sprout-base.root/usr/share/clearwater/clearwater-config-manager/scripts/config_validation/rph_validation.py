@@ -104,7 +104,7 @@ for header_list in HEADERS_LISTS:
 # and exit with a failure code.
 if error_list:
     print "{} is not valid.".format(config_file)
-    print "The erros are printed below:"
+    print "The errors are printed below:"
 
     for error in error_list:
         print error
