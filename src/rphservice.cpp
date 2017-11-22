@@ -220,6 +220,7 @@ SIPEventPriorityLevel RPHService::lookup_priority(std::string rph_value,
                 rph_value.c_str());
     SAS::Event event(trail, SASEvent::RPH_UNKNOWN_VALUE, 0);
     event.add_var_param(rph_value);
+    SAS::report_event(event);
   }
 
   return priority;
