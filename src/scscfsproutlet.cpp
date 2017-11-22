@@ -489,8 +489,8 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                                            PJSIP_H_PROXY_AUTHORIZATION,
                                                            NULL);
       _impi = PJUtils::extract_username(proxy_auth_hdr,
-                                        PJUtils::orig_served_user(req, 
-                                                                  get_pool(req), 
+                                        PJUtils::orig_served_user(req,
+                                                                  get_pool(req),
                                                                   trail()));
     }
   }
@@ -1440,19 +1440,46 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
         SAS::report_event(event);
         route_to_bgcf(req);
       }
-      else
+      else if (uri_class != UNKNOWN)
       {
         // Destination is on-net so route to the I-CSCF.
         route_to_icscf(req);
+      }
+      else
+      {
+        // Non-sip: or -tel: URI is invalid at this point, so just reject the request
+        SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+        pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
+        send_response(rsp);
+        free_msg(req);
       }
     }
     else
     {
       // ENUM is not configured so we have no way to tell if this request is
-      // on-net or off-net. Route it to the I-CSCF, which should be able to
-      // look it up in the HSS.
-      TRC_DEBUG("No ENUM lookup available - routing to I-CSCF");
-      route_to_icscf(req);
+      // on-net or off-net. If it's to a valid sip: or tel: URI, route it to the
+      // I-CSCF, which should be able to look it up in the HSS.
+      URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri, true, false);
+
+      if (uri_class != UNKNOWN)
+      {
+        TRC_DEBUG("No ENUM lookup available - routing to I-CSCF");
+        route_to_icscf(req);
+      }
+      else
+      {
+        // Invalid URI, so just reject the request
+        std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+        TRC_DEBUG("Rejecting request to invalid URI %s", uri_str.c_str());
+        SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
+        event.add_var_param(uri_str);
+        SAS::report_event(event);
+        pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
+        send_response(rsp);
+        free_msg(req);
+      }
     }
   }
 }
