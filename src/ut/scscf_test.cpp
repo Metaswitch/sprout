@@ -9334,7 +9334,7 @@ TEST_F(SCSCFTest, SCSCFHandlesInvalidUri)
   free_txdata();
 }
 
-TEST_F(SCSCFTest, SCSCFHandlesUrnInvalidWithoutEnum)
+TEST_F(SCSCFTest, SCSCFHandlesInvalidUriWithoutEnum)
 {
   // Tests that if the SCSCF without ENUM configured receives an originating
   // request with an unrouteable URI after originating processing has finished,
@@ -9368,6 +9368,34 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnInvalidWithoutEnum)
   free_txdata();
 }
 
+TEST_F(SCSCFTest, SCSCFHandlesInvalidUriTerm)
+{
+  // Tests that if the SCSCF receives a terminating request with an unrouteable
+  // URI as the next hop, it rejects it with a 400
+  SCOPED_TRACE("");
+
+  // Create a MESSAGE containing the URI "urn:service:sos".
+  SCSCFMessage msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:service:sos";
+  msg._full_to_header = "To: <urn:service:sos>";
+  msg._route = "Route: <sip:sprout.homedomain>";
+  std::string p_asserted_id = "P-Asserted-Identity: <sip:";
+  p_asserted_id.append(msg._from).append("@").append(msg._fromdomain).append(">");
+  msg._extra = p_asserted_id;
+
+  // Send the MESSAGE into the S-CSCF.
+  SCOPED_TRACE("MESSAGE");
+  inject_msg(msg.get_request(), _tp_default);
+  poll();
+
+  // Check that we get a 400 error
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(400).matches(out);
+  _tp_default->expect_target(current_txdata(), true);
+  free_txdata();
+}
 
 class SCSCFTestWithoutICSCF : public SCSCFTestBase
 {

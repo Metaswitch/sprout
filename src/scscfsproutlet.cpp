@@ -646,12 +646,30 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     else
     {
       // No AS chain set, so don't apply services to the request.
-      // Default action will be to try to route following remaining Route
-      // headers or to the RequestURI.
-      TRC_INFO("Route request without applying services");
-      SAS::Event no_as_route(trail(), SASEvent::NO_AS_CHAIN_ROUTE, 0);
-      SAS::report_event(no_as_route);
-      send_request(req);
+      // Check whether the next hop is a routeable URI
+      pjsip_uri_context_e context;
+      pjsip_uri* next_uri = PJUtils::get_next_routing_uri(req, &context);
+      URIClass uri_class = URIClassifier::classify_uri(next_uri);
+
+      if (uri_class != UNKNOWN)
+      {
+        TRC_INFO("Route request without applying services");
+        SAS::Event no_as_route(trail(), SASEvent::NO_AS_CHAIN_ROUTE, 0);
+        SAS::report_event(no_as_route);
+        send_request(req);
+      }
+      else
+      {
+        // Invalid URI, so just reject the request
+        std::string uri_str = PJUtils::uri_to_string(context, next_uri);
+        TRC_DEBUG("Rejecting request to invalid URI %s", uri_str.c_str());
+        SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
+        event.add_var_param(uri_str);
+        SAS::report_event(event);
+        pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
+        send_response(rsp);
+        free_msg(req);
+      }
     }
   }
 }
