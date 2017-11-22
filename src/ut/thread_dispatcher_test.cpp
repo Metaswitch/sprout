@@ -206,6 +206,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectAckTest)
   msg._method = "ACK";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
@@ -237,6 +238,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectPrioritizedInviteTest)
   msg._extra = "Resource-Priority: wps.0";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(rph_service, lookup_priority("wps.0", _)).WillOnce(Return(SIPEventPriorityLevel::HIGH_PRIORITY_11));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -270,6 +272,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectInDialogTest)
 
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
