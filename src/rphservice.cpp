@@ -209,6 +209,11 @@ SIPEventPriorityLevel RPHService::lookup_priority(std::string rph_value,
   if (result != _rph_map.end())
   {
     priority = result->second;
+    TRC_DEBUG("Priority of RPH value \"%s\" is %d", rph_value.c_str(), priority);
+    SAS::Event event(trail, SASEvent::RPH_LOOKUP_SUCCESSFUL, 0);
+    event.add_var_param(rph_value);
+    event.add_static_param(priority);
+    SAS::report_event(event);
   }
   else
   {
@@ -218,7 +223,7 @@ SIPEventPriorityLevel RPHService::lookup_priority(std::string rph_value,
     TRC_WARNING("An unknown RPH value \"%s\" was received on an incoming message."
                 " This message will be handled, but will not be prioritized.",
                 rph_value.c_str());
-    SAS::Event event(trail, SASEvent::RPH_UNKNOWN_VALUE, 0);
+    SAS::Event event(trail, SASEvent::RPH_VALUE_UNKNOWN, 0);
     event.add_var_param(rph_value);
     SAS::report_event(event);
   }
