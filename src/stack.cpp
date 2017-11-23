@@ -145,7 +145,8 @@ static void on_io_started(const std::string& msg)
 
   if (Log::enabled(Log::DEBUG_LEVEL))
   {
-    TRC_BACKTRACE("Call stack for blocking work follows");
+    TRC_DEBUG("Call stack for blocking work follows");
+    TRC_BACKTRACE();
   }
 }
 

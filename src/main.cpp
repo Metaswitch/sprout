@@ -1353,17 +1353,25 @@ void signal_handler(int sig)
   signal(SIGABRT, SIG_DFL);
   signal(SIGSEGV, signal_handler);
 
-  // Log the signal, along with a backtrace.
-  TRC_BACKTRACE("Signal %d caught", sig);
-
-  // Ensure the log files are complete - the core file created by abort() below
-  // will trigger the log files to be copied to the diags bundle
-  TRC_COMMIT();
+  // Log the signal, along with a simple backtrace.
+  TRC_ERROR("Signal %d caught", sig);
+  TRC_BACKTRACE();
 
   // Check if there's a stored jmp_buf on the thread and handle if there is
   exception_handler->handle_exception();
 
+  //
+  // If we get here it means we didn't handle the exception so we need to exit.
+  //
+
   CL_SPROUT_CRASH.log(strsignal(sig));
+
+  // Log a full backtrace to make debugging easier.
+  TRC_BACKTRACE_ADV();
+
+  // Ensure the log files are complete - the core file created by abort() below
+  // will trigger the log files to be copied to the diags bundle
+  TRC_COMMIT();
 
   // Dump a core.
   abort();
