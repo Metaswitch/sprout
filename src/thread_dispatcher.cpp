@@ -736,6 +736,8 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   qe.priority = SIPEventPriorityLevel::NORMAL_PRIORITY;
 
   // Increment the number of items put on the queue for a worker thread.
+  // This stat must be thread-safe as we already access it on the worker and
+  // transport threads above, so it is safe to access here.
   if (queue_success_fail_table)
   {
     queue_success_fail_table->increment_attempts(qe.priority); // LCOV_EXCL_LINE
