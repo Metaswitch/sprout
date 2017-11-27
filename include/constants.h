@@ -115,6 +115,7 @@ const pj_str_t STR_NONCE = pj_str((char*)"nonce");
 const pj_str_t STR_NAMESPACE = pj_str((char*)"namespace");
 const pj_str_t STR_MMFTARGET = pj_str((char*)"mmftarget");
 const pj_str_t STR_MMFSCOPE = pj_str((char*)"mmfscope");
+const pj_str_t STR_RESOURCE_PRIORITY = pj_str((char*)"Resource-Priority");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");

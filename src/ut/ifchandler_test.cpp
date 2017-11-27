@@ -562,6 +562,25 @@ TEST_F(IfcHandlerTest, NoType)
   EXPECT_TRUE(log.contains("Missing mandatory value for ConditionTypeCNF"));
 }
 
+TEST_F(IfcHandlerTest, UnusualRequestURI)
+{
+  CapturingTestLogger log;
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <RequestURI>sip:homedomain:3443</RequestURI>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+  EXPECT_TRUE(log.contains("Continue processing unusual iFC"));
+}
+
 TEST_F(IfcHandlerTest, Unimplemented)
 {
   CapturingTestLogger log;

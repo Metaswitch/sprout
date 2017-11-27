@@ -61,17 +61,35 @@ Ifc::Ifc(std::string ifc_str,
   delete new_document;
 }
 
-void Ifc::invalid_ifc(std::string error,
-                      std::string server_name,
-                      int sas_event_id,
-                      int instance_id,
-                      SAS::TrailId trail)
+void Ifc::handle_invalid_ifc(std::string error,
+                             std::string server_name,
+                             int sas_event_id,
+                             int instance_id,
+                             SAS::TrailId trail)
 {
+  TRC_ERROR("Skip processing invalid iFC for %s: %s", 
+            server_name.c_str(), 
+            error.c_str());
   SAS::Event event(trail, sas_event_id, instance_id);
   event.add_var_param(server_name);
   event.add_var_param(error);
   SAS::report_event(event);
-  throw xml_error(error.c_str());
+  throw ifc_error();
+}
+
+void Ifc::handle_unusual_ifc(std::string error,
+                             std::string server_name,
+                             int sas_event_id,
+                             int instance_id,
+                             SAS::TrailId trail)
+{
+  TRC_INFO("Continue processing unusual iFC for %s: %s", 
+           server_name.c_str(), 
+           error.c_str());
+  SAS::Event event(trail, sas_event_id, instance_id);
+  event.add_var_param(server_name);
+  event.add_var_param(error);
+  SAS::report_event(event);
 }
 
 // Test if the SPT matches. Ignores grouping and negation, and just
@@ -79,8 +97,8 @@ void Ifc::invalid_ifc(std::string error,
 // @return true if the SPT matches, false if not
 // @throw xml_error if there is a problem evaluating the trigger.
 bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
-                      bool is_registered,               //< The registration state
-                      bool is_initial_registration,
+                      const bool is_registered,               //< The registration state
+                      const bool is_initial_registration,
                       pjsip_msg* msg,                   //< The message being matched
                       xml_node<>* spt,                  //< The Service Point Trigger node
                       std::string ifc_str,
@@ -100,7 +118,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     {
       if (strcmp(name, RegDataXMLUtils::EXTENSION) == 0)
       {
-        invalid_ifc("Missing class for service point trigger", server_name, SASEvent::IFC_INVALID, 0, trail);
+        handle_invalid_ifc("Missing class for service point trigger", server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
       }
       else
       {
@@ -111,7 +129,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 
   if (!node)
   {
-    invalid_ifc("Missing class for service point trigger", server_name, SASEvent::IFC_INVALID, 0, trail);
+    handle_invalid_ifc("Missing class for service point trigger", server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
   }
 
   // Now interpret the node depending on its class.
@@ -188,8 +206,8 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 
     if (!spt_header)
     {
-      invalid_ifc("Missing Header element for SIPHeader service point trigger",
-                  server_name, SASEvent::IFC_INVALID, 0, trail);
+      handle_invalid_ifc("Missing Header element for SIPHeader service point trigger",
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     header_regex = boost::regex(XMLUtils::get_text_or_cdata(spt_header),
@@ -197,8 +215,8 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                                 boost::regex_constants::no_except);
     if (header_regex.status())
     {
-      invalid_ifc("Invalid regular expression in Header element for SIPHeader service point trigger",
-                  server_name, SASEvent::IFC_INVALID, 0, trail);
+      handle_invalid_ifc("Invalid regular expression in Header element for SIPHeader service point trigger",
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     for (header = msg->hdr.next; header != &msg->hdr; header = header->next)
@@ -220,8 +238,8 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                                          boost::regex_constants::no_except);
             if (content_regex.status())
             {
-              invalid_ifc("Invalid regular expression in Content element for SIPHeader service point trigger",
-                          server_name, SASEvent::IFC_INVALID, 0, trail);
+              handle_invalid_ifc("Invalid regular expression in Content element for SIPHeader service point trigger",
+                                 server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
             }
           }
 
@@ -305,14 +323,23 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
       test_string = hostport;
     }
 
-    req_uri_regex = boost::regex(XMLUtils::get_text_or_cdata(node),
+    std::string req_uri = XMLUtils::get_text_or_cdata(node);
+    if ((req_uri.compare(0, 4, "sip:") == 0) ||
+        (req_uri.compare(0, 4, "tel:") == 0))
+    {
+      handle_unusual_ifc("Request URI should be a regex that matches either on "
+                         "the hostport of a SIP URI or a telephone number.",
+                         server_name, SASEvent::IFC_UNUSUAL, 0, trail);
+    }
+    
+    req_uri_regex = boost::regex(req_uri,
                                  boost::regex_constants::no_except);
     if (req_uri_regex.status())
     {
-      invalid_ifc("Invalid regular expression in Request URI service point trigger",
-                  server_name, SASEvent::IFC_INVALID, 0, trail);
+      handle_invalid_ifc("Invalid regular expression in Request URI service point trigger",
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
-    ret = boost::regex_search(test_string, req_uri_regex);
+      ret = boost::regex_search(test_string, req_uri_regex);
   }
   else if (strcmp(RegDataXMLUtils::SESSION_DESCRIPTION, name) == 0)
   {
@@ -324,16 +351,16 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 
     if (!spt_line)
     {
-      invalid_ifc("Missing Line element for SessionDescription service point trigger",
-                  server_name, SASEvent::IFC_INVALID, 0, trail);
+      handle_invalid_ifc("Missing Line element for SessionDescription service point trigger",
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     line_regex = boost::regex(XMLUtils::get_text_or_cdata(spt_line),
                               boost::regex_constants::no_except);
     if (line_regex.status())
     {
-      invalid_ifc("Invalid regular expression in Line element for Session Description service point trigger",
-                  server_name, SASEvent::IFC_INVALID, 0, trail);
+      handle_invalid_ifc("Invalid regular expression in Line element for Session Description service point trigger",
+                         server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     // Check if the message body is SDP.
@@ -366,8 +393,8 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                                              boost::regex_constants::no_except);
                 if (content_regex.status())
                 {
-                  invalid_ifc("Invalid regular expression in Content element for Session Description service point trigger",
-                              server_name, SASEvent::IFC_INVALID, 0, trail);
+                  handle_invalid_ifc("Invalid regular expression in Content element for Session Description service point trigger",
+                                     server_name, SASEvent::INVALID_IFC_IGNORED, 0, trail);
                 }
               }
 
@@ -408,8 +435,8 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 //
 // @return true if the message matches, false if not.
 bool Ifc::filter_matches(const SessionCase& session_case,
-                         bool is_registered,
-                         bool is_initial_registration,
+                         const bool is_registered,
+                         const bool is_initial_registration,
                          pjsip_msg* msg,
                          SAS::TrailId trail) const
 {
@@ -426,23 +453,15 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     xml_node<>* as = _ifc->first_node(RegDataXMLUtils::APPLICATION_SERVER);
     if (as == NULL)
     {
-      std::string error_msg = "iFC missing ApplicationServer element";
-
-      SAS::Event event(trail, SASEvent::IFC_INVALID_NOAS, 0);
-      SAS::report_event(event);
-
-      throw xml_error(error_msg);
+      handle_invalid_ifc("iFC missing ApplicationServer element", server_name, 
+                         SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     server_name = XMLUtils::get_first_node_value(as, RegDataXMLUtils::SERVER_NAME);
     if (server_name.empty())
     {
-      std::string error_msg = "iFC has no ServerName";
-
-      SAS::Event event(trail, SASEvent::IFC_INVALID_NOAS, 0);
-      SAS::report_event(event);
-
-      throw xml_error(error_msg);
+      handle_invalid_ifc("iFC has no ServerName", server_name, 
+                         SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     xml_node<>* profile_part_indicator = _ifc->first_node(RegDataXMLUtils::PROFILE_PART_INDICATOR);
@@ -493,49 +512,61 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     // we AND all the groups together. In DNF we do the converse.
     std::map<int32_t, bool> groups;
 
+    std:: string spt_relation = cnf ? "OR" : "AND";
+    std:: string group_relation = cnf ? "AND" : "OR";
+    std:: string ifc_match = "";
+    ifc_match.append(spt_relation).append(" each SPT match result to determine group result.\n");
+    ifc_match.append(group_relation).append(" each group result to determine overall iFC match.\n\n");
+
     for (xml_node<>* spt = trigger->first_node(RegDataXMLUtils::SPT);
          spt;
          spt = spt->next_sibling(RegDataXMLUtils::SPT))
     {
       xml_node<>* neg_node = spt->first_node(RegDataXMLUtils::CONDITION_NEGATED);
       bool neg = neg_node && XMLUtils::parse_bool(neg_node, RegDataXMLUtils::CONDITION_NEGATED);
-      bool val = spt_matches(session_case,
-                             is_registered,
-                             is_initial_registration,
-                             msg,
-                             spt,
-                             ifc_str,
-                             server_name,
-                             trail) != neg;
+      bool spt_matched = spt_matches(session_case,
+                                     is_registered,
+                                     is_initial_registration,
+                                     msg,
+                                     spt,
+                                     ifc_str,
+                                     server_name,
+                                     trail) != neg;
 
       for (xml_node<>* group_node = spt->first_node(RegDataXMLUtils::GROUP);
            group_node;
            group_node = group_node->next_sibling(RegDataXMLUtils::GROUP))
       {
-        int32_t group = XMLUtils::parse_integer(group_node,
-                                                "Group ID",
-                                                0,
-                                                std::numeric_limits<int32_t>::max());
-        TRC_DEBUG("Add to group %d val %s", (int)group, val ? "true" : "false");
-        if (groups.find(group) == groups.end())
+        int32_t group_id = XMLUtils::parse_integer(group_node,
+                                                   "Group ID",
+                                                   0,
+                                                   std::numeric_limits<int32_t>::max());
+        if (groups.find(group_id) == groups.end())
         {
-          groups[group] = val;
+          groups[group_id] = spt_matched;
         }
         else
         {
-          groups[group] = cnf ? (groups[group] || val) : (groups[group] && val);
+          groups[group_id] = cnf ? (groups[group_id] || spt_matched) : 
+            (groups[group_id] && spt_matched);
         }
+
+        ifc_match.append("SPT in group ").append(std::to_string(group_id))
+          .append(" is ").append(spt_matched ? "matched.\n" : "not matched.\n");
       }
     }
 
     bool ret = cnf;
 
-    for (std::map<int32_t, bool>::iterator it = groups.begin();
-         it != groups.end();
-         ++it)
+    for (std::map<int32_t, bool>::iterator group = groups.begin();
+         group != groups.end();
+         ++group)
     {
-      TRC_DEBUG("Result group %d val %s", (int)it->first, it->second ? "true" : "false");
-      ret = cnf ? (ret && it->second) : (ret || it->second);
+      std::string group_result = group->second ? "matched" : "not matched";
+      ifc_match.append("Group ").append(std::to_string(group->first))
+        .append(" is ").append(group_result).append(".\n");
+
+      ret = cnf ? (ret && group->second) : (ret || group->second);
     }
 
     if (ret)
@@ -543,6 +574,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
       TRC_DEBUG("iFC matches");
       SAS::Event event(trail, SASEvent::IFC_MATCHED, 0);
       event.add_var_param(server_name);
+      event.add_var_param(ifc_match);
       SAS::report_event(event);
     }
     else
@@ -550,21 +582,29 @@ bool Ifc::filter_matches(const SessionCase& session_case,
       TRC_DEBUG("iFC does not match");
       SAS::Event event(trail, SASEvent::IFC_NOT_MATCHED, 0);
       event.add_var_param(server_name);
+      event.add_var_param(ifc_match);
       SAS::report_event(event);
     }
 
+    TRC_DEBUG("%s", ifc_match.c_str());
     return ret;
   }
   catch (xml_error err)
   {
-    // Generic SAS event is logged to make it clear that this iFC is being
-    // skipped since it is invalid. In most cases, a specific SAS event
-    // detailing the exact error will already have been logged as well.
-    std::string err_str = "iFC evaluation error: " + std::string(err.what());
+    // Generic SAS event to log skipping iFC due to syntactic error in parsing
+    // XML, most likely thrown by utility libraries. 
+    std::string err_str = "iFC XML is syntactically invalid: " 
+      + std::string(err.what());
     TRC_ERROR(err_str.c_str());
-    SAS::Event event(trail, SASEvent::INVALID_IFC_IGNORED, 0);
+    SAS::Event event(trail, SASEvent::INVALID_XML_IGNORED, 0);
     event.add_var_param(std::string(err.what()));
     SAS::report_event(event);
+    return false;
+  }
+  catch (ifc_error err)
+  {
+    // Skip processing iFC due to semantic error. Specific SAS event and
+    // TRC_ERROR is logged by handle_invalid_ifc.
     return false;
   }
 }
@@ -576,7 +616,6 @@ bool Ifc::filter_matches(const SessionCase& session_case,
 AsInvocation Ifc::as_invocation() const
 {
   xml_node<>* as = _ifc->first_node(RegDataXMLUtils::APPLICATION_SERVER);
-  pj_assert(as != NULL);
 
   AsInvocation as_invocation;
   as_invocation.server_name = XMLUtils::get_first_node_value(as, RegDataXMLUtils::SERVER_NAME);
