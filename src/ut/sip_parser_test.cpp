@@ -1061,3 +1061,67 @@ TEST_F(SipParserTest, StarHashToHeader)
   pj_str_t goal = pj_str("*1234#");
   EXPECT_EQ(pj_strcmp(user, &goal), 0);
 }
+
+// Test that you can create a Resource-Priority header, parse it and clone it
+// without any issues
+TEST_F(SipParserTest, ResourcePriority)
+{
+  pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+                                                 PJSIP_POOL_RDATA_LEN,
+                                                 PJSIP_POOL_RDATA_INC);
+  pj_pool_t *clone_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+                                                  PJSIP_POOL_RDATA_LEN,
+                                                  PJSIP_POOL_RDATA_INC);
+
+  string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
+             "Max-Forwards: 63\n"
+             "From: <sip:6505551234@homedomain>;tag=1234\n"
+             "To: <sip:6505554321@homedomain>\n"
+             "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "Resource-Priority: dsn.flash, wps.4\n"
+             "CSeq: 1 INVITE\n"
+             "Content-Length: 0\n\n");
+
+  pjsip_rx_data* rdata = build_rxdata(str, _tp_default, main_pool);
+  parse_rxdata(rdata);
+
+  pj_str_t header_name = pj_str("Resource-Priority");
+  pjsip_generic_array_hdr* hdr =
+      (pjsip_generic_array_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                               &header_name,
+                                                               NULL);
+  EXPECT_NE(hdr, (pjsip_generic_array_hdr*)NULL);
+  EXPECT_EQ(hdr->count, 2);
+  EXPECT_PJEQ(hdr->values[0], "dsn.flash");
+  EXPECT_PJEQ(hdr->values[1], "wps.4");
+
+  pjsip_generic_array_hdr* clone = (pjsip_generic_array_hdr*)hdr->vptr->clone(clone_pool, (void*)hdr);
+  EXPECT_EQ(clone->count, 2);
+  EXPECT_PJEQ(clone->values[0], "dsn.flash");
+  EXPECT_PJEQ(clone->values[1], "wps.4");
+
+  pjsip_generic_array_hdr* sclone = (pjsip_generic_array_hdr*)hdr->vptr->shallow_clone(clone_pool, (void*)clone);
+  EXPECT_EQ(sclone->count, 2);
+  EXPECT_PJEQ(sclone->values[0], "dsn.flash");
+  EXPECT_PJEQ(sclone->values[1], "wps.4");
+
+  pj_pool_release(main_pool);
+
+  char buf[1024];
+  memset(buf, 0, 1024);
+  pjsip_hdr* generic_hdr = (pjsip_hdr*)sclone;
+  int written = generic_hdr->vptr->print_on(sclone, buf, 0);
+  EXPECT_EQ(written, -1);
+
+  int i = 1;
+  while ((written == -1) && (i <= 1024))
+  {
+    written = generic_hdr->vptr->print_on(sclone, buf, i);
+    i++;
+  }
+  EXPECT_STREQ("Resource-Priority: dsn.flash, wps.4", buf);
+
+  pj_pool_release(clone_pool);
+}
