@@ -1435,6 +1435,39 @@ int pjsip_accept_contact_hdr_print_on(void* void_hdr,
   return buf-startbuf;
 }
 
+static pjsip_hdr_vptr pjsip_resource_priority_vptr = {
+  (pjsip_hdr_clone_fptr) &pjsip_generic_array_hdr_clone,
+  (pjsip_hdr_clone_fptr) &pjsip_generic_array_hdr_shallow_clone,
+  (pjsip_hdr_print_fptr) &pjsip_generic_array_hdr_print
+};
+
+pjsip_generic_array_hdr* pjsip_resource_priority_hdr_create(pj_pool_t *pool)
+{
+  void *mem = pj_pool_alloc(pool, sizeof(pjsip_generic_array_hdr));
+  pjsip_generic_array_hdr *hdr = pjsip_generic_array_hdr_init(pool, mem, &STR_RESOURCE_PRIORITY);
+  hdr->vptr = &pjsip_resource_priority_vptr;
+  return hdr;
+}
+
+pjsip_hdr* parse_hdr_resource_priority(pjsip_parse_ctx* ctx)
+{
+  // The Resource-Priority header has the following ABNF (as defined in RFC 4412
+  // section 3.1):
+  //
+  //    Resource-Priority  = "Resource-Priority" HCOLON
+  //                         r-value *(COMMA r-value)
+  //    r-value            = namespace "." r-priority
+  //    namespace          = token-nodot
+  //    r-priority         = token-nodot
+  //    token-nodot        = 1*( alphanum / "-"  / "!" / "%" / "*"
+  //                                / "_" / "+" / "`" / "'" / "~" )
+  const pjsip_parser_const_t* pc = pjsip_parser_const();
+  pjsip_generic_array_hdr* hdr = pjsip_resource_priority_hdr_create(ctx->pool);
+  pjsip_parse_delimited_array_hdr(hdr, ctx->scanner, ',',
+                                  &(pc->pjsip_NOT_COMMA_OR_NEWLINE));
+  return (pjsip_hdr*)hdr;
+}
+
 /// Register all of our custom header parsers with pjSIP.  This should be
 // called once during startup.
 pj_status_t register_custom_headers()
@@ -1468,6 +1501,8 @@ pj_status_t register_custom_headers()
   status = pjsip_register_hdr_parser("Reject-Contact", "j", &parse_hdr_reject_contact);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("Accept-Contact", "a", &parse_hdr_accept_contact);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("Resource-Priority", NULL, &parse_hdr_resource_priority);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   return PJ_SUCCESS;

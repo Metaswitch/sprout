@@ -6,6 +6,8 @@ scripts/sprout-log-cleanup etc/cron.hourly
 modules/clearwater-etcd-plugins/sprout/sprout_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
 modules/clearwater-etcd-plugins/sprout/sprout_scscf_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
 modules/clearwater-etcd-plugins/sprout/sprout_enum_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
+modules/clearwater-etcd-plugins/sprout/sprout_rph_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
 
 modules/clearwater-etcd-plugins/clearwater_config_access/scscf_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
 modules/clearwater-etcd-plugins/clearwater_config_access/enum_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
+modules/clearwater-etcd-plugins/clearwater_config_access/rph_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/

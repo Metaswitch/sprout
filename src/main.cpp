@@ -1682,6 +1682,7 @@ int main(int argc, char* argv[])
   CommunicationMonitor* astaire_comm_monitor = NULL;
   CommunicationMonitor* remote_astaire_comm_monitor = NULL;
   CommunicationMonitor* ralf_comm_monitor = NULL;
+  RPHService* rph_service = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, signal_handler);
@@ -1935,6 +1936,7 @@ int main(int argc, char* argv[])
 
   SNMP::EventAccumulatorByScopeTable* latency_table;
   SNMP::EventAccumulatorByScopeTable* queue_size_table;
+  SNMP::SuccessFailCountByPriorityAndScopeTable* queue_success_fail_table;
   SNMP::CounterByScopeTable* requests_counter;
   SNMP::CounterByScopeTable* overload_counter;
 
@@ -1959,6 +1961,8 @@ int main(int argc, char* argv[])
                                                                ".1.2.826.0.1.1578918.9.2.2");
     queue_size_table = SNMP::EventAccumulatorByScopeTable::create("bono_queue_size",
                                                                   ".1.2.826.0.1.1578918.9.2.6");
+    queue_success_fail_table = SNMP::SuccessFailCountByPriorityAndScopeTable::create("bono_queue_success_fail",
+                                                                                     ".1.2.826.0.1.1578918.9.2.7");
     requests_counter = SNMP::CounterByScopeTable::create("bono_incoming_requests",
                                                          ".1.2.826.0.1.1578918.9.2.4");
     overload_counter = SNMP::CounterByScopeTable::create("bono_rejected_overload",
@@ -1970,6 +1974,8 @@ int main(int argc, char* argv[])
                                                                ".1.2.826.0.1.1578918.9.3.1");
     queue_size_table = SNMP::EventAccumulatorByScopeTable::create("sprout_queue_size",
                                                                   ".1.2.826.0.1.1578918.9.3.8");
+    queue_success_fail_table = SNMP::SuccessFailCountByPriorityAndScopeTable::create("sprout_queue_success_fail",
+                                                                                     ".1.2.826.0.1.1578918.9.3.43");
     requests_counter = SNMP::CounterByScopeTable::create("sprout_incoming_requests",
                                                          ".1.2.826.0.1.1578918.9.3.6");
     overload_counter = SNMP::CounterByScopeTable::create("sprout_rejected_overload",
@@ -2187,6 +2193,13 @@ int main(int argc, char* argv[])
     enum_service = new DummyEnumService(opt.home_domain);
   }
 
+  // Create RPH service.
+  TRC_STATUS("Setting up RPH service");
+  rph_service = new RPHService(new Alarm(alarm_manager,
+                                         "sprout",
+                                         AlarmDef::SPROUT_RPH_STATUS,
+                                         AlarmDef::CRITICAL));
+
   if (opt.pcscf_enabled)
   {
     // Create an ACR factory for the P-CSCF.
@@ -2353,8 +2366,10 @@ int main(int argc, char* argv[])
   init_thread_dispatcher(opt.worker_threads,
                          latency_table,
                          queue_size_table,
+                         queue_success_fail_table,
                          overload_counter,
                          load_monitor,
+                         rph_service,
                          exception_handler,
                          opt.request_on_queue_timeout);
 
@@ -2546,6 +2561,7 @@ int main(int argc, char* argv[])
   delete hss_connection;
   delete fifc_service;
   delete sifc_service;
+  delete rph_service;
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;
