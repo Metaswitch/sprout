@@ -111,7 +111,6 @@ struct SipEvent
 bool process_queue_element();
 
 // Add a Callback object to the queue, to be run on a worker thread.
-// This MUST be called from the main PJSIP transport thread.
 void add_callback_to_queue(PJUtils::Callback*);
 
 // Implements eventq::Backend as a std::priority_queue of SipEvent structs.

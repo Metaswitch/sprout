@@ -57,7 +57,7 @@ void ChronosAoRTimeoutTask::run()
 
   send_http_reply(HTTP_OK);
 
-  PJUtils::run_callback_on_worker_thread(new ChronosAoRTimeoutTaskHandler(this));
+  PJUtils::run_callback_on_worker_thread(new ChronosAoRTimeoutTaskHandler(this), false);
 }
 
 HTTPCode ChronosAoRTimeoutTask::parse_response(std::string body)

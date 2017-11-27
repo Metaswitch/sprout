@@ -622,12 +622,6 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   // future we may want to look at prioritizing them
   qe.priority = SipEventPriorityLevel::NORMAL_PRIORITY;
 
-  // Track the current queue size
-  if (queue_size_table)
-  {
-    queue_size_table->accumulate(sip_event_queue.size()); // LCOV_EXCL_LINE
-  }
-
   // Add the SipEvent
   TRC_DEBUG("Queuing callback %p for worker threads with priority %d",
             cb,

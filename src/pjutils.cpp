@@ -1233,15 +1233,16 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 
 /// Runs a Callback object on a worker thread.
 /// Takes ownership of the Callback and is responsible for deleting it
-void PJUtils::run_callback_on_worker_thread(PJUtils::Callback* cb)
+void PJUtils::run_callback_on_worker_thread(PJUtils::Callback* cb,
+                                            bool is_pjsip_thread)
 {
   // The UTs have a different threading model - in those we run the callback
   // directly on whatever thread we're on
 #ifndef UNIT_TEST
-  if (is_pjsip_transport_thread())
+  if (is_pjsip_transport_thread() || !is_pjsip_thread)
   {
-    // We're on the transport thread, so we must add the callback to the worker
-    // thread's queue
+    // We're either on the transport thread or on a non-PJSIP owned thread, so
+    // add the callback to the worker thread queue
     // This relinquishes ownership of the Callback object
     add_callback_to_queue(cb);
   }

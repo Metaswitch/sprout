@@ -196,8 +196,11 @@ public:
 // object that can safely be run on another thread.
 typedef Callback* (*send_callback_builder)(void* token, pjsip_event* event);
 
-// Runs the specified callback on a worker thread
-void run_callback_on_worker_thread(PJUtils::Callback* cb);
+// Runs the specified callback on a worker thread.
+// `is_pjsip_thread` is used to allow a non-PJSIP owned thread (e.g. an HTTP
+// thread) to indicate that it can't possibly be the transport thread.
+void run_callback_on_worker_thread(PJUtils::Callback* cb,
+                                   bool is_pjsip_thread = true);
 
 pj_status_t send_request(pjsip_tx_data* tdata,
                          int retries=0,
