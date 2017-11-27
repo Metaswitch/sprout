@@ -309,7 +309,7 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
   }
 }
 
-bool is_ims_expected(const std::string& req_type)
+bool is_ims_subscription_expected(const std::string& req_type)
 {
   return (req_type == HSSConnection::REG || req_type == HSSConnection::CALL);
 }
@@ -318,7 +318,7 @@ bool decode_homestead_xml(const std::string& public_id,
                           HSSConnection::irs_info& irs_info,
                           const std::shared_ptr<rapidxml::xml_document<> > root,
                           SIFCService* sifc_service,
-                          const bool& IMSExpected,
+                          const bool ims_subscription_expected,
                           SAS::TrailId trail)
 {
   if (!root.get())
@@ -364,7 +364,7 @@ bool decode_homestead_xml(const std::string& public_id,
   {
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
-    if (IMSExpected)
+    if (ims_subscription_expected)
     {
       TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
                   public_id.c_str(),
@@ -373,7 +373,7 @@ bool decode_homestead_xml(const std::string& public_id,
     }
     else
     {
-      TRC_INFO("In HSS XML for %s, there is no IMSSubscription element:\n%s",
+      TRC_DEBUG("In HSS XML for %s, there is no IMSSubscription element:\n%s",
                public_id.c_str(),
                sp_str.c_str());
       return true;
@@ -479,7 +479,7 @@ HTTPCode HSSConnection::put_homestead_xml(const irs_query& irs_query,
   {
     // We have either not found the subscriber on the HSS, or been unable to 
     // communicate with the HSS successfully.
-    TRC_ERROR("Could not get subscriber data from HSS");
+    TRC_WARNING("Could not get subscriber data from HSS");
   }
   return http_code;
 }
@@ -496,12 +496,12 @@ HTTPCode HSSConnection::update_registration_state(const irs_query& irs_query,
   HTTPCode http_code = put_homestead_xml(irs_query, root, trail);
   if (http_code == HTTP_OK)
   {
-    bool IMSExpected = is_ims_expected(irs_query._req_type);
+    bool ims_subscription_expected = is_ims_subscription_expected(irs_query._req_type);
     http_code = decode_homestead_xml(irs_query._public_id,
                                      irs_info,
                                      root,
                                      _sifc_service,
-                                     IMSExpected,
+                                     ims_subscription_expected,
                                      trail) ? HTTP_OK : HTTP_SERVER_ERROR;
   }
   return http_code;
@@ -568,7 +568,7 @@ HTTPCode HSSConnection::get_homestead_xml(const std::string& public_id,
   {
     // We have either not found the subscriber on the HSS, or been unable to 
     // communicate with the HSS successfully.
-    TRC_ERROR("Could not get subscriber data from HSS");
+    TRC_WARNING("Could not get subscriber data from HSS");
   }
 
   return http_code;
