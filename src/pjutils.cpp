@@ -206,6 +206,12 @@ std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
   }
 }
 
+pj_bool_t PJUtils::valid_public_id_from_uri(const pjsip_uri* uri, std::string& impu)
+{
+  impu = public_id_from_uri(uri);
+  return (impu == "") ? PJ_FALSE : PJ_TRUE;
+}
+
 // Determine the default private ID for a public ID contained in a URI.  This
 // is calculated as specified by the 3GPP specs by effectively stripping the
 // scheme.
@@ -442,6 +448,7 @@ void PJUtils::get_impi_and_impu(pjsip_msg* req,
 {
   pjsip_authorization_hdr* auth_hdr;
   pjsip_uri* impu_uri;
+
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
     impu_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(req)->uri);
