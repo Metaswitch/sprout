@@ -576,7 +576,6 @@ bool Ifc::filter_matches(const SessionCase& session_case,
 AsInvocation Ifc::as_invocation() const
 {
   xml_node<>* as = _ifc->first_node(RegDataXMLUtils::APPLICATION_SERVER);
-  pj_assert(as != NULL);
 
   AsInvocation as_invocation;
   as_invocation.server_name = XMLUtils::get_first_node_value(as, RegDataXMLUtils::SERVER_NAME);

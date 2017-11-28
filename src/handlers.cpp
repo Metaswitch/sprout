@@ -120,7 +120,7 @@ static void update_hss_on_aor_expiry(const std::string& aor_id,
   irs_query._public_id = aor_id;
   irs_query._req_type = HSSConnection::DEREG_TIMEOUT;
   irs_query._server_name = aor->_scscf_uri;
-  
+
   HSSConnection::irs_info unused_irs_info;
 
   hss->update_registration_state(irs_query,
@@ -552,10 +552,12 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
   // get the challenge if the timer has popped after the challenge has expired
   ImpiStore::Impi* impi_obj = _cfg->_local_impi_store->get_impi(impi, trail(), true);
   ImpiStore::AuthChallenge* auth_challenge = NULL;
+
   if (impi_obj != NULL)
   {
     auth_challenge = impi_obj->get_auth_challenge(nonce);
   }
+
   if (auth_challenge != NULL)
   {
     // Use the original REGISTER's branch parameter for SAS
@@ -576,13 +578,13 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
       // Server Error - this will trigger the timer service to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
       HSSConnection::irs_query irs_query;
-      irs_query._public_id = impu; 
-      irs_query._private_id = impi; 
+      irs_query._public_id = impu;
+      irs_query._private_id = impi;
       irs_query._req_type = HSSConnection::AUTH_TIMEOUT;
       irs_query._server_name = auth_challenge->get_scscf_uri();
       HSSConnection::irs_info unused_irs_info;
 
-      HTTPCode hss_query = _cfg->_hss->update_registration_state(irs_query, 
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(irs_query,
                                                                  unused_irs_info,
                                                                  trail());
 

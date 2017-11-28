@@ -122,11 +122,41 @@ static void resume_stopwatch(Utils::StopWatch& s, const std::string& reason)
 }
 // LCOV_EXCL_STOP
 
+static void dump_message_details(pjsip_rx_data* rdata)
+{
+  TRC_WARNING("SAS Trail: %llu", get_trail(rdata));
+
+  if (rdata->msg_info.cid != NULL)
+  {
+    TRC_WARNING("Call-Id: %.*s",
+                ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
+                ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
+  }
+  if (rdata->msg_info.cseq != NULL)
+  {
+    TRC_WARNING("CSeq: %ld %.*s",
+                ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
+                ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
+                ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
+  }
+
+  pjsip_via_hdr* via = (pjsip_via_hdr*)rdata->msg_info.via;
+
+  if (via != NULL)
+  {
+    TRC_WARNING("Via: %.*s",
+                via->branch_param.slen,
+                via->branch_param.ptr);
+  }
+}
+
 bool process_queue_element()
 {
   TRC_DEBUG("Attempting to process queue element");
   bool rc;
   SipEvent qe;
+
+  unsigned long target_latency_us = load_monitor->get_target_latency_us();
 
   rc = sip_event_queue.pop(qe);
 
@@ -137,8 +167,8 @@ bool process_queue_element()
       pjsip_rx_data* rdata = qe.event_data.rdata;
 
       // Create an IO hook that pauses the stopwatch while blocked on IO.
-      Utils::IOHook io_hook(std::bind(pause_stopwatch, qe.stop_watch, std::placeholders::_1),
-                            std::bind(resume_stopwatch, qe.stop_watch, std::placeholders::_1));
+      Utils::IOHook io_hook(std::bind(pause_stopwatch, std::ref(qe.stop_watch), std::placeholders::_1),
+                            std::bind(resume_stopwatch, std::ref(qe.stop_watch), std::placeholders::_1));
 
       if (rdata)
       {
@@ -196,20 +226,8 @@ bool process_queue_element()
           {
             // Dump details about the exception.  Be defensive about reading these
             // as we don't know much about the state we're in.
-            TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
-            if (rdata->msg_info.cid != NULL)
-            {
-              TRC_ERROR("Exception Call-Id: %.*s (maybe)",
-                        ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
-                        ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
-            }
-            if (rdata->msg_info.cseq != NULL)
-            {
-              TRC_ERROR("Exception CSeq: %ld %.*s (maybe)",
-                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
-                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
-                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
-            }
+            TRC_ERROR("Hit exception handling message in worker thread. Details of probable cause follow");
+            dump_message_details(rdata);
 
             // Make a 500 response to the rdata with a retry-after header of
             // 10 mins if it's a request other than an ACK
@@ -230,12 +248,22 @@ bool process_queue_element()
           // LCOV_EXCL_STOP
 
           TRC_DEBUG("Worker thread completed processing message %p", rdata);
-          pjsip_rx_data_free_cloned(rdata);
 
           unsigned long latency_us = 0;
           if (qe.stop_watch.read(latency_us))
           {
-            TRC_DEBUG("Request latency = %ldus", latency_us);
+            if ((50L * target_latency_us) < latency_us)
+            {
+              TRC_WARNING("SIP Message took %ldus - vastly exceeding target of %ldus",
+                          latency_us,
+                          target_latency_us);
+              dump_message_details(rdata);
+            }
+            else
+            {
+              TRC_DEBUG("Request latency = %ldus", latency_us);
+            }
+
             if (latency_table)
             {
               latency_table->accumulate(latency_us); // LCOV_EXCL_LINE
@@ -246,6 +274,8 @@ bool process_queue_element()
           {
             TRC_ERROR("Failed to get done timestamp: %s", strerror(errno)); // LCOV_EXCL_LINE
           }
+
+          pjsip_rx_data_free_cloned(rdata);
         }
       }
     }

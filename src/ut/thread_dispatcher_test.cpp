@@ -25,6 +25,7 @@ using ::testing::StrictMock;
 using ::testing::_;
 using ::testing::ResultOf;
 using ::testing::Expectation;
+using ::testing::InvokeWithoutArgs;
 
 // Should be at least 5 to avoid causing problems with some of the UTs
 static const int REQUEST_ON_QUEUE_TIMEOUT_MS = 10;
@@ -121,6 +122,28 @@ TEST_F(ThreadDispatcherTest, StandardInviteTest)
 
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+TEST_F(ThreadDispatcherTest, SlowInviteTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "INVITE";
+
+  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+
+  // Slow responses get logged out by a different path, where slow means
+  // that > 50 * target latency
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(DoAll(
+    InvokeWithoutArgs([](){ cwtest_advance_time_ms(6000); }),
+    Return(PJ_TRUE)));
+
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(10));
+
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
@@ -148,6 +171,7 @@ TEST_F(ThreadDispatcherTest, RejectOldInviteTest)
   msg._method = "INVITE";
 
   EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(*mod_mock, on_tx_response(ResultOf(get_tx_status_code, 503)));
 
   inject_msg_thread(msg.get_request());
@@ -163,6 +187,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectOptionsTest)
   msg._method = "OPTIONS";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
@@ -177,6 +202,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectSubscribeTest)
   msg._method = "SUBSCRIBE";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_request());
@@ -192,6 +218,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
   msg._status = "200 OK";
 
   EXPECT_CALL(*mod_mock, on_rx_response(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_response());
@@ -201,6 +228,8 @@ TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
 // Queued callbacks should be run then destroyed.
 TEST_F(ThreadDispatcherTest, CallbackTest)
 {
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+
   StrictMock<MockCallback>* cb = new StrictMock<MockCallback>();
   add_callback_to_queue(cb);
 
@@ -233,6 +262,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOptionsTest)
     .After(options_exp)
     .WillOnce(Return(PJ_TRUE));
 
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillRepeatedly(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _)).Times(2);
 
   inject_msg_thread(invite_msg.get_request());
@@ -264,6 +294,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOlderTest)
     .After(older_exp)
     .WillOnce(Return(PJ_TRUE));
 
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillRepeatedly(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _)).Times(2);
 
   inject_msg_thread(older_msg.get_request());
@@ -298,6 +329,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOptionsOverOlderTest)
     .After(options_exp)
     .WillOnce(Return(PJ_TRUE));
 
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillRepeatedly(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _)).Times(2);
 
   inject_msg_thread(invite_msg.get_request());

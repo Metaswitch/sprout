@@ -311,7 +311,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   handler->run();
 
   ASSERT_EQ(irs_query._public_id, aor_id);
-  ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_TIMEOUT); 
+  ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_TIMEOUT);
   ASSERT_EQ(irs_query._server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 
 }
@@ -514,15 +514,16 @@ TEST_F(ChronosAuthTimeoutTest, NoIMPU)
   handler->run();
 }
 
-TEST_F(ChronosAuthTimeoutTest, CorruptIMPU)
+TEST_F(ChronosAuthTimeoutTest, CorruptIMPUMissingIMPI)
 {
   std::string body = "{\"impi\": \"test@example.com\", \"impu\": \"I am not a URI\", \"nonce\": \"abcdef\"}";
   build_timeout_request(body, htp_method_POST);
 
+  ImpiStore::Impi* impi = NULL;
+  EXPECT_CALL(*store, get_impi("test@example.com", _, true)).WillOnce(Return(impi));
   EXPECT_CALL(stack, send_reply(_, 500, _));
   handler->run();
 }
-
 
 TEST_F(ChronosAuthTimeoutTest, NoIMPI)
 {
