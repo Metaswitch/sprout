@@ -5391,7 +5391,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
-    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56789;transport=UDP");
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP");
   SubscriptionBuilder subscription = SubscriptionBuilder()
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
@@ -5404,7 +5404,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "4.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "4.2.3.4", 56788);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
