@@ -67,8 +67,11 @@ static int num_worker_threads = 1;
 
 static SNMP::EventAccumulatorByScopeTable* latency_table = NULL;
 static SNMP::EventAccumulatorByScopeTable* queue_size_table = NULL;
+static SNMP::SuccessFailCountByPriorityAndScopeTable* queue_success_fail_table = NULL;
 
 static LoadMonitor* load_monitor = NULL;
+
+static RPHService* rph_service = NULL;
 
 static SNMP::CounterByScopeTable* overload_counter = NULL;
 
@@ -122,11 +125,41 @@ static void resume_stopwatch(Utils::StopWatch& s, const std::string& reason)
 }
 // LCOV_EXCL_STOP
 
+static void dump_message_details(pjsip_rx_data* rdata)
+{
+  TRC_WARNING("SAS Trail: %llu", get_trail(rdata));
+
+  if (rdata->msg_info.cid != NULL)
+  {
+    TRC_WARNING("Call-Id: %.*s",
+                ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
+                ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
+  }
+  if (rdata->msg_info.cseq != NULL)
+  {
+    TRC_WARNING("CSeq: %ld %.*s",
+                ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
+                ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
+                ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
+  }
+
+  pjsip_via_hdr* via = (pjsip_via_hdr*)rdata->msg_info.via;
+
+  if (via != NULL)
+  {
+    TRC_WARNING("Via: %.*s",
+                via->branch_param.slen,
+                via->branch_param.ptr);
+  }
+}
+
 bool process_queue_element()
 {
   TRC_DEBUG("Attempting to process queue element");
   bool rc;
   SipEvent qe;
+
+  unsigned long target_latency_us = load_monitor->get_target_latency_us();
 
   rc = sip_event_queue.pop(qe);
 
@@ -137,8 +170,8 @@ bool process_queue_element()
       pjsip_rx_data* rdata = qe.event_data.rdata;
 
       // Create an IO hook that pauses the stopwatch while blocked on IO.
-      Utils::IOHook io_hook(std::bind(pause_stopwatch, qe.stop_watch, std::placeholders::_1),
-                            std::bind(resume_stopwatch, qe.stop_watch, std::placeholders::_1));
+      Utils::IOHook io_hook(std::bind(pause_stopwatch, std::ref(qe.stop_watch), std::placeholders::_1),
+                            std::bind(resume_stopwatch, std::ref(qe.stop_watch), std::placeholders::_1));
 
       if (rdata)
       {
@@ -159,6 +192,13 @@ bool process_queue_element()
         if ((latency_us > (request_on_queue_timeout_us)) &&
             (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG))
         {
+          // This request is about to be dropped so increment the number of
+          // failures for items put on the queue for a worker thread.
+          if (queue_success_fail_table)
+          {
+            queue_success_fail_table->increment_failures(qe.priority); // LCOV_EXCL_LINE
+          }
+
           if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
           {
             // Discard non-ACK requests if the request has been on the queue for
@@ -171,6 +211,7 @@ bool process_queue_element()
             SAS::report_marker(start_marker);
 
             SAS::Event event(trail, SASEvent::SIP_TOO_LONG_IN_QUEUE, 0);
+            event.add_static_param(qe.priority);
             event.add_static_param(latency_us/1000);
             event.add_static_param(request_on_queue_timeout_us/1000);
             SAS::report_event(event);
@@ -184,6 +225,15 @@ bool process_queue_element()
         }
         else
         {
+          // At this point we are about to hand this message over to a worker
+          // thread. The queue has done its job, and any failures from now are
+          // on the worker thread, so increment the number of successes for items
+          // put on the queue for a worker thread.
+          if (queue_success_fail_table)
+          {
+            queue_success_fail_table->increment_successes(qe.priority); // LCOV_EXCL_LINE
+          }
+
           CW_TRY
           {
             pjsip_endpt_process_rx_data(stack_data.endpt,
@@ -196,20 +246,8 @@ bool process_queue_element()
           {
             // Dump details about the exception.  Be defensive about reading these
             // as we don't know much about the state we're in.
-            TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
-            if (rdata->msg_info.cid != NULL)
-            {
-              TRC_ERROR("Exception Call-Id: %.*s (maybe)",
-                        ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
-                        ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
-            }
-            if (rdata->msg_info.cseq != NULL)
-            {
-              TRC_ERROR("Exception CSeq: %ld %.*s (maybe)",
-                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
-                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
-                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
-            }
+            TRC_ERROR("Hit exception handling message in worker thread. Details of probable cause follow");
+            dump_message_details(rdata);
 
             // Make a 500 response to the rdata with a retry-after header of
             // 10 mins if it's a request other than an ACK
@@ -230,12 +268,22 @@ bool process_queue_element()
           // LCOV_EXCL_STOP
 
           TRC_DEBUG("Worker thread completed processing message %p", rdata);
-          pjsip_rx_data_free_cloned(rdata);
 
           unsigned long latency_us = 0;
           if (qe.stop_watch.read(latency_us))
           {
-            TRC_DEBUG("Request latency = %ldus", latency_us);
+            if ((50L * target_latency_us) < latency_us)
+            {
+              TRC_WARNING("SIP Message took %ldus - vastly exceeding target of %ldus",
+                          latency_us,
+                          target_latency_us);
+              dump_message_details(rdata);
+            }
+            else
+            {
+              TRC_DEBUG("Request latency = %ldus", latency_us);
+            }
+
             if (latency_table)
             {
               latency_table->accumulate(latency_us); // LCOV_EXCL_LINE
@@ -246,7 +294,22 @@ bool process_queue_element()
           {
             TRC_ERROR("Failed to get done timestamp: %s", strerror(errno)); // LCOV_EXCL_LINE
           }
+
+          pjsip_rx_data_free_cloned(rdata);
         }
+      }
+      else
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("No rx_data found for message");
+
+        // Increment the number of failures for items put on the queue for a worker
+        // thread.
+        if (queue_success_fail_table)
+        {
+          queue_success_fail_table->increment_failures(qe.priority);
+        }
+        //LCOV_EXCL_STOP
       }
     }
     else
@@ -256,11 +319,27 @@ bool process_queue_element()
       cb->run();
       delete cb; cb = nullptr;
       TRC_DEBUG("Ran callback %p", cb);
+
+      // Increment the number of successes for items put on the queue for a worker
+      // thread.
+      if (queue_success_fail_table)
+      {
+        queue_success_fail_table->increment_successes(qe.priority); // LCOV_EXCL_LINE
+      }
     }
   }
   else
   {
-    TRC_DEBUG("Unable to process queue element: queue has been terminated"); // LCOV_EXCL_LINE
+    // LCOV_EXCL_START
+    TRC_DEBUG("Unable to process queue element: queue has been terminated");
+
+    // Increment the number of failures for items put on the queue for a worker
+    // thread.
+    if (queue_success_fail_table)
+    {
+      queue_success_fail_table->increment_failures(qe.priority);
+    }
+    //LCOV_EXCL_STOP
   }
 
   return rc;
@@ -286,14 +365,57 @@ int worker_thread(void* p)
 }
 // LCOV_EXCL_STOP
 
+enum IGNORE_LOAD_MONITOR_REASON
+{
+  OPTIONS=0,
+  RESOURCE_PRIORITY,
+  RESPONSE,
+  IN_DIALOG,
+  ACK,
+  SUBSCRIBE
+};
+
+static void log_ignore_load_monitor(SAS::TrailId trail,
+                                    IGNORE_LOAD_MONITOR_REASON reason)
+{
+  SAS::Event event(trail, SASEvent::SIP_BYPASS_LOAD_MONITOR, 0);
+  event.add_static_param(reason);
+  SAS::report_event(event);
+}
+
 // Returns true if the SIP message should always be processed, regardless of
 // overload, and false otherwise.
-static bool ignore_load_monitor(pjsip_rx_data* rdata)
+static bool ignore_load_monitor(pjsip_rx_data* rdata,
+                                SIPEventPriorityLevel priority,
+                                SAS::TrailId trail)
 {
+  const pjsip_method& method = rdata->msg_info.msg->line.req.method;
+
+  // If a request has anything other than normal priority, we will bypass the
+  // load monitor.
+  //
+  // Monit probes Sprout using OPTIONS polls, so these are given higher priority
+  // to prevent Monit killing Sprout during overload.
+  if (priority > SIPEventPriorityLevel::NORMAL_PRIORITY)
+  {
+    // If this was an OPTIONS poll, we should log appropriately.
+    if (pjsip_method_cmp(&method, pjsip_get_options_method()) == 0)
+    {
+      log_ignore_load_monitor(trail, OPTIONS);
+    }
+    else
+    {
+      log_ignore_load_monitor(trail, RESOURCE_PRIORITY);
+    }
+
+    return true;
+  }
+
   // The type of a message is either REQUEST or RESPONSE; we only check the load
   // monitor for REQUEST messages
   if (rdata->msg_info.msg->type != PJSIP_REQUEST_MSG)
   {
+    log_ignore_load_monitor(trail, RESPONSE);
     return true;
   }
 
@@ -302,23 +424,22 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata)
   pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
   if ((to_hdr != NULL) && (to_hdr->tag.slen != 0))
   {
-    // TODO
-    // LCOV_EXCL_START
+    log_ignore_load_monitor(trail, IN_DIALOG);
     return true;
-    // LCOV_EXCL_STOP
   }
 
-  // Always accept OPTIONS, ACK and SUBSCRIBE requests.
-  // -  Monit probes Sprout using OPTIONS polls, so these are allowed through
-  //    the load monitor to prevent Monit killing Sprout during overload.
+  // Always accept ACK and SUBSCRIBE requests.
   // -  There is no way to reject an ACK, so always allow them.
   // -  SUBSCRIBE flows are effectively follow on work from having allowed a
   //    subscriber to register.
-  const pjsip_method& method = rdata->msg_info.msg->line.req.method;
-  if ((pjsip_method_cmp(&method, pjsip_get_options_method()) == 0) ||
-      (pjsip_method_cmp(&method, pjsip_get_ack_method()) == 0) ||
-      (pjsip_method_cmp(&method, pjsip_get_subscribe_method()) == 0))
+  if (pjsip_method_cmp(&method, pjsip_get_ack_method()) == 0)
   {
+    log_ignore_load_monitor(trail, ACK);
+    return true;
+  }
+  else if (pjsip_method_cmp(&method, pjsip_get_subscribe_method()) == 0)
+  {
+    log_ignore_load_monitor(trail, SUBSCRIBE);
     return true;
   }
 
@@ -326,17 +447,21 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata)
 }
 
 // Determines the priority value of a SIP message based on its method.
-static int get_rx_msg_priority(pjsip_rx_data* rdata)
+static SIPEventPriorityLevel get_rx_msg_priority(pjsip_rx_data* rdata,
+                                                 SAS::TrailId trail)
 {
   // Monit probes Sprout using OPTIONS polls, so these are prioritised to
   // prevent Monit killing Sprout during overload.
   if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG &&
       rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD)
   {
-    return SipEventPriorityLevel::HIGH_PRIORITY;
+    return SIPEventPriorityLevel::HIGH_PRIORITY_15;
   }
 
-  return SipEventPriorityLevel::NORMAL_PRIORITY;
+  // Determine the prioritiy of the request based on any Resource-Priority
+  // headers. This function call returns the default priority if the message
+  // does not require prioritization.
+  return PJUtils::get_priority_of_message(rdata->msg_info.msg, rph_service, trail);
 }
 
 static pj_status_t reject_with_retry_header(pjsip_rx_data* rdata,
@@ -400,8 +525,10 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::Event event(trail, SASEvent::BEGIN_THREAD_DISPATCHER, 0);
   SAS::report_event(event);
 
+  SIPEventPriorityLevel priority = get_rx_msg_priority(rdata, trail);
+
   // Check whether the request should be rejected due to overload
-  if (!(ignore_load_monitor(rdata)) &&
+  if (!(ignore_load_monitor(rdata, priority, trail)) &&
       !(load_monitor->admit_request(trail)))
   {
     reject_rx_msg_overload(rdata, trail);
@@ -460,7 +587,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   qe.type = MESSAGE;
 
   // Set the message priority and log to SAS
-  qe.priority = get_rx_msg_priority(clone_rdata);
+  qe.priority = priority;
   TRC_DEBUG("Queuing cloned received message %p for worker threads with priority %d",
             clone_rdata, qe.priority);
   SAS::Event priority_event(trail, SASEvent::THREAD_DISPATCHER_SET_PRIORITY_LEVEL, 0);
@@ -472,6 +599,11 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   {
     queue_size_table->accumulate(sip_event_queue.size()); // LCOV_EXCL_LINE
   }
+  // Increment the number of items put on the queue for a worker thread.
+  if (queue_success_fail_table)
+  {
+    queue_success_fail_table->increment_attempts(qe.priority); // LCOV_EXCL_LINE
+  }
   sip_event_queue.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
@@ -481,8 +613,10 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* latency_table_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_table_arg,
+                                   SNMP::SuccessFailCountByPriorityAndScopeTable* queue_success_fail_table_arg,
                                    SNMP::CounterByScopeTable* overload_counter_arg,
                                    LoadMonitor* load_monitor_arg,
+                                   RPHService* rph_service_arg,
                                    ExceptionHandler* exception_handler_arg,
                                    unsigned long request_on_queue_timeout_ms_arg)
 {
@@ -496,7 +630,9 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   num_worker_threads = num_worker_threads_arg;
   latency_table = latency_table_arg;
   queue_size_table = queue_size_table_arg;
+  queue_success_fail_table = queue_success_fail_table_arg;
   load_monitor = load_monitor_arg;
+  rph_service = rph_service_arg;
   overload_counter = overload_counter_arg;
   exception_handler = exception_handler_arg;
   request_on_queue_timeout_us = request_on_queue_timeout_ms_arg * 1000;
@@ -555,6 +691,13 @@ void stop_worker_threads()
        qe != remaining_elts.end();
        ++qe)
   {
+    // Increment the number of failures for items put on the queue for a worker
+    // thread.
+    if (queue_success_fail_table)
+    {
+      queue_success_fail_table->increment_failures(qe->priority);
+    }
+
     if (qe->type == MESSAGE)
     {
       pjsip_rx_data_free_cloned(qe->event_data.rdata);
@@ -590,12 +733,17 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   qe.event_data.callback = cb;
   // This maintains the previous behaviour with respect to callbacks, but in
   // future we may want to look at prioritizing them
-  qe.priority = SipEventPriorityLevel::NORMAL_PRIORITY;
+  qe.priority = SIPEventPriorityLevel::NORMAL_PRIORITY;
 
   // Track the current queue size
   if (queue_size_table)
   {
     queue_size_table->accumulate(sip_event_queue.size()); // LCOV_EXCL_LINE
+  }
+  // Increment the number of items put on the queue for a worker thread.
+  if (queue_success_fail_table)
+  {
+    queue_success_fail_table->increment_attempts(qe.priority); // LCOV_EXCL_LINE
   }
 
   // Add the SipEvent

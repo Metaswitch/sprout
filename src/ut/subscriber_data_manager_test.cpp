@@ -35,6 +35,7 @@ using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::AtLeast;
 
 /// Fixture for BasicSubscriberDataManagerTest.
 class BasicSubscriberDataManagerTest : public SipTest
@@ -444,6 +445,9 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
 // the endpoint then a NOTIFY isn't sent.
 TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 {
+  // We're not testing analytics in this UT, so we don't care about any calls to it.
+  EXPECT_CALL(*(this->_analytics_logger), registration(_,_,_,_)).Times(AtLeast(0));
+
   CapturingTestLogger log;
   AoR::Binding* b0;
   AoR::Binding* b1;

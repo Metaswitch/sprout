@@ -2694,3 +2694,68 @@ void PJUtils::add_top_header(pjsip_msg* msg, pjsip_hdr* hdr)
     pj_list_insert_after(&msg->hdr, hdr);
   }
 }
+
+SIPEventPriorityLevel PJUtils::get_priority_of_message(const pjsip_msg* msg,
+                                                       RPHService* rph_service,
+                                                       SAS::TrailId trail)
+{
+  SIPEventPriorityLevel priority = SIPEventPriorityLevel::NORMAL_PRIORITY;
+
+  // Pull out all the Resource-Priority headers, and all the values within the
+  // headers. For each value, get the priority of that value. The final
+  // prioritisation of the message is the priority of the highest value.
+  std::vector<pjsip_generic_array_hdr*> resource_priority_headers;
+  pjsip_generic_array_hdr* resource_priority_header =
+   (pjsip_generic_array_hdr*)pjsip_msg_find_hdr_by_name(
+     msg,
+     &STR_RESOURCE_PRIORITY,
+     NULL);
+
+  while (resource_priority_header != NULL)
+  {
+    resource_priority_headers.push_back(resource_priority_header);
+    resource_priority_header =
+     (pjsip_generic_array_hdr*)pjsip_msg_find_hdr_by_name(
+       msg,
+       &STR_RESOURCE_PRIORITY,
+       resource_priority_header->next);
+  }
+
+  std::vector<std::string> rph_values;
+  std::string chosen_rph_value;
+  for (pjsip_generic_array_hdr* hdr : resource_priority_headers)
+  {
+    for (unsigned ii = 0; ii < hdr->count; ++ii)
+    {
+      std::string rph_value = pj_str_to_string(&hdr->values[ii]);
+      rph_values.push_back(rph_value);
+      SIPEventPriorityLevel temp_pri = rph_service->lookup_priority(rph_value, trail);
+
+      if (temp_pri > priority)
+      {
+        priority = temp_pri;
+        chosen_rph_value = rph_value;
+      }
+    }
+  }
+
+  if (priority > 0)
+  {
+    std::stringstream ss;
+    std::copy(rph_values.begin(), rph_values.end(), std::ostream_iterator<std::string>(ss, ","));
+    std::string list = ss.str();
+    if (!list.empty())
+    {
+      // Strip the trailing comma.
+      list = list.substr(0, list.length() - 1);
+    }
+
+    SAS::Event event(trail, SASEvent::RPH_SELECTED_MESSAGE_PRIORITY, 0);
+    event.add_var_param(list);
+    event.add_var_param(chosen_rph_value);
+    event.add_static_param(priority);
+    SAS::report_event(event);
+  }
+
+  return priority;
+}

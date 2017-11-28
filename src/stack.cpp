@@ -180,7 +180,6 @@ static int pjsip_thread_func(void *p)
   }
 
   pj_bool_t curr_quiescing = PJ_FALSE;
-  pj_bool_t new_quiescing = quiescing;
 
   // Log whenever we do any I/O on this thread. There is only one transport
   // thread so blocking on it is a really bad idea!
@@ -192,7 +191,7 @@ static int pjsip_thread_func(void *p)
     pjsip_endpt_handle_events(stack_data.endpt, &delay);
 
     // Check if our quiescing state has changed, and act appropriately
-    new_quiescing = quiescing;
+    pj_bool_t new_quiescing = quiescing;
     if (curr_quiescing != new_quiescing)
     {
       TRC_STATUS("Quiescing state changed");
