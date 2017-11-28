@@ -687,7 +687,6 @@ void BasicProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata, const std:
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
-  // @@CPH what st_code to use here? maybe get it from rdata?
   cancel_pending_uac_tsx(0, reason, false);
 }
 
@@ -1208,7 +1207,6 @@ void BasicProxy::UASTsx::on_tsx_state(pjsip_event* event)
     {
       // INVITE transaction has been terminated.  If there are any
       // pending UAC transactions they should be cancelled.
-      // @@CPH what about the st_code?
       cancel_pending_uac_tsx(0, pjsip_event_str(event->body.tsx_state.type), true);
     }
     unbind_from_pjsip_tsx();

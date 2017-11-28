@@ -1,0 +1,39 @@
+{
+  "definitions": {
+    "Namespace.Priority-Value": {
+      "type": "string",
+      "pattern": ".+\\..+"
+    }
+  },
+
+  "properties": {
+    "priority_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 15
+          },
+          "rph_values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Namespace.Priority-Value"
+            },
+            "additionalItems": false
+          }
+        },
+        "required": ["priority"],
+        "additionalProperties": false
+      },
+      "additionalItems": false,
+      "maxItems": 15,
+      "uniqueItems": true
+    }
+  },
+  "maxProperties": 1,
+  "required": ["priority_blocks"],
+  "additionalProperties": false
+}

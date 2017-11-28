@@ -283,12 +283,21 @@ public:
   /// non-INVITE requests the fork is terminated immediately.
   ///
   /// @param fork_id       - The identifier of the fork to cancel.
+  /// @param st_code       - SIP status code to include in the Reason header
+  ///                        on any CANCEL message sent.  A value of zero
+  ///                        means no Reason header will be included.
+  /// @param reason        - Human-readable reason string.  For diagnostics only.
   ///
   virtual void cancel_fork(int fork_id, int st_code = 0, std::string reason = "") = 0;
 
   /// Cancels all pending forked requests by either sending a CANCEL request
   /// (for INVITE requests) or terminating the transaction (for non-INVITE
   /// requests).
+  ///
+  /// @param st_code       - SIP status code to include in the Reason header
+  ///                        on any CANCEL message sent.  A value of zero
+  ///                        means no Reason header will be included.
+  /// @param reason        - Human-readable reason string.  For diagnostics only.
   ///
   virtual void cancel_pending_forks(int st_code = 0, std::string reason = "") = 0;
 

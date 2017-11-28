@@ -26,6 +26,7 @@ extern "C" {
 #include "sas.h"
 #include "sipresolver.h"
 #include "enumservice.h"
+#include "rphservice.h"
 #include "uri_classifier.h"
 #include "acr.h"
 
@@ -67,6 +68,7 @@ std::string hdr_to_string(void* hdr);
 std::string extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_uri* impu_uri);
 
 std::string public_id_from_uri(const pjsip_uri* uri);
+pj_bool_t valid_public_id_from_uri(const pjsip_uri* uri, std::string& impu);
 
 std::string default_private_id_from_uri(const pjsip_uri* uri);
 
@@ -375,6 +377,19 @@ bool is_param_in_top_route(const pjsip_msg* req,
 /// @param msg        - The message to which the header should be added
 /// @param hdr        - The header to add
 void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
+
+/// Gets the priority of a message, based on the Resource-Priority headers.
+/// The priority is an integer between 0 and 15, where 0 is the default
+/// priority and 15 is the highest priority.
+///
+/// @param msg         - The message to determine the priority of.
+/// @param rph_service - Used to lookup the priority of an RPH value.
+/// @trail             - The SAS trail ID.
+///
+/// @return            - The priority of the message.
+SIPEventPriorityLevel get_priority_of_message(const pjsip_msg* msg,
+                                              RPHService* rph_service,
+                                              SAS::TrailId trail);
 
 } // namespace PJUtils
 

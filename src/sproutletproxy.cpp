@@ -1717,7 +1717,6 @@ void SproutletWrapper::cancel_fork(int fork_id, int st_code, std::string reason)
   }
 }
 
-// @@CPH should this not call into cancel_fork rather than duplicating code?
 void SproutletWrapper::cancel_pending_forks(int st_code, std::string reason)
 {
   for (size_t ii = 0; ii < _forks.size(); ++ii)

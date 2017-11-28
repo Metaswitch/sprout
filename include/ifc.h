@@ -83,28 +83,37 @@ public:
       rapidxml::xml_document<>* ifc_doc);
 
   bool filter_matches(const SessionCase& session_case,
-                      bool is_registered,
-                      bool is_initial_registration,
+                      const bool is_registered,
+                      const bool is_initial_registration,
                       pjsip_msg* msg,
                       SAS::TrailId trail) const;
 
   AsInvocation as_invocation() const;
 
 private:
+
+class ifc_error : public std::exception {};
+
   static bool spt_matches(const SessionCase& session_case,
-                          bool is_registered,
-                          bool is_initial_registration,
+                          const bool is_registered,
+                          const bool is_initial_registration,
                           pjsip_msg *msg,
                           rapidxml::xml_node<>* spt,
                           std::string ifc_str,
                           std::string server_name,
                           SAS::TrailId trail);
 
-  static void invalid_ifc(std::string error,
-                          std::string server_name,
-                          int sas_event_id,
-                          int instance_id,
-                          SAS::TrailId trail);
+  static void handle_invalid_ifc(std::string error,
+                                 std::string server_name,
+                                 int sas_event_id,
+                                 int instance_id,
+                                 SAS::TrailId trail);
+
+  static void handle_unusual_ifc(std::string error,
+                                 std::string server_name,
+                                 int sas_event_id,
+                                 int instance_id,
+                                 SAS::TrailId trail);
 
   rapidxml::xml_node<>* _ifc;
   std::string _server_name;

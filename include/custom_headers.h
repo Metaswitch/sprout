@@ -143,4 +143,8 @@ void* pjsip_accept_contact_hdr_clone(pj_pool_t* pool, const void* o);
 void* pjsip_accept_contact_hdr_shallow_clone(pj_pool_t* pool, const void* o);
 int pjsip_accept_contact_hdr_print_on(void* hdr, char* buf, pj_size_t len);
 
+// Resource-Priority
+pjsip_hdr* parse_hdr_resource_priority(pjsip_parse_ctx* ctx);
+pjsip_generic_array_hdr* pjsip_resource_priority_hdr_create(pj_pool_t* pool);
+
 #endif
