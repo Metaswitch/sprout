@@ -1239,7 +1239,7 @@ void PJUtils::run_callback_on_worker_thread(PJUtils::Callback* cb,
   // The UTs have a different threading model - in those we run the callback
   // directly on whatever thread we're on
 #ifndef UNIT_TEST
-  if (is_pjsip_transport_thread() || !is_pjsip_thread)
+  if (!is_pjsip_thread || is_pjsip_transport_thread())
   {
     // We're either on the transport thread or on a non-PJSIP owned thread, so
     // add the callback to the worker thread queue
