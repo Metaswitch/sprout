@@ -1659,9 +1659,6 @@ int main(int argc, char* argv[])
   CommunicationMonitor* remote_astaire_comm_monitor = NULL;
   CommunicationMonitor* ralf_comm_monitor = NULL;
 
-  // Set up our exception signal handler for aborts and segfaults.
-  Utils::setup_exception_signal_handlers(exception_handler, &CL_SPROUT_CRASH);
-
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
 
@@ -2021,6 +2018,9 @@ int main(int argc, char* argv[])
   exception_handler = new ExceptionHandler(opt.exception_max_ttl,
                                            true,
                                            hc);
+
+  // Set up our exception signal handler for aborts and segfaults.
+  Utils::setup_exception_signal_handlers(exception_handler, &CL_SPROUT_CRASH);
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
