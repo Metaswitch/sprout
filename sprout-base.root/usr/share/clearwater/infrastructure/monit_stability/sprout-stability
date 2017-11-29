@@ -13,7 +13,8 @@
 
 PROCESS_NAME="sprout"
 GRACE_PERIOD=20
-ABORT_TIMEOUT=60
 
-/usr/share/clearwater/bin/process-stability $method $PROCESS_NAME $GRACE_PERIOD $ABORT_TIMEOUT
+method=$1
+
+/usr/share/clearwater/bin/process-stability $method $PROCESS_NAME $GRACE_PERIOD
 exit $?
