@@ -515,6 +515,7 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
   // We cache AoRPairs from the local and remote SDMs to avoid having
   // to do repeated remote reads, saving thread time
   std::map<SubscriberDataManager*, AoRPair*> _cached_aors;
+  int cseq = 0;
 
   AoRPair* local_aor_pair = read_and_cache_from_store(subscription->_sdm,
                                                       aor,
@@ -526,6 +527,8 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
     status = Store::Status::ERROR;
     return status;
   }
+
+  cseq = local_aor_pair->get_current()->_notify_cseq;
 
   // Write to the local store, handling any CAS error
   do
@@ -592,6 +595,8 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
       {
         update_subscription(subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
         remote_aor_pair->get_current()->_associated_uris = *associated_uris;
+
+        remote_aor_pair->get_current()->_notify_cseq = cseq;
 
         rc = sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, remote_aor_pair, trail());
         if (rc == Store::DATA_CONTENTION)
