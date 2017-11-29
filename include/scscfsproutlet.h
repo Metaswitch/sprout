@@ -460,6 +460,12 @@ private:
   /// Get the base request that the S-CSCF should use when retrying a request.
   pjsip_msg* get_base_request();
 
+  /// SAS logs that the next hop URI is invalid and rejects the request with a
+  /// 400 Bad Request error (which also frees the request).
+  /// @param req     The request to rejet
+  /// @param uri_str The URI string to add to the SAS log
+  void reject_invalid_uri(pjsip_msg* req, const std::string& uri_str);
+
   /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
   /// HSS. This field should not be changed once it has been set by the
   /// on_rx_intial_request() call.

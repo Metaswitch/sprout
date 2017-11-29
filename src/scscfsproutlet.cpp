@@ -662,13 +662,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       {
         // Invalid URI, so just reject the request
         std::string uri_str = PJUtils::uri_to_string(context, next_uri);
-        TRC_DEBUG("Rejecting request to invalid URI %s", uri_str.c_str());
-        SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
-        event.add_var_param(uri_str);
-        SAS::report_event(event);
-        pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
-        send_response(rsp);
-        free_msg(req);
+        reject_invalid_uri(req, uri_str);
       }
     }
   }
@@ -1466,12 +1460,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       else
       {
         // Non-sip: or -tel: URI is invalid at this point, so just reject the request
-        SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
-        event.add_var_param(new_uri_str);
-        SAS::report_event(event);
-        pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
-        send_response(rsp);
-        free_msg(req);
+        reject_invalid_uri(req, new_uri_str);
       }
     }
     else
@@ -1490,13 +1479,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       {
         // Invalid URI, so just reject the request
         std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
-        TRC_DEBUG("Rejecting request to invalid URI %s", uri_str.c_str());
-        SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
-        event.add_var_param(uri_str);
-        SAS::report_event(event);
-        pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
-        send_response(rsp);
-        free_msg(req);
+        reject_invalid_uri(req, uri_str);
       }
     }
   }
@@ -2394,4 +2377,15 @@ pjsip_msg* SCSCFSproutletTsx::get_base_request()
   {
     return original_request();
   }
+}
+
+void SCSCFSproutletTsx::reject_invalid_uri(pjsip_msg* req, const std::string& uri_str)
+{
+  TRC_DEBUG("Rejecting request to invalid URI %s", uri_str.c_str());
+  SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
+  event.add_var_param(uri_str);
+  SAS::report_event(event);
+  pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
+  send_response(rsp);
+  free_msg(req);
 }
