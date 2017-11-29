@@ -735,12 +735,13 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   // future we may want to look at prioritizing them
   qe.priority = SIPEventPriorityLevel::NORMAL_PRIORITY;
 
-  // Track the current queue size
-  if (queue_size_table)
-  {
-    queue_size_table->accumulate(sip_event_queue.size()); // LCOV_EXCL_LINE
-  }
-  // Increment the number of items put on the queue for a worker thread.
+  // We don't bother tracking the queue size in queue_size_table here, because
+  // the size is tracked whenever the transport thread adds an item to the
+  // queue (so the next time an item is added the correct size will be tracked).
+  // However, we do need to track the number of attempts in the
+  // queue_success_fail_table because these are counted.
+  // This stat must be thread-safe as we already access it on the worker and
+  // transport threads above, so it is safe to access here.
   if (queue_success_fail_table)
   {
     queue_success_fail_table->increment_attempts(qe.priority); // LCOV_EXCL_LINE
