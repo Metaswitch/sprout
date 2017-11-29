@@ -295,14 +295,12 @@ TEST_F(ThreadDispatcherTest, NeverRejectASRequestTest)
   process_queue_element();
 }
 
-// On recieving an emergency registration, the thread dispatcher should not call
-// into the load monitor - it should process the request regardless of load.
-TEST_F(ThreadDispatcherTest, NeverRejectEmergencyRegTest)
+// On recieving a registration, the thread dispatcher should not call into the
+// load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectRegisterTest)
 {
   TestingCommon::Message msg;
   msg._method = "REGISTER";
-  msg._extra = "Contact: <sip:dfgkjk34j5kjdfg0fd8g34jdfhgk345h@10.114.61.213:5061;transport=tcp;ob>;expires=3600;+sip.ice;reg-id=1\r\n"
-               "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=3600;+sip.ice;reg-id=1";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));

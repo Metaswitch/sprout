@@ -373,8 +373,8 @@ enum IGNORE_LOAD_MONITOR_REASON
   IN_DIALOG,
   ACK,
   SUBSCRIBE,
+  REGISTER,
   ODI_TOKEN,
-  EMERGENCY_REGISTRATION,
   URN_SERVICE_SOS
 };
 
@@ -431,11 +431,18 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
     return true;
   }
 
-  // Always accept ACK and SUBSCRIBE requests.
+  // Always accept REGISTER, ACK and SUBSCRIBE requests.
+  // -  REGISTERs are critical to any successful calls being made, so always
+  //    allow them.
   // -  There is no way to reject an ACK, so always allow them.
   // -  SUBSCRIBE flows are effectively follow on work from having allowed a
   //    subscriber to register.
-  if (pjsip_method_cmp(&method, pjsip_get_ack_method()) == 0)
+  if (pjsip_method_cmp(&method, pjsip_get_register_method()) == 0)
+  {
+    log_ignore_load_monitor(trail, REGISTER);
+    return true;
+  }
+  else if (pjsip_method_cmp(&method, pjsip_get_ack_method()) == 0)
   {
     log_ignore_load_monitor(trail, ACK);
     return true;
@@ -458,27 +465,6 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
   {
     log_ignore_load_monitor(trail, ODI_TOKEN);
     return true;
-  }
-
-  // Always accept emergency registrations.
-  if (pjsip_method_cmp(&method, pjsip_get_register_method()) == 0)
-  {
-    pjsip_contact_hdr* contact_hdr =
-      (pjsip_contact_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
-                                             PJSIP_H_CONTACT,
-                                             NULL);
-    while (contact_hdr != NULL)
-    {
-      if (PJUtils::is_emergency_registration(contact_hdr))
-      {
-        log_ignore_load_monitor(trail, EMERGENCY_REGISTRATION);
-        return true;
-      }
-
-      contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
-                                                            PJSIP_H_CONTACT,
-                                                            contact_hdr->next);
-    }
   }
 
   // Always accept MESSAGEs with "urn:service:sos" in the request URI.
