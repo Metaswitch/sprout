@@ -1346,37 +1346,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 }
 
 
-// Signal handler that simply dumps the stack and then crashes out.
-void signal_handler(int sig)
-{
-  // Reset the signal handlers so that another exception will cause a crash.
-  signal(SIGABRT, SIG_DFL);
-  signal(SIGSEGV, signal_handler);
-
-  // Log the signal, along with a simple backtrace.
-  TRC_BACKTRACE("Signal %d caught", sig);
-
-  // Check if there's a stored jmp_buf on the thread and handle if there is
-  exception_handler->handle_exception();
-
-  //
-  // If we get here it means we didn't handle the exception so we need to exit.
-  //
-
-  CL_SPROUT_CRASH.log(strsignal(sig));
-
-  // Log a full backtrace to make debugging easier.
-  TRC_BACKTRACE_ADV();
-
-  // Ensure the log files are complete - the core file created by abort() below
-  // will trigger the log files to be copied to the diags bundle
-  TRC_COMMIT();
-
-  // Dump a core.
-  abort();
-}
-
-
 // Signal handler that receives requests to (un)quiesce.
 void quiesce_unquiesce_handler(int sig)
 {
@@ -1690,9 +1659,8 @@ int main(int argc, char* argv[])
   CommunicationMonitor* remote_astaire_comm_monitor = NULL;
   CommunicationMonitor* ralf_comm_monitor = NULL;
 
-  // Set up our exception signal handler for asserts and segfaults.
-  signal(SIGABRT, signal_handler);
-  signal(SIGSEGV, signal_handler);
+  // Set up our exception signal handler for aborts and segfaults.
+  Utils::setup_exception_signal_handlers(exception_handler, &CL_SPROUT_CRASH);
 
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
@@ -2546,6 +2514,8 @@ int main(int argc, char* argv[])
 
   destroy_options();
   destroy_stack();
+
+  Utils::unset_exception_signal_handlers();
 
   delete http_stack_sig; http_stack_sig = NULL;
   delete http_stack_mgmt; http_stack_mgmt = NULL;
