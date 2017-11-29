@@ -270,6 +270,56 @@ TEST_F(ThreadDispatcherTest, NeverRejectInDialogTest)
   msg._method = "UPDATE";
   msg._in_dialog = true;
 
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+// On receiving a request that contains an ODI token in the top route header,
+// the thread dispatcher should not call into the load monitor - it should
+// process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectASRequestTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "INVITE";
+  msg._route = "Route: <sip:odi_i5u09fdngj45@10.225.20.254;service=scscf>";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+// On recieving an emergency registration, the thread dispatcher should not call
+// into the load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectEmergencyRegTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "REGISTER";
+  msg._extra = "Contact: <sip:dfgkjk34j5kjdfg0fd8g34jdfhgk345h@10.114.61.213:5061;transport=tcp;ob>;expires=3600;+sip.ice;reg-id=1\r\n"
+               "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=3600;+sip.ice;reg-id=1";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+// On recieving a MESSAGE with urn:service:sos in the request URI, the thread
+// dispatcher should not call into the load monitor - it should process the
+// request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:service:sos";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));

@@ -372,7 +372,10 @@ enum IGNORE_LOAD_MONITOR_REASON
   RESPONSE,
   IN_DIALOG,
   ACK,
-  SUBSCRIBE
+  SUBSCRIBE,
+  ODI_TOKEN,
+  EMERGENCY_REGISTRATION,
+  URN_SERVICE_SOS
 };
 
 static void log_ignore_load_monitor(SAS::TrailId trail,
@@ -443,6 +446,55 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
     return true;
   }
 
+  // Always accept requests containing an ODI token in the top route header.
+  pjsip_route_hdr* top_route =
+    (pjsip_route_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
+  if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
+      (top_route != NULL) &&
+      (PJSIP_URI_SCHEME_IS_SIP(top_route->name_addr.uri)) &&
+      (!pj_strncmp(&((pjsip_sip_uri*)top_route->name_addr.uri)->user,
+                   &STR_ODI_PREFIX,
+                   STR_ODI_PREFIX.slen)))
+  {
+    log_ignore_load_monitor(trail, ODI_TOKEN);
+    return true;
+  }
+
+  // Always accept emergency registrations.
+  if (pjsip_method_cmp(&method, pjsip_get_register_method()) == 0)
+  {
+    pjsip_contact_hdr* contact_hdr =
+      (pjsip_contact_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                             PJSIP_H_CONTACT,
+                                             NULL);
+    while (contact_hdr != NULL)
+    {
+      if (PJUtils::is_emergency_registration(contact_hdr))
+      {
+        log_ignore_load_monitor(trail, EMERGENCY_REGISTRATION);
+        return true;
+      }
+
+      contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                            PJSIP_H_CONTACT,
+                                                            contact_hdr->next);
+    }
+  }
+
+  // Always accept MESSAGEs with "urn:service:sos" in the request URI.
+  const pjsip_method message_method= { PJSIP_OTHER_METHOD, { "MESSAGE", 7 }};
+  pjsip_uri* req_uri = rdata->msg_info.msg->line.req.uri;
+  if ((pjsip_method_cmp(&method, &message_method) == 0) &&
+      (PJSIP_URI_SCHEME_IS_URN(req_uri)))
+  {
+    std::string req_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri);
+    if (req_uri_str == "urn:service:sos")
+    {
+      log_ignore_load_monitor(trail, URN_SERVICE_SOS);
+      return true;
+    } // LCOV_EXCL_LINE - For some reason this isn't covered.
+  }
+
   return false;
 }
 
@@ -458,7 +510,7 @@ static SIPEventPriorityLevel get_rx_msg_priority(pjsip_rx_data* rdata,
     return SIPEventPriorityLevel::HIGH_PRIORITY_15;
   }
 
-  // Determine the prioritiy of the request based on any Resource-Priority
+  // Determine the priority of the request based on any Resource-Priority
   // headers. This function call returns the default priority if the message
   // does not require prioritization.
   return PJUtils::get_priority_of_message(rdata->msg_info.msg, rph_service, trail);
