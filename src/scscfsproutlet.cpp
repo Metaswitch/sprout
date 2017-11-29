@@ -796,6 +796,9 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
           // handling is set to continue.
           TRC_DEBUG("Trigger default_handling=CONTINUE processing");
           SAS::Event bypass_As(trail(), SASEvent::BYPASS_AS, 1);
+          bypass_As.add_var_param(st_code == PJSIP_SC_REQUEST_TIMEOUT ?
+                                  "Timed out waiting for response to INVITE request from AS" :
+                                  "AS returned 5xx response");
           SAS::report_event(bypass_As);
 
           _as_chain_link = _as_chain_link.next();
@@ -2127,7 +2130,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
 
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
-    cancel_pending_forks();
+    cancel_pending_forks(PJSIP_SC_REQUEST_TIMEOUT, "AS liveness timer expired");
 
     if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {
@@ -2135,6 +2138,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
       // handling is set to continue.
       TRC_DEBUG("Trigger default_handling=CONTINUED processing");
       SAS::Event bypass_as(trail(), SASEvent::BYPASS_AS, 0);
+      bypass_as.add_var_param("AS liveness timer expired");
       SAS::report_event(bypass_as);
 
       _as_chain_link = _as_chain_link.next();
