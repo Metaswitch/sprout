@@ -2,7 +2,7 @@
 
 # @file poll_sprout_sip.sh
 #
-# Copyright (C) Metaswitch Networks 2017
+# Copyright (C) Metaswitch Networks 2015
 # If license terms are provided to you in a COPYING file in the root directory
 # of the source code repository by which you are accessing this code, then
 # the license outlined in that COPYING file applies to your use.
@@ -40,10 +40,12 @@ fi
 
 # If the sprout process is not stable, we ignore a non-zero return code and
 # return zero.
-if ! /usr/share/clearwater/infrastructure/monit_stability/sprout-stability check \
-  && [ $rc -ne 0 ]; then
-  echo "return code $rc ignored" >&2
-  rc=0
+if [ $rc != 0 ]; then
+  /usr/share/clearwater/infrastructure/monit_stability/sprout-stability check
+  if [ $? != 0 ]; then
+    echo "return code $rc ignored" >&2
+    rc=0
+  fi
 fi
 
 exit $rc

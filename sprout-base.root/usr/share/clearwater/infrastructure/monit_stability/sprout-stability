@@ -15,11 +15,5 @@ PROCESS_NAME="sprout"
 GRACE_PERIOD=20
 ABORT_TIMEOUT=60
 
-if [ -z "$1" ]; then
-  method="check"
-else
-  method=$1
-fi
-
 /usr/share/clearwater/bin/process-stability $method $PROCESS_NAME $GRACE_PERIOD $ABORT_TIMEOUT
 exit $?
