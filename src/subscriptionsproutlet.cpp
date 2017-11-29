@@ -515,7 +515,6 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
   // We cache AoRPairs from the local and remote SDMs to avoid having
   // to do repeated remote reads, saving thread time
   std::map<SubscriberDataManager*, AoRPair*> _cached_aors;
-  int cseq = 0;
 
   AoRPair* local_aor_pair = read_and_cache_from_store(subscription->_sdm,
                                                       aor,
@@ -528,7 +527,14 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
     return status;
   }
 
-  cseq = local_aor_pair->get_current()->_notify_cseq;
+  // If the NOTIFY Cseq values on the local AoR pair and the remote AoR pair get
+  // out of sync, we need a way to recover. We store the local value, and
+  // overwrite the remote value if necessary. This means that we will recover
+  // once a subscription is updated, possibly after sending some NOTIFYs with
+  // incorrect CSeq values.
+  // This isn't an ideal solution - this entire area of code is due to be
+  // refactored, at which point a more permanent fix will be implemented.
+  int local_notify_cseq = local_aor_pair->get_current()->_notify_cseq;
 
   // Write to the local store, handling any CAS error
   do
@@ -593,10 +599,18 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
       }
       else
       {
+        if (remote_aor_pair->get_current()->_notify_cseq != local_notify_cseq)
+        {
+          // Overwrite the CSeq value on the remote AoR pair, and log an error.
+          TRC_ERROR("(TJW2) Remote CSeq %d differs from local CSeq %d for AoR %s, overwriting remote CSeq",
+                    remote_aor_pair->get_current()->_notify_cseq,
+                    local_notify_cseq,
+                    aor.c_str());
+          remote_aor_pair->get_current()->_notify_cseq = local_notify_cseq;
+        }
+
         update_subscription(subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
         remote_aor_pair->get_current()->_associated_uris = *associated_uris;
-
-        remote_aor_pair->get_current()->_notify_cseq = cseq;
 
         rc = sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, remote_aor_pair, trail());
         if (rc == Store::DATA_CONTENTION)
