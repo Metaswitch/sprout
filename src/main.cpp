@@ -1354,8 +1354,7 @@ void signal_handler(int sig)
   signal(SIGSEGV, signal_handler);
 
   // Log the signal, along with a simple backtrace.
-  TRC_ERROR("Signal %d caught", sig);
-  TRC_BACKTRACE();
+  TRC_BACKTRACE("Signal %d caught", sig);
 
   // Check if there's a stored jmp_buf on the thread and handle if there is
   exception_handler->handle_exception();
