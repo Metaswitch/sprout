@@ -51,8 +51,8 @@ private:
   Alarm* _alarm;
   std::string _configuration;
 
-  // RPH values are case insensitive, so write a case insensitive compare
-  // function to pass to the map.
+  // RFC 4412 section 3.1 states that RPH values are case-insensitive, so write
+  // a case-insensitive compare function to pass to the map.
   struct str_cmp_ci
   {
     bool operator() (std::string k1, std::string k2) const
