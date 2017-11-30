@@ -310,7 +310,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectRegisterTest)
   process_queue_element();
 }
 
-// On recieving a MESSAGE with urn:service:sos in the request URI, the thread
+// On recieving a message with urn:service:sos in the request URI, the thread
 // dispatcher should not call into the load monitor - it should process the
 // request regardless of load.
 TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosTest)

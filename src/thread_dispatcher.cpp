@@ -467,18 +467,13 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
     return true;
   }
 
-  // Always accept MESSAGEs with "urn:service:sos" in the request URI.
-  const pjsip_method message_method= { PJSIP_OTHER_METHOD, { "MESSAGE", 7 }};
+  // Always accept messages with "urn:service:sos" in the request URI.
   pjsip_uri* req_uri = rdata->msg_info.msg->line.req.uri;
-  if ((pjsip_method_cmp(&method, &message_method) == 0) &&
-      (PJSIP_URI_SCHEME_IS_URN(req_uri)))
+  std::string req_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri);
+  if (req_uri_str == "urn:service:sos")
   {
-    std::string req_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri);
-    if (req_uri_str == "urn:service:sos")
-    {
-      log_ignore_load_monitor(trail, URN_SERVICE_SOS);
-      return true;
-    } // LCOV_EXCL_LINE - For some reason this isn't covered.
+    log_ignore_load_monitor(trail, URN_SERVICE_SOS);
+    return true;
   }
 
   return false;
