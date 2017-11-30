@@ -1726,10 +1726,10 @@ int main(int argc, char* argv[])
   opt.call_list_ttl = 604800;
   opt.target_latency_us = 10000;
   opt.cass_target_latency_us = 1000000;
-  opt.max_tokens = 1000;
+  opt.max_tokens = 20;
   opt.init_token_rate = 100.0;
   opt.min_token_rate = 10.0;
-  opt.max_token_rate = 0.0;
+  opt.max_token_rate = 950.0;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;

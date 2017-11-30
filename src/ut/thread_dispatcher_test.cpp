@@ -124,7 +124,7 @@ TEST_F(ThreadDispatcherTest, StandardInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
@@ -138,7 +138,7 @@ TEST_F(ThreadDispatcherTest, SlowInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
 
   // Slow responses get logged out by a different path, where slow means
   // that > 50 * target latency
@@ -160,7 +160,7 @@ TEST_F(ThreadDispatcherTest, OverloadedInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(false));
+  EXPECT_CALL(load_monitor, admit_request(_, false)).WillOnce(Return(false));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(*mod_mock, on_tx_response(ResultOf(get_tx_status_code, 503)));
 
@@ -174,7 +174,7 @@ TEST_F(ThreadDispatcherTest, RejectOldInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(*mod_mock, on_tx_response(ResultOf(get_tx_status_code, 503)));
 
@@ -191,6 +191,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectOptionsTest)
   msg._method = "OPTIONS";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -206,6 +207,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectAckTest)
   msg._method = "ACK";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -221,6 +223,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectSubscribeTest)
   msg._method = "SUBSCRIBE";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -238,6 +241,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectPrioritizedInviteTest)
   msg._extra = "Resource-Priority: wps.0";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(rph_service, lookup_priority("wps.0", _)).WillOnce(Return(SIPEventPriorityLevel::HIGH_PRIORITY_11));
   EXPECT_CALL(load_monitor, request_complete(_, _));
@@ -255,6 +259,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
   msg._status = "200 OK";
 
   EXPECT_CALL(*mod_mock, on_rx_response(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -271,6 +276,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectInDialogTest)
   msg._in_dialog = true;
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -288,6 +294,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectASRequestTest)
   msg._route = "Route: <sip:odi_i5u09fdngj45@10.225.20.254;service=scscf>";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -303,6 +310,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectRegisterTest)
   msg._method = "REGISTER";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -320,6 +328,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosTest)
   msg._requri = "urn:service:sos";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
@@ -350,8 +359,10 @@ TEST_F(ThreadDispatcherTest, PrioritiseOptionsTest)
   TestingCommon::Message options_msg;
   options_msg._method = "OPTIONS";
 
-  // Only the INVITE should check the load monitor
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  // Both requests should check the load monitor, but only the INVITE can
+  // get rejected.
+  EXPECT_CALL(load_monitor, admit_request(_, false)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
 
   // The OPTIONS poll should be processed first
   Expectation options_exp = EXPECT_CALL(*mod_mock,
@@ -383,7 +394,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOlderTest)
   TestingCommon::Message newer_msg;
   newer_msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).Times(2).WillRepeatedly(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).Times(2).WillRepeatedly(Return(true));
 
   // The older message should be processed first
   Expectation older_exp = EXPECT_CALL(*mod_mock,
@@ -417,8 +428,10 @@ TEST_F(ThreadDispatcherTest, PrioritiseOptionsOverOlderTest)
   TestingCommon::Message options_msg;
   options_msg._method = "OPTIONS";
 
-  // Only the INVITE should check the load monitor
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  // Both requests should check the load monitor, but only the INVITE can
+  // get rejected.
+  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, false)).WillOnce(Return(true));
 
   // The OPTIONS poll should be processed first
   Expectation options_exp = EXPECT_CALL(*mod_mock,
