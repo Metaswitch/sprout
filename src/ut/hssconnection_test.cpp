@@ -180,6 +180,13 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location?auth-type=DEREG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [], \"optional-capabilities\": []}";
     fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location?originating=true&auth-type=CAPAB"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
     fakecurl_responses["http://10.42.42.42:80/impu/pubid45/location"] = CURLE_REMOTE_FILE_NOT_FOUND;
+
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid48/reg-data", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"server_name\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "</ClearwaterRegData>";
+
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
@@ -191,8 +198,6 @@ class HssConnectionTest : public BaseTest
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
-        "<IMSSubscription>"
-        "</IMSSubscription>"
       "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid51/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"sip:scscf.sprout.homedomain;transport=TCP\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -427,6 +432,20 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
   EXPECT_EQ(0u, irs_info._associated_uris.get_unbarred_uris().size());
 }
 
+TEST_F(HssConnectionTest, SimpleAuthenticationTimeout)
+{
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = "pubid48";
+  irs_query._req_type = HSSConnection::AUTH_TIMEOUT;
+  irs_query._server_name = "server_name";
+  HSSConnection::irs_info irs_info;
+
+  _hss.update_registration_state(irs_query, irs_info, 0);
+
+  EXPECT_EQ("NOT_REGISTERED", irs_info._regstate);
+  EXPECT_TRUE(irs_info._service_profiles.empty());
+}
+
 TEST_F(HssConnectionTest, SimpleUnregistered)
 {
   HSSConnection::irs_query irs_query;
@@ -451,6 +470,7 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
   _hss.update_registration_state(irs_query, irs_info, 0);
 
   EXPECT_EQ("NOT_REGISTERED", irs_info._regstate);
+  EXPECT_TRUE(irs_info._service_profiles.empty());
 }
 
 TEST_F(HssConnectionTest, SimpleIfc)
