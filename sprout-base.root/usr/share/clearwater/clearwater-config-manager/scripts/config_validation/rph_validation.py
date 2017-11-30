@@ -74,7 +74,7 @@ for priority_block in raw_config[PRIORITY_BLOCKS]:
             # names could be present in any mix of upper/lower case. For string
             # comparison reasons, convert them all to be lower case.
             if header.lower() in parsed_config:
-                error_list.append("{} is present more than once.".format(header))
+                error_list.append("{} is present more than once.".format(header.lower()))
             else:
                 parsed_config.update({header.lower(): priority})
 
