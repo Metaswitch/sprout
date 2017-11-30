@@ -452,13 +452,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                      private_id_for_binding,
                                      all_bindings_expired);
 
-  // We want to write the same CSeq value to the remote stores as we have just
-  // written to the local one. Writing to the store causes the CSeq to be
-  // incremented, so we correct for that by decrementing it.
-  // This isn't an ideal solution - this entire area of code is due to be
-  // refactored, at which point a more permanent fix should be implemented.
-  int local_notify_cseq = aor_pair->get_current()->_notify_cseq - 1;
-
   // Update our view of whether this was in fact an initial registration based
   // on whether we found any bindings. There are race conditions where
   // at the time that Homestead processed the request this looked like an
@@ -487,6 +480,13 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     // Log the bindings.
     log_bindings(aor, aor_pair->get_current());
+
+    // We want to write the same CSeq value to the remote stores as we have just
+    // written to the local one. Writing to the store causes the CSeq to be
+    // incremented, so we correct for that by decrementing it.
+    // This isn't an ideal solution - this entire area of code is due to be
+    // refactored, at which point a more permanent fix should be implemented.
+    int local_notify_cseq = aor_pair->get_current()->_notify_cseq - 1;
 
     // If we have any remote stores, try to store this in them too. We don't worry
     // about failures in this case.
