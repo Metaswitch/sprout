@@ -4,7 +4,7 @@
         "rph_values" : ["wps.0"]
       },
       { "priority" : 2,
-        "rph_values" : ["wps.0"]
+        "rph_values" : ["WPS.0"]
       }
     ]
 }

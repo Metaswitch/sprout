@@ -15,6 +15,7 @@
 #include <map>
 #include <string>
 #include <boost/thread.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "updater.h"
 #include "sip_event_priority.h"
@@ -49,7 +50,19 @@ public:
 private:
   Alarm* _alarm;
   std::string _configuration;
-  std::map<std::string, SIPEventPriorityLevel> _rph_map;
+
+  // RFC 4412 section 3.1 states that RPH values are case-insensitive, so write
+  // a case-insensitive compare function to pass to the map.
+  struct str_cmp_ci
+  {
+    bool operator() (std::string k1, std::string k2) const
+    {
+      boost::algorithm::to_lower(k1);
+      boost::algorithm::to_lower(k2);
+      return k1 < k2;
+    }
+  };
+  std::map<std::string, SIPEventPriorityLevel, str_cmp_ci> _rph_map;
   Updater<void, RPHService>* _updater;
 
   // Mark as mutable to flag that this can be modified without affecting the

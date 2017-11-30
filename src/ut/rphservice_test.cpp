@@ -105,24 +105,27 @@ TEST_F(RPHServiceTest, DuplicatedValueRPHFile)
 
 TEST_F(RPHServiceTest, ValidRPHFile)
 {
+  CapturingTestLogger log;
   EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   RPHService rph(_mock_alarm, string(UT_DIR).append("/test_rph.json"));
+  EXPECT_TRUE(log.contains("RPH configuration successfully updated"));
 
-  // Check that the map is correctly populated.
-  EXPECT_EQ(rph.lookup_priority("wps.4", 0), SIPEventPriorityLevel::HIGH_PRIORITY_1);
-  EXPECT_EQ(rph.lookup_priority("ets.4", 0), SIPEventPriorityLevel::HIGH_PRIORITY_1);
-  EXPECT_EQ(rph.lookup_priority("wps.3", 0), SIPEventPriorityLevel::HIGH_PRIORITY_3);
+  // Check that the map is correctly populated. Mix up cases to check that case
+  // insensitive matching works.
+  EXPECT_EQ(rph.lookup_priority("wPs.4", 0), SIPEventPriorityLevel::HIGH_PRIORITY_1);
+  EXPECT_EQ(rph.lookup_priority("EtS.4", 0), SIPEventPriorityLevel::HIGH_PRIORITY_1);
+  EXPECT_EQ(rph.lookup_priority("WPS.3", 0), SIPEventPriorityLevel::HIGH_PRIORITY_3);
   EXPECT_EQ(rph.lookup_priority("ets.3", 0), SIPEventPriorityLevel::HIGH_PRIORITY_3);
   EXPECT_EQ(rph.lookup_priority("foo", 0), SIPEventPriorityLevel::HIGH_PRIORITY_4);
-  EXPECT_EQ(rph.lookup_priority("wps.2", 0), SIPEventPriorityLevel::HIGH_PRIORITY_5);
-  EXPECT_EQ(rph.lookup_priority("ets.2", 0), SIPEventPriorityLevel::HIGH_PRIORITY_5);
-  EXPECT_EQ(rph.lookup_priority("wps.1", 0), SIPEventPriorityLevel::HIGH_PRIORITY_7);
-  EXPECT_EQ(rph.lookup_priority("ets.1", 0), SIPEventPriorityLevel::HIGH_PRIORITY_7);
-  EXPECT_EQ(rph.lookup_priority("wps.0", 0), SIPEventPriorityLevel::HIGH_PRIORITY_9);
-  EXPECT_EQ(rph.lookup_priority("ets.0", 0), SIPEventPriorityLevel::HIGH_PRIORITY_9);
-  EXPECT_EQ(rph.lookup_priority("dsn.flash-override", 0), SIPEventPriorityLevel::HIGH_PRIORITY_10);
-  EXPECT_EQ(rph.lookup_priority("drsn.flash-override", 0), SIPEventPriorityLevel::HIGH_PRIORITY_13);
-  EXPECT_EQ(rph.lookup_priority("drsn.flash-override-override", 0), SIPEventPriorityLevel::HIGH_PRIORITY_15);
+  EXPECT_EQ(rph.lookup_priority("WPs.2", 0), SIPEventPriorityLevel::HIGH_PRIORITY_5);
+  EXPECT_EQ(rph.lookup_priority("eTS.2", 0), SIPEventPriorityLevel::HIGH_PRIORITY_5);
+  EXPECT_EQ(rph.lookup_priority("wPs.1", 0), SIPEventPriorityLevel::HIGH_PRIORITY_7);
+  EXPECT_EQ(rph.lookup_priority("ETS.1", 0), SIPEventPriorityLevel::HIGH_PRIORITY_7);
+  EXPECT_EQ(rph.lookup_priority("wpS.0", 0), SIPEventPriorityLevel::HIGH_PRIORITY_9);
+  EXPECT_EQ(rph.lookup_priority("ETs.0", 0), SIPEventPriorityLevel::HIGH_PRIORITY_9);
+  EXPECT_EQ(rph.lookup_priority("dSn.flASH-OVerride", 0), SIPEventPriorityLevel::HIGH_PRIORITY_10);
+  EXPECT_EQ(rph.lookup_priority("dRSn.flash-oVeRridE", 0), SIPEventPriorityLevel::HIGH_PRIORITY_13);
+  EXPECT_EQ(rph.lookup_priority("dRsn.Flash-overrIde-OVERRIDE", 0), SIPEventPriorityLevel::HIGH_PRIORITY_15);
 
   // Check that if we lookup an unknown RPH value, that we get back the default
   // priority.
