@@ -332,6 +332,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   irs_query._server_name = _scscf_uri;
 
   HSSConnection::irs_info irs_info;
+  printf("1");
   HTTPCode http_code = _registrar->_hss->update_registration_state(irs_query,
                                                                    irs_info,
                                                                    trail());
@@ -432,13 +433,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   }
 
   // Write to the local store, checking the remote stores if there is no entry locally.
-  bool all_bindings_expired;
   int max_expiry;
 
   // Figure out whether we think this is an intial registration, based on
   // what Homestead thought the previous regstate was.
   bool is_initial_registration = (irs_info._prev_regstate == RegDataXMLUtils::STATE_NOT_REGISTERED);
+  bool dereg_at_hss = is_initial_registration;
   bool no_existing_bindings_found = false;
+
   AoRPair* aor_pair = write_to_store(_registrar->_sdm,
                                      aor,
                                      &(irs_info._associated_uris),
@@ -450,7 +452,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                      NULL,
                                      _registrar->_remote_sdms,
                                      private_id_for_binding,
-                                     all_bindings_expired);
+                                     dereg_at_hss);
 
   // Update our view of whether this was in fact an initial registration based
   // on whether we found any bindings. There are race conditions where
@@ -460,9 +462,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // we'll just have been slightly less efficient.
   is_initial_registration = no_existing_bindings_found;
 
-  if (all_bindings_expired)
+  if (dereg_at_hss)
   {
-    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    TRC_DEBUG("No bindings - triggering deregistration at the HSS");
 
     HSSConnection::irs_query irs_query;
     irs_query._public_id = aor;
@@ -471,6 +473,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     HSSConnection::irs_info irs_info;
 
+    printf("2");
     _registrar->_hss->update_registration_state(irs_query,
                                                 irs_info,
                                                 trail());
@@ -1047,14 +1050,13 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
                    std::string private_id,                     ///<private id that the binding was registered with
-                   bool& out_all_bindings_expired)
+                   bool& dereg_at_hss)                         /// TODO
 {
 
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
   AoRPair* aor_pair = NULL;
-  bool all_bindings_expired = false;
   Store::Status set_rc;
 
   out_no_existing_bindings_found = true;
@@ -1099,7 +1101,9 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
         TRC_DEBUG("Store access error: Failed to get AoR binding for %s", aor.c_str());
         break;
       }
-      out_no_existing_bindings_found = out_no_existing_bindings_found && aor_pair->get_current()->bindings().empty();
+
+      out_no_existing_bindings_found = out_no_existing_bindings_found &&
+                                       aor_pair->get_current()->bindings().empty();
     }
 
     int changed_bindings = 0;
@@ -1120,8 +1124,7 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
       set_rc = primary_sdm->set_aor_data(aor,
                                          SubscriberDataManager::EventTrigger::USER,
                                          aor_pair,
-                                         trail(),
-                                         all_bindings_expired);
+                                         trail());
     }
     else
     {
@@ -1130,7 +1133,7 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
       // the sub in the calling routine), so set all_bindings_expired based on
       // whether we found any bindings to report.
       set_rc = Store::OK;
-      all_bindings_expired = aor_pair->get_current()->bindings().empty();
+      dereg_at_hss = aor_pair->get_current()->bindings().empty();
     }
 
     if (set_rc != Store::OK)
@@ -1139,8 +1142,6 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
-
-  out_all_bindings_expired = all_bindings_expired;
 
   return aor_pair;
 }

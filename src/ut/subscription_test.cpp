@@ -874,7 +874,7 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
 }
 
 // Check data contention in a remote store
-TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
+TEST_F(SubscriptionTest, SubscriptionWithRemoteDataContention)
 {
   // Add the base AoR to the remote store
   std::string aor = "sip:6505550231@homedomain";
@@ -1500,6 +1500,29 @@ TEST_F(SubscriptionTest, Resubscribe)
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("sip:6505550231@homedomain", 1u);
+}
+
+// Test that if you attempt to subscribe to a binding that's expired we only
+// send a final NOTIFY, and don't store the subscription.
+TEST_F(SubscriptionTest, SubscribeTriggeringExpiry)
+{
+  // We registered a binding in the set up. Advance time now to make sure that
+  // when we read the data when processing the subscription it has expired.
+  cwtest_advance_time_ms(300000L);
+
+  // Send in a subscribe
+  SubscribeMessage msg;
+  EXPECT_CALL(*(this->_analytics), subscription(_, _, _, _));
+  inject_msg(msg.get());
+
+  // Check that we have a final NOTIFY and that the subscription isn't stored
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
+  std::string to_tag = check_OK_and_NOTIFY("terminated", std::make_pair("terminated", "unregistered"), irs_impus, true, "deactivated");
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  // TODO - shouldn't really be in this test, but is confirmation for now.
+  EXPECT_TRUE(_hss_connection->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data", "{\"reqtype\": \"dereg-user\", \"server_name\": \"\"}"));
 }
 
 void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)

@@ -187,12 +187,14 @@ public:
   /// @param associated_uris      The IMPUs associated with this IRS
   /// @param aor_pair             The AoR pair to set
   /// @param trail                SAS trail
+  /// @param TODO
   /// @param all_bindings_expired Whether all bindings have expired
   ///                             as a result of the set
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      const EventTrigger& event_trigger,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
+                                     HTTPCode& http_code = unused_http,
                                      bool& all_bindings_expired = unused_bool);
 
 private:
@@ -248,6 +250,13 @@ private:
   void log_new_or_extended_bindings(ClassifiedBindings& classified_bindings,
                                     int now);
 
+  void update_hss_on_aor_removal(const std::string& aor_id,
+                                 const std::string& req_type,
+                                 const std::string& scscf_uri,
+                                 HTTPCode& http_code,
+                                 SAS::TrailId trail);
+
+  static HTTPCode unused_http;
   static bool unused_bool;
   HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;

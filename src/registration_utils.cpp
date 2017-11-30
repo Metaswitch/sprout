@@ -614,18 +614,13 @@ static void send_register_to_as(SubscriberDataManager* sdm,
   }
 }
 
-static void notify_application_servers()
-{
-  TRC_DEBUG("In dummy notify_application_servers function");
-  // TODO: implement as part of reg events package
-}
-
 static bool expire_bindings(SubscriberDataManager *sdm,
                             const std::string& aor,
                             const SubscriberDataManager::EventTrigger& event_trigger,
                             AssociatedURIs* associated_uris,
                             const std::string& binding_id,
                             std::string& scscf_uri,
+                            HTTPCode& http_code,
                             SAS::TrailId trail)
 {
   // We need the retry loop to handle the store's compare-and-swap.
@@ -660,10 +655,11 @@ static bool expire_bindings(SubscriberDataManager *sdm,
     }
 
     aor_pair->get_current()->_associated_uris = *associated_uris;
-    set_rc = sdm->set_aor_data(aor, 
+    set_rc = sdm->set_aor_data(aor,
                                event_trigger,
-                               aor_pair, 
-                               trail, 
+                               aor_pair,
+                               trail,
+                               http_code,
                                all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
@@ -677,7 +673,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
   return all_bindings_expired;
 }
 
-bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
+void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         std::vector<SubscriberDataManager*> remote_sdms,
                                         HSSConnection* hss,
                                         FIFCService* fifc_service,
@@ -687,18 +683,15 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         const std::string& dereg_type,
                                         const SubscriberDataManager::EventTrigger& event_trigger,
                                         SAS::TrailId trail,
-                                        HTTPCode* hss_status_code)
+                                        HTTPCode& http_code)
 {
   TRC_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
-  bool all_bindings_expired = false;
 
   // Determine the set of IMPUs in the Implicit Registration Set
   std::vector<std::string> unbarred_irs_impus;
   HSSConnection::irs_info irs_info;
 
-  HTTPCode http_code = hss->get_registration_data(aor,
-                                                  irs_info,
-                                                  trail);
+  http_code = hss->get_registration_data(aor, irs_info, trail);
 
   // We only want to send NOTIFYs for unbarred IMPUs.
   unbarred_irs_impus = irs_info._associated_uris.get_unbarred_uris();
@@ -718,21 +711,11 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   std::string scscf_uri;
 
-  if (expire_bindings(sdm, aor, event_trigger, &(irs_info._associated_uris), binding_id, scscf_uri, trail))
+  if (expire_bindings(sdm, aor, event_trigger, &(irs_info._associated_uris), binding_id, scscf_uri, http_code, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
-    TRC_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
-    all_bindings_expired = true;
-
-    HSSConnection::irs_query irs_query;
-    irs_query._public_id = aor;
-    irs_query._req_type = dereg_type;
-    irs_query._server_name = scscf_uri;
-
-    HTTPCode http_code = hss->update_registration_state(irs_query,
-                                                        irs_info,
-                                                        trail);
+    TRC_INFO("All bindings for %s expired, so deregister at ASs", aor.c_str());
 
     if (http_code == HTTP_OK)
     {
@@ -746,12 +729,6 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                           hss,
                                           aor,
                                           trail);
-      notify_application_servers();
-    }
-
-    if (hss_status_code)
-    {
-      *hss_status_code = http_code;
     }
   }
 
@@ -759,15 +736,17 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   // make any effort to check whether the local and remote stores are in sync --
   // we'll do this next time we get the data from the store and before we do
   // anything with it.
-  for (std::vector<SubscriberDataManager*>::const_iterator remote_sdm =
-       remote_sdms.begin();
-       remote_sdm != remote_sdms.end();
-       ++remote_sdm)
+  for (SubscriberDataManager* remote_sdm : remote_sdms)
   {
-    (void) expire_bindings(*remote_sdm, aor, event_trigger, &(irs_info._associated_uris), binding_id, scscf_uri, trail);
+    expire_bindings(remote_sdm,
+                    aor,
+                    event_trigger,
+                    &(irs_info._associated_uris),
+                    binding_id,
+                    scscf_uri,
+                    http_code,
+                    trail);
   }
-
-  return all_bindings_expired;
 }
 
 /// Retrieve information from the Subscriber Data Manager for a specified AoR.

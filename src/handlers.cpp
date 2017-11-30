@@ -37,7 +37,6 @@ static AoRPair* get_and_set_local_aor_data(
                           AssociatedURIs* associated_uris,
                           AoRPair* previous_aor_pair,
                           std::vector<SubscriberDataManager*> remote_sdms,
-                          bool& all_bindings_expired,
                           SAS::TrailId trail)
 {
   AoRPair* aor_pair = NULL;
@@ -60,8 +59,7 @@ static AoRPair* get_and_set_local_aor_data(
     set_rc = current_sdm->set_aor_data(aor_id,
                                        event_trigger,
                                        aor_pair,
-                                       trail,
-                                       all_bindings_expired);
+                                       trail);
     if (set_rc != Store::OK)
     {
       delete aor_pair; aor_pair = NULL;
@@ -80,8 +78,6 @@ static void set_remote_aor_data(std::string aor_id,
                                 HSSConnection* hss,
                                 SAS::TrailId trail)
 {
-  bool ignored = false;
-
   // If we have any remote stores, try to store this in them too.  We don't worry
   // about failures in this case.
   for (SubscriberDataManager* sdm : remote_sdms)
@@ -94,38 +90,10 @@ static void set_remote_aor_data(std::string aor_id,
                                                             associated_uris,
                                                             previous_aor_pair,
                                                             {},
-                                                            ignored,
                                                             trail);
       delete remote_aor_pair;
     }
   }
-}
-
-static void update_hss_on_aor_expiry(const std::string& aor_id,
-                                     AoRPair& aor_pair,
-                                     HSSConnection* hss,
-                                     SAS::TrailId trail)
-{
-  // No bindings left - inform the HSS
-  TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-
-  SAS::Event event(trail, SASEvent::REGISTRATION_EXPIRED, 0);
-  event.add_var_param(aor_id);
-  SAS::report_event(event);
-
-  // Get the S-CSCF URI off the AoR to put on the SAR.
-  AoR* aor = aor_pair.get_current();
-
-  HSSConnection::irs_query irs_query;
-  irs_query._public_id = aor_id;
-  irs_query._req_type = HSSConnection::DEREG_TIMEOUT;
-  irs_query._server_name = aor->_scscf_uri;
-  
-  HSSConnection::irs_info unused_irs_info;
-
-  hss->update_registration_state(irs_query,
-                                 unused_irs_info,
-                                 trail);
 }
 
 static bool get_reg_data(HSSConnection* hss,
@@ -141,8 +109,12 @@ static bool get_reg_data(HSSConnection* hss,
   {
     // We were unable to determine the set of IMPUs for this AoR. Push the AoR
     // we have into the Associated URIs list so that we have at least one IMPU
-    // we can issue NOTIFYs for. We should only do this if that IMPU is not barred.
-    TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor_id.c_str(), http_code);
+    // we can issue NOTIFYs for. We should only do this if that IMPU is not
+    // barred.
+    TRC_WARNING("Unable to get Implicit Registration Set for %s: %d",
+                aor_id.c_str(),
+                http_code);
+
     if (!irs_info._associated_uris.is_impu_barred(aor_id))
     {
       irs_info._associated_uris.clear_uris();
@@ -166,6 +138,7 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
     // Create and report the marker.
     SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
     sip_all_register.add_var_param(Utils::strip_uri_scheme(uri_str));
+
     // Add the DN parameter. If the user part is not numeric just log it in
     // its entirety.
     sip_all_register.add_var_param(URIClassifier::is_user_numeric(user) ?
@@ -175,7 +148,8 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
   }
   else
   {
-    TRC_WARNING("Could not raise SAS REGISTER marker for unparseable URI '%s'", uri_str.c_str());
+    TRC_WARNING("Could not raise SAS REGISTER marker for unparseable URI '%s'",
+                uri_str.c_str());
   }
 
   // Remember to release the temporary pool.
@@ -235,14 +209,12 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   HSSConnection::irs_info irs_info;
   get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
 
-  bool all_bindings_expired = false;
   AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
                                                  aor_id,
                                                  SubscriberDataManager::EventTrigger::TIMEOUT,
                                                  &(irs_info._associated_uris),
                                                  NULL,
                                                  _cfg->_remote_sdms,
-                                                 all_bindings_expired,
                                                  trail());
 
   if (aor_pair != NULL)
@@ -254,14 +226,6 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
                         _cfg->_remote_sdms,
                         _cfg->_hss,
                         trail());
-
-    if (all_bindings_expired)
-    {
-      update_hss_on_aor_expiry(aor_id,
-                               *aor_pair,
-                               _cfg->_hss,
-                               trail());
-    }
   }
   else
   {
@@ -443,7 +407,6 @@ AoRPair* DeregistrationTask::deregister_bindings(
                              std::set<std::string>& impis_to_delete)
 {
   AoRPair* aor_pair = NULL;
-  bool all_bindings_expired = false;
   bool got_ifcs;
   Store::Status set_rc;
   std::vector<std::string> impis_to_dereg;
@@ -498,8 +461,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
     set_rc = current_sdm->set_aor_data(aor_id,
                                        SubscriberDataManager::EventTrigger::ADMIN,
                                        aor_pair,
-                                       trail(),
-                                       all_bindings_expired);
+                                       trail());
 
     if (set_rc != Store::OK)
     {
@@ -576,13 +538,13 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
       // Server Error - this will trigger the timer service to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
       HSSConnection::irs_query irs_query;
-      irs_query._public_id = impu; 
-      irs_query._private_id = impi; 
+      irs_query._public_id = impu;
+      irs_query._private_id = impi;
       irs_query._req_type = HSSConnection::AUTH_TIMEOUT;
       irs_query._server_name = auth_challenge->get_scscf_uri();
       HSSConnection::irs_info unused_irs_info;
 
-      HTTPCode hss_query = _cfg->_hss->update_registration_state(irs_query, 
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(irs_query,
                                                                  unused_irs_info,
                                                                  trail());
 
@@ -757,40 +719,38 @@ void DeleteImpuTask::run()
   std::string impu = _req.full_path().substr(prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  HTTPCode hss_sc;
+  HTTPCode http_code = HTTP_SERVER_ERROR;
   int sc;
 
-  // Expire all the bindings. This will handle deregistering with the HSS and
-  // sending NOTIFYs and 3rd party REGISTERs.
-  bool all_bindings_expired =
-    RegistrationUtils::remove_bindings(_cfg->_sdm,
-                                       _cfg->_remote_sdms,
-                                       _cfg->_hss,
-                                       _cfg->_fifc_service,
-                                       _cfg->_ifc_configuration,
-                                       impu,
-                                       "*",
-                                       HSSConnection::DEREG_ADMIN,
-                                       SubscriberDataManager::EventTrigger::ADMIN,
-                                       trail(),
-                                       &hss_sc);
+  // Expire all the bindings.
+  RegistrationUtils::remove_bindings(_cfg->_sdm,
+                                     _cfg->_remote_sdms,
+                                     _cfg->_hss,
+                                     _cfg->_fifc_service,
+                                     _cfg->_ifc_configuration,
+                                     impu,
+                                     "*",
+                                     HSSConnection::DEREG_ADMIN,
+                                     SubscriberDataManager::EventTrigger::ADMIN,
+                                     trail(),
+                                     http_code);
 
   // Work out what status code to return.
-  if (all_bindings_expired)
+  if (true) // MM TODO
   {
     // All bindings expired successfully, so the status code is determined by
     // the response from homestead.
-    if ((hss_sc >= 200) && (hss_sc < 300))
+    if ((http_code >= 200) && (http_code < 300))
     {
       // 2xx -> 200.
       sc = HTTP_OK;
     }
-    else if (hss_sc == HTTP_NOT_FOUND)
+    else if (http_code == HTTP_NOT_FOUND)
     {
       // 404 -> 404.
       sc = HTTP_NOT_FOUND;
     }
-    else if ((hss_sc >= 400) && (hss_sc < 500))
+    else if ((http_code >= 400) && (http_code < 500))
     {
       // Any other 4xx -> 400
       sc = HTTP_BAD_REQUEST;
@@ -803,7 +763,7 @@ void DeleteImpuTask::run()
       sc = HTTP_BAD_GATEWAY;
     }
 
-    TRC_DEBUG("All bindings expired. Homestead returned %d (-> %d)", hss_sc, sc);
+    TRC_DEBUG("All bindings expired. Homestead returned %d (-> %d)", http_code, sc);
   }
   else
   {
@@ -905,7 +865,6 @@ HTTPCode PushProfileTask::get_associated_uris(std::string body,
 HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
   HTTPCode rc = HTTP_OK;
-  bool all_bindings_expired = false;
 
   AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
                                                  _default_public_id,
@@ -913,7 +872,6 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
                                                  &_associated_uris,
                                                  NULL,
                                                  _cfg->_remote_sdms,
-                                                 all_bindings_expired,
                                                  trail);
 
   if (aor_pair != NULL)
@@ -925,14 +883,6 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
                         _cfg->_remote_sdms,
                         _cfg->_hss,
                         trail);
-
-    if (all_bindings_expired)
-    {
-      update_hss_on_aor_expiry(_default_public_id,
-                               *aor_pair,
-                               _cfg->_hss,
-                               trail);
-    }
   }
   else
   {

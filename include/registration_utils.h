@@ -28,10 +28,12 @@ extern "C" {
 
 namespace RegistrationUtils {
 
+static HTTPCode unused_http = HTTP_OK;
+
 void init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
           bool force_third_party_register_body_arg);
 
-bool remove_bindings(SubscriberDataManager* sdm,
+void remove_bindings(SubscriberDataManager* sdm,
                      std::vector<SubscriberDataManager*> remote_sdms,
                      HSSConnection* hss,
                      FIFCService* fifc_service,
@@ -41,7 +43,7 @@ bool remove_bindings(SubscriberDataManager* sdm,
                      const std::string& dereg_type,
                      const SubscriberDataManager::EventTrigger& event_trigger,
                      SAS::TrailId trail,
-                     HTTPCode* hss_status_code = nullptr);
+                     HTTPCode& http_code = unused_http);
 
 bool get_aor_data(AoRPair** aor_pair,
                   std::string aor_id,

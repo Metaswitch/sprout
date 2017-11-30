@@ -52,6 +52,7 @@ NotifyUtils::ContactEvent determine_contact_event(
                        const SubscriberDataManager::EventTrigger& event_trigger)
 {
   NotifyUtils::ContactEvent contact_event;
+
   switch(event_trigger){
     case SubscriberDataManager::EventTrigger::TIMEOUT:
       contact_event = NotifyUtils::ContactEvent::EXPIRED;
@@ -68,7 +69,34 @@ NotifyUtils::ContactEvent determine_contact_event(
       break;
     // LCOV_EXCL_STOP
   }
+
   return contact_event;
+}
+
+// Map SDM EventTrigger to HSS request type
+std::string determine_hss_req_type(
+                       const SubscriberDataManager::EventTrigger& event_trigger)
+{
+  std::string hss_req_type;
+
+  switch(event_trigger){
+    case SubscriberDataManager::EventTrigger::TIMEOUT:
+      hss_req_type = HSSConnection::DEREG_TIMEOUT;
+      break;
+    case SubscriberDataManager::EventTrigger::USER:
+      hss_req_type = HSSConnection::DEREG_USER;
+      break;
+    case SubscriberDataManager::EventTrigger::ADMIN:
+      hss_req_type = HSSConnection::DEREG_ADMIN;
+      break;
+    // LCOV_EXCL_START - not hittable as all cases of event_trigger are covered
+    default:
+      hss_req_type = HSSConnection::DEREG_USER;
+      break;
+    // LCOV_EXCL_STOP
+  }
+
+  return hss_req_type;
 }
 
 /// SubscriberDataManager Methods
@@ -130,14 +158,16 @@ AoRPair* SubscriberDataManager::get_aor_data(const std::string& aor_id,
 /// @param aor_pair   The registration data record.
 /// @param trail      The SAS trail
 bool SubscriberDataManager::unused_bool = false;
+HTTPCode SubscriberDataManager::unused_http = HTTP_OK;
 
 Store::Status SubscriberDataManager::set_aor_data(
                                      const std::string& aor_id,
                                      const SubscriberDataManager::EventTrigger& event_trigger,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
+                                     HTTPCode& http_code,
                                      bool& all_bindings_expired)
-  {
+{
   // The ordering of this function is quite important.
   //
   // 1. Expire any old bindings/subscriptions.
@@ -145,7 +175,7 @@ Store::Status SubscriberDataManager::set_aor_data(
   // 3. Send any Chronos timer requests
   // 4. Write the data to memcached. If this fails, bail out here
   // 5. Log new or extended bindings
-  // 6. Send any messages we were asked to by the caller
+  // 6. Update the registration state in the HSS if we've removed an AoR
   // 7. Send any NOTIFYs
   //
   // This ordering is important to ensure that we don't send
@@ -239,7 +269,17 @@ Store::Status SubscriberDataManager::set_aor_data(
       log_new_or_extended_bindings(classified_bindings, now);
     }
 
-    // 6. Send any NOTIFYs
+    // 6. Update the HSS
+    if (all_bindings_expired)
+    {
+      update_hss_on_aor_removal(aor_id,
+                                determine_hss_req_type(event_trigger),
+                                aor_pair->get_current()->_scscf_uri,
+                                http_code,
+                                trail);
+    }
+
+    // 7. Send any NOTIFYs
     _notify_sender->send_notifys(aor_id, event_trigger, aor_pair, now, trail);
   }
 
@@ -481,6 +521,32 @@ int SubscriberDataManager::expire_bindings(AoR* aor_data,
   return max_expires;
 }
 
+// TODO - this whole function wants moving into the SDM
+// TODO comment
+void SubscriberDataManager::update_hss_on_aor_removal(const std::string& aor_id,
+                                                      const std::string& req_type,
+                                                      const std::string& scscf_uri,
+                                                      HTTPCode& http_code,
+                                                      SAS::TrailId trail)
+{
+  // No bindings left - inform the HSS
+  TRC_DEBUG("All bindings have been removed - triggering deregistration at the HSS");
+
+  SAS::Event event(trail, SASEvent::REGISTRATION_EXPIRED, 0); // TODO change SAS event
+  event.add_var_param(aor_id);
+  SAS::report_event(event);
+
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = aor_id;
+  irs_query._req_type = req_type;
+  irs_query._server_name = scscf_uri;
+
+  HSSConnection::irs_info unused_irs_info;
+
+  http_code = _hss_connection->update_registration_state(irs_query,
+                                                         unused_irs_info,
+                                                         trail);
+}
 
 /// ChronosTimerRequestSender Methods
 

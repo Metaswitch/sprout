@@ -554,7 +554,8 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 
   // Write AoR record back to store with ADMIN. This would simulate the
   // behaviour of admin deregistration via Sprout/HSS.
-  rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0, all_bindings_expired);
+  HTTPCode http_code;
+  rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::ADMIN, aor_data1, 0, http_code, all_bindings_expired);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -573,7 +574,7 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 
   // Write AoR record back to store with TIMEOUT. This would simulate the
   // behaviour of an expired binding that subscribed to its own registration.
-  rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::TIMEOUT, aor_data1, 0, all_bindings_expired);
+  rc = this->_store->set_aor_data(aor1, SubscriberDataManager::EventTrigger::TIMEOUT, aor_data1, 0, http_code, all_bindings_expired);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
