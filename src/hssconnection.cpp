@@ -156,7 +156,7 @@ HTTPCode HSSConnection::get_json_object(const std::string& path,
 
     if (json_object->HasParseError())
     {
-      TRC_INFO("Failed to parse Homestead response:\nPath: %s\nData: %s\nError: %s",
+      TRC_DEBUG("Failed to parse Homestead response:\nPath: %s\nData: %s\nError: %s",
                path.c_str(),
                json_data.c_str(),
                rapidjson::GetParseError_En(json_object->GetParseError()));
@@ -182,7 +182,7 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
   catch (rapidxml::parse_error& err)
   {
     // report to the user the failure and their locations in the document.
-    TRC_WARNING("Failed to parse Homestead response:\n %s\n %s\n %s", url.c_str(), raw_data.c_str(), err.what());
+    TRC_DEBUG("Failed to parse Homestead response:\n %s\n %s\n %s", url.c_str(), raw_data.c_str(), err.what());
     delete root;
     root = NULL;
   }
@@ -323,7 +323,7 @@ bool decode_homestead_xml(const std::string& public_id,
 {
   if (!root.get())
   {
-    TRC_WARNING("Malformed HSS XML for %s - document couldn't be parsed",
+    TRC_DEBUG("Malformed HSS XML for %s - document couldn't be parsed",
                 public_id.c_str());
     return false;
   }
@@ -334,7 +334,7 @@ bool decode_homestead_xml(const std::string& public_id,
   {
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
-    TRC_WARNING("Malformed Homestead XML for %s - no ClearwaterRegData element:\n%s",
+    TRC_DEBUG("Malformed Homestead XML for %s - no ClearwaterRegData element:\n%s",
                 public_id.c_str(),
                 sp_str.c_str());
     return false;
@@ -346,7 +346,7 @@ bool decode_homestead_xml(const std::string& public_id,
   {
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
-    TRC_WARNING("Malformed Homestead XML for %s - no RegistrationState element:\n%s",
+    TRC_DEBUG("Malformed Homestead XML for %s - no RegistrationState element:\n%s",
                 public_id.c_str(),
                 sp_str.c_str());
     return false;
@@ -366,7 +366,7 @@ bool decode_homestead_xml(const std::string& public_id,
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
     if (ims_subscription_expected)
     {
-      TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
+      TRC_DEBUG("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
                   public_id.c_str(),
                   sp_str.c_str());
       return false;
@@ -392,7 +392,7 @@ bool decode_homestead_xml(const std::string& public_id,
   {
     std::string sp_str;
     rapidxml::print(std::back_inserter(sp_str), *root, 0);
-    TRC_WARNING("Malformed HSS XML for %s:\n%s",
+    TRC_DEBUG("Malformed HSS XML for %s:\n%s",
                 public_id.c_str(),
                 sp_str.c_str());
     return false;
@@ -479,7 +479,7 @@ HTTPCode HSSConnection::put_homestead_xml(const irs_query& irs_query,
   {
     // We have either not found the subscriber on the HSS, or been unable to 
     // communicate with the HSS successfully.
-    TRC_WARNING("Could not get subscriber data from HSS");
+    TRC_DEBUG("Could not get subscriber data from HSS");
   }
   return http_code;
 }
@@ -568,7 +568,7 @@ HTTPCode HSSConnection::get_homestead_xml(const std::string& public_id,
   {
     // We have either not found the subscriber on the HSS, or been unable to 
     // communicate with the HSS successfully.
-    TRC_WARNING("Could not get subscriber data from HSS");
+    TRC_DEBUG("Could not get subscriber data from HSS");
   }
 
   return http_code;
