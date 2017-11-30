@@ -79,7 +79,7 @@ void RPHService::update_rph()
   rapidjson::Document doc;
   doc.Parse<0>(rph_str.c_str());
 
-  std::map<std::string, SIPEventPriorityLevel> new_rph_map;
+  std::map<std::string, SIPEventPriorityLevel, str_cmp_ci> new_rph_map;
 
   if (doc.HasParseError())
   {
@@ -205,7 +205,7 @@ SIPEventPriorityLevel RPHService::lookup_priority(std::string rph_value,
   // Lookup the key in the map. If it doesn't exist, we will return the default
   // priority of 0.
   TRC_DEBUG("Looking up priority of RPH value \"%s\"", rph_value.c_str());
-  std::map<std::string, SIPEventPriorityLevel>::iterator result = _rph_map.find(rph_value);
+  std::map<std::string, SIPEventPriorityLevel, str_cmp_ci>::iterator result = _rph_map.find(rph_value);
   if (result != _rph_map.end())
   {
     priority = result->second;
