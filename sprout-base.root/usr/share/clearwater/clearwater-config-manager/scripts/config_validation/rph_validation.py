@@ -70,10 +70,13 @@ for priority_block in raw_config[PRIORITY_BLOCKS]:
     if RPH_VALUES in priority_block:
         headers_with_priority = priority_block[RPH_VALUES]
         for header in headers_with_priority:
-            if header in parsed_config:
+            # RFC 4412 states namespace names are case insensitive, so these
+            # names could be present in any mix of upper/lower case. For string
+            # comparison reasons, convert them all to be lower case.
+            if header.lower() in parsed_config:
                 error_list.append("{} is present more than once.".format(header))
             else:
-                parsed_config.update({header: priority})
+                parsed_config.update({header.lower(): priority})
 
 # Check the priorites are set in a way which is valid.
 # A higher priority header cannot be given a lower priority than a lower
@@ -93,9 +96,9 @@ for header_list in HEADERS_LISTS:
                     error_list.append(error)
                 else:
                     next_priority = parsed_config[higher_priority_header]
-                    if next_priority <= header_priority:
-                        error = "{} is not a higher priority than {}, which " \
-                                "is not permitted.".format(
+                    if next_priority < header_priority:
+                        error = "{} is a lower priority than {}, which is " \
+                                "not permitted.".format(
                                         higher_priority_header, header)
                         error_list.append(error)
         place_in_list += 1
