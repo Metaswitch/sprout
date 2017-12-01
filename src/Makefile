@@ -255,6 +255,7 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -lz \
                          -lpthread \
                          -lboost_filesystem \
+                         -lboost_locale \
                          `net-snmp-config --netsnmp-agent-libs`
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them
