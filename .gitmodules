@@ -6,7 +6,7 @@
 	url = git@github.com:bagder/c-ares.git
 [submodule "modules/curl"]
 	path = modules/curl
-	url = git@github.com:bagder/curl.git
+	url = git@github.com:Metaswitch/curl.git
 [submodule "modules/gmock"]
 	path = modules/gmock
 	url = git@github.com:Metaswitch/gmock-upstream.git
