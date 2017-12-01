@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# @file poll_sprout.sh
+# @file poll_sprout_sip.sh
 #
 # Copyright (C) Metaswitch Networks 2015
 # If license terms are provided to you in a COPYING file in the root directory
@@ -36,6 +36,16 @@ fi
 if [ $rc = 0 ] && [ "$bgcf" != "0" ]; then
   $namespace_prefix /usr/share/clearwater/bin/poll-sip $bgcf
   rc=$?
+fi
+
+# If the sprout process is not stable, we ignore a non-zero return code and
+# return zero.
+if [ $rc != 0 ]; then
+  /usr/share/clearwater/infrastructure/monit_stability/sprout-stability check
+  if [ $? != 0 ]; then
+    echo "return code $rc ignored" >&2
+    rc=0
+  fi
 fi
 
 exit $rc
