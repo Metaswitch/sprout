@@ -229,7 +229,12 @@ static void pjsip_log_handler(int level,
   default: level = 5; break;
   }
 
-  Log::write(level, "pjsip", 0, data);
+  // Pass the data string as a parameter, with a format of "%s", to the standard
+  // common log write routine.
+  // Note that we mustn't pass data as the format string (with no parameters),
+  // because it may contain % characters which we don't want to be accidentally
+  // interpreted as format specifiers.
+  Log::write(level, "pjsip", 0, "%s", data);
 }
 
 
