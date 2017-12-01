@@ -2166,12 +2166,7 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
          ++it)
     {
       TRC_DEBUG("Adding CCF %s to PCFA header", it->c_str());
-      pjsip_param* new_param =
-        (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
-      new_param->name = STR_CCF;
-      new_param->value = pj_strdup3(pool, it->c_str());
-
-      pj_list_insert_before(&pcfa_hdr->ccf, new_param);
+      add_pcfa_param(&pcfa_hdr->ccf, pool, STR_CCF, *it);      
     }
 
     for (std::deque<std::string>::const_iterator it = ecfs.begin();
@@ -2179,16 +2174,65 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
          ++it)
     {
       TRC_DEBUG("Adding ECF %s to PCFA header", it->c_str());
-      pjsip_param* new_param =
-        (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
-      new_param->name = STR_ECF;
-      new_param->value = pj_strdup3(pool, it->c_str());
-
-      pj_list_insert_before(&pcfa_hdr->ecf, new_param);
+      add_pcfa_param(&pcfa_hdr->ecf, pool, STR_ECF, *it);      
     }
+
     pjsip_msg_add_hdr(msg, (pjsip_hdr*)pcfa_hdr);
   }
 }
+
+// Add Changing Function param to the list for a PCFA header
+void PJUtils::add_pcfa_param(pj_list_type *cf_list,
+                             pj_pool_t* pool,
+                             const pj_str_t name,
+                             std::string value)
+{
+  pjsip_param* new_param =
+            (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
+  new_param->name = name;
+
+  // Check whether we need to quote the value.  We'll need to do this if
+  // - its not already quoted
+  // - it contains characters other than those allowed for a host or 
+  //   token (see RFC 3455, section 5.5)
+  // Note that we assume for simplicity that if the value starts with '[', 
+  // its an ipv6 address (int_parse_host in sip_parser.c makes the same 
+  // and the pjsip_HOST_SPEC doesn't cover IPv6 parsing)
+  const char *inbuf = value.c_str();
+  bool no_quote;
+
+  if ((inbuf[0] == '"') || (inbuf[0] == '['))
+  {
+    // value is assumed to be either already quoted, or an IPv6 address
+    no_quote = true;
+  }
+  else
+  {
+    no_quote = false;
+    const pjsip_parser_const_t *pc = pjsip_parser_const();
+    for (size_t index = 0; index < value.length(); index++)
+    {
+      no_quote = no_quote && (pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) ||
+                              pj_cis_match(&pc->pjsip_HOST_SPEC, inbuf[index]));
+    }      
+  }
+
+  std::string final_value;
+  if (no_quote)
+  {
+    TRC_DEBUG("Use unquoted cf value %s", inbuf);
+    final_value = value;    
+  }
+  else
+  {
+    final_value = Utils::quote_string(value);
+    TRC_DEBUG("Use quoted cf value %s", final_value.c_str());
+  }
+
+  new_param->value = pj_strdup3(pool, final_value.c_str());
+
+  pj_list_insert_before(cf_list, new_param);      
+}                             
 
 /// Takes a SIP URI and turns it into its equivalent tel URI. This is used
 /// for SIP URIs that actually represent phone numbers, i.e. SIP URIs that
