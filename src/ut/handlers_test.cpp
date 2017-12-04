@@ -988,8 +988,6 @@ TEST_F(DeleteImpuTaskTest, Mainline)
   build_task(impu_escaped);
 
   HSSConnection::irs_query irs_query;
-  HSSConnection::irs_info irs_info;
-  irs_info._service_profiles = {};
 
   {
     InSequence s;
@@ -1003,7 +1001,6 @@ TEST_F(DeleteImpuTaskTest, Mainline)
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
         .WillOnce(DoAll(SaveArg<0>(&irs_query),
-                        SetArgReferee<1>(irs_info),
                         Return(200)));
       EXPECT_CALL(*stack, send_reply(_, 200, _));
   }

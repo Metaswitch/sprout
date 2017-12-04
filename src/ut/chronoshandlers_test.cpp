@@ -75,6 +75,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
 
   HSSConnection::irs_info irs_info;
   irs_info._associated_uris = associated_uris;
+  irs_info._service_profiles = {};
 
   {
     InSequence s;

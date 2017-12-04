@@ -311,7 +311,11 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
 
 bool is_ims_subscription_expected(const std::string& req_type)
 {
-  return (req_type == HSSConnection::REG || req_type == HSSConnection::CALL);
+  // Not expected for AUTH cases
+  return (req_type == HSSConnection::REG || req_type == HSSConnection::CALL || 
+          req_type == HSSConnection::DEREG_USER || 
+          req_type == HSSConnection::DEREG_ADMIN ||
+          req_type == HSSConnection::DEREG_TIMEOUT);
 }
 
 bool decode_homestead_xml(const std::string& public_id,

@@ -186,6 +186,11 @@ class HssConnectionTest : public BaseTest
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
       "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid48/reg-data", "{\"reqtype\": \"dereg-auth-failed\", \"server_name\": \"server_name\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "</ClearwaterRegData>";
 
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -198,6 +203,8 @@ class HssConnectionTest : public BaseTest
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+        "<IMSSubscription>"
+        "</IMSSubscription>"
       "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid51/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"sip:scscf.sprout.homedomain;transport=TCP\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -206,6 +213,7 @@ class HssConnectionTest : public BaseTest
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
+
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement1/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
@@ -213,6 +221,16 @@ class HssConnectionTest : public BaseTest
         "</IMSSubscription>"
       "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data", "{\"reqtype\": \"dereg-admin\", \"server_name\": \"server_name\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data", "{\"reqtype\": \"dereg-user\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
@@ -440,10 +458,26 @@ TEST_F(HssConnectionTest, SimpleAuthenticationTimeout)
   irs_query._server_name = "server_name";
   HSSConnection::irs_info irs_info;
 
-  _hss.update_registration_state(irs_query, irs_info, 0);
+  HTTPCode rc =_hss.update_registration_state(irs_query, irs_info, 0);
 
   EXPECT_EQ("NOT_REGISTERED", irs_info._regstate);
   EXPECT_TRUE(irs_info._service_profiles.empty());
+  ASSERT_TRUE(rc == 200); 
+}
+
+TEST_F(HssConnectionTest, SimpleAuthenticationFail)
+{
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = "pubid48";
+  irs_query._req_type = HSSConnection::AUTH_FAIL;
+  irs_query._server_name = "server_name";
+  HSSConnection::irs_info irs_info;
+
+  HTTPCode rc =_hss.update_registration_state(irs_query, irs_info, 0);
+
+  EXPECT_EQ("NOT_REGISTERED", irs_info._regstate);
+  EXPECT_TRUE(irs_info._service_profiles.empty());
+  ASSERT_TRUE(rc == 200); 
 }
 
 TEST_F(HssConnectionTest, SimpleUnregistered)
@@ -674,12 +708,47 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
   irs_query._server_name = "server_name";
   HSSConnection::irs_info irs_info;
 
-  _hss.update_registration_state(irs_query, irs_info, 0);
+  HTTPCode rc = _hss.update_registration_state(irs_query, irs_info, 0);
 
   EXPECT_TRUE(irs_info._associated_uris.get_unbarred_uris().empty());
+  EXPECT_TRUE(irs_info._service_profiles.empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
+  ASSERT_TRUE(rc == 500);
 }
 
+TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription2)
+{
+  CapturingTestLogger log;
+
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = "missingelement2";
+  irs_query._req_type = HSSConnection::DEREG_ADMIN;
+  irs_query._server_name = "server_name";
+  HSSConnection::irs_info irs_info;
+
+  HTTPCode rc =_hss.update_registration_state(irs_query, irs_info, 0);
+
+  EXPECT_TRUE(irs_info._service_profiles.empty());
+  EXPECT_TRUE(log.contains("Malformed HSS XML"));
+  ASSERT_TRUE(rc == 500);
+}
+
+TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription3)
+{
+  CapturingTestLogger log;
+
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = "missingelement2";
+  irs_query._req_type = HSSConnection::DEREG_USER;
+  irs_query._server_name = "server_name";
+  HSSConnection::irs_info irs_info;
+
+  HTTPCode rc = _hss.update_registration_state(irs_query, irs_info, 0);
+
+  EXPECT_TRUE(irs_info._service_profiles.empty());
+  EXPECT_TRUE(log.contains("Malformed HSS XML"));
+  ASSERT_TRUE(rc == 500);
+}
 
 TEST_F(HssConnectionTest, ServerFailure)
 {
