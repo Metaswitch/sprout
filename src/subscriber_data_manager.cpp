@@ -681,7 +681,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
       }
       else
       {
-        // The binding is in both AoRs. Check if the expiry time has changed at all
+        // The binding is in both AoRs. 
         NotifyUtils::ContactEvent event;
 
         if (aor_orig_b_match->second->_uri.compare(binding->_uri) != 0)

@@ -307,7 +307,7 @@ public:
                     std::string expected_aor,
                     std::string reg_state,
                     std::pair<std::string, std::string> contact_values,
-                    bool check_last = false)
+                    int check_contact = 0)
   {
     char buf[16384];
     int n = out->body->print_body(out->body, buf, sizeof(buf));
@@ -333,14 +333,12 @@ public:
     rapidxml::xml_node<> *registration = reg_info->first_node("registration");
     ASSERT_TRUE(registration);
     rapidxml::xml_node<> *contact;
-    if (check_last)
+    contact = registration->first_node("contact");      
+    for (int ii; ii < check_contact; ii++)
     {
-      contact = registration->last_node("contact");      
+      contact = contact->next_sibling();      
     }
-    else
-    {
-      contact = registration->first_node("contact");      
-    }
+
     ASSERT_TRUE(contact);
 
     ASSERT_EQ(expected_aor, std::string(registration->first_attribute("aor")->value()));
@@ -3002,7 +3000,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   check_notify(out, aor, "active", std::make_pair("terminated", "deactivated"));
-  check_notify(out, aor, "active", std::make_pair("active", "created"), true);
+  check_notify(out, aor, "active", std::make_pair("active", "created"), 1);
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
