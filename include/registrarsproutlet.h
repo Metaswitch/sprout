@@ -129,7 +129,8 @@ protected:
                           std::vector<SubscriberDataManager*> backup_sdms,
                                                                       ///<backup stores to read from if no entry in store and no backup data
                           std::string private_id,                     ///<private id that the binding was registered with
-                          bool& out_all_bindings_expired);            ///<[out] whether all bindings have now expired.
+                          bool& out_all_bindings_expired,             ///<[out] whether all bindings have now expired.
+                          int& initial_notify_cseq);                  ///<[out] The CSeq value on the AoR pair before it is written to the store
 
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);

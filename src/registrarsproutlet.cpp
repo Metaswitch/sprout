@@ -439,6 +439,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // what Homestead thought the previous regstate was.
   bool is_initial_registration = (irs_info._prev_regstate == RegDataXMLUtils::STATE_NOT_REGISTERED);
   bool no_existing_bindings_found = false;
+  int initial_notify_cseq = 0;
   AoRPair* aor_pair = write_to_store(_registrar->_sdm,
                                      aor,
                                      &(irs_info._associated_uris),
@@ -450,7 +451,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                      NULL,
                                      _registrar->_remote_sdms,
                                      private_id_for_binding,
-                                     all_bindings_expired);
+                                     all_bindings_expired,
+                                     initial_notify_cseq);
 
   // Update our view of whether this was in fact an initial registration based
   // on whether we found any bindings. There are race conditions where
@@ -481,13 +483,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // Log the bindings.
     log_bindings(aor, aor_pair->get_current());
 
-    // We want to write the same CSeq value to the remote stores as we have just
-    // written to the local one. Writing to the store causes the CSeq to be
-    // incremented, so we correct for that by decrementing it.
-    // This isn't an ideal solution - this entire area of code is due to be
-    // refactored, at which point a more permanent fix should be implemented.
-    int local_notify_cseq = aor_pair->get_current()->_notify_cseq - 1;
-
     // If we have any remote stores, try to store this in them too. We don't worry
     // about failures in this case.
     for (std::vector<SubscriberDataManager*>::iterator it = _registrar->_remote_sdms.begin();
@@ -498,13 +493,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       {
         int tmp_expiry = 0;
         bool ignored;
+        int ignored_cseq;
 
-        if (aor_pair->get_current()->_notify_cseq != local_notify_cseq)
+        if (aor_pair->get_current()->_notify_cseq != initial_notify_cseq)
         {
           TRC_DEBUG("Correcting incremented CSeq %d to %d",
                     aor_pair->get_current()->_notify_cseq,
-                    local_notify_cseq);
-          aor_pair->get_current()->_notify_cseq = local_notify_cseq;
+                    initial_notify_cseq);
+          aor_pair->get_current()->_notify_cseq = initial_notify_cseq;
         }
 
         AoRPair* remote_aor_pair = write_to_store(*it,
@@ -518,7 +514,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                   aor_pair,
                                                   {},
                                                   private_id_for_binding,
-                                                  ignored);
+                                                  ignored,
+                                                  ignored_cseq);
         delete remote_aor_pair;
       }
     }
@@ -1063,7 +1060,8 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
                    std::string private_id,                     ///<private id that the binding was registered with
-                   bool& out_all_bindings_expired)
+                   bool& out_all_bindings_expired,
+                   int& initial_notify_cseq)
 {
 
   // The registration service uses optimistic locking to avoid concurrent
@@ -1128,6 +1126,7 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
 
     // Set the S-CSCF URI on the AoR.
     AoR* aor_data = aor_pair->get_current();
+    initial_notify_cseq = aor_data->_notify_cseq;
     aor_data->_scscf_uri = _scscf_uri;
 
     if (changed_bindings > 0)
