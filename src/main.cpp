@@ -2430,7 +2430,13 @@ int main(int argc, char* argv[])
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm,
                                             remote_sdms,
-                                            hss_connection);
+                                            hss_connection,
+                                            fifc_service,
+                                            IFCConfiguration(opt.apply_fallback_ifcs,
+                                                             opt.reject_if_no_matching_ifcs,
+                                                             opt.dummy_app_server,
+                                                             NULL,
+                                                             NULL));
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
 

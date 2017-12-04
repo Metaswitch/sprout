@@ -43,8 +43,13 @@ public:
 
   void build_timeout_request(std::string body, htp_method method)
   {
+    IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
     req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
-    config = new AoRTimeoutTask::Config(store, {remote_store1, remote_store2}, mock_hss);
+    config = new AoRTimeoutTask::Config(store, 
+                                        {remote_store1, remote_store2}, 
+                                        mock_hss, 
+                                        NULL, 
+                                        ifc_configuration);
     handler = new ChronosAoRTimeoutTask(*req, config, 0);
   }
 
@@ -372,10 +377,11 @@ class ChronosAoRTimeoutTasksMockStoreTest : public SipTest
 
   void SetUp()
   {
+    IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
     store = new MockSubscriberDataManager();
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
-    config = new AoRTimeoutTask::Config(store, {}, fake_hss);
+    config = new AoRTimeoutTask::Config(store, {}, fake_hss, NULL, ifc_configuration);
     handler = new ChronosAoRTimeoutTask(*req, config, 0);
   }
 

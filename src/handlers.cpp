@@ -233,7 +233,7 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
 
   // Determine the set of IMPUs in the Implicit Registration Set
   HSSConnection::irs_info irs_info;
-  get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
+  bool got_ifcs = get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
 
   bool all_bindings_expired = false;
   AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
@@ -261,6 +261,18 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
                                *aor_pair,
                                _cfg->_hss,
                                trail());
+
+      if (got_ifcs)
+      {
+        RegistrationUtils::deregister_with_application_servers(irs_info._service_profiles[aor_id],
+                                                               _cfg->_fifc_service,
+                                                               _cfg->_ifc_configuration,
+                                                               _cfg->_sdm,
+                                                               _cfg->_remote_sdms,
+                                                               _cfg->_hss,
+                                                               aor_id,
+                                                               trail());
+      }
     }
   }
   else
@@ -444,13 +456,12 @@ AoRPair* DeregistrationTask::deregister_bindings(
 {
   AoRPair* aor_pair = NULL;
   bool all_bindings_expired = false;
-  bool got_ifcs;
   Store::Status set_rc;
   std::vector<std::string> impis_to_dereg;
 
   // Get registration data
   HSSConnection::irs_info irs_info;
-  got_ifcs = get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
+  bool got_ifcs = get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
 
   do
   {
