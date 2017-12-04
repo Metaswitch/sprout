@@ -306,7 +306,8 @@ public:
   void check_notify(pjsip_msg* out,
                     std::string expected_aor,
                     std::string reg_state,
-                    std::pair<std::string, std::string> contact_values)
+                    std::pair<std::string, std::string> contact_values,
+                    int check_contact = 0)
   {
     char buf[16384];
     int n = out->body->print_body(out->body, buf, sizeof(buf));
@@ -331,7 +332,13 @@ public:
     ASSERT_TRUE(reg_info);
     rapidxml::xml_node<> *registration = reg_info->first_node("registration");
     ASSERT_TRUE(registration);
-    rapidxml::xml_node<> *contact = registration->first_node("contact");
+    rapidxml::xml_node<> *contact;
+    contact = registration->first_node("contact");      
+    for (int ii; ii < check_contact; ii++)
+    {
+      contact = contact->next_sibling();      
+    }
+
     ASSERT_TRUE(contact);
 
     ASSERT_EQ(expected_aor, std::string(registration->first_attribute("aor")->value()));
@@ -2984,9 +2991,22 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
+  // Change the Contact URI on the registration
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob";
+  msg._cseq = "16570";
+  msg._unique += 1;
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  check_notify(out, aor, "active", std::make_pair("terminated", "deactivated"));
+  check_notify(out, aor, "active", std::make_pair("active", "created"), 1);
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
   // Delete the registration
   msg._expires = "Expires: 0";
-  msg._cseq = "16570";
+  msg._cseq = "16571";
   msg._unique += 1;
   inject_msg(msg.get());
   ASSERT_EQ(2, txdata_count());
