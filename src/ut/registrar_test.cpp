@@ -334,7 +334,7 @@ public:
     ASSERT_TRUE(registration);
     rapidxml::xml_node<> *contact;
     contact = registration->first_node("contact");      
-    for (int ii; ii < check_contact; ii++)
+    for (int ii = 0; ii < check_contact; ii++)
     {
       contact = contact->next_sibling();      
     }
