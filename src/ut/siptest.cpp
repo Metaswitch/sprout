@@ -315,7 +315,6 @@ std::string SipTest::TransportFlow::type_name()
 }
 
 
-
 int SipTest::TransportFlow::local_port()
 {
   return _transport->local_name.port;
