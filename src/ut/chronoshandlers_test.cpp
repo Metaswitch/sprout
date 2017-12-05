@@ -240,6 +240,8 @@ TEST_F(ChronosAoRTimeoutTasksTest, LocalAoRNoBindingsTest)
 // Test with a remote store, and both AoRs with no bindings
 TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
 {
+  CapturingTestLogger log(5);
+
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
 
   build_timeout_request(body, htp_method_POST);
@@ -319,6 +321,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_TIMEOUT);
   ASSERT_EQ(irs_query._server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 
+  EXPECT_TRUE(log.contains("Creating third party deregistration"));
 }
 
 // Test with NULL AoRs
