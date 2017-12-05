@@ -1008,8 +1008,15 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresHeader)
 /// appropriate headers are passed through
 TEST_F(RegistrarTest, SimpleMainlinePassthrough)
 {
-  _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "", "?private_id=Alice");
-
+  // Set some interesting Charging Function values
+  _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "", "?private_id=Alice", "",
+    "<ChargingAddresses>\n"
+    "  <CCF priority=\"1\">token%</CCF>\n"
+    "  <CCF priority=\"2\">aaa://example.host;transport=TCP</CCF>\n"
+    "  <ECF priority=\"1\">\"aaa://example.host;transport=UDP\"</ECF>\n"
+    "  <ECF priority=\"2\">[fd2c:de55:7690:7777::ac12:aa6]</ECF>\n"
+    "</ChargingAddresses>"
+  );
   Message msg;
   msg._expires = "Expires: 300";
   msg._contact_params = ";+sip.ice;reg-id=1";
@@ -1019,7 +1026,9 @@ TEST_F(RegistrarTest, SimpleMainlinePassthrough)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
-  EXPECT_EQ("P-Charging-Function-Addresses: ccf=ccf1;ecf=ecf1;ecf=ecf2", get_headers(out, "P-Charging-Function-Addresses"));
+  // Check the contents of the PCFA header.  Only the 2nd value above should be quoted, as the 1st and 4th values match
+  // the required spec for a "token" or IPv6 address, and the 3rd value was already quoted.
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=token%;ccf=\"aaa://example.host;transport=TCP\";ecf=\"aaa://example.host;transport=UDP\";ecf=[fd2c:de55:7690:7777::ac12:aa6]", get_headers(out, "P-Charging-Function-Addresses"));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
@@ -1462,7 +1471,16 @@ TEST_F(RegistrarTest, AppServersPassthrough)
                               "      <DefaultHandling>0</DefaultHandling>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                              "",
+                              "",
+                              // Set some more sample Charging Function names to exercise quoting logic
+                              "<ChargingAddresses>\n"
+                              "  <CCF priority=\"1\">1.2.3.4</CCF>\n"
+                              "  <CCF priority=\"2\">quote=this</CCF>\n"
+                              "  <ECF priority=\"1\">quote;this;as;well</CCF>\n"
+                              "</ChargingAddresses>"
+                          );
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1482,7 +1500,8 @@ TEST_F(RegistrarTest, AppServersPassthrough)
 
   // Test the headers we expect to have passed through
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
-  EXPECT_EQ("P-Charging-Function-Addresses: ccf=ccf1;ecf=ecf1;ecf=ecf2", get_headers(out, "P-Charging-Function-Addresses"));
+  // Check quoting.  Note that IP addresses don't need to be quoted inthe PCFA.
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ccf=\"quote=this\";ecf=\"quote;this;as;well\"", get_headers(out, "P-Charging-Function-Addresses"));
 
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));

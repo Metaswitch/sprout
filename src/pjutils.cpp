@@ -2197,36 +2197,31 @@ void PJUtils::add_pcfa_param(pj_list_type *cf_list,
   //   token (see RFC 3455, section 5.5)
   // Note that we assume for simplicity that if the value starts with '[', 
   // its an ipv6 address (int_parse_host in sip_parser.c makes the same 
-  // and the pjsip_HOST_SPEC doesn't cover IPv6 parsing)
+  // assumption and the pjsip_HOST_SPEC doesn't cover IPv6 parsing).
   const char *inbuf = value.c_str();
-  bool no_quote;
+  bool quote = false;
 
-  if ((inbuf[0] == '"') || (inbuf[0] == '['))
+  // Check whether the value already quoted, or an IPv6 address
+  if ((inbuf[0] != '"') && (inbuf[0] != '['))
   {
-    // value is assumed to be either already quoted, or an IPv6 address
-    no_quote = true;
-  }
-  else
-  {
-    no_quote = false;
     const pjsip_parser_const_t *pc = pjsip_parser_const();
     for (size_t index = 0; index < value.length(); index++)
     {
-      no_quote = no_quote && (pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) ||
-                              pj_cis_match(&pc->pjsip_HOST_SPEC, inbuf[index]));
-    }      
+      quote = quote || (!pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) &&
+                        !pj_cis_match(&pc->pjsip_HOST_SPEC, inbuf[index]));
+    }
   }
 
   std::string final_value;
-  if (no_quote)
-  {
-    TRC_DEBUG("Use unquoted cf value %s", inbuf);
-    final_value = value;    
-  }
-  else
+  if (quote)
   {
     final_value = Utils::quote_string(value);
     TRC_DEBUG("Use quoted cf value %s", final_value.c_str());
+  }
+  else
+  {
+    TRC_DEBUG("Use unquoted cf value %s", inbuf);
+    final_value = value;    
   }
 
   new_param->value = pj_strdup3(pool, final_value.c_str());
