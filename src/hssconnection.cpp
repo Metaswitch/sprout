@@ -311,9 +311,15 @@ void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
 
 bool is_ims_subscription_expected(const std::string& req_type)
 {
-  // Not expected for AUTH cases
-  return (req_type == HSSConnection::REG || req_type == HSSConnection::CALL || 
-          req_type == HSSConnection::DEREG_USER || 
+  // TS29.228 Table S-CSCF registration/deregistration notification response:
+  // User-Data shall be present for SAR type NO_ASSIGNMENT, REGISTRATION,
+  // RE_REGISTRATION or UNREGISTERED_USER. 
+  //
+  // req_type REG and CALL map to those types, while DEREGs should get user-data
+  // from homestead cache to deregister with AS.
+  return (req_type == HSSConnection::REG ||
+          req_type == HSSConnection::CALL ||
+          req_type == HSSConnection::DEREG_USER ||
           req_type == HSSConnection::DEREG_ADMIN ||
           req_type == HSSConnection::DEREG_TIMEOUT);
 }

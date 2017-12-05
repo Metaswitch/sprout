@@ -181,16 +181,15 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location?originating=true&auth-type=CAPAB"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
     fakecurl_responses["http://10.42.42.42:80/impu/pubid45/location"] = CURLE_REMOTE_FILE_NOT_FOUND;
 
+    std::string missing_ims_subscription =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid48/reg-data", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"server_name\"}")] =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-      "<ClearwaterRegData>"
-        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
-      "</ClearwaterRegData>";
+      missing_ims_subscription;
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid48/reg-data", "{\"reqtype\": \"dereg-auth-failed\", \"server_name\": \"server_name\"}")] =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-      "<ClearwaterRegData>"
-        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
-      "</ClearwaterRegData>";
+      missing_ims_subscription;
 
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -220,21 +219,18 @@ class HssConnectionTest : public BaseTest
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-      "<ClearwaterRegData>"
-        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
-      "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data", "{\"reqtype\": \"dereg-admin\", \"server_name\": \"server_name\"}")] =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-      "<ClearwaterRegData>"
-        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
-      "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data", "{\"reqtype\": \"dereg-user\", \"server_name\": \"server_name\"}")] =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-      "<ClearwaterRegData>"
-        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
-      "</ClearwaterRegData>";
+
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missing_ims_subscription/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+      missing_ims_subscription;
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missing_ims_subscription/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"server_name\"}")] =
+      missing_ims_subscription;
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missing_ims_subscription/reg-data", "{\"reqtype\": \"dereg-admin\", \"server_name\": \"server_name\"}")] =
+      missing_ims_subscription;
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missing_ims_subscription/reg-data", "{\"reqtype\": \"dereg-user\", \"server_name\": \"server_name\"}")] =
+      missing_ims_subscription;
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missing_ims_subscription/reg-data", "{\"reqtype\": \"dereg-timeout\", \"server_name\": \"server_name\"}")] =
+      missing_ims_subscription;
+
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement3/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<C>"
@@ -462,7 +458,7 @@ TEST_F(HssConnectionTest, SimpleAuthenticationTimeout)
 
   EXPECT_EQ("NOT_REGISTERED", irs_info._regstate);
   EXPECT_TRUE(irs_info._service_profiles.empty());
-  ASSERT_TRUE(rc == 200); 
+  EXPECT_TRUE(rc == 200); 
 }
 
 TEST_F(HssConnectionTest, SimpleAuthenticationFail)
@@ -477,7 +473,7 @@ TEST_F(HssConnectionTest, SimpleAuthenticationFail)
 
   EXPECT_EQ("NOT_REGISTERED", irs_info._regstate);
   EXPECT_TRUE(irs_info._service_profiles.empty());
-  ASSERT_TRUE(rc == 200); 
+  EXPECT_TRUE(rc == 200); 
 }
 
 TEST_F(HssConnectionTest, SimpleUnregistered)
@@ -698,30 +694,38 @@ TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
-TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
+TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription_Reg)
 {
-  CapturingTestLogger log;
-
   HSSConnection::irs_query irs_query;
-  irs_query._public_id = "missingelement2";
+  irs_query._public_id = "missing_ims_subscription";
   irs_query._req_type = HSSConnection::REG;
   irs_query._server_name = "server_name";
   HSSConnection::irs_info irs_info;
 
   HTTPCode rc = _hss.update_registration_state(irs_query, irs_info, 0);
 
-  EXPECT_TRUE(irs_info._associated_uris.get_unbarred_uris().empty());
   EXPECT_TRUE(irs_info._service_profiles.empty());
-  EXPECT_TRUE(log.contains("Malformed HSS XML"));
-  ASSERT_TRUE(rc == 500);
+  EXPECT_TRUE(rc == 500);
 }
 
-TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription2)
+TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription_Call)
 {
-  CapturingTestLogger log;
-
   HSSConnection::irs_query irs_query;
-  irs_query._public_id = "missingelement2";
+  irs_query._public_id = "missing_ims_subscription";
+  irs_query._req_type = HSSConnection::CALL;
+  irs_query._server_name = "server_name";
+  HSSConnection::irs_info irs_info;
+
+  HTTPCode rc = _hss.update_registration_state(irs_query, irs_info, 0);
+
+  EXPECT_TRUE(irs_info._service_profiles.empty());
+  EXPECT_TRUE(rc == 500);
+}
+
+TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription_DeregAdmin)
+{
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = "missing_ims_subscription";
   irs_query._req_type = HSSConnection::DEREG_ADMIN;
   irs_query._server_name = "server_name";
   HSSConnection::irs_info irs_info;
@@ -729,16 +733,13 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription2)
   HTTPCode rc =_hss.update_registration_state(irs_query, irs_info, 0);
 
   EXPECT_TRUE(irs_info._service_profiles.empty());
-  EXPECT_TRUE(log.contains("Malformed HSS XML"));
-  ASSERT_TRUE(rc == 500);
+  EXPECT_TRUE(rc == 500);
 }
 
-TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription3)
+TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription_DeregUser)
 {
-  CapturingTestLogger log;
-
   HSSConnection::irs_query irs_query;
-  irs_query._public_id = "missingelement2";
+  irs_query._public_id = "missing_ims_subscription";
   irs_query._req_type = HSSConnection::DEREG_USER;
   irs_query._server_name = "server_name";
   HSSConnection::irs_info irs_info;
@@ -746,8 +747,21 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription3)
   HTTPCode rc = _hss.update_registration_state(irs_query, irs_info, 0);
 
   EXPECT_TRUE(irs_info._service_profiles.empty());
-  EXPECT_TRUE(log.contains("Malformed HSS XML"));
-  ASSERT_TRUE(rc == 500);
+  EXPECT_TRUE(rc == 500);
+}
+
+TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription_DeregTimeout)
+{
+  HSSConnection::irs_query irs_query;
+  irs_query._public_id = "missing_ims_subscription";
+  irs_query._req_type = HSSConnection::DEREG_TIMEOUT;
+  irs_query._server_name = "server_name";
+  HSSConnection::irs_info irs_info;
+
+  HTTPCode rc = _hss.update_registration_state(irs_query, irs_info, 0);
+
+  EXPECT_TRUE(irs_info._service_profiles.empty());
+  EXPECT_TRUE(rc == 500);
 }
 
 TEST_F(HssConnectionTest, ServerFailure)
