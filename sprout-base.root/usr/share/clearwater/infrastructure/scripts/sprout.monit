@@ -18,13 +18,13 @@ check process sprout_process with pidfile /var/run/sprout/sprout.pid
   group sprout
 
   # The start, stop and restart commands are linked to alarms
-  start program = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout start'"
+  start program = "/bin/bash -c '/usr/share/clearwater/infrastructure/monit_stability/sprout-stability reset; /usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout start'"
   stop program = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout stop'"
-  restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout restart'"
+  restart program = "/bin/bash -c '/usr/share/clearwater/infrastructure/monit_stability/sprout-stability reset; /usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout restart'"
 
   # Check the service's resource usage, and abort the process if it's too high. This will
   # generate a core file and trigger diagnostics collection.
-  if memory > 80% then exec "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout abort'"
+  if memory > 80% then exec "/bin/bash -c '/usr/share/clearwater/infrastructure/monit_stability/sprout-stability aborted; /usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout abort'"
 
 # Clear any alarms if the process has been running long enough.
 check program sprout_uptime with path /usr/share/clearwater/infrastructure/monit_uptime/check-sprout-uptime
@@ -40,14 +40,14 @@ check program poll_sprout_sip with path "/usr/share/clearwater/bin/poll_sprout_s
   depends on sprout_process
 
   # Aborting generates a core file and triggers diagnostic collection.
-  if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout abort'"
+  if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/infrastructure/monit_stability/sprout-stability aborted; /usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout abort'"
 
 check program poll_sprout_http with path "/usr/share/clearwater/bin/poll_sprout_http.sh"
   group sprout
   depends on sprout_process
 
   # Aborting generates a core file and triggers diagnostic collection.
-  if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout abort'"
+  if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/infrastructure/monit_stability/sprout-stability aborted; /usr/share/clearwater/bin/issue-alarm monit 1000.3; /etc/init.d/sprout abort'"
 EOF
 chmod 0644 /etc/monit/conf.d/sprout.monit
 

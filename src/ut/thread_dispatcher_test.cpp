@@ -14,6 +14,7 @@
 #include "test_interposer.hpp"
 #include "testingcommon.h"
 #include "mockloadmonitor.hpp"
+#include "mock_rph_service.h"
 #include "mock_pjsip_module.h"
 #include "siptest.hpp"
 #include "stack.h"
@@ -51,7 +52,9 @@ public:
                            NULL,
                            NULL,
                            NULL,
+                           NULL,
                            &load_monitor,
+                           &rph_service,
                            NULL,
                            REQUEST_ON_QUEUE_TIMEOUT_MS);
     mod_thread_dispatcher = get_mod_thread_dispatcher();
@@ -111,6 +114,7 @@ public:
 
   StrictMock<MockPJSipModule>* mod_mock;
   ::testing::StrictMock<MockLoadMonitor> load_monitor;
+  MockRPHService rph_service;
   pjsip_module* mod_thread_dispatcher;
   pjsip_process_rdata_param rp;
 };
@@ -120,7 +124,7 @@ TEST_F(ThreadDispatcherTest, StandardInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(load_monitor, request_complete(_, _));
@@ -134,7 +138,7 @@ TEST_F(ThreadDispatcherTest, SlowInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
 
   // Slow responses get logged out by a different path, where slow means
   // that > 50 * target latency
@@ -156,7 +160,7 @@ TEST_F(ThreadDispatcherTest, OverloadedInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(false));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(false));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(*mod_mock, on_tx_response(ResultOf(get_tx_status_code, 503)));
 
@@ -170,7 +174,7 @@ TEST_F(ThreadDispatcherTest, RejectOldInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
   EXPECT_CALL(*mod_mock, on_tx_response(ResultOf(get_tx_status_code, 503)));
 
@@ -185,6 +189,21 @@ TEST_F(ThreadDispatcherTest, NeverRejectOptionsTest)
 {
   TestingCommon::Message msg;
   msg._method = "OPTIONS";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+// On recieving an ACK message, the thread dispatcher should not call into
+// the load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectAckTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "ACK";
 
   EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
   EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
@@ -209,6 +228,24 @@ TEST_F(ThreadDispatcherTest, NeverRejectSubscribeTest)
   process_queue_element();
 }
 
+// On recieving a prioritized INVITE message, the thread dispatcher should not
+// call into the load monitor - it should process the request regardless of
+// load.
+TEST_F(ThreadDispatcherTest, NeverRejectPrioritizedInviteTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "INVITE";
+  msg._extra = "Resource-Priority: wps.0";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(rph_service, lookup_priority("wps.0", _)).WillOnce(Return(SIPEventPriorityLevel::HIGH_PRIORITY_11));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
 // On recieving a SIP response, the thread dispatcher should not call into the
 // load monitor - it should process the request regardless of load.
 TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
@@ -222,6 +259,71 @@ TEST_F(ThreadDispatcherTest, NeverRejectResponseTest)
   EXPECT_CALL(load_monitor, request_complete(_, _));
 
   inject_msg_thread(msg.get_response());
+  process_queue_element();
+}
+
+// On recieving an in-dialog request, the thread dispatcher should not call into
+// the load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectInDialogTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "UPDATE";
+  msg._in_dialog = true;
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+// On receiving a request that contains an ODI token in the top route header,
+// the thread dispatcher should not call into the load monitor - it should
+// process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectASRequestTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "INVITE";
+  msg._route = "Route: <sip:odi_i5u09fdngj45@10.225.20.254;service=scscf>";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+// On recieving a registration, the thread dispatcher should not call into the
+// load monitor - it should process the request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectRegisterTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "REGISTER";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
+  process_queue_element();
+}
+
+// On recieving a message with urn:service:sos in the request URI, the thread
+// dispatcher should not call into the load monitor - it should process the
+// request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:service:sos";
+
+  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(load_monitor, request_complete(_, _));
+
+  inject_msg_thread(msg.get_request());
   process_queue_element();
 }
 
@@ -249,7 +351,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOptionsTest)
   options_msg._method = "OPTIONS";
 
   // Only the INVITE should check the load monitor
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
 
   // The OPTIONS poll should be processed first
   Expectation options_exp = EXPECT_CALL(*mod_mock,
@@ -281,7 +383,7 @@ TEST_F(ThreadDispatcherTest, PrioritiseOlderTest)
   TestingCommon::Message newer_msg;
   newer_msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_)).Times(2).WillRepeatedly(Return(true));
+  EXPECT_CALL(load_monitor, admit_request(_, _)).Times(2).WillRepeatedly(Return(true));
 
   // The older message should be processed first
   Expectation older_exp = EXPECT_CALL(*mod_mock,
@@ -315,8 +417,8 @@ TEST_F(ThreadDispatcherTest, PrioritiseOptionsOverOlderTest)
   TestingCommon::Message options_msg;
   options_msg._method = "OPTIONS";
 
-  // Only the INVITE should check the load monitor
-  EXPECT_CALL(load_monitor, admit_request(_)).WillOnce(Return(true));
+  // Only the INVITE should check the load monitor.
+  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
 
   // The OPTIONS poll should be processed first
   Expectation options_exp = EXPECT_CALL(*mod_mock,
@@ -382,12 +484,12 @@ public:
 // 'Larger' SipEvents are returned sooner by the priority queue.
 TEST_F(SipEventQueueTest, PriorityOrdering)
 {
-  // Lower the priority of e2
-  e2.priority = 1;
+  // Raise the priority of e2
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_1;
 
-  // e1 should be 'larger' than e2
-  EXPECT_TRUE(SipEvent::compare(e2, e1));
-  EXPECT_TRUE(SipEvent::compare(e2, e1));
+  // e2 should be 'larger' than e1
+  EXPECT_TRUE(SipEvent::compare(e1, e2));
+  EXPECT_TRUE(SipEvent::compare(e1, e2));
 }
 
 // Test that older SipEvents are 'larger' than newer ones at the same priority
@@ -407,36 +509,36 @@ TEST_F(SipEventQueueTest, TimeOrdering)
 // Test that SipEvents are ordered by priority before time.
 TEST_F(SipEventQueueTest, PriorityAndTimeOrdering)
 {
-  // Lower the priority of e2
-  e2.priority = 1;
+  // Raise the priority of e2
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_1;
 
-  // Set e2 to be older than e1
+  // Set e1 to be older than e2
   e1.stop_watch.start();
   cwtest_advance_time_ms(1);
   e2.stop_watch.start();
 
-  // e1 should be 'larger' than e2
-  EXPECT_TRUE(SipEvent::compare(e2, e1));
-  EXPECT_TRUE(SipEvent::compare(e2, e1));
+  // e2 should be 'larger' than e1
+  EXPECT_TRUE(SipEvent::compare(e1, e2));
+  EXPECT_TRUE(SipEvent::compare(e1, e2));
 }
 
 // Test that higher priority SipEvents are returned before lower priority ones.
 TEST_F(SipEventQueueTest, QueuePriorityOrdering)
 {
-  // Lower the priority of e2
-  e2.priority = 1;
+  // Raise the priority of e2
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_10;
 
   q->push(e2);
   q->push(e1);
 
   SipEvent e;
 
-  // e1 is higher priority, so should be returned first
+  // e2 is higher priority, so should be returned first
   q->pop(e);
-  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
+  EXPECT_EQ(e2.event_data.rdata, e.event_data.rdata);
 
   q->pop(e);
-  EXPECT_EQ(e2.priority, e.priority);
+  EXPECT_EQ(e1.priority, e.priority);
 }
 
 // Test that older SipEvents are returned before newer ones at the same priority
@@ -464,10 +566,10 @@ TEST_F(SipEventQueueTest, QueueTimeOrdering)
 // Test that SipEvents are returned from the queue in priority, then time, order.
 TEST_F(SipEventQueueTest, QueuePriorityAndTimeOrdering)
 {
-  // Lower the priority of e2
-  e2.priority = 1;
+  // Raise the priority of e2
+  e2.priority = SIPEventPriorityLevel::HIGH_PRIORITY_1;
 
-  // Set e2 to be older than e1
+  // Set e1 to be older than e2
   e1.stop_watch.start();
   cwtest_advance_time_ms(1);
   e2.stop_watch.start();
@@ -477,10 +579,10 @@ TEST_F(SipEventQueueTest, QueuePriorityAndTimeOrdering)
 
   SipEvent e;
 
-  // e1 is higher priority, so should be returned first despite e2 being older
-  q->pop(e);
-  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
-
+  // e2 is higher priority, so should be returned first despite e1 being older
   q->pop(e);
   EXPECT_EQ(e2.event_data.rdata, e.event_data.rdata);
+
+  q->pop(e);
+  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
 }

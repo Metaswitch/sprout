@@ -292,8 +292,21 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
     }
     else
     {
-      // The binding is in both AoRs. Check if the expiry time has changed at all
-      if (aor_orig_b_match->second->_expires < aor_current_b.second->_expires)
+      // The binding is in both AoRs. 
+      if (aor_orig_b_match->second->_uri.compare(aor_current_b.second->_uri) != 0)
+      {
+        // Change of Contact URI. If the contact URI has been changed, we need to
+        // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2	
+        // "Notification about registration state") and create a new one.  
+        // We do this by adding a DEACTIVATED and then a CREATED ClassifiedBinding.
+        ClassifiedBinding* deactivated_record =
+           new ClassifiedBinding(aor_orig_b_match->first,
+                                 aor_orig_b_match->second,
+                                 NotifyUtils::ContactEvent::DEACTIVATED);
+        classified_bindings.push_back(deactivated_record);
+        event = NotifyUtils::ContactEvent::CREATED;
+      }
+      else if (aor_orig_b_match->second->_expires < aor_current_b.second->_expires)
       {
         TRC_DEBUG("Binding %s in AoR %s has been refreshed",
                   aor_current_b.first.c_str(),
@@ -668,10 +681,28 @@ void SubscriberDataManager::NotifySender::send_notifys(
       }
       else
       {
-        // The binding is in both AoRs. Check if the expiry time has changed at all
+        // The binding is in both AoRs. 
         NotifyUtils::ContactEvent event;
 
-        if (aor_orig_b_match->second->_expires < binding->_expires)
+        if (aor_orig_b_match->second->_uri.compare(binding->_uri) != 0)
+        {
+          // Change of Contact URI. If the contact URI has been changed, we need to
+          // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2	
+          // "Notification about registration state") and create a new one.  
+          // We do this by adding a DEACTIVATED and then a CREATED ClassifiedBinding.
+          TRC_DEBUG("Binding %s has changed URIs from %s to %s", 
+                                      b_id.c_str(),
+                                      aor_orig_b_match->second->_uri.c_str(),
+                                      binding->_uri.c_str());
+          NotifyUtils::BindingNotifyInformation* deactivated_bni =
+             new NotifyUtils::BindingNotifyInformation(b_id,
+                                                       aor_orig_b_match->second,
+                                                       NotifyUtils::ContactEvent::DEACTIVATED);
+          binding_info_to_notify.push_back(deactivated_bni);
+          event = NotifyUtils::ContactEvent::CREATED;
+          bindings_changed = true;
+        }
+        else if (aor_orig_b_match->second->_expires < binding->_expires)
         {
           TRC_DEBUG("Binding %s has been refreshed", b_id.c_str());
           event = NotifyUtils::ContactEvent::REFRESHED;

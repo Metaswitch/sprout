@@ -325,7 +325,7 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
-  uas_tsx->process_cancel_request(rdata);
+  uas_tsx->process_cancel_request(rdata, "CANCEL request received from peer");
 
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
@@ -680,14 +680,14 @@ void BasicProxy::UASTsx::process_tsx_request(pjsip_rx_data* rdata)
 
 
 /// Handle a received CANCEL request.
-void BasicProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
+void BasicProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata, const std::string& reason)
 {
   TRC_DEBUG("%s - Cancel for UAS transaction", name());
 
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
-  cancel_pending_uac_tsx(0, false);
+  cancel_pending_uac_tsx(0, reason, false);
 }
 
 
@@ -1131,7 +1131,7 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
 
         // Cancel any pending transactions, but don't dissociate so that we wait
         // for all transactions to complete before forwarding the response.
-        cancel_pending_uac_tsx(status_code, false);
+        cancel_pending_uac_tsx(status_code, "6xx response received", false);
       }
     }
 
@@ -1148,16 +1148,23 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
 
 /// Notification that a client transaction is not responding.
 void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx,
-                                                  ForkErrorState fork_error)
+                                                  ForkErrorState fork_error,
+                                                  const std::string& reason)
 {
   if (_tsx != NULL)
   {
     enter_context();
 
     // UAC transaction has timed out or hit a transport error.  If
-    // we've not received a response from on any other UAC
+    // we've not received a response from a client on any other UAC
     // transactions then keep this as the best response.
-    TRC_DEBUG("%s - client transaction not responding", uac_tsx->name());
+    TRC_DEBUG("%s - client transaction not responding (%s)",
+              uac_tsx->name(),
+              reason.c_str());
+
+    SAS::Event client_not_responding(trail(), SASEvent::UAC_TSX_FAILED_NO_RESPONSE, 0);
+    client_not_responding.add_var_param(reason);
+    SAS::report_event(client_not_responding);
 
     if (--_pending_responses == 0)
     {
@@ -1200,7 +1207,7 @@ void BasicProxy::UASTsx::on_tsx_state(pjsip_event* event)
     {
       // INVITE transaction has been terminated.  If there are any
       // pending UAC transactions they should be cancelled.
-      cancel_pending_uac_tsx(0, true);
+      cancel_pending_uac_tsx(0, pjsip_event_str(event->body.tsx_state.type), true);
     }
     unbind_from_pjsip_tsx();
     _pending_destroy = true;
@@ -1325,7 +1332,9 @@ void BasicProxy::UASTsx::on_tsx_complete()
 
 
 /// Cancels all pending UAC transactions associated with this UAS transaction.
-void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code, bool dissociate_uac)
+void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code,
+                                                const std::string& reason,
+                                                bool dissociate_uac)
 {
   enter_context();
 
@@ -1350,7 +1359,7 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code, bool dissociate_uac
     if (uac_tsx != NULL)
     {
       // Found a UAC transaction that is still active, so send a CANCEL.
-      uac_tsx->cancel_pending_tsx(st_code);
+      uac_tsx->cancel_pending_tsx(st_code, reason);
 
       // Normal behaviour (that is, on receipt of a CANCEL on the UAS
       // transaction), is to leave the UAC transaction connected to the UAS
@@ -1787,11 +1796,23 @@ void BasicProxy::UACTsx::send_request()
       // case the request is used to build an error response.
       PJUtils::remove_top_via(_tdata);
 
-      ForkErrorState fork_error = (_current_server.is_set()) ?
-                                    ForkErrorState::TRANSPORT_ERROR :
-                                    ForkErrorState::NO_ADDRESSES;
+      ForkErrorState fork_error;
+      std::string reason;
 
-      _uas_tsx->on_client_not_responding(this, fork_error);
+      if (_current_server.is_set())
+      {
+        // LCOV_EXCL_START - don't expect failure to send messages in UT
+        fork_error = ForkErrorState::TRANSPORT_ERROR;
+        reason = "Unexpected failure to send request to peer";
+        // LCOV_EXCL_STOP
+      }
+      else
+      {
+        fork_error = ForkErrorState::NO_ADDRESSES;
+        reason = "No address for peer";
+      }
+
+      _uas_tsx->on_client_not_responding(this, fork_error, reason);
     }
 
     _pending_destroy = true;
@@ -1803,7 +1824,7 @@ void BasicProxy::UACTsx::send_request()
 
 /// Cancels the pending transaction, using the specified status code in the
 /// Reason header.
-void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
+void BasicProxy::UACTsx::cancel_pending_tsx(int st_code, const std::string& reason)
 {
   if (_tsx != NULL)
   {
@@ -1821,6 +1842,19 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
                                                        _tsx->last_tx,
                                                        st_code);
         set_trail(cancel, _trail);
+
+        SAS::Event cancel_tsx_event(_trail, SASEvent::CANCELLING_TSX, 0);
+
+        if (reason.size() != 0)
+        {
+          cancel_tsx_event.add_var_param(reason);
+        }
+        else
+        {
+          cancel_tsx_event.add_var_param("(no reason available)");
+        }
+
+        SAS::report_event(cancel_tsx_event);
 
         // Create a PJSIP UAC transaction on which to send the CANCEL, and
         // make sure this is using the same group lock.
@@ -1899,6 +1933,8 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
 /// destroy the UACTsx.
 void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
 {
+  std::string reason;
+
   enter_context();
 
   // Handle incoming responses (provided the UAS transaction hasn't
@@ -2018,7 +2054,9 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
           TRC_DEBUG("Timeout or transport error");
           SAS::Event sas_event(trail(), SASEvent::TRANSPORT_FAILURE, 0);
           SAS::report_event(sas_event);
+
           fork_error = ForkErrorState::TRANSPORT_ERROR;
+          reason = "Transport failure";
         }
         // LCOV_EXCL_START - no timeouts in UT.
         else if (event->body.tsx_state.type == PJSIP_EVENT_TIMER)
@@ -2026,14 +2064,19 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
           TRC_DEBUG("Timeout error");
           SAS::Event sas_event(trail(), SASEvent::TIMEOUT_FAILURE, 0);
           SAS::report_event(sas_event);
+
           fork_error = ForkErrorState::TIMEOUT;
+          reason = "Timeout";
         }
         // LCOV_EXCL_STOP - no timeouts in UT.
 
         // Report the error to the UASTsx.  Remove the top Via header from the
         // request first in case it is used to generate an error response.
         PJUtils::remove_top_via(_tdata);
-        _uas_tsx->on_client_not_responding(this, fork_error);
+
+        _uas_tsx->on_client_not_responding(this,
+                                           fork_error,
+                                           reason);
       }
     }
   }
@@ -2268,7 +2311,7 @@ void BasicProxy::UACTsx::timer_c_expired()
       TRC_INFO("Timer C expired, %.*s transaction in %s state, sending CANCEL",
                _tsx->method.name.slen, _tsx->method.name.ptr,
                pjsip_tsx_state_str(_tsx->state));
-      cancel_pending_tsx(0);
+      cancel_pending_tsx(408, "Timer C expired");
     }
     //LCOV_EXCL_START - RFC3261 says that Timer C can expire for a non-INVITE
     // transaction, or an INVITE transaction in calling state, but it
@@ -2288,7 +2331,10 @@ void BasicProxy::UACTsx::timer_c_expired()
                pjsip_tsx_state_str(_tsx->state));
       pjsip_tsx_terminate(_tsx, PJSIP_SC_REQUEST_TIMEOUT);
       PJUtils::remove_top_via(_tdata);
-      _uas_tsx->on_client_not_responding(this, ForkErrorState::TIMEOUT);
+
+      _uas_tsx->on_client_not_responding(this,
+                                         ForkErrorState::TIMEOUT,
+                                         "Timer C expired");
     }
     //LCOV_EXCL_STOP
   }

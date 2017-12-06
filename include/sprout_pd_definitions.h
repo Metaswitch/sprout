@@ -574,4 +574,46 @@ static const PDLog1<const char *> CL_SPROUT_TERM_PARTY_BARRED
   "None"
 );
 
+static const PDLog CL_SPROUT_RPH_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 67,
+  LOG_ERR,
+  "The RPH file is not present.",
+  "The S-CSCF supports message prioritization based on the Resource-Priority header, but the configuration file for this does not exist.",
+  "The S-CSCF will not be able to prioritize messages based on a Resource-Priority header.",
+  "The RPH configuration should be defined in /etc/clearwater/rph.json. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+);
+
+static const PDLog CL_SPROUT_RPH_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 68,
+  LOG_ERR,
+  "The RPH file is empty.",
+  "The S-CSCF supports message prioritization based on the Resource-Priority header, but the configuration file for this is empty.",
+  "The S-CSCF will not be able to prioritize messages based on a Resource-Priority header.",
+  "The RPH configuration should be defined in /etc/clearwater/rph.json. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_RPH_FILE_INVALID
+(
+  PDLogBase::CL_SPROUT_ID + 69,
+  LOG_ERR,
+
+  "The RPH file contains invalid JSON.",
+  "The S-CSCF supports message prioritization based on the Resource-Priority header, but the configuration file for this is invalid.",
+  "The S-CSCF will not be able to prioritize messages based on a Resource-Priority header.",
+  "The RPH configuration should be defined in /etc/clearwater/rph.json. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_RPH_FILE_INVALID_CONFIG
+(
+  PDLogBase::CL_SPROUT_ID + 70,
+  LOG_ERR,
+
+  "The RPH file contains invalid configuration.",
+  "The S-CSCF supports message prioritization based on the Resource-Priority header, but the configuration file contains invalid configuration.",
+  "The S-CSCF will not be able to prioritize messages based on a Resource-Priority header.",
+  "The RPH configuration should be defined in /etc/clearwater/rph.json. Populate this file according to the documentation."
+);
+
 #endif

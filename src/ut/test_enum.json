@@ -56,6 +56,10 @@
             "prefix" : "+1660",
             "regex"  : "!^\\+1660(.*$)!tel:+1650\\1!"
         },
+        {   "name" : "+1661000000 => urn:services:sos - tests invalid translation",
+            "prefix" : "+1661000000",
+            "regex"  : "!^\\+1661000000(.*$)!urn:services:sos!"
+        },
         {   "name" : "Clearwater internal numbers",
             "prefix" : "650555",
             "regex"  : "!(^.*$)!sip:\\1@ut-int.cw-ngv.com!"

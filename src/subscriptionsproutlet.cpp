@@ -527,6 +527,15 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
     return status;
   }
 
+  // If the NOTIFY Cseq values on the local AoR pair and the remote AoR pair get
+  // out of sync, we need a way to recover. We store the local value, and
+  // overwrite the remote value if necessary. This means that we will recover
+  // once a subscription is updated, possibly after sending some NOTIFYs with
+  // incorrect CSeq values.
+  // This isn't an ideal solution - this entire area of code is due to be
+  // refactored, at which point a more permanent fix should be implemented.
+  int local_notify_cseq = local_aor_pair->get_current()->_notify_cseq;
+
   // Write to the local store, handling any CAS error
   do
   {
@@ -590,6 +599,16 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
       }
       else
       {
+        if (remote_aor_pair->get_current()->_notify_cseq != local_notify_cseq)
+        {
+          // Overwrite the CSeq value on the remote AoR pair, and log an error.
+          TRC_WARNING("Remote CSeq %d differs from local CSeq %d for AoR %s, overwriting remote CSeq",
+                      remote_aor_pair->get_current()->_notify_cseq,
+                      local_notify_cseq,
+                      aor.c_str());
+          remote_aor_pair->get_current()->_notify_cseq = local_notify_cseq;
+        }
+
         update_subscription(subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
         remote_aor_pair->get_current()->_associated_uris = *associated_uris;
 
@@ -695,7 +714,15 @@ void SubscriptionSproutletTsx::update_subscription(
         if (!cached_aor.second->get_current()->subscriptions().empty())
         {
           TRC_DEBUG("AoR contained no subscriptions, but a remote copy did; copying data across");
+
+          // We don't want to overwrite the local CSeq value with that from the
+          // remote, as the remote CSeq may have already been incremented, and
+          // the local CSeq has not.
+          int local_cseq = aor_pair->get_current()->_notify_cseq;
+
           aor_pair->get_current()->copy_aor(cached_aor.second->get_current());
+
+          aor_pair->get_current()->_notify_cseq = local_cseq;
           break;
         }
       }

@@ -1,0 +1,13 @@
+{
+  "priority_blocks" : [
+      { "priority" : 1,
+        "rph_values" : ["wPs.0"]
+      },
+      { "priority" : 2,
+        "rph_values" : ["WpS.2"]
+      },
+      { "priority" : 3,
+        "rph_values" : ["wps.1"]
+      }
+    ]
+}
