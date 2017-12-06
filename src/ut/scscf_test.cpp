@@ -5431,8 +5431,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   // Save off the invite, as it will be needed later.
   out = current_txdata()->msg;
   ReqMatcher("INVITE").matches(out);
-  bool remote_addr_eq = (pj_sockaddr_cmp(&(tpAS1._rem_addr), &(current_txdata()->tp_info.dst_addr)) == 0);
-  EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
+  tpAS1.expect_target(current_txdata(), false);
   pjsip_tx_data* invite_1_tx_data = pop_txdata();
 
   // Advance time by just over 3s (which is the testbed default time to wait for a
@@ -5447,8 +5446,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   ReqMatcher("INVITE").matches(out);
-  remote_addr_eq = (pj_sockaddr_cmp(&(tpAS2._rem_addr), &(current_txdata()->tp_info.dst_addr)) == 0);
-  EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
+  tpAS2.expect_target(current_txdata(), false);
   pjsip_tx_data* invite_2_tx_data = pop_txdata();
 
   // Send in a 183 Session Progress response from AS2 to indicate it is
@@ -5471,8 +5469,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   // Expect an ACK to be sent to AS2.
   out = current_txdata()->msg;
   ReqMatcher("ACK").matches(out);
-  remote_addr_eq = (pj_sockaddr_cmp(&(tpAS2._rem_addr), &(current_txdata()->tp_info.dst_addr)) == 0);
-  EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
+  tpAS2.expect_target(current_txdata(), false);
   free_txdata();
 
   // Expect the 500 to be passed back to the caller without delay.
@@ -5499,8 +5496,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   ReqMatcher("CANCEL").matches(out);
-  remote_addr_eq = (pj_sockaddr_cmp(&(tpAS1._rem_addr), &(current_txdata()->tp_info.dst_addr)) == 0);
-  EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
+  tpAS1.expect_target(current_txdata(), false);
   free_txdata();
 
   ASSERT_EQ(0, txdata_count());
@@ -5561,8 +5557,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   // Save off the invite, as it will be needed later.
   out = current_txdata()->msg;
   ReqMatcher("INVITE").matches(out);
-  bool remote_addr_eq = (pj_sockaddr_cmp(&(tpAS1._rem_addr), &(current_txdata()->tp_info.dst_addr)) == 0);
-  EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
+  tpAS1.expect_target(current_txdata(), false);
   pjsip_tx_data* invite_1_tx_data = pop_txdata();
 
   // Advance time by just over 3s (which is the testbed default time to wait for a
@@ -5577,8 +5572,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   ReqMatcher("INVITE").matches(out);
-  remote_addr_eq = (pj_sockaddr_cmp(&(tpAS2._rem_addr), &(current_txdata()->tp_info.dst_addr)) == 0);
-  EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
+  tpAS2.expect_target(current_txdata(), false);
   pjsip_tx_data* invite_2_tx_data = pop_txdata();
 
   // Send in a 183 Session Progress response from AS2 to indicate it is
@@ -5601,8 +5595,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   // Expect an ACK to be sent to AS2.
   out = current_txdata()->msg;
   ReqMatcher("ACK").matches(out);
-  remote_addr_eq = (pj_sockaddr_cmp(&(tpAS2._rem_addr), &(current_txdata()->tp_info.dst_addr)) == 0);
-  EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
+  tpAS2.expect_target(current_txdata(), false);
   free_txdata();
 
   // Expect the 500 to be passed back to the caller without delay.
@@ -5626,8 +5619,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   ReqMatcher("ACK").matches(out);
-  remote_addr_eq = (pj_sockaddr_cmp(&(tpAS1._rem_addr), &(current_txdata()->tp_info.dst_addr)) == 0);
-  EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
+  tpAS1.expect_target(current_txdata(), false);
   free_txdata();
 
   ASSERT_EQ(0, txdata_count());
