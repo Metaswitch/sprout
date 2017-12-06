@@ -3992,7 +3992,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 
 
 // Test that after a 100 Trying is received from an AS, the request isn't timed
-// out after 2 secs (which is the default timeout for an AS when Default
+// out after 6 secs (set as the default timeout for an AS when Default
 // Handling is set to Session Terminated) with a 408, and instead a CANCEL is
 // sent after waiting for 3 mins (min timeout for INVITE generating a final
 // response).
@@ -4049,7 +4049,7 @@ TEST_F(SCSCFTest, TimoutExtendedByProofOfLife)
   // AS responds with 100 Trying.
   inject_msg(respond_to_txdata(inv_for_as, 100), &tpAS1);
 
-  // Advance some time (more than 4s, which is the timout for session
+  // Advance some time (more than 6s, which is the testbed timout for session
   // terminated AS which haven't sent any response).
   cwtest_advance_time_ms(4001);
   poll();
@@ -5390,8 +5390,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   // to session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
-    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP");
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=TCP");
   SubscriptionBuilder subscription = SubscriptionBuilder()
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
@@ -5403,8 +5403,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "4.2.3.4", 56788);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::TCP, stack_data.scscf_port, "4.2.3.4", 56788);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
@@ -5435,9 +5435,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
   pjsip_tx_data* invite_1_tx_data = pop_txdata();
 
-  // Advance time by 2.001s (time to wait for a response from AS1 to is 2s).
+  // Advance time by just over 3s (which is the testbed default time to wait for a
+  // response from a session continued AS).
   ASSERT_EQ(0, txdata_count());
-  cwtest_advance_time_ms(2001);
+  cwtest_advance_time_ms(3001);
   poll();
 
   // Expect the INVITE to have now been passed on to AS2.
@@ -5519,8 +5520,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   // to session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
-    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56789;transport=UDP");
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56789;transport=TCP");
   SubscriptionBuilder subscription = SubscriptionBuilder()
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
@@ -5532,8 +5533,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "4.2.3.4", 56789);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::TCP, stack_data.scscf_port, "4.2.3.4", 56789);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
@@ -5564,9 +5565,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
   pjsip_tx_data* invite_1_tx_data = pop_txdata();
 
-  // Advance time by 2.001s (time to wait for a response from AS1 to is 2s).
+  // Advance time by just over 3s (which is the testbed default time to wait for a
+  // response from a session continued AS).
   ASSERT_EQ(0, txdata_count());
-  cwtest_advance_time_ms(2001);
+  cwtest_advance_time_ms(3001);
   poll();
 
   // Expect the INVITE to have now been passed on to AS2.
