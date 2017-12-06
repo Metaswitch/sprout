@@ -604,17 +604,17 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
       }
       else
       {
-        if (remote_aor_pair->get_current()->_notify_cseq != local_notify_cseq)
+        // Attempt to recover in the case that CSeqs are out of sync between the
+        // local and remote stores.
+        if (remote_aor_pair->get_current()->_notify_cseq < local_notify_cseq)
         {
-          // Overwrite the CSeq value on the remote AoR pair, and log an error.
-          if (remote_aor_pair->get_current()->_notify_cseq < local_notify_cseq)
-          {
-            remote_aor_pair->get_current()->_notify_cseq = local_notify_cseq;
-          }
-          else
-          {
-            remote_aor_pair->get_current()->_notify_cseq = local_notify_cseq - 1;
-          }
+          // If the remote CSeq is smaller, overwrite it with the local one.
+          remote_aor_pair->get_current()->_notify_cseq = local_notify_cseq;
+        }
+        else
+        {
+          // If the remote CSeq is larger, do not increment it.
+          remote_aor_pair->get_current()->_notify_cseq -= 1;
         }
 
         update_subscription(subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
