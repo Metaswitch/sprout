@@ -3565,9 +3565,9 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
 }
 
 
-// Test that if an AS is unresponsive (ie. does not respond in 2s), and Default
-// Handling is set to Session Terminated, that the call is rejected (without
-// waiting for all retries to the AS to time out).
+// Test that if an AS is unresponsive (ie. does not respond before it times
+// out), and Default Handling is set to Session Terminated, that the call is
+// rejected (without waiting for all retries to the AS to time out).
 TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
 {
   // Register an endpoint to act as the callee.
@@ -3591,7 +3591,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
   TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
-  // Caller sends INVITE
+  // Caller sends INVITE.
   SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
@@ -3604,14 +3604,14 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   poll();
   ASSERT_EQ(2, txdata_count());
 
-  // 100 Trying goes back to caller
+  // 100 Trying goes back to caller.
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
   msg.convert_routeset(out);
   free_txdata();
 
-  // INVITE passed on to AS
+  // INVITE passed on to AS.
   out = current_txdata()->msg;
   ReqMatcher r1("INVITE");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -3619,10 +3619,10 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
 
   // Advance time without receiving a response. The application server is
   // bypassed.
-  cwtest_advance_time_ms(6000);
+  cwtest_advance_time_ms(6001);
   poll();
 
-  // 408 received at callee.
+  // 408 received at callee, without having to advance time again.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3691,7 +3691,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
 
   // Advance time without receiving a response. The application server is
   // bypassed.
-  cwtest_advance_time_ms(6000);
+  cwtest_advance_time_ms(6001);
   poll();
 
   // 408 received at callee.
@@ -3707,7 +3707,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
   poll();
   ASSERT_EQ(0, txdata_count());
 
-  // Advance some time.
+  // Advance some more time.
   cwtest_advance_time_ms(6000);
   poll();
 
@@ -3781,7 +3781,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
 
   // Advance time without receiving a response. The application server is
   // bypassed.
-  cwtest_advance_time_ms(6000);
+  cwtest_advance_time_ms(6001);
   poll();
 
   // 408 received at callee.
@@ -3797,7 +3797,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
   poll();
   ASSERT_EQ(0, txdata_count());
 
-  // Advance some time.
+  // Advance some more time.
   cwtest_advance_time_ms(6000);
   poll();
 
@@ -3866,7 +3866,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
 
   // Advance time without receiving a response. The application server is
   // bypassed.
-  cwtest_advance_time_ms(6000);
+  cwtest_advance_time_ms(6001);
   poll();
 
   // 408 received at callee.
@@ -3882,7 +3882,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
   poll();
   ASSERT_EQ(0, txdata_count());
 
-  // Advance some time.
+  // Advance some more time.
   cwtest_advance_time_ms(6000);
   poll();
 
@@ -3956,7 +3956,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 
   // Advance time without receiving a response. The application server is
   // bypassed.
-  cwtest_advance_time_ms(6000);
+  cwtest_advance_time_ms(6001);
   poll();
 
   // 408 received at callee.
@@ -3972,7 +3972,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
   poll();
   ASSERT_EQ(0, txdata_count());
 
-  // Advance some time.
+  // Advance some more time.
   cwtest_advance_time_ms(6000);
   poll();
 
@@ -4049,9 +4049,9 @@ TEST_F(SCSCFTest, TimoutExtendedByProofOfLife)
   // AS responds with 100 Trying.
   inject_msg(respond_to_txdata(inv_for_as, 100), &tpAS1);
 
-  // Advance some time (more than 6s, which is the testbed timout for session
-  // terminated AS which haven't sent any response).
-  cwtest_advance_time_ms(4001);
+  // Advance some time (more than 6s, which is the testbed timout for a session
+  // terminated AS which hasn't sent any response).
+  cwtest_advance_time_ms(6001);
   poll();
 
   // Check no timeout has been sent upstream.
@@ -5549,7 +5549,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   poll();
   ASSERT_EQ(2, txdata_count());
 
-  // 100 Trying goes back to caller
+  // 100 Trying goes back to caller.
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
