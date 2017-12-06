@@ -1476,9 +1476,10 @@ TEST_F(RegistrarTest, AppServersPassthrough)
                               "",
                               // Set some more sample Charging Function names to exercise quoting logic
                               "<ChargingAddresses>\n"
-                              "  <CCF priority=\"1\">1.2.3.4</CCF>\n"
-                              "  <CCF priority=\"2\">quote=this</CCF>\n"
-                              "  <ECF priority=\"1\">quote;this;as;well</CCF>\n"
+                              "  <CCF priority=\"1\">4.3.2.1</CCF>\n"
+                              "  <CCF priority=\"2\">\\\"\\</CCF>\n"
+                              "  <ECF priority=\"1\">quote=this</CCF>\n"
+                              "  <ECF priority=\"2\">quote;this;as;well</CCF>\n"
                               "</ChargingAddresses>"
                           );
 
@@ -1500,8 +1501,8 @@ TEST_F(RegistrarTest, AppServersPassthrough)
 
   // Test the headers we expect to have passed through
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
-  // Check quoting.  Note that IP addresses don't need to be quoted inthe PCFA.
-  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ccf=\"quote=this\";ecf=\"quote;this;as;well\"", get_headers(out, "P-Charging-Function-Addresses"));
+  // Check quoting.  Note that IP addresses don't need to be quoted in the PCFA.
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=4.3.2.1;ccf=\"\\\\\\\"\\\\\";ecf=\"quote=this\";ecf=\"quote;this;as;well\"", get_headers(out, "P-Charging-Function-Addresses"));
 
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
