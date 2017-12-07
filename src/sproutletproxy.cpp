@@ -1743,10 +1743,7 @@ void SproutletWrapper::mark_pending_forks_as_abandoned()
     if ((_forks[ii].state.tsx_state != PJSIP_TSX_STATE_NULL) &&
         (_forks[ii].state.tsx_state != PJSIP_TSX_STATE_TERMINATED))
     {
-      if (_forks[ii].req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
-      {
-        _forks[ii].abandoned = true;
-      }
+      _forks[ii].abandoned = true;
     }
   }
 }

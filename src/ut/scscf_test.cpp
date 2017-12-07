@@ -3735,6 +3735,99 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
 
   // Check no other messages are pending.
   ASSERT_EQ(0, txdata_count());
+  pjsip_tx_data_dec_ref(inv_for_as); inv_for_as = NULL;
+}
+
+
+// Test that after a 408 has been sent in response to an unresponsive AS, a 100
+// Trying response from the AS is still handled (while handling a MESSAGE).
+TEST_F(SCSCFTest, DefaultHandlingTerminateMessage100AfterTimeout)
+{
+  // Register an endpoint to act as UE2.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Set up an application server for UE1. It's default handling is set to
+  // session terminated.
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
+
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+
+  TransportFlow tpUE1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // UE1 sends MESSAGE.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "MESSAGE";
+  inject_msg(msg.get_request(), &tpUE1);
+  poll();
+  ASSERT_EQ(1, txdata_count());
+
+  // MESSAGE passed on to AS.
+  // Save off the MESSAGE, as it is needed later on in the test.
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("MESSAGE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  pjsip_tx_data* msg_for_as = pop_txdata();
+
+  // Advance time by just over 3.5 secs, so that a delayed 100 Trying will be
+  // returned to UE1.
+  cwtest_advance_time_ms(3501);
+  poll();
+
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpUE1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+
+  // Advance time further without receiving a response.
+  // The application server is bypassed after 6s, so advance to reach this
+  // (remembering we have already advanced 3.5s).
+  cwtest_advance_time_ms(2500);
+  poll();
+
+  // 408 received at UE1.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(408).matches(out);
+  tpUE1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+
+  // Caller ACKs error response.
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpUE1);
+  poll();
+  ASSERT_EQ(0, txdata_count());
+
+  // Advance some more time.
+  cwtest_advance_time_ms(6000);
+  poll();
+
+  // Now the AS finally responds with a 100 Trying. This doesn't trigger a
+  // CANCEL, as it was a response to a MESSAGE.
+  inject_msg(respond_to_txdata(msg_for_as, 100), &tpAS1);
+  ASSERT_EQ(0, txdata_count());
+
+  // AS sends back a 200 for the MESSAGE.
+  inject_msg(respond_to_txdata(msg_for_as, 200), &tpAS1);
+
+  // Check no other messages are pending.
+  ASSERT_EQ(0, txdata_count());
+  pjsip_tx_data_dec_ref(msg_for_as); msg_for_as = NULL;
 }
 
 
@@ -4020,8 +4113,6 @@ TEST_F(SCSCFTest, TimeoutExtendedByProofOfLife)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
-
-//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5409,7 +5500,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
-//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5443,8 +5534,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   tpAS1.expect_target(current_txdata(), false);
   pjsip_tx_data* invite_1_tx_data = pop_txdata();
 
-  // Advance time by just over 3s (which is the testbed default time to wait for a
-  // response from a session continued AS).
+  // Advance time by just over 3s (which is the testbed default time to wait for
+  // a response from a session continued AS).
   ASSERT_EQ(0, txdata_count());
   cwtest_advance_time_ms(3001);
   poll();
@@ -5537,7 +5628,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
-//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5571,8 +5662,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   tpAS1.expect_target(current_txdata(), false);
   pjsip_tx_data* invite_1_tx_data = pop_txdata();
 
-  // Advance time by just over 3s (which is the testbed default time to wait for a
-  // response from a session continued AS).
+  // Advance time by just over 3s (which is the testbed default time to wait for
+  // a response from a session continued AS).
   ASSERT_EQ(0, txdata_count());
   cwtest_advance_time_ms(3001);
   poll();
@@ -5636,6 +5727,106 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   ASSERT_EQ(0, txdata_count());
   pjsip_tx_data_dec_ref(invite_1_tx_data); invite_1_tx_data = NULL;
   pjsip_tx_data_dec_ref(invite_2_tx_data); invite_2_tx_data = NULL;
+}
+
+
+// Test that if AS1 times out, then AS2 rejects an MESSAGE, and the rejection is
+// sent upstream, if AS1 then replies with an error, the error is handled.
+TEST_F(SCSCFTest, DefaultHandlingContinueMessageErrorTimeoutThenResp)
+{
+  // Register an endpoint to act as UE2.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Set up an application server for UE1. It's default handling is set to
+  // session continue.
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP")
+    .addIfc(2, {"<Method>MESSAGE</Method>"}, "sip:4.2.3.4:56789;transport=TCP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
+
+  TransportFlow tpUE1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::TCP, stack_data.scscf_port, "4.2.3.4", 56789);
+
+  // MESSAGE sent from UE1.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "MESSAGE";
+  inject_msg(msg.get_request(), &tpUE1);
+  poll();
+  ASSERT_EQ(1, txdata_count());
+
+  // The MESSAGE is sent onto AS1 (which will reply very slowly).
+  //
+  // Save off the MESSAGE, as it will be needed later.
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher("MESSAGE").matches(out);
+  tpAS1.expect_target(current_txdata(), false);
+  pjsip_tx_data* message_1_tx_data = pop_txdata();
+
+  // Advance time by just over 3s (which is the testbed default time to wait for
+  // a response from a session continued AS).
+  ASSERT_EQ(0, txdata_count());
+  cwtest_advance_time_ms(3001);
+  poll();
+
+  // Expect the MESSAGE to have now been passed on to AS2.
+  //
+  // Save off the MESSAGE, as it will be needed later.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  ReqMatcher("MESSAGE").matches(out);
+  tpAS2.expect_target(current_txdata(), false);
+  pjsip_tx_data* message_2_tx_data = pop_txdata();
+
+  // Send in a 183 Session Progress response from AS2 to indicate it is
+  // processing the request. This will disable the default handling.
+  inject_msg(respond_to_txdata(message_2_tx_data, 183), &tpAS2);
+  poll();
+
+  // Expect the 183 to be returned to UE1 without delay.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(183).matches(out);
+  tpUE1.expect_target(current_txdata(), true);
+  free_txdata();
+
+  // AS2 now rejects the request with a 500 response. This will be returned to
+  // UE1, as the 183 indicated that AS2 was alive.
+  inject_msg(respond_to_txdata(message_2_tx_data, 500), &tpAS2);
+  ASSERT_EQ(1, txdata_count());
+
+  // Expect the 500 to be passed back to the caller without delay.
+  out = current_txdata()->msg;
+  RespMatcher(500).matches(out);
+  tpUE1.expect_target(current_txdata(), true);
+  free_txdata();
+
+  ASSERT_EQ(0, txdata_count());
+
+  // Now AS1 finally responds with a 403 (an error code chosen at random).
+  inject_msg(respond_to_txdata(message_1_tx_data, 483), &tpAS1);
+
+  // Check the error is not sent upstream, as an error has already been sent.
+  ASSERT_EQ(0, txdata_count());
+  pjsip_tx_data_dec_ref(message_1_tx_data); message_1_tx_data = NULL;
+  pjsip_tx_data_dec_ref(message_2_tx_data); message_2_tx_data = NULL;
 }
 
 

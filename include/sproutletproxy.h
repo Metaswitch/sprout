@@ -327,7 +327,7 @@ public:
   void send_response(pjsip_msg*& rsp);
   void cancel_fork(int fork_id, int st_code = 0, std::string reason = "");
   void cancel_pending_forks(int st_code = 0, std::string reason = "");
-  void mark_pending_forks_as_timed_out();
+  void mark_pending_forks_as_abandoned();
   const ForkState& fork_state(int fork_id);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
@@ -441,7 +441,7 @@ private:
     int cancel_st_code;
     std::string cancel_reason;
     bool pending_response;
-    bool timed_out;
+    bool abandoned;
   } ForkStatus;
   std::vector<ForkStatus> _forks;
 
