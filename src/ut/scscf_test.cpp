@@ -2622,6 +2622,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -2684,7 +2685,8 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
@@ -4398,6 +4400,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4426,7 +4429,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed onto final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
@@ -4456,6 +4460,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4506,7 +4511,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
@@ -4534,6 +4540,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4587,7 +4594,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
@@ -4618,6 +4626,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4677,7 +4686,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
@@ -4802,6 +4812,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4867,7 +4878,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
@@ -5085,6 +5097,7 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5113,7 +5126,8 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
@@ -5141,6 +5155,7 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5169,7 +5184,8 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
@@ -5198,6 +5214,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5226,7 +5243,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE is passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
 
   // The S-CSCF should record-route itself for both originating and terminating
   // billing.
@@ -6844,6 +6862,7 @@ TEST_F(SCSCFTest, MmtelFlow)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -6903,7 +6922,8 @@ TEST_F(SCSCFTest, MmtelFlow)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, so to callee.
+  tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
   EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
