@@ -292,12 +292,12 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
     }
     else
     {
-      // The binding is in both AoRs.
+      // The binding is in both AoRs. 
       if (aor_orig_b_match->second->_uri.compare(aor_current_b.second->_uri) != 0)
       {
         // Change of Contact URI. If the contact URI has been changed, we need to
-        // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2
-        // "Notification about registration state") and create a new one.
+        // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2	
+        // "Notification about registration state") and create a new one.  
         // We do this by adding a DEACTIVATED and then a CREATED ClassifiedBinding.
         ClassifiedBinding* deactivated_record =
            new ClassifiedBinding(aor_orig_b_match->first,
@@ -681,16 +681,16 @@ void SubscriberDataManager::NotifySender::send_notifys(
       }
       else
       {
-        // The binding is in both AoRs.
+        // The binding is in both AoRs. 
         NotifyUtils::ContactEvent event;
 
         if (aor_orig_b_match->second->_uri.compare(binding->_uri) != 0)
         {
           // Change of Contact URI. If the contact URI has been changed, we need to
-          // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2
-          // "Notification about registration state") and create a new one.
+          // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2	
+          // "Notification about registration state") and create a new one.  
           // We do this by adding a DEACTIVATED and then a CREATED ClassifiedBinding.
-          TRC_DEBUG("Binding %s has changed URIs from %s to %s",
+          TRC_DEBUG("Binding %s has changed URIs from %s to %s", 
                                       b_id.c_str(),
                                       aor_orig_b_match->second->_uri.c_str(),
                                       binding->_uri.c_str());
@@ -797,7 +797,6 @@ void SubscriberDataManager::NotifySender::send_notifys(
                 reasons.c_str());
 
       pjsip_tx_data* tdata_notify = NULL;
-
       pj_status_t status = NotifyUtils::create_subscription_notify(
                                             &tdata_notify,
                                             subscription,
