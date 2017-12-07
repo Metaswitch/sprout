@@ -286,7 +286,7 @@ TEST_F(SipParserTest, PChargingFunctionAddresses)
              "Max-Forwards: 63\n"
              "From: <sip:6505551234@homedomain>;tag=1234\n"
              "To: <sip:6505554321@homedomain>\n"
-             "P-Charging-Function-Addresses: ecf=10.0.0.1; ccf=10.0.0.2; ecf=10.0.0.3; ccf=10.0.0.4; other-param=test-value\n"
+             "P-Charging-Function-Addresses: ecf=10.0.0.1; ccf=\"aaa://example.com;transport=TCP\"; ecf=[fd2c:de55:7690:7777::ac12:aa6]; ccf=token%; other-param=\"test;value\"\n"
              "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
              "Call-ID: 1-13919@10.151.20.48\n"
              "CSeq: 1 INVITE\n"
@@ -330,8 +330,8 @@ TEST_F(SipParserTest, PChargingFunctionAddresses)
     written = hdr->vptr->print_on(hdr, buf, i);
     i++;
   }
-  EXPECT_EQ(written, 105);
-  EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.0.0.2;ccf=10.0.0.4;ecf=10.0.0.1;ecf=10.0.0.3;other-param=test-value", buf);
+  EXPECT_EQ(written, 153);
+  EXPECT_STREQ("P-Charging-Function-Addresses: ccf=\"aaa://example.com;transport=TCP\";ccf=token%;ecf=10.0.0.1;ecf=[fd2c:de55:7690:7777::ac12:aa6];other-param=\"test;value\"", buf);
 }
 
 TEST_F(SipParserTest, PChargingFunctionAddressesIPv6)
