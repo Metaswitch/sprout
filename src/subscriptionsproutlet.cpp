@@ -610,8 +610,9 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
         }
         else if (remote_aor_pair->get_current()->_notify_cseq > local_notify_cseq)
         {
-          // If the remote CSeq is larger, do not increment it.
-          remote_aor_pair->get_current()->_notify_cseq -= 1;
+          // If the remote CSeq is larger, do not increment it. It's not easy to
+          // test this with the current UT infrastructure.
+          remote_aor_pair->get_current()->_notify_cseq -= 1; // LCOV_EXCL_LINE
         }
 
         update_subscription(subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
