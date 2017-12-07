@@ -1736,7 +1736,7 @@ void SproutletWrapper::cancel_pending_forks(int st_code, std::string reason)
   }
 }
 
-void SproutletWrapper::mark_pending_forks_as_timed_out()
+void SproutletWrapper::mark_pending_forks_as_abandoned()
 {
   for (size_t ii = 0; ii < _forks.size(); ++ii)
   {
@@ -1745,7 +1745,7 @@ void SproutletWrapper::mark_pending_forks_as_timed_out()
     {
       if (_forks[ii].req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
       {
-        _forks[ii].timed_out = true;
+        _forks[ii].abandoned = true;
       }
     }
   }
@@ -2303,7 +2303,7 @@ int SproutletWrapper::count_pending_actionable_responses()
   for (size_t ii = 0; ii < _forks.size(); ++ii)
   {
     if (_forks[ii].pending_response &&
-        !_forks[ii].timed_out)
+        !_forks[ii].abandoned)
     {
       ++forks_pending_actionable_response;
     }

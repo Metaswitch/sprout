@@ -2159,7 +2159,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
     cancel_pending_forks(PJSIP_SC_REQUEST_TIMEOUT, "AS liveness timer expired");
-    mark_pending_forks_as_timed_out();
+    mark_pending_forks_as_abandoned();
 
     if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {

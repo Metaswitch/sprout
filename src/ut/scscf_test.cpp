@@ -3500,7 +3500,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
-//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("408")));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("408")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3585,11 +3585,10 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
                                    "UNREGISTERED",
                                    subscription.return_sub());
 
-//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
@@ -3622,7 +3621,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   cwtest_advance_time_ms(6001);
   poll();
 
-  // 408 received at callee, without having to advance time again.
+  // 408 received at caller, without having to advance time again.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3656,11 +3655,10 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
                                    "UNREGISTERED",
                                    subscription.return_sub());
 
-//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
@@ -3694,7 +3692,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
   cwtest_advance_time_ms(6001);
   poll();
 
-  // 408 received at callee.
+  // 408 received at caller.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3719,6 +3717,19 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   ReqMatcher("CANCEL").matches(out);
+  tpAS1.expect_target(current_txdata(), true);
+
+  // AS responds to the CANCEL with a 200 OK.
+  inject_msg(respond_to_txdata(current_txdata(), 200), &tpAS1);
+  free_txdata();
+
+  // AS sends back a 487 for the cancelled INVITE.
+  inject_msg(respond_to_txdata(inv_for_as, 487), &tpAS1);
+
+  // Confirm that sprout ACKs the 487.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  ReqMatcher("ACK").matches(out);
   tpAS1.expect_target(current_txdata(), true);
   free_txdata();
 
@@ -3746,11 +3757,10 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
                                    "UNREGISTERED",
                                    subscription.return_sub());
 
-//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
@@ -3784,7 +3794,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
   cwtest_advance_time_ms(6001);
   poll();
 
-  // 408 received at callee.
+  // 408 received at caller.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3831,11 +3841,10 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
                                    "UNREGISTERED",
                                    subscription.return_sub());
 
-//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
@@ -3869,7 +3878,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
   cwtest_advance_time_ms(6001);
   poll();
 
-  // 408 received at callee.
+  // 408 received at caller.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3889,7 +3898,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
   // Now the AS finally responds with a 403 (a 4xx error code chosen at random).
   inject_msg(respond_to_txdata(inv_for_as, 403), &tpAS1);
 
-  // Send an ACK for to the AS for the error.
+  // Confirm sprout responds to the error from the AS with an ACK.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   ReqMatcher("ACK").matches(out);
@@ -3925,7 +3934,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
@@ -3959,7 +3967,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
   cwtest_advance_time_ms(6001);
   poll();
 
-  // 408 received at callee.
+  // 408 received at caller.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
@@ -3979,7 +3987,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
   // Now the AS finally responds with a 501 (a 5xx error code chosen at random).
   inject_msg(respond_to_txdata(inv_for_as, 501), &tpAS1);
 
-  // Send an ACK for to the AS for the error.
+  // Confirm sprout responds to the error from the AS with an ACK.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   ReqMatcher("ACK").matches(out);
@@ -3996,7 +4004,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 // Handling is set to Session Terminated) with a 408, and instead a CANCEL is
 // sent after waiting for 3 mins (min timeout for INVITE generating a final
 // response).
-TEST_F(SCSCFTest, TimoutExtendedByProofOfLife)
+TEST_F(SCSCFTest, TimeoutExtendedByProofOfLife)
 {
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -4017,7 +4025,6 @@ TEST_F(SCSCFTest, TimoutExtendedByProofOfLife)
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE.
   SCSCFMessage msg;
@@ -4476,8 +4483,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
 
   // ---------- AS1 immediately rejects the request with a 500 response.  This
-  // doesn't get returned to the caller, because no 183 has arrived indicating
-  // the AS is live.
+  // doesn't get returned to the caller, because no 183 has arrived (which would
+  // disable the default handling).
   std::string fresp = respond_to_txdata(current_txdata(), 500);
   inject_msg(fresp, &tpAS1);
   free_txdata();
@@ -4567,8 +4574,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
   inject_msg(fresp, &tpAS1);
 
   // ---------- AS1 now rejects the request with a 500 response.  This doesn't
-  // get returned to the caller, because no 183 has arrived indicating the AS is
-  // alive.
+  // get returned to the caller, because no 183 has arrived (which would disable
+  // the default handling).
   fresp = respond_to_txdata(current_txdata(), 500);
   inject_msg(fresp, &tpAS1);
   free_txdata();
@@ -5402,6 +5409,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
+//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
+
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
   TransportFlow tpAS2(TransportFlow::Protocol::TCP, stack_data.scscf_port, "4.2.3.4", 56788);
@@ -5527,6 +5536,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
+//  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
