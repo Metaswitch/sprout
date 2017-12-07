@@ -159,12 +159,12 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
         }
         else
         {
-          ret = HOME_DOMAIN_SIP_URI;
+          ret = (local_to_node) ? NODE_LOCAL_SIP_URI : HOME_DOMAIN_SIP_URI;
         }
       }
       else
       {
-        ret = HOME_DOMAIN_SIP_URI;
+        ret = (local_to_node) ? NODE_LOCAL_SIP_URI : HOME_DOMAIN_SIP_URI;
       }
     }
     // Not a phone number - classify it based on domain

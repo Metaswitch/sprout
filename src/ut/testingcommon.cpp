@@ -296,9 +296,13 @@ std::string Message::get_request()
 
   // The remote target.
   std::string target = std::string(_toscheme).append(":").append(_to);
+  if (!_to.empty())
+  {
+    target.append("@");
+  }
   if (!_todomain.empty())
   {
-    target.append("@").append(_todomain);
+    target.append(_todomain);
   }
 
   // Set the request uri and the route variables.
@@ -327,7 +331,7 @@ std::string Message::get_request()
                    "%1$s %9$s SIP/2.0\r\n"
                    "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
                    "%12$s"
-                   "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                   "From: <sip:%2$s%17$s%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
                    "%10$s\r\n"
                    "Max-Forwards: %8$d\r\n"
                    "Call-ID: %11$s\r\n"
@@ -355,7 +359,8 @@ std::string Message::get_request()
                    /* 13 */ _via.c_str(),
                    /* 14 */ route.c_str(),
                    /* 15 */ _cseq,
-                   /* 16 */ branch.c_str()
+                   /* 16 */ branch.c_str(),
+                   /* 17 */ _from.empty() ? "" : "@"
                      );
 
   EXPECT_LT(n, (int)sizeof(buf));
