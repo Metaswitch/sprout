@@ -3895,7 +3895,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  // INVITE passed onto final destination, so to callee.
+  // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
@@ -4707,7 +4707,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
-  // INVITE is passed to final destination, so to callee.
+  // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
 
   // The S-CSCF should record-route itself for both originating and terminating
@@ -5195,7 +5195,7 @@ void SCSCFTestBase::doAsOriginated(const std::string& msg, bool expect_orig)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  // INVITE passed on to final destination, so to callee.
+  // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
@@ -5929,7 +5929,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  // INVITE passed to final destination, which is the final calle (who the call
+  // INVITE passed to final destination, which is the final callee (who the call
   // was diverted twice to).
   tpDivertedToCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", r1.uri());
@@ -6208,7 +6208,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  // INVITE passed to final destination, which is callee.
+  // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
@@ -6343,7 +6343,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  // INVITE passed to final destination, which is callee.
+  // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
@@ -6847,7 +6847,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  // INVITE passed directly to terminating UE
+  // INVITE passed to terminating UE (callee).
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
@@ -7053,6 +7053,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   SCOPED_TRACE("INVITE (2)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
   // INVITE passed to terminating UE (callee).
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
@@ -7310,11 +7311,12 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   inject_msg(out, &tpAS);
   pjsip_tx_data_dec_ref(message_txdata);
 
-  // MESSAGE passed to terminating UE
+  // MESSAGE passed to terminating UE.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-  // MESSAGE passed to terminating UE, UE2.
+
+  // MESSAGE passed to terminating UE (UE2).
   tpUE2.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));

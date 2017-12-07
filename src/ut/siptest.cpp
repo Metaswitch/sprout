@@ -349,26 +349,11 @@ void SipTest::TransportFlow::expect_target(const pjsip_tx_data* tdata, bool stri
       << " / actual " << tdata->tp_info.transport->obj_name
       << " " << tdata->tp_info.transport->info;
   }
-  else
+
+  if (!strcmp(_transport->type_name, "UDP"))
   {
-    // pj_sockaddr_cmp will compare the port as well as the address.
     bool remote_addr_eq = (pj_sockaddr_cmp(&_rem_addr, &tdata->tp_info.dst_addr) == 0);
-    char expected_addr[PJ_INET6_ADDRSTRLEN];
-    char actual_addr[PJ_INET6_ADDRSTRLEN];
-    pj_inet_ntop(_rem_addr.addr.sa_family,
-                 pj_sockaddr_get_addr((pj_sockaddr_t*)&_rem_addr),
-                 expected_addr,
-                 sizeof(expected_addr));
-    pj_inet_ntop(_rem_addr.addr.sa_family,
-                 pj_sockaddr_get_addr((pj_sockaddr_t*)&tdata->tp_info.dst_addr),
-                 actual_addr,
-                 sizeof(actual_addr));
-    EXPECT_EQ(remote_addr_eq, true)
-      << "Wrong destination address:"
-      << " expected " << expected_addr
-      << ":" << pj_sockaddr_get_port((pj_sockaddr_t*)&_rem_addr)
-      << " / actual " << actual_addr
-      << ":" << *(&tdata->tp_info.dst_port);
+    EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
   }
 }
 
