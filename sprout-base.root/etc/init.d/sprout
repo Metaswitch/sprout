@@ -92,7 +92,7 @@ get_settings()
         # Enable no-ENUM TEL URI translation fallback by default for backwards compatibility
         default_tel_uri_translation="Y"
 
-        # Enable the treatment of originating SIP "user=phone" URIs (that corresponding to global 
+        # Enable the treatment of originating SIP "user=phone" URIs (that corresponding to global
         # phone numbers) as though they were Tel URIs for Identity purposes by default.
         enable_orig_sip_to_tel_coerce="Y"
 
@@ -100,10 +100,6 @@ get_settings()
         # Sprout uses blocking look-up services, so must run multi-threaded.
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 250))
         num_http_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
-
-        # Testing has shown that we can handle at least 250 requests per second per core - this is
-        # probably an underestimate, but is a reasonable start.
-        init_token_rate=$(($(grep processor /proc/cpuinfo | wc -l) * 250))
 
         log_level=2
         authentication=Y
