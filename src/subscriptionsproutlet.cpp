@@ -534,13 +534,15 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
   // incorrect CSeq values.
   // This isn't an ideal solution - this entire area of code is due to be
   // refactored, at which point a more permanent fix should be implemented.
-  int local_notify_cseq = local_aor_pair->get_current()->_notify_cseq;
+  int local_notify_cseq = -1;
 
   // Write to the local store, handling any CAS error
   do
   {
     update_subscription(subscription, new_subscription, aor, local_aor_pair, _cached_aors);
     local_aor_pair->get_current()->_associated_uris = *associated_uris;
+
+    local_notify_cseq = local_aor_pair->get_current()->_notify_cseq;
 
     status = subscription->_sdm->set_aor_data(aor, SubscriberDataManager::EventTrigger::USER, local_aor_pair, trail());
     if (status == Store::DATA_CONTENTION)
@@ -599,14 +601,18 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
       }
       else
       {
-        if (remote_aor_pair->get_current()->_notify_cseq != local_notify_cseq)
+        // Attempt to recover in the case that CSeqs are out of sync between the
+        // local and remote stores.
+        if (remote_aor_pair->get_current()->_notify_cseq < local_notify_cseq)
         {
-          // Overwrite the CSeq value on the remote AoR pair, and log an error.
-          TRC_WARNING("Remote CSeq %d differs from local CSeq %d for AoR %s, overwriting remote CSeq",
-                      remote_aor_pair->get_current()->_notify_cseq,
-                      local_notify_cseq,
-                      aor.c_str());
+          // If the remote CSeq is smaller, overwrite it with the local one.
           remote_aor_pair->get_current()->_notify_cseq = local_notify_cseq;
+        }
+        else if (remote_aor_pair->get_current()->_notify_cseq > local_notify_cseq)
+        {
+          // If the remote CSeq is larger, do not increment it. It's not easy to
+          // test this with the current UT infrastructure.
+          remote_aor_pair->get_current()->_notify_cseq -= 1; // LCOV_EXCL_LINE
         }
 
         update_subscription(subscription, new_subscription, aor, remote_aor_pair, _cached_aors);
