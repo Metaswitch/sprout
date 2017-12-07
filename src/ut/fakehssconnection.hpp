@@ -41,25 +41,15 @@ public:
                        std::string,
                        std::string = "",
                        const std::string& wildcard = "",
-                       const std::string& chargingaddrsxml =
-                                           "<ChargingAddresses>\n"
-                                           "  <CCF priority=\"1\">ccf1</CCF>\n"
-                                           "  <ECF priority=\"1\">ecf1</ECF>\n"
-                                           "  <ECF priority=\"2\">ecf2</ECF>\n"
-                                           "</ChargingAddresses>");
+                       std::string chargingaddrsxml = "");
 void set_impu_result_with_prev(const std::string&,
-  const std::string&,
-  const std::string&,
-  const std::string&,
-  std::string,
-  std::string = "",
-  const std::string& wildcard = "",
-  const std::string& chargingaddrsxml =
-  "<ChargingAddresses>\n"
-  "  <CCF priority=\"1\">ccf1</CCF>\n"
-  "  <ECF priority=\"1\">ecf1</ECF>\n"
-  "  <ECF priority=\"2\">ecf2</ECF>\n"
-  "</ChargingAddresses>");
+                               const std::string&,
+                               const std::string&,
+                               const std::string&,
+                               std::string,
+                               std::string = "",
+                               const std::string& wildcard = "",
+                               std::string chargingaddrsxml = "");
 void delete_result(const std::string& url);
   void set_rc(const std::string& url, long rc);
   void delete_rc(const std::string& url);
@@ -77,7 +67,7 @@ private:
                                 std::string,
                                 std::string,
                                 const std::string& wildcard,
-                                const std::string& chargingaddrsxml);
+                                std::string chargingaddrsxml);
 
   long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);
   long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);

@@ -1008,8 +1008,9 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresHeader)
 /// appropriate headers are passed through
 TEST_F(RegistrarTest, SimpleMainlinePassthrough)
 {
+  _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "", "?private_id=Alice");
   // Set some interesting Charging Function values
-  _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "", "?private_id=Alice", "",
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "", "", "",
     "<ChargingAddresses>\n"
     "  <CCF priority=\"1\">token%</CCF>\n"
     "  <CCF priority=\"2\">aaa://example.host;transport=TCP</CCF>\n"

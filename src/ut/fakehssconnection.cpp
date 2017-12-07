@@ -64,7 +64,7 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                                         std::string subxml,
                                         std::string extra_params,
                                         const std::string& wildcard,
-                                        const std::string& chargingaddrsxml)
+                                        std::string chargingaddrsxml)
 {
   set_impu_result_internal(impu,
                            type,
@@ -83,7 +83,7 @@ void FakeHSSConnection::set_impu_result_with_prev(const std::string& impu,
                                                   std::string subxml,
                                                   std::string extra_params,
                                                   const std::string& wildcard,
-                                                  const std::string& chargingaddrsxml)
+                                                  std::string chargingaddrsxml)
 {
   set_impu_result_internal(impu,
                            type,
@@ -102,7 +102,7 @@ void FakeHSSConnection::set_impu_result_internal(const std::string& impu,
                                                  std::string subxml,
                                                  std::string extra_params,
                                                  const std::string& wildcard,
-                                                 const std::string& chargingaddrsxml)
+                                                 std::string chargingaddrsxml)
 {
   std::string url = "/impu/" + Utils::url_escape(impu) + "/reg-data" + extra_params;
 
@@ -113,6 +113,15 @@ void FakeHSSConnection::set_impu_result_internal(const std::string& impu,
               "  <InitialFilterCriteria>\n"
               "  </InitialFilterCriteria>\n"
               "</ServiceProfile></IMSSubscription>");
+  }
+
+  if (chargingaddrsxml.empty())
+  {
+    chargingaddrsxml = ("<ChargingAddresses>\n"
+                        "  <CCF priority=\"1\">ccf1</CCF>\n"
+                        "  <ECF priority=\"1\">ecf1</ECF>\n"
+                        "  <ECF priority=\"2\">ecf2</ECF>\n"
+                        "</ChargingAddresses>");
   }
 
   std::string prev_state_string = "";
