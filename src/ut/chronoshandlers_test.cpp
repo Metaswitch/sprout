@@ -21,8 +21,10 @@
 #include "handlers_test.h"
 #include "chronoshandlers.h"
 #include "hssconnection.h"
+#include "testingcommon.h"
 
 using namespace std;
+using namespace TestingCommon;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::SetArgReferee;
@@ -240,8 +242,6 @@ TEST_F(ChronosAoRTimeoutTasksTest, LocalAoRNoBindingsTest)
 // Test with a remote store, and both AoRs with no bindings
 TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
 {
-  CapturingTestLogger log(5);
-
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
 
   build_timeout_request(body, htp_method_POST);
@@ -321,7 +321,6 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_TIMEOUT);
   ASSERT_EQ(irs_query._server_name, "sip:scscf.sprout.homedomain:5058;transport=TCP");
 
-  EXPECT_TRUE(log.contains("Creating third party deregistration"));
 }
 
 // Test with NULL AoRs
@@ -398,6 +397,64 @@ class ChronosAoRTimeoutTasksMockStoreTest : public SipTest
   }
 
 };
+
+
+TEST_F(ChronosAoRTimeoutTasksMockStoreTest, DeregisterAS)
+{
+  // Test that deregister is sent to AS when all bindings expired
+  AoR* aor = new AoR("sip:6505550231@homedomain");
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
+
+  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri("sip:6505550231@homedomain", false);
+
+  // Set all bindings expired to true, this should trigger a deregister with AS
+  EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(true),
+                    Return(Store::OK)));
+
+  fake_hss->set_impu_result("sip:6505550231@homedomain",
+                             "dereg-timeout",
+                             RegDataXMLUtils::STATE_REGISTERED,
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>1</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // Parse and handle the request
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
+  int status = handler->parse_response(body);
+
+  ASSERT_EQ(status, 200);
+
+  handler->handle_response();
+
+  // Expect a 3rd-party deregister to be sent to the AS in the iFCs
+  ASSERT_EQ(1, txdata_count());
+  // REGISTER passed on to AS
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+}
 
 TEST_F(ChronosAoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
 {

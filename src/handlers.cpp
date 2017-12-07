@@ -456,12 +456,13 @@ AoRPair* DeregistrationTask::deregister_bindings(
 {
   AoRPair* aor_pair = NULL;
   bool all_bindings_expired = false;
+  bool got_ifcs;
   Store::Status set_rc;
   std::vector<std::string> impis_to_dereg;
 
   // Get registration data
   HSSConnection::irs_info irs_info;
-  bool got_ifcs = get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
+  got_ifcs = get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
 
   do
   {
