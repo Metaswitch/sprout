@@ -3800,18 +3800,12 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateMessage100AfterTimeout)
   cwtest_advance_time_ms(2500);
   poll();
 
-  // 408 received at UE1.
+  // Check that a 408 is sent to UE1, as the request to the AS has timed out.
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
   tpUE1.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
-
-  // Caller ACKs error response.
-  msg._method = "ACK";
-  inject_msg(msg.get_request(), &tpUE1);
-  poll();
-  ASSERT_EQ(0, txdata_count());
 
   // Advance some more time.
   cwtest_advance_time_ms(6000);
@@ -5812,7 +5806,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueMessageErrorTimeoutThenResp)
   inject_msg(respond_to_txdata(message_2_tx_data, 500), &tpAS2);
   ASSERT_EQ(1, txdata_count());
 
-  // Expect the 500 to be passed back to the caller without delay.
+  // Expect the 500 to be passed back to UE1 without delay.
   out = current_txdata()->msg;
   RespMatcher(500).matches(out);
   tpUE1.expect_target(current_txdata(), true);
