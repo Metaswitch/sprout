@@ -1016,6 +1016,7 @@ TEST_F(RegistrarTest, SimpleMainlinePassthrough)
     "  <CCF priority=\"2\">aaa://example.host;transport=TCP</CCF>\n"
     "  <ECF priority=\"1\">\"aaa://example.host;transport=UDP\"</ECF>\n"
     "  <ECF priority=\"2\">[fd2c:de55:7690:7777::ac12:aa6]</ECF>\n"
+    "  <ECF priority=\"3\">&quot;aaa://another.example.host;transport=TCP&quot;</ECF>\n"
     "</ChargingAddresses>"
   );
   Message msg;
@@ -1029,7 +1030,7 @@ TEST_F(RegistrarTest, SimpleMainlinePassthrough)
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
   // Check the contents of the PCFA header.  Only the 2nd value above should be quoted, as the 1st and 4th values match
   // the required spec for a "token" or IPv6 address, and the 3rd value was already quoted.
-  EXPECT_EQ("P-Charging-Function-Addresses: ccf=token%;ccf=\"aaa://example.host;transport=TCP\";ecf=\"aaa://example.host;transport=UDP\";ecf=[fd2c:de55:7690:7777::ac12:aa6]", get_headers(out, "P-Charging-Function-Addresses"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=token%;ccf=\"aaa://example.host;transport=TCP\";ecf=\"aaa://example.host;transport=UDP\";ecf=[fd2c:de55:7690:7777::ac12:aa6];ecf=\"aaa://another.example.host;transport=TCP\"", get_headers(out, "P-Charging-Function-Addresses"));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
