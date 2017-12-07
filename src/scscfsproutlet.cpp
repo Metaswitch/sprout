@@ -2123,20 +2123,20 @@ bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
       }
       else
       {
-        TRC_WARNING("Unknown charging role %.*s, assume originating",
-                    param->value.slen, param->value.ptr);
+        TRC_INFO("Unknown charging role %.*s, assume originating",
+                 param->value.slen, param->value.ptr);
         role = ACR::NODE_ROLE_ORIGINATING;
       }
     }
     else
     {
-      TRC_WARNING("No charging role in Route header, assume originating");
+      TRC_INFO("No charging role in Route header, assume originating");
       role = ACR::NODE_ROLE_ORIGINATING;
     }
   }
   else
   {
-    TRC_WARNING("Cannot determine charging role as no Route header, assume originating");
+    TRC_INFO("Cannot determine charging role as no Route header, assume originating");
     role = ACR::NODE_ROLE_ORIGINATING;
   }
 

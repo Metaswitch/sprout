@@ -561,8 +561,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SIPEventPriorityLevel priority = get_rx_msg_priority(rdata, trail);
 
   // Check whether the request should be rejected due to overload
-  if (!(ignore_load_monitor(rdata, priority, trail)) &&
-      !(load_monitor->admit_request(trail)))
+  bool admit_anyway = ignore_load_monitor(rdata, priority, trail);
+  if (!(load_monitor->admit_request(trail, admit_anyway)))
   {
     reject_rx_msg_overload(rdata, trail);
     return PJ_TRUE;
