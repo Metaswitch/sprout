@@ -611,7 +611,7 @@ Store::Status SubscriptionSproutletTsx::update_subscription_in_stores(
           // If the remote CSeq is smaller, overwrite it with the local one.
           remote_aor_pair->get_current()->_notify_cseq = local_notify_cseq;
         }
-        else
+        else if (remote_aor_pair->get_current()->_notify_cseq > local_notify_cseq)
         {
           // If the remote CSeq is larger, do not increment it.
           remote_aor_pair->get_current()->_notify_cseq -= 1;
