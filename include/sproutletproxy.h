@@ -327,6 +327,7 @@ public:
   void send_response(pjsip_msg*& rsp);
   void cancel_fork(int fork_id, int st_code = 0, std::string reason = "");
   void cancel_pending_forks(int st_code = 0, std::string reason = "");
+  void mark_pending_forks_as_abandoned();
   const ForkState& fork_state(int fork_id);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
@@ -361,6 +362,8 @@ private:
 
   void process_actions(bool complete_after_actions);
   void aggregate_response(pjsip_tx_data* rsp);
+  int count_pending_responses();
+  int count_pending_actionable_responses();
   void tx_request(SproutletProxy::SendRequest req, int fork_id);
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);
@@ -415,7 +418,6 @@ private:
   Responses _send_responses;
 
   int _pending_sends;
-  int _pending_responses;
   pjsip_tx_data* _best_rsp;
 
   bool _complete;
@@ -438,6 +440,8 @@ private:
     bool pending_cancel;
     int cancel_st_code;
     std::string cancel_reason;
+    bool pending_response;
+    bool abandoned;
   } ForkStatus;
   std::vector<ForkStatus> _forks;
 

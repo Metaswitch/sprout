@@ -301,6 +301,9 @@ public:
   ///
   virtual void cancel_pending_forks(int st_code = 0, std::string reason = "") = 0;
 
+  /// Marks all pending forked requests as timed out.
+  virtual void mark_pending_forks_as_abandoned() = 0;
+
   /// Returns the current status of a downstream fork, including the
   /// transaction state and whether a timeout or transport error has been
   /// detected on the fork.
@@ -641,6 +644,10 @@ protected:
   ///
   void cancel_pending_forks(int st_code = 0, std::string reason = "")
     {_helper->cancel_pending_forks(st_code, reason);}
+
+  /// Marks all pending forks as timed out.
+  void mark_pending_forks_as_abandoned()
+    {_helper->mark_pending_forks_as_abandoned();}
 
   /// Returns the current status of a downstream fork, including the
   /// transaction state and whether a timeout or transport error has been

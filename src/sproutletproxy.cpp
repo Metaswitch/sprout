@@ -1314,7 +1314,6 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _send_requests(),
   _send_responses(),
   _pending_sends(0),
-  _pending_responses(0),
   _best_rsp(NULL),
   _complete(false),
   _process_actions_entered(0),
@@ -1737,6 +1736,18 @@ void SproutletWrapper::cancel_pending_forks(int st_code, std::string reason)
   }
 }
 
+void SproutletWrapper::mark_pending_forks_as_abandoned()
+{
+  for (size_t ii = 0; ii < _forks.size(); ++ii)
+  {
+    if ((_forks[ii].state.tsx_state != PJSIP_TSX_STATE_NULL) &&
+        (_forks[ii].state.tsx_state != PJSIP_TSX_STATE_TERMINATED))
+    {
+      _forks[ii].abandoned = true;
+    }
+  }
+}
+
 const ForkState& SproutletWrapper::fork_state(int fork_id)
 {
   if (fork_id < (int)_forks.size())
@@ -1970,7 +1981,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp,
     TRC_VERBOSE("%s received final response %s on fork %d, state = %s",
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
-    --_pending_responses;
+    _forks[fork_id].pending_response = false;
 
     if ((_sproutlet != NULL) &&
       (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
@@ -2051,7 +2062,7 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
     pjsip_tx_data_dec_ref(_forks[fork_id].req);
     _forks[fork_id].req = NULL;
-    --_pending_responses;
+    _forks[fork_id].pending_response = false;
 
     if (status == PJ_SUCCESS)
     {
@@ -2118,7 +2129,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
 
   if ((!_complete) &&
       (_best_rsp != NULL) &&
-      (_pending_sends + _pending_responses == 0))
+      (_pending_sends + count_pending_actionable_responses() == 0))
   {
     // There are no pending responses and no new forked requests waiting to
     // be sent, and the Sproutlet has sent at least one final response, so
@@ -2168,7 +2179,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   _process_actions_entered--;
 
   if ((_complete) &&
-      (_pending_responses == 0) &&
+      (count_pending_responses() == 0) &&
       (_pending_timers.empty()) &&
       (_process_actions_entered == 0))
   {
@@ -2186,8 +2197,8 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
 
   if (_complete)
   {
-    // We've already sent a final response upstream (a 200 OK) so discard
-    // this response.
+    // We've already sent a final response upstream (a 200 OK or 408 timeout) so
+    // discard this response.
     TRC_DEBUG("Discard stale response %s (%s)",
               pjsip_tx_data_get_info(rsp), rsp->obj_name);
     deregister_tdata(rsp);
@@ -2266,6 +2277,37 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
   }
 }
 
+// Counts the number of forks that are pending a response.
+int SproutletWrapper::count_pending_responses()
+{
+  int forks_pending_response = 0;
+  for (size_t ii = 0; ii < _forks.size(); ++ii)
+  {
+    if (_forks[ii].pending_response)
+    {
+      ++forks_pending_response;
+    }
+  }
+  return forks_pending_response;
+}
+
+// Counts the number of forks that are pending a response, and have not been
+// marked as timed out (which means any response they send will not be
+// acted on).
+int SproutletWrapper::count_pending_actionable_responses()
+{
+  int forks_pending_actionable_response = 0;
+  for (size_t ii = 0; ii < _forks.size(); ++ii)
+  {
+    if (_forks[ii].pending_response &&
+        !_forks[ii].abandoned)
+    {
+      ++forks_pending_actionable_response;
+    }
+  }
+  return forks_pending_actionable_response;
+}
+
 void SproutletWrapper::tx_request(SproutletProxy::SendRequest req,
                                   int fork_id)
 {
@@ -2280,7 +2322,7 @@ void SproutletWrapper::tx_request(SproutletProxy::SendRequest req,
     // state for determining when we can legally send CANCEL requests so using
     // CALLING in all cases is fine).
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_CALLING;
-    ++_pending_responses;
+    _forks[fork_id].pending_response = true;
 
     // Store a reference to the request.
     TRC_DEBUG("%s store reference to non-ACK request %s on fork %d",
