@@ -179,6 +179,17 @@ static int pjsip_thread_func(void *p)
                 "Overload may not be handled gracefully");
   }
 
+  // Pin all real time threads to the same core.
+  cpu_set_t cpu;
+  CPU_ZERO(&cpu);
+  CPU_SET(0, &cpu);
+
+  if (pthread_setaffinity_np(this_thread, sizeof(cpu_set_t), &cpu) != 0)
+  {
+    TRC_ERROR("Unable to set affinity on the transport thread. "
+              "Overload may not be handled gracefully");
+  }
+
   pj_bool_t curr_quiescing = PJ_FALSE;
 
   // Log whenever we do any I/O on this thread. There is only one transport
