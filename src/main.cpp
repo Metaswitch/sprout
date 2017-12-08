@@ -1733,7 +1733,7 @@ int main(int argc, char* argv[])
   opt.call_list_ttl = 604800;
   opt.target_latency_us = 10000;
   opt.cass_target_latency_us = 1000000;
-  opt.max_tokens = 20;
+  opt.max_tokens = 1000;
   opt.init_token_rate = 2000.0;
   opt.min_token_rate = 10.0;
   opt.max_token_rate = 2000.0;
