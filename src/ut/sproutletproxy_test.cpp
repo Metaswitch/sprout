@@ -59,6 +59,36 @@ public:
   const std::string _next_hop;
 };
 
+template <class T>
+class UninterestedSproutlet : public Sproutlet
+{
+public:
+  UninterestedSproutlet(const std::string& service_name,
+                        int port,
+                        const std::string& uri,
+                        const std::string& service_host,
+                        std::string alias = "",
+                        SNMP::FakeSuccessFailCountByRequestTypeTable* fake_inc_tbl = NULL,
+                        SNMP::FakeSuccessFailCountByRequestTypeTable* fake_out_tbl = NULL,
+                        const std::string& network_function="",
+                        const std::string& next_hop="next-hop") :
+    Sproutlet(service_name, port, uri, service_host, { alias }, fake_inc_tbl, fake_out_tbl, network_function),
+    _next_hop(next_hop)
+  {
+  }
+
+  SproutletTsx* get_tsx(SproutletHelper* helper, const std::string& alias, pjsip_msg* req, pjsip_sip_uri*& next_hop, pj_pool_t* pool, SAS::TrailId trail)
+  {
+    pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
+    next_hop = helper->next_hop_uri(_next_hop,
+                                    base_uri,
+                                    pool);
+    return NULL;
+  }
+
+  const std::string _next_hop;
+};
+
 template <int S>
 class FakeSproutletTsxReject : public SproutletTsx
 {
@@ -796,6 +826,7 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletForkErrors>("forkerr", 0, "sip:forkerr.homedomain;transport=tcp", "", "", NULL, NULL, "fork-nf", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("teltest1", 44555, "sip:teltest1.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", "teltest2"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletURIForwarder>("teltest2", 0, "sip:teltest2.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", ""));
+    _sproutlets.push_back(new UninterestedSproutlet<FakeSproutletTsxNextHop>("teltest3", 44666, "sip:teltest3.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", "teltest2"));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -2385,6 +2416,65 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunctionTelURI)
   // hand.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
                                         44555,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with no Route header, and a Tel URI.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "tel:8088341234";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._forwards = "100";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITEs.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the INVITE and send a 100 Trying.
+  pjsip_tx_data* req = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, req);
+  ReqMatcher("INVITE").matches(req->msg);
+  inject_msg(respond_to_txdata(req, 100));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(req, 200));
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, CompositeNetworkFunctionTelURI2)
+{
+  // Tests passing a request through a Network Function composed of multiple
+  // sproutlets, when the request is routed by port (as there are no Route
+  // headers, the Request URI is not a routable SIP URI - e.g. it is a Tel
+  // URI), and the first sproutlet is not interested in handling the request.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP transport that will deliver inbound messages on the port
+  // 44666.  This port is owned by the teltest3 sproutlet, which forwards on to
+  // the teltest2 sproutlet, even though it doesn't have a routable SIP URI to
+  // hand.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        44666,
                                         "1.2.3.4",
                                         49152);
 
