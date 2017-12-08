@@ -14,6 +14,7 @@
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
 #include "compositesproutlet.h"
+#include "custom_headers.h"
 #include "pjutils.h"
 #include "pjsip.h"
 #include "pjsip_simple.h"
@@ -641,6 +642,13 @@ public:
     pjsip_route_hdr* route = pjsip_route_hdr_create(pool);
     route->name_addr.uri = PJUtils::uri_from_string(forwarding_uri, pool, PJ_FALSE);
     pjsip_msg_insert_first_hdr(req, (pjsip_hdr*)route);
+
+    // Add a foo header so we can check that this sproutlet actually received
+    // the message.
+    pj_str_t foo = pj_str((char*)"Foo");
+    pjsip_route_hdr* foo_hdr = identity_hdr_create(pool, foo);
+    foo_hdr->name_addr.uri = PJUtils::uri_from_string("sip:bar@baz", pool, PJ_FALSE);
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)foo_hdr);
 
     send_request(req);
   }
@@ -2439,10 +2447,12 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunctionTelURI)
   EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
-  // Check the INVITE and send a 100 Trying.
+  // Check the INVITE contains the Foo header added by teltest2 and send a
+  // 100 Trying.
   pjsip_tx_data* req = pop_txdata();
   expect_target("TCP", "10.10.20.1", 5060, req);
   ReqMatcher("INVITE").matches(req->msg);
+  EXPECT_EQ("Foo: <sip:bar@baz>", get_headers(req->msg, "Foo"));
   inject_msg(respond_to_txdata(req, 100));
 
   // Send a 200 OK response.
@@ -2498,10 +2508,12 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunctionTelURI2)
   EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
-  // Check the INVITE and send a 100 Trying.
+  // Check the INVITE contains the Foo header added by teltest2 and send a
+  // 100 Trying.
   pjsip_tx_data* req = pop_txdata();
   expect_target("TCP", "10.10.20.1", 5060, req);
   ReqMatcher("INVITE").matches(req->msg);
+  EXPECT_EQ("Foo: <sip:bar@baz>", get_headers(req->msg, "Foo"));
   inject_msg(respond_to_txdata(req, 100));
 
   // Send a 200 OK response.
