@@ -108,8 +108,8 @@ TEST_F(ContactFilteringMatchTokensTest, MatchingTokensCaseInsensitive) { EXPECT_
 TEST_F(ContactFilteringMatchTokensTest, MatchingTokensWithWhitespace)
 {
   EXPECT_EQ(YES, match_tokens("hello, goodbye , yes,no ,maybe", "goodbye,norma,jean"));
-  EXPECT_EQ(YES, match_tokens("hello, goodbye , yes,no ,maybe", "you,say,yes"));
-  EXPECT_EQ(YES, match_tokens("hello, goodbye , yes,no ,maybe", "I,say,no"));
+  EXPECT_EQ(YES, match_tokens("hello, goodbye , yes,no ,maybe", "you,say,yes "));
+  EXPECT_EQ(YES, match_tokens("hello, goodbye , yes,no ,maybe", "I, say, no"));
 }
 
 typedef ContactFilteringTest ContactFilteringMatchFeatureTest;
