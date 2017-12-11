@@ -104,7 +104,13 @@ TEST_F(ContactFilteringMatchNumericTest, InvalidNumericBackwardsRange) { EXPECT_
 typedef ContactFilteringTest ContactFilteringMatchTokensTest;
 TEST_F(ContactFilteringMatchTokensTest, MatchingTokens) { EXPECT_EQ(YES, match_tokens("hello,world", "goodbye,cruel,world")); }
 TEST_F(ContactFilteringMatchTokensTest, NonMatchingTokens) { EXPECT_EQ(NO, match_tokens("hello,dave", "i,cant,let,you,do,that")); }
-TEST_F(ContactFilteringMatchTokensTest, MatchingTokensCaseInsensitive) { EXPECT_EQ(YES, match_tokens("hello,dave", "Hello,is,it,me,your,looking,for")); }
+TEST_F(ContactFilteringMatchTokensTest, MatchingTokensCaseInsensitive) { EXPECT_EQ(YES, match_tokens("hello,dave", "Hello,is,it,me,youre,looking,for")); }
+TEST_F(ContactFilteringMatchTokensTest, MatchingTokensWithWhitespace)
+{
+  EXPECT_EQ(YES, match_tokens("hello, goodbye , yes,no ,maybe", "goodbye,norma,jean"));
+  EXPECT_EQ(YES, match_tokens("hello, goodbye , yes,no ,maybe", "you,say,yes "));
+  EXPECT_EQ(YES, match_tokens("hello, goodbye , yes,no ,maybe", "I, say, no"));
+}
 
 typedef ContactFilteringTest ContactFilteringMatchFeatureTest;
 TEST_F(ContactFilteringMatchFeatureTest, MatchBoolean)

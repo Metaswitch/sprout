@@ -614,10 +614,10 @@ MatchResult match_numeric(const std::string& matcher,
 }
 
 // Only needed for passing in to "transform" below.
-std::string string_to_lowercase(std::string& str)
+std::string string_to_lowercase_and_trim(std::string& str)
 {
   ::boost::algorithm::to_lower(str);
-  return str;
+  return Utils::trim(str);
 }
 
 MatchResult match_tokens(const std::string& matcher,
@@ -629,11 +629,11 @@ MatchResult match_tokens(const std::string& matcher,
   std::vector<std::string> matchee_tokens;
   Utils::split_string(matchee, ',', matchee_tokens, 0, true);
 
-  // Lower-case everything so we can safely compare.
+  // Lower-case everything and strip whitespace so we can safely compare.
   std::transform(matcher_tokens.begin(), matcher_tokens.end(),
-                 matcher_tokens.begin(), string_to_lowercase);
+                 matcher_tokens.begin(), string_to_lowercase_and_trim);
   std::transform(matchee_tokens.begin(), matchee_tokens.end(),
-                 matchee_tokens.begin(), string_to_lowercase);
+                 matchee_tokens.begin(), string_to_lowercase_and_trim);
 
   // Loop over both sets of tokens, to see whether a feature
   // collection (i.e. a single token) could satisfy both predicates.
