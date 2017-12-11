@@ -296,12 +296,12 @@ std::string Message::get_request()
 
   // The remote target.
   std::string target = std::string(_toscheme).append(":").append(_to);
-  if (!_to.empty())
-  {
-    target.append("@");
-  }
   if (!_todomain.empty())
   {
+    if (!_to.empty())
+    {
+      target.append("@");
+    }
     target.append(_todomain);
   }
 

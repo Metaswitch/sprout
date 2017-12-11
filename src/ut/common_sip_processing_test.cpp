@@ -195,6 +195,7 @@ TEST_F(CommonProcessingTest, OptionsPollPingICSCF)
   pjsip_tx_data* tdata;
 
   //Create a TCP connection to the I-CSCF listening port.  
+  delete(_tp);
   _tp = new TransportFlow(TransportFlow::Protocol::TCP,
                                         ICSCF_PORT,
                                         "127.0.0.1",
@@ -275,6 +276,8 @@ TEST_F(CommonProcessingTest, OptionsPollPingICSCF)
   r3.matches(tdata->msg);
 
   free_txdata();
+
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
 }
 
 TEST_F(CommonProcessingTest, RequestAllowed)
