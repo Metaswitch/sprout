@@ -100,7 +100,7 @@ endef
 
 # Define the possible make targets for the plugins and generate the makefile
 # rules.
-PLUGIN_TARGETS := build test clean deb deb-only
+PLUGIN_TARGETS := build test clean deb-only
 $(foreach target,$(PLUGIN_TARGETS),$(eval $(call plugin_target_template,$(target))))
 
 #
@@ -111,7 +111,7 @@ include build-infra/cw-deb.mk
 deb-only: plugins-deb-only
 
 .PHONY: deb
-deb: build plugins-deb deb-only
+deb: build deb-only
 
 .PHONY: all build test clean distclean
 
