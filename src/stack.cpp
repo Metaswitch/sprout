@@ -114,11 +114,6 @@ const static std::string _known_statnames[] = {
   "cdiv_not_registered",
   "cdiv_no_answer",
   "cdiv_not_reachable",
-  "memento_completed_calls",
-  "memento_failed_calls",
-  "memento_not_recorded_overload",
-  "memento_cassandra_read_latency",
-  "memento_cassandra_write_latency",
 };
 
 const std::string* known_statnames = _known_statnames;

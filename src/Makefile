@@ -185,8 +185,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
-                       cassandra_connection_pool.cpp \
-                       cassandra_store.cpp \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
                        authenticationsproutlet.cpp \
@@ -257,8 +255,6 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
 # SPROUT_COMMON_LDFLAGS.
 sprout_LDFLAGS := -Wl,--whole-archive -lpjsip-x86_64-unknown-linux-gnu -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject` ${SPROUT_COMMON_LDFLAGS}
 sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \
-                       -lthrift \
-                       -lcassandra \
                        -lboost_date_time \
                        `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
 

@@ -95,7 +95,6 @@ struct options
   std::string                          billing_cdf;
   bool                                 emerg_reg_accepted;
   int                                  max_call_list_length;
-  int                                  memento_threads;
   int                                  call_list_ttl;
   int                                  worker_threads;
   bool                                 log_to_file;
@@ -124,7 +123,6 @@ struct options
   std::string                          pbx_service_route;
   uint32_t                             non_register_auth_mode;
   bool                                 force_third_party_register_body;
-  std::string                          memento_notify_url;
   std::string                          pidfile;
   std::map<std::string, std::multimap<std::string, std::string>>
                                        plugin_options;

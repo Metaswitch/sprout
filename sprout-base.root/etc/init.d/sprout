@@ -252,29 +252,14 @@ get_daemon_args()
           DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires=$sub_max_expires"
         fi
 
-        if [ -n "$memento_threads" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --memento-threads=$memento_threads"
-        fi
-
         if [ -n "$max_call_list_length" ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --max-call-list-length=$max_call_list_length"
         fi
 
-        if [ -n "$memento_notify_url" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --memento-notify-url=$memento_notify_url"
-        fi
-
-        if [ -n "$call_list_ttl" ]
+                if [ -n "$call_list_ttl" ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl=$call_list_ttl"
-        fi
-
-        if [ -n "$memento" ] && [ -n "$cassandra_hostname" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --plugin-option=memento,cassandra,$cassandra_hostname"
         fi
 
         # TODO improve this so we don't have to have the same parameters
@@ -288,9 +273,6 @@ get_daemon_args()
         [ "$bgcf" = "" ]                          || DAEMON_ARGS="$DAEMON_ARGS --bgcf=$bgcf"
         [ "$bgcf_prefix" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --prefix-bgcf=$bgcf_prefix"
         [ "$bgcf_uri" = "" ]                      || DAEMON_ARGS="$DAEMON_ARGS --uri-bgcf=$bgcf_uri"
-        [ "$memento" = "" ]                       || DAEMON_ARGS="$DAEMON_ARGS --memento=$memento"
-        [ "$memento_prefix" = "" ]                || DAEMON_ARGS="$DAEMON_ARGS --prefix-memento=$memento_prefix"
-        [ "$memento_uri" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --uri-memento=$memento_uri"
         [ "$gemini" = "" ]                        || DAEMON_ARGS="$DAEMON_ARGS --gemini=$gemini"
         [ "$gemini_prefix" = "" ]                 || DAEMON_ARGS="$DAEMON_ARGS --prefix-gemini=$gemini_prefix"
         [ "$gemini_uri" = "" ]                    || DAEMON_ARGS="$DAEMON_ARGS --uri-gemini=$gemini_uri"
