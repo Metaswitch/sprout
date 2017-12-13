@@ -31,7 +31,7 @@ DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-stats clearwater-sip-pe
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
-SUBMODULES := pjsip c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client thrift
+SUBMODULES := pjsip c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client
 
 include build-infra/cw-module-install.mk
 
