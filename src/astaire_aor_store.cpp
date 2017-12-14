@@ -79,7 +79,12 @@ AoR* AstaireAoRStore::Connector::get_aor_data(
 
   std::string data;
   uint64_t cas;
-  Store::Status status = _data_store->get_data("reg", aor_id, data, cas, trail);
+  Store::Status status = _data_store->get_data("reg", 
+                                               aor_id,
+                                               data,
+                                               cas,
+                                               trail,
+                                               Store::Format::JSON);
 
   if (status == Store::Status::OK)
   {
