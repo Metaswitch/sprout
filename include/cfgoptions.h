@@ -134,6 +134,7 @@ struct options
   bool                                 nonce_count_supported;
   std::string                          scscf_node_uri;
   bool                                 sas_signaling_if;
+  bool                                 sas_compress_logs;
   bool                                 disable_tcp_switch;
   std::string                          chronos_hostname;
   std::string                          sprout_chronos_callback_uri;

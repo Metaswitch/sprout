@@ -608,6 +608,7 @@ pj_status_t init_stack(const std::string& system_name,
                        int pcscf_untrusted_port,
                        int scscf_port,
                        bool sas_signaling_if,
+                       bool sas_compress_logs,
                        std::set<int> sproutlet_ports,
                        const std::string& local_host,
                        const std::string& public_host,
@@ -752,6 +753,8 @@ pj_status_t init_stack(const std::string& system_name,
             sas_write,
             sas_signaling_if ? create_connection_in_signaling_namespace
                              : create_connection_in_management_namespace);
+
+  stack_data.sas_compress_logs = sas_compress_logs;
 
   // Initialise PJSIP and all the associated resources.
   status = init_pjsip();

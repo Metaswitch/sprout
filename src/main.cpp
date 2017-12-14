@@ -133,6 +133,7 @@ enum OptionTypes
   OPT_IMPI_STORES,
   OPT_SCSCF_NODE_URI,
   OPT_SAS_USE_SIGNALING_IF,
+  OPT_SAS_COMPRESS_LOGS,
   OPT_DISABLE_TCP_SWITCH,
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
@@ -227,6 +228,7 @@ const static struct pj_getopt_option long_opt[] =
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
+  { "disable-sas-compress-logs",    no_argument,       0, OPT_SAS_COMPRESS_LOGS},
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
@@ -441,6 +443,8 @@ static void usage(void)
        "     --sas-use-signaling-interface\n"
        "                            Whether SAS traffic is to be dispatched over the signaling network\n"
        "                            interface rather than the default management interface\n"
+       "     --disable-sas-compress-logs\n"
+       "                            Whether sprout disables compression of any SAS logs.\n"
        "     --disable-tcp-switch\n"
        "                            Whether to disable TCP-to-UDP uplift when messages are greater than.\n"
        "                            1300 bytes.\n"
@@ -1213,6 +1217,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("SAS connections created in the signaling namespace");
       break;
 
+    case OPT_SAS_COMPRESS_LOGS  :
+      options->sas_compress_logs = false;
+      TRC_INFO("Compression of SAS logs is disabled");
+      break;
+
     case OPT_DISABLE_TCP_SWITCH:
       options->disable_tcp_switch = true;
       TRC_INFO("Switching to TCP is disabled");
@@ -1761,6 +1770,7 @@ int main(int argc, char* argv[])
   opt.nonce_count_supported = false;
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
+  opt.sas_compress_logs = true;
   opt.disable_tcp_switch = false;
   opt.apply_fallback_ifcs = false;
   opt.reject_if_no_matching_ifcs = false;
@@ -2083,6 +2093,7 @@ int main(int argc, char* argv[])
                       opt.pcscf_untrusted_port,
                       opt.port_scscf,
                       opt.sas_signaling_if,
+                      opt.sas_compress_logs,
                       opt.sproutlet_ports,
                       opt.local_host,
                       opt.public_host,
@@ -2663,4 +2674,3 @@ int main(int argc, char* argv[])
 
   return 0;
 }
-

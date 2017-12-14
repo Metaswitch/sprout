@@ -318,6 +318,7 @@ get_daemon_args()
         [ "$ralf_threads" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --ralf-threads=$ralf_threads"
         [ "$non_register_authentication" = "" ]   || DAEMON_ARGS="$DAEMON_ARGS --non-register-authentication=$non_register_authentication"
         [ "$nonce_count_supported" != "Y" ]       || DAEMON_ARGS="$DAEMON_ARGS --nonce-count-supported"
+        [ "$sas_compress_logs" != "N"]            || DAEMON_ARGS="$DAEMON_ARGS --disable-sas-compress-logs"
         [ "$listen_port" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --listen-port=$listen_port"
         [ "$blacklisted_scscf_uris" = "" ]        || DAEMON_ARGS="$DAEMON_ARGS --blacklisted-scscfs=$blacklisted_scscf_uris"
 
