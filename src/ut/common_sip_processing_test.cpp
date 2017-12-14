@@ -233,17 +233,8 @@ TEST_F(CommonProcessingTest, OptionsPollPingICSCF)
 
   /// Case 2.
   // Inject an OPTIONS poll request.
-  Message msg2;
-  msg2._first_hop = true;
-  msg2._method = "OPTIONS";
-  msg2._requri = std::string("sip:poll-sip@127.0.0.1:") + std::to_string(ICSCF_PORT) + std::string(";user=phone");
-  msg2._via = "127.0.0.1";
-  msg2._todomain = std::string("127.0.0.1:") + std::to_string(ICSCF_PORT);
-  msg2._to = "poll-sip";
-  msg2._fromdomain = "127.0.0.1";
-  msg2._from = msg2._to;
-  msg2._contentlength = false;
-  msg2._extra = "Contact: <sip:127.0.0.1>\nAccept: application/sdp\nContent-Length: 0";
+  Message msg2 = msg1;
+  msg2._requri += std::string(";user=phone");
   inject_msg(msg2.get_request(), _tp);
 
   // Expect a 200 OK response.
@@ -256,17 +247,10 @@ TEST_F(CommonProcessingTest, OptionsPollPingICSCF)
 
   /// Case 3.
   // Inject an OPTIONS poll request.
-  Message msg3;
-  msg3._first_hop = true;
-  msg3._method = "OPTIONS";
+  Message msg3 = msg1;
   msg3._requri = std::string("sip:127.0.0.1:") + std::to_string(ICSCF_PORT) + std::string(";user=phone");
-  msg3._via = "127.0.0.1";
-  msg3._todomain = std::string("127.0.0.1:") + std::to_string(ICSCF_PORT);
   msg3._to = "";
-  msg3._fromdomain = "127.0.0.1";
   msg3._from = msg3._to;
-  msg3._contentlength = false;
-  msg3._extra = "Contact: <sip:127.0.0.1>\nAccept: application/sdp\nContent-Length: 0";
   inject_msg(msg3.get_request(), _tp);
 
   // Expect a 200 OK response.
