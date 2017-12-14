@@ -160,17 +160,6 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
           ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
           classified = true;
         }
-        else
-        {
-          classified = false;
-          ret = (local_to_node) ? NODE_LOCAL_SIP_URI : HOME_DOMAIN_SIP_URI;
-        }
-      }
-      else
-      {
-        classified = false;
-        ret = (local_to_node) ? NODE_LOCAL_SIP_URI : HOME_DOMAIN_SIP_URI;
-      }
     }
     if (!classified)
     {
