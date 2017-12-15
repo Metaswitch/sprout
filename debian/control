@@ -24,7 +24,7 @@ Description: Debugging symbols for sprout-libs
 
 Package: sprout-node
 Architecture: any
-Depends: sprout (= ${binary:Version}), clearwater-memcached, chronos, astaire
+Depends: sprout (= ${binary:Version}), clearwater-memcached, chronos, astaire, rogers
 Description: sprout-node, the SIP Router node
 
 Package: sprout-node-dbg
@@ -32,7 +32,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: sprout-node (= ${binary:Version})
-Recommends: sprout-dbg, chronos-dbg
+Recommends: sprout-dbg, chronos-dbg, memcached-dbg, astaire-dbg, rogers-dbg
 Description: Debugging symbols for sprout-node, the SIP Router node
 
 Package: sprout
