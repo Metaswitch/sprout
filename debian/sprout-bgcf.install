@@ -3,3 +3,5 @@ sprout-bgcf.root/* /
 
 # Install the etcd plugin
 modules/clearwater-etcd-plugins/sprout/sprout_bgcf_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
+
+modules/clearwater-etcd-plugins/clearwater_config_access/bgcf_json_config_plugin.py /usr/share/clearwater/clearwater-config-access/plugins/
