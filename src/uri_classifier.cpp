@@ -138,6 +138,7 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
               prefer_sip ? "true" : "false",
               treat_number_as_phone ? "true" : "false");
 
+    bool classified = false;
     // SIP URI that's 'really' a phone number - apply the same logic as for TEL URIs
     if ((!pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE) ||
          (home_domain && treat_number_as_phone && !is_gruu)))
@@ -152,33 +153,19 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
         if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_GLOBAL_NUM))
         {
           ret = GLOBAL_PHONE_NUMBER;
+          classified = true;
         }
         else if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_LOCAL_NUM))
         {
           ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
-        }
-        else
-        {
-          ret = HOME_DOMAIN_SIP_URI;
+          classified = true;
         }
       }
-      else
-      {
-        ret = HOME_DOMAIN_SIP_URI;
-      }
     }
-    // Not a phone number - classify it based on domain
-    else if (home_domain)
+    if (!classified)
     {
-      ret = HOME_DOMAIN_SIP_URI;
-    }
-    else if (local_to_node)
-    {
-      ret = NODE_LOCAL_SIP_URI;
-    }
-    else
-    {
-      ret = OFFNET_SIP_URI;
+      // Not a phone number - classify it based on domain
+      ret = (home_domain) ? HOME_DOMAIN_SIP_URI : ((local_to_node) ? NODE_LOCAL_SIP_URI : OFFNET_SIP_URI);
     }
   }
 
