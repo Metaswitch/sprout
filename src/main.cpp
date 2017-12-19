@@ -94,8 +94,6 @@ enum OptionTypes
   OPT_ADDITIONAL_HOME_DOMAINS,
   OPT_EMERGENCY_REG_ACCEPTED,
   OPT_SUB_MAX_EXPIRES,
-  OPT_MAX_CALL_LIST_LENGTH,
-  OPT_CALL_LIST_TTL,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
   OPT_OVERRIDE_NPDI,
@@ -188,8 +186,6 @@ const static struct pj_getopt_option long_opt[] =
   { "http-threads",                 required_argument, 0, 'q'},
   { "billing-cdf",                  required_argument, 0, 'B'},
   { "allow-emergency-registration", no_argument,       0, OPT_EMERGENCY_REG_ACCEPTED},
-  { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
-  { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
   { "log-level",                    required_argument, 0, 'L'},
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
@@ -993,22 +989,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Emergency registrations accepted");
       break;
 
-    case OPT_MAX_CALL_LIST_LENGTH:
-      {
-        VALIDATE_INT_PARAM(options->max_call_list_length,
-                           max_call_list_length,
-                           Max call list length);
-      }
-      break;
-
-    case OPT_CALL_LIST_TTL:
-      {
-        VALIDATE_INT_PARAM(options->call_list_ttl,
-                           call_list_ttl,
-                           TTL for entries in the call list);
-      }
-      break;
-
     case OPT_BLACKLISTED_SCSCFS:
       {
         std::vector<std::string> blacklisted_scscfs;
@@ -1704,8 +1684,6 @@ int main(int argc, char* argv[])
   opt.dns_servers.push_back("127.0.0.1");
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
-  opt.max_call_list_length = 0;
-  opt.call_list_ttl = 604800;
   opt.target_latency_us = 10000;
   opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 1000;

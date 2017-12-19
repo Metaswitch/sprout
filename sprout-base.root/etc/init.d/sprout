@@ -252,16 +252,6 @@ get_daemon_args()
           DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires=$sub_max_expires"
         fi
 
-        if [ -n "$max_call_list_length" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --max-call-list-length=$max_call_list_length"
-        fi
-
-                if [ -n "$call_list_ttl" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl=$call_list_ttl"
-        fi
-
         # TODO improve this so we don't have to have the same parameters
         # repeated for each Sproutlet
         [ "$icscf" = "" ]                         || DAEMON_ARGS="$DAEMON_ARGS --icscf=$icscf"
