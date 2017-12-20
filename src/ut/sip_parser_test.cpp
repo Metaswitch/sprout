@@ -740,27 +740,125 @@ TEST_F(SipParserTest, AcceptContactCloning)
                               CloneType::Shallow));
 }
 
-TEST_F(SipParserTest, DISABLED_AcceptContactQuotedStringEscapedChar)
+TEST_F(SipParserTest, AcceptContactQuotedPair)
 {
-  EXPECT_EQ("Accept-Contact: *",
-          parse_and_print_one("Accept-Contact: *;c=\"\\j\"",
+  EXPECT_EQ("Accept-Contact: *;c=\"\\j\"",
+          parse_and_print_one("Accept-Contact: *;c=\"\\j\"\n",
                               "Accept-Contact"));
 }
 
 TEST_F(SipParserTest, DISABLED_AcceptContact_QuotedStringLWS)
 {
 
-      EXPECT_EQ("Accept-Contact: *;a=\"\r\n  \"\n",
-                parse_and_print_one("Accept-Contact: *;a=\"\r\n	 \"\n",
-                                    "Accept-Contact"));
+  EXPECT_EQ("Accept-Contact: *;a=\"\r\n  \"\n",
+            parse_and_print_one("Accept-Contact: *;a=\"\r\n	 \"\n",
+                                "Accept-Contact"));
+
+  // Further failures with a similar root cause:
+  parse_and_print_multi("a	 : *,			 	*	 ;\n	+q'S= \n	 	\"< 	 	 \n >\",* ,*\n",
+                        "Accept-Contact");
 }
 
-TEST_F(SipParserTest, AcceptContact_VariousABNF_1)
+TEST_F(SipParserTest, DISABLED_AcceptContact_VariousABNF_NonASCIICharacters)
+{
+
+  parse_and_print_multi("accEpt-cONtacT			:  *\n  ;DATA;+k!R	  ;\n			reQUire\n		 	;rEQuiRe \n ;~%,*			 ;+'!- \n	=[::Ec]\n				; \n 	 +r50=	  	\"<>\" \n	; 	 eXPLIcit;	REquiRE;%%.*_=\n	\"\"\n	 		 	 	;			aCtOR		\n = 	 		 		\"<\\z>\"   \n ;+%=\" 			\n		\",*\n  ;EXpLiciT	\n	 	;_= \n	 \"\\!e\"\n",
+                        "Accept-Contact");
+
+  // Further failures with a similar root cause:
+  parse_and_print_multi("aCcePt-ConTact:\n  *  ;~g=	\n 	\"\\  \n		  	\\\"	,	*, \n	  *\n ,\n  *	,  \n	 *  \n ,\n   *\n",
+                        "Accept-Contact");
+  parse_and_print_multi("A:*; +P17%=\"<8\\b\\>\";EXPliciT  \n ;requiRe 	; ~		\n	=\"	\n		\\\\\n	\";\n	 REQUIre\n",
+                        "Accept-Contact");
+  parse_and_print_multi("A :*;+X	 		\n	 ;\n	REQUirE	  		 \n	 				;	\n 	ReQUire;\n		`%~-~,*,\n  *; 	+g%-=\"TRUe,#>=-47\"  ,* 	\n 		  	 ;\n *=\n 		\n	 	\"A	\";	+h! 	  ,\n	*;  -=\n	 	 \"\\\"	,	*,*, *	,*  , \n 	* ;aUtOMATA=	\n	\"!+-,!#<=387.421\"\n ;ReqUIRE,* ;ExpLICIT\n",
+                        "Accept-Contact");
+}
+
+TEST_F(SipParserTest, DISABLED_AcceptContact_VariousABNF_NullCharacter)
+{
+  std::string with_null("A: *;b=\"\\\0qwertyuiopasdfghjkl\"\n", 31);
+  parse_and_print_multi(with_null,
+                        "Accept-Contact");
+}
+
+TEST_F(SipParserTest, AcceptContact_VariousABNF_ManyCommas)
 {
       std::vector<std::string> expected = { "Accept-Contact: *;explicit", "Accept-Contact: *", "Accept-Contact: *", "Accept-Contact: *", "Accept-Contact: *" };
       EXPECT_EQ(expected,
                 parse_and_print_multi("a:*;ExpLiciT\n		 		,\n 	*\n	,*,	\n *,  \n  *\n",
                                 "Accept-Contact"));
+}
+
+TEST_F(SipParserTest, AcceptContact_ShortFormWithCommas)
+{
+
+  std::vector<std::string> expected = {"Accept-Contact: *", "Accept-Contact: *"};
+  EXPECT_EQ(expected,
+            parse_and_print_multi("a  		: *,	 *\n",
+                                  "Accept-Contact"));
+}
+
+TEST_F(SipParserTest, AcceptContact_VariousABNF_Punctuation)
+{
+  std::vector<std::string> expected = { "Accept-Contact: *;require", "Accept-Contact: *;S-=\"\";ISfOCUS;'=O;require", "Accept-Contact: *;SchemEs=\"<>\"" };
+  EXPECT_EQ(expected,
+            parse_and_print_multi("A :	 *\n	 ;REqUIRe\n 	,*\n  ;\n	 S-\n =\n \"\"\n ;ISfOCUS	\n ;reQUirE;'=O	 	 \n	 ,		  		\n   *;SchemEs 		=		\"<>\"\n",
+                                  "Accept-Contact"));
+}
+
+TEST_F(SipParserTest, AcceptContact_VariousABNF_Whitespace)
+{
+  std::vector<std::string> expected = { "Accept-Contact: *;explicit" };
+  EXPECT_EQ(expected,
+            parse_and_print_multi("ACCepT-ConTACT: 		*	;\n	expLiCit\n",
+                                  "Accept-Contact"));
+}
+
+TEST_F(SipParserTest, AcceptContact_VariousABNF_StarParameter)
+{
+  std::vector<std::string> expected = { "Accept-Contact: *;*.", "Accept-Contact: *;explicit", "Accept-Contact: *;require" };
+  EXPECT_EQ(expected,
+            parse_and_print_multi("acCePt-ConTaCt:*;*.\n   	,*	;eXPLICIT\n ,	\n	 * ;rEquire\n",
+                                  "Accept-Contact"));
+}
+
+TEST_F(SipParserTest, AcceptContact_VariousABNF_QuotedString2)
+{
+  std::vector<std::string> expected = { "Accept-Contact: *", "Accept-Contact: *;+T=\"<>\"", "Accept-Contact: *;explicit;require", "Accept-Contact: *" };
+  EXPECT_EQ(expected,
+            parse_and_print_multi("A:*, 	*\n		  ;	+T=	\n		\"<>\"\n	,	  	 				\n 		*;EXpLICit;ReQuIre\n , 	 *\n",
+                                  "Accept-Contact"));
+}
+
+TEST_F(SipParserTest, AcceptContact_VariousABNF_MultiExplicit)
+{
+  std::vector<std::string> expected = { "Accept-Contact: *;explicit" };
+  EXPECT_EQ(expected,
+            parse_and_print_multi("A:*;eXplICit		 ;eXpliCit;EXPlICIt\n",
+                                  "Accept-Contact"));
+}
+
+TEST_F(SipParserTest, DISABLED_AcceptContact_VariousABNF_MultipleLWS)
+{
+  std::vector<std::string> expected = { "Accept-Contact: *;MOBiLitY=\"<>\"" };
+  EXPECT_EQ(expected,
+            parse_and_print_multi("A:*;MOBiLitY=\n \"<>\"	\n",
+                                  "Accept-Contact"));
+  EXPECT_EQ(expected,
+            parse_and_print_multi("A:*;MOBiLitY=\n \n \"<>\"	\n",
+                                  "Accept-Contact"));
+
+  // Further failures with a similar root cause:
+  parse_and_print_multi("ACCept-coNTact:*; \n  	    laNgUaGe			=	 \n 	\n  \"<\\>>\"	\n",
+                        "Accept-Contact");
+  parse_and_print_multi("a:	 				  	      *\n	;+e=\n	 	 \n	\"<=&T>\"\n	\n			; reQuIRE	; reQUirE	;    ReQuiRe 	\n  	;\n	 EXPliCit; 	\n  ExpliCiT	\n  	;+E,*\n			;\n	 EXPliCIt\n",
+                        "Accept-Contact");
+  parse_and_print_multi("a:		*;	+K \n	 ;\n	ReQUiRE;  EXpLICiT; 	\n	-=48.9.0.403 		  	,*;	MObILity\n	 =	\n	 	 \n	\"#>=18.\",*\n	; EXpLIciT\n		;reQUIre,*;requiRE\n",
+                        "Accept-Contact");
+  parse_and_print_multi("accept-CONTACt	  :*		\n	 ,*\n	;-=  \n	    \n \"\"	;\n	+g\n",
+                        "Accept-Contact");
+  parse_and_print_multi("A	:\n	*;explicIT\n ;\n MetHoDs\n	=	\n 	\n	\"!#>=02.4,trUe,!*'..~,#=6.,!truE,truE,!FAlse\" \n 	;	  \n	 `\n",
+                        "Accept-Contact");
 }
 
 TEST_F(SipParserTest, RejectContact)
@@ -1263,7 +1361,3 @@ TEST_F(SipParserTest, ResourcePriority)
   pj_pool_release(clone_pool);
   EXPECT_EQ("", parse_and_print_one("rEsOurce-pRioRiTY :     *-.%   , *.''\n", "Resource-Priority"));
 }
-
-
-
-
