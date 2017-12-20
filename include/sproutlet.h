@@ -370,7 +370,9 @@ public:
   ///
   virtual SAS::TrailId trail() const = 0;
 
-  /// Get the URI that caused us to be routed to this Sproutlet.
+  /// Get the URI that caused us to be routed to this Sproutlet or if no such
+  /// URI exists e.g. if the Sproutlet was matched on a port, return the root
+  /// URI.
   ///
   /// @returns            - The URI that routed to this Sproutlet.
   ///
@@ -723,7 +725,9 @@ protected:
   SAS::TrailId trail() const
     {return _helper->trail();}
 
-  /// Get the URI that caused us to be routed to this Sproutlet.
+  /// Get the URI that caused us to be routed to this Sproutlet or if no such
+  /// URI exists e.g. if the Sproutlet was matched on a port, return the root
+  /// URI.
   ///
   /// @returns            - The URI that routed to this Sproutlet.
   ///
@@ -780,8 +784,11 @@ public:
   /// Virtual descrustor.
   virtual ~SproutletHelper() {}
 
-  /// Gets the URI that caused this request to be routed to this Sproutlet.
-  virtual pjsip_sip_uri* get_routing_uri(const pjsip_msg* req) const = 0;
+  /// Get the URI that caused us to be routed to this Sproutlet or if no such
+  /// URI exists e.g. if the Sproutlet was matched on a port, return the root
+  /// URI.
+  virtual pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
+                                         const Sproutlet* sproutlet) const = 0;
 
   /// Constructs the next URI for the Sproutlet that doesn't want to handle a
   /// request.
@@ -795,8 +802,7 @@ public:
   ///
   /// If the URI is not a SIP URI, this function returns FALSE.
   virtual bool is_uri_reflexive(const pjsip_uri* uri,
-                                Sproutlet* sproutlet,
-                                SAS::TrailId trail) = 0;
+                                const Sproutlet* sproutlet) const = 0;
 };
 
 #endif

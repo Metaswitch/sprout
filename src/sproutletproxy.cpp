@@ -482,27 +482,28 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
   //LCOV_EXCL_STOP
 }
 
-pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req) const
+pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req,
+                                               const Sproutlet* sproutlet) const
 {
   // Start off with _root_uri and replace it with a SIP URI from the request,
-  // if there is one.
-  //
-  // TODO: We should make sure any SIP URI we get from the message is reflexive.
+  // if there is one that matches this Sproutlet.
   const pjsip_route_hdr* route = (pjsip_route_hdr*)
                                     pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
   pjsip_sip_uri* routing_uri = _root_uri;
   if (route != NULL)
   {
-    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
+    if ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
+        (is_uri_reflexive(route->name_addr.uri, sproutlet)))
     {
       routing_uri = (pjsip_sip_uri*)route->name_addr.uri;
     }
   }
   else
   {
-    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
+    if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
+        (is_uri_reflexive(req->line.req.uri, sproutlet)))
     {
-      routing_uri = (pjsip_sip_uri*)req->line.req.uri; // LCOV_EXCL_LINE
+      routing_uri = (pjsip_sip_uri*)req->line.req.uri;
     }
   }
 
@@ -552,8 +553,7 @@ bool SproutletProxy::is_host_local(const pj_str_t* host) const
 }
 
 bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
-                                      Sproutlet* sproutlet,
-                                      SAS::TrailId trail)
+                                      const Sproutlet* sproutlet) const
 {
   std::string alias_unused;
   std::string local_hostname_unused;
@@ -1836,7 +1836,7 @@ SAS::TrailId SproutletWrapper::trail() const
 
 bool SproutletWrapper::is_uri_reflexive(const pjsip_uri* uri) const
 {
-  return _proxy->is_uri_reflexive(uri, _sproutlet, trail());
+  return _proxy->is_uri_reflexive(uri, _sproutlet);
 }
 
 bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
@@ -1859,21 +1859,21 @@ pjsip_sip_uri* SproutletWrapper::next_hop_uri(const std::string& service,
 pjsip_sip_uri* SproutletWrapper::get_routing_uri(const pjsip_msg* req) const
 {
   // Start off with _root_uri and replace it with a SIP URI from the request,
-  // if there is one.
-  //
-  // TODO: We should make sure any SIP URI we get from the message is reflexive.
+  // if there is one that matches this Sproutlet.
   const pjsip_route_hdr* route = route_hdr();
   pjsip_sip_uri* routing_uri = _proxy->_root_uri;
   if (route != NULL)
   {
-    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
+    if ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
+        (is_uri_reflexive(route->name_addr.uri)))
     {
       routing_uri = (pjsip_sip_uri*)route->name_addr.uri;
     }
   }
   else
   {
-    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
+    if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
+        (is_uri_reflexive(req->line.req.uri)))
     {
       routing_uri = (pjsip_sip_uri*)req->line.req.uri;
     }

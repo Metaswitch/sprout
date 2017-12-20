@@ -144,7 +144,7 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
   }
 
   // We're not interested in the message so create a next hop URI.
-  pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
+  pjsip_sip_uri* base_uri = helper->get_routing_uri(req, this);
   next_hop = helper->next_hop_uri(_next_hop_service,
                                   base_uri,
                                   pool);

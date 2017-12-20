@@ -110,12 +110,12 @@ protected:
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
   bool is_uri_local(const pjsip_uri* uri);
-  pjsip_sip_uri* get_routing_uri(const pjsip_msg* req) const;
+  pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
+                                 const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
   bool is_host_local(const pj_str_t* host) const;
   bool is_uri_reflexive(const pjsip_uri* uri,
-                        Sproutlet* sproutlet,
-                        SAS::TrailId trail);
+                        const Sproutlet* sproutlet) const;
 
   // A struct to wrap tx_data and allowed_host_state in a convenient bundle
   // to pass over interfaces when sending a request.
