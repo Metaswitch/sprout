@@ -137,7 +137,8 @@ Store::Status AstaireImpiStore::set_impi(ImpiStore::Impi* impi,
                                                data,
                                                astaire_impi->_cas,
                                                astaire_impi->get_expires() - now,
-                                               trail);
+                                               trail,
+                                               Store::Format::JSON);
   if (status == Store::Status::OK)
   {
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_SET_SUCCESS, 0);
@@ -171,7 +172,12 @@ ImpiStore::Impi* AstaireImpiStore::get_impi(const std::string& impi,
   AstaireImpiStore::Impi* impi_obj = NULL;
   std::string data;
   uint64_t cas;
-  Store::Status status = _data_store->get_data(TABLE_IMPI, impi, data, cas, trail);
+  Store::Status status = _data_store->get_data(TABLE_IMPI,
+                                               impi,
+                                               data,
+                                               cas,
+                                               trail,
+                                               Store::Format::JSON);
   if (status == Store::Status::OK)
   {
     TRC_DEBUG("Retrieved IMPI for %s\n%s", impi.c_str(), data.c_str());
