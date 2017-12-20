@@ -371,8 +371,7 @@ public:
   virtual SAS::TrailId trail() const = 0;
 
   /// Get the URI that caused us to be routed to this Sproutlet or if no such
-  /// URI exists e.g. if the Sproutlet was matched on a port, return the root
-  /// URI.
+  /// URI exists e.g. if the Sproutlet was matched on a port, return NULL.
   ///
   /// @returns            - The URI that routed to this Sproutlet.
   ///
@@ -726,8 +725,7 @@ protected:
     {return _helper->trail();}
 
   /// Get the URI that caused us to be routed to this Sproutlet or if no such
-  /// URI exists e.g. if the Sproutlet was matched on a port, return the root
-  /// URI.
+  /// URI exists e.g. if the Sproutlet was matched on a port, return NULL.
   ///
   /// @returns            - The URI that routed to this Sproutlet.
   ///
@@ -785,8 +783,7 @@ public:
   virtual ~SproutletHelper() {}
 
   /// Get the URI that caused us to be routed to this Sproutlet or if no such
-  /// URI exists e.g. if the Sproutlet was matched on a port, return the root
-  /// URI.
+  /// URI exists e.g. if the Sproutlet was matched on a port, return NULL.
   virtual pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                          const Sproutlet* sproutlet) const = 0;
 

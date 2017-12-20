@@ -485,11 +485,11 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
 pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req,
                                                const Sproutlet* sproutlet) const
 {
-  // Start off with _root_uri and replace it with a SIP URI from the request,
-  // if there is one that matches this Sproutlet.
+  // Get the URI that caused us to be routed to this Sproutlet or if no such
+  // URI exists e.g. if the Sproutlet was matched on a port, return NULL.
   const pjsip_route_hdr* route = (pjsip_route_hdr*)
                                     pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-  pjsip_sip_uri* routing_uri = _root_uri;
+  pjsip_sip_uri* routing_uri = NULL;
   if (route != NULL)
   {
     if ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
@@ -1858,10 +1858,10 @@ pjsip_sip_uri* SproutletWrapper::next_hop_uri(const std::string& service,
 
 pjsip_sip_uri* SproutletWrapper::get_routing_uri(const pjsip_msg* req) const
 {
-  // Start off with _root_uri and replace it with a SIP URI from the request,
-  // if there is one that matches this Sproutlet.
+  // Get the URI that caused us to be routed to this Sproutlet or if no such
+  // URI exists e.g. if the Sproutlet was matched on a port, return NULL.
   const pjsip_route_hdr* route = route_hdr();
-  pjsip_sip_uri* routing_uri = _proxy->_root_uri;
+  pjsip_sip_uri* routing_uri = NULL;
   if (route != NULL)
   {
     if ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
