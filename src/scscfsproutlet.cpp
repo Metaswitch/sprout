@@ -256,6 +256,11 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
   if ((*aor_pair == NULL) ||
       (!(*aor_pair)->current_contains_bindings()))
   {
+    // scan-build currently detects this loop as double freeing memory, as it
+    // doesn't recognise that the value of aor_pair changes each loop iteration.
+    // Excluding from analysis while this bug is present
+    // (https://bugs.llvm.org/show_bug.cgi?id=18222).
+    #ifndef __clang_analyzer__
     std::vector<SubscriberDataManager*>::iterator it = _remote_sdms.begin();
 
     while ((it != _remote_sdms.end()) &&
@@ -270,6 +275,7 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
 
       ++it;
     }
+    #endif
   }
 
   // TODO - Log bindings to SAS

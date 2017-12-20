@@ -2126,6 +2126,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   }
 
   if ((event->body.tsx_state.tsx == _tsx) &&
+      (_tsx != NULL) &&
       (_tsx->state == PJSIP_TSX_STATE_DESTROYED))
   {
     TRC_DEBUG("%s - UAC tsx destroyed", _tsx->obj_name);
