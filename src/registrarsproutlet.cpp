@@ -144,7 +144,7 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
   }
 
   // We're not interested in the message so create a next hop URI.
-  pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
+  pjsip_sip_uri* base_uri = helper->get_routing_uri(req, this);
   next_hop = helper->next_hop_uri(_next_hop_service,
                                   base_uri,
                                   pool);
@@ -319,10 +319,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
   pjsip_sip_uri* routing_uri = get_routing_uri(req);
-  SCSCFUtils::get_scscf_uri(get_pool(req),
-                            get_local_hostname(routing_uri),
-                            get_local_hostname(scscf_uri),
-                            scscf_uri);
+  if (routing_uri != NULL)
+  {
+    SCSCFUtils::get_scscf_uri(get_pool(req),
+                              get_local_hostname(routing_uri),
+                              get_local_hostname(scscf_uri),
+                              scscf_uri);
+  }
+
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   HSSConnection::irs_query irs_query;
@@ -760,10 +764,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Replace the local hostname part of the Service route URI with the local
   // hostname part of the URI that routed to this sproutlet.
   pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)sr_hdr->name_addr.uri;
-  SCSCFUtils::get_scscf_uri(get_pool(rsp),
-                            get_local_hostname(routing_uri),
-                            get_local_hostname(sr_uri),
-                            sr_uri);
+  if (routing_uri != NULL)
+  {
+    SCSCFUtils::get_scscf_uri(get_pool(rsp),
+                              get_local_hostname(routing_uri),
+                              get_local_hostname(sr_uri),
+                              sr_uri);
+  }
+
   pjsip_msg_insert_first_hdr(rsp, (pjsip_hdr*)sr_hdr);
 
   // Log any URIs that have been left out of the P-Associated-URI because they

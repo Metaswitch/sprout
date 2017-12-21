@@ -333,10 +333,10 @@ public:
     rapidxml::xml_node<> *registration = reg_info->first_node("registration");
     ASSERT_TRUE(registration);
     rapidxml::xml_node<> *contact;
-    contact = registration->first_node("contact");      
+    contact = registration->first_node("contact");
     for (int ii = 0; ii < check_contact; ii++)
     {
-      contact = contact->next_sibling();      
+      contact = contact->next_sibling();
     }
 
     ASSERT_TRUE(contact);
@@ -425,7 +425,7 @@ private:
     EXPECT_CALL(*_hss_connection_observer, update_registration_state(_, _, _))
       .WillOnce(DoAll(SaveArg<0>(&irs_query),
                       Return(HTTP_OK)));
-    
+
     hss_connection()->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "");
 
     inject_msg(msg.get());
@@ -873,7 +873,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   free_txdata();
 }
 
-// Check that something sensible happens if there is not route header on the request.
+// Check that something sensible happens if there is no route header on the request.
 TEST_F(RegistrarTest, SimpleMainlineAuthHeaderNoRoute)
 {
   // We have a private ID in this test, so set up the expect response
@@ -897,7 +897,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderNoRoute)
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:scscf.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
@@ -918,7 +918,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderNoRoute)
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:scscf.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();

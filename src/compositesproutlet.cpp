@@ -31,15 +31,6 @@ int CompositeSproutletTsx::send_request(pjsip_msg*& req,
     // This is a standalone or dialog-creating request, and we have a next hop
     // configured - use it.
     pjsip_sip_uri* base_uri = get_routing_uri(req);
-
-    if (!is_uri_reflexive((pjsip_uri*)base_uri))
-    {
-      // The URI we've been passed isn't reflexive i.e. will not route back to
-      // the SPN. However we have a service as the next hop meaning it should
-      // come back to the SPN.  Passing in null will use the node's root URI.
-      base_uri = nullptr;
-    }
-
     pjsip_sip_uri* uri = next_hop_uri(_next_hop_service,
                                       base_uri,
                                       get_pool(req));
