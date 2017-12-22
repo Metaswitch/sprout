@@ -92,6 +92,13 @@ bool AuthenticationSproutlet::init()
   params.options = 0;
   status = pjsip_auth_srv_init2(stack_data.pool, &_auth_srv, &params);
 
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START - Don't test initialization failures in UT
+    TRC_ERROR("Authentication sproutlet failed to initialize (%d)", status);
+    // LCOV_EXCL_STOP
+  }
+
   params.options = PJSIP_AUTH_SRV_IS_PROXY;
   status = pjsip_auth_srv_init2(stack_data.pool, &_auth_srv_proxy, &params);
 
@@ -1063,7 +1070,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                       &sc,
                                       (void*)auth_challenge);
 
-      if (status == PJ_SUCCESS)
+      if ((status == PJ_SUCCESS) && (auth_challenge != NULL))
       {
         // The authentication information in the request was verified.
         TRC_DEBUG("Request authenticated successfully");

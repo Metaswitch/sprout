@@ -227,6 +227,11 @@ pj_status_t SIPConnectionPool::create_connection(int hash_slot)
   pjsip_tp_state_listener_key* key;
   status = pjsip_transport_add_state_listener(tp, &transport_state, (void*)this, &key);
 
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+
   // Store the new transport in the hash slot, but marked as disconnected.
   pthread_mutex_lock(&_tp_hash_lock);
   _tp_hash[hash_slot].tp = tp;

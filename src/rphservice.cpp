@@ -146,10 +146,10 @@ void RPHService::update_rph()
     return;
   }
 
-  //  Check that RPH values are well ordered. This block of code loops through
-  //  each IANA namespace from the low priority RPH values to the high priority
-  //  ones. If a value is set it checks that all values of higher priority are
-  //  given higher priorites.
+  // Check that RPH values are well ordered. This block of code loops through
+  // each IANA namespace from the low priority RPH values to the high priority
+  // ones. If a value is set it checks that all values of higher priority are
+  // given higher priorites.
   for (std::vector<std::string> nspace : RPH_NAMESPACES)
   {
     std::vector<std::string>::iterator nspace_it = nspace.begin();
@@ -159,7 +159,7 @@ void RPHService::update_rph()
       ++nspace_it;
     }
 
-    SIPEventPriorityLevel priority;
+    SIPEventPriorityLevel priority = SIPEventPriorityLevel::NORMAL_PRIORITY;
     if (nspace_it != nspace.end())
     {
       priority = new_rph_map.find(*nspace_it)->second;
@@ -171,7 +171,8 @@ void RPHService::update_rph()
       if ((new_rph_map.find(*nspace_it) == new_rph_map.end()) ||
           (new_rph_map.find(*nspace_it)->second < priority))
       {
-        TRC_ERROR("RPH value \"%s\" has lower priority than a lower priority RPH value from the same namespace",
+        TRC_ERROR("RPH value \"%s\" has lower priority than a lower priority "
+                  "RPH value from the same namespace",
                   (*nspace_it).c_str());
         CL_SPROUT_RPH_FILE_INVALID.log();
         set_alarm();
@@ -184,7 +185,7 @@ void RPHService::update_rph()
     }
   }
 
-  // At this point, we're definitely going to override the RPH map we currently have so,
+  // At this point, we're definitely going to override the RPH map we currently have so
   // take the lock and update the map.
   boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
   _rph_map = new_rph_map;
