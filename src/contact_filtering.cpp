@@ -239,20 +239,12 @@ bool binding_to_target(const std::string& aor,
     // we use that, otherwise we use the _path_uris field.
     if (!binding._path_headers.empty())
     {
-      for (std::list<std::string>::const_iterator path = binding._path_headers.begin();
-           path != binding._path_headers.end();
-           ++path)
+      for (std::string path : binding._path_headers)
       {
-        // We need a char* not a const char* so using c_str() isn't enough and
-        // we need to cpoy the string across.
-        std::string const_path_str = (*path).c_str();
-        char* path_str = new char[const_path_str.length() + 1];
-        std::strcpy(path_str, const_path_str.c_str());
-
         pjsip_route_hdr* path_hdr = (pjsip_route_hdr*)pjsip_parse_hdr(pool,
                                                                       &STR_ROUTE,
-                                                                      path_str,
-                                                                      strlen(path_str),
+                                                                      (char*)path.c_str(),
+                                                                      strlen(path.c_str()),
                                                                       NULL);
         if (path_hdr != NULL)
         {
@@ -261,15 +253,13 @@ bool binding_to_target(const std::string& aor,
           // deleting path_str.
           pjsip_route_hdr* path_hdr_clone = (pjsip_route_hdr*)pjsip_hdr_clone(pool, path_hdr);
           target.paths.push_back(path_hdr_clone);
-          delete[] path_str;
         }
         else
         {
           TRC_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
-                      binding._uri.c_str(), aor.c_str(), (*path).c_str());
+                      binding._uri.c_str(), aor.c_str(), path.c_str());
           // TODO SAS log
           valid = false;
-          delete[] path_str;
           break;
         }
       }

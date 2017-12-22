@@ -295,10 +295,17 @@ static pj_bool_t on_ws_data(ws_transport *ws,
   ws->rdata.pkt_info.src_port = pj_sockaddr_get_port(rem_addr);
 
   const char *msg_str = msg->get_payload().c_str();
-  if (strlen(msg_str) <= PJSIP_MAX_PKT_LEN) {
+
+  if (strlen(msg_str) <= PJSIP_MAX_PKT_LEN)
+  {
     ws->rdata.pkt_info.packet = (char*)pj_pool_alloc(ws->rdata.tp_info.pool, strlen(msg_str) + 1);
-    strcpy(ws->rdata.pkt_info.packet, msg_str);
-  } else {
+    size_t p_size = strlen(msg_str) + 1;
+    size_t m_size = sizeof(ws->rdata.pkt_info.packet);
+    size_t max_chars = std::min(p_size, m_size);
+    strncpy(ws->rdata.pkt_info.packet, msg_str, max_chars);
+  }
+  else
+  {
     TRC_ERROR("Dropping incoming websocket message as it is larger than PJSIP_MAX_PKT_LEN, %d", strlen(msg_str));
     return PJ_FALSE;
   }

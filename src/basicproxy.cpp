@@ -684,10 +684,14 @@ void BasicProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata, const std:
 {
   TRC_DEBUG("%s - Cancel for UAS transaction", name());
 
+  enter_context();
+
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
   cancel_pending_uac_tsx(0, reason, false);
+
+  exit_context();
 }
 
 
@@ -1336,8 +1340,6 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code,
                                                 const std::string& reason,
                                                 bool dissociate_uac)
 {
-  enter_context();
-
   // Send CANCEL on all pending UAC transactions forked from this UAS
   // transaction.  This is invoked either because the UAS transaction
   // received a CANCEL, or one of the UAC transactions received a 200 OK or
@@ -1359,8 +1361,6 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code,
     if (uac_tsx != NULL)
     {
       // Found a UAC transaction that is still active, so send a CANCEL.
-      uac_tsx->cancel_pending_tsx(st_code, reason);
-
       // Normal behaviour (that is, on receipt of a CANCEL on the UAS
       // transaction), is to leave the UAC transaction connected to the UAS
       // transaction so the 487 response gets passed through.  However, in
@@ -1372,10 +1372,10 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code,
       {
         dissociate(uac_tsx);
       }
+
+      uac_tsx->cancel_pending_tsx(st_code, reason);
     }
   }
-
-  exit_context();
 }
 
 
