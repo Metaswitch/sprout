@@ -101,7 +101,6 @@ enum OptionTypes
   OPT_INIT_TOKEN_RATE,
   OPT_MIN_TOKEN_RATE,
   OPT_MAX_TOKEN_RATE,
-  OPT_CASS_TARGET_LATENCY_US,
   OPT_EXCEPTION_MAX_TTL,
   OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
@@ -195,7 +194,6 @@ const static struct pj_getopt_option long_opt[] =
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
   { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
   { "max-token-rate",               required_argument, 0, OPT_MAX_TOKEN_RATE},
-  { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
@@ -855,14 +853,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         VALIDATE_INT_PARAM_NON_ZERO(options->target_latency_us,
                                     target_latency_us,
                                     Target latency (in microseconds));
-      }
-      break;
-
-    case OPT_CASS_TARGET_LATENCY_US:
-      {
-        VALIDATE_INT_PARAM_NON_ZERO(options->cass_target_latency_us,
-                                    cass_target_latency_us,
-                                    Target cassandra latency (in microseconds));
       }
       break;
 
@@ -1685,7 +1675,6 @@ int main(int argc, char* argv[])
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
   opt.target_latency_us = 10000;
-  opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 1000;
   opt.init_token_rate = 2000.0;
   opt.min_token_rate = 10.0;

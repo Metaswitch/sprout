@@ -175,7 +175,6 @@ get_daemon_args()
         [ "$enable_orig_sip_to_tel_coerce" != "Y" ] || enable_orig_sip_to_tel_coerce_arg="--enable-orig-sip-to-tel-coerce"
 
         [ -z "$sprout_target_latency_us" ] || target_latency_us_arg="--target-latency-us=$sprout_target_latency_us"
-        [ -z "$cass_target_latency_us" ] || cass_target_latency_us_arg="--cass-target-latency-us=$cass_target_latency_us"
         [ -z "$sprout_max_tokens" ] || max_tokens_arg="--max-tokens=$sprout_max_tokens"
         [ -z "$sprout_init_token_rate" ] || init_token_rate_arg="--init-token-rate=$sprout_init_token_rate"
         [ -z "$sprout_min_token_rate" ] || min_token_rate_arg="--min-token-rate=$sprout_min_token_rate"
@@ -215,7 +214,6 @@ get_daemon_args()
                      --default-session-expires=$default_session_expires
                      $max_session_expires_arg
                      $target_latency_us_arg
-                     $cass_target_latency_us_arg
                      $max_tokens_arg
                      $init_token_rate_arg
                      $min_token_rate_arg
