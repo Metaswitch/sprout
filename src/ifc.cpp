@@ -67,8 +67,8 @@ void Ifc::handle_invalid_ifc(std::string error,
                              int instance_id,
                              SAS::TrailId trail)
 {
-  TRC_ERROR("Skip processing invalid iFC for %s: %s", 
-            server_name.c_str(), 
+  TRC_ERROR("Skip processing invalid iFC for %s: %s",
+            server_name.c_str(),
             error.c_str());
   SAS::Event event(trail, sas_event_id, instance_id);
   event.add_var_param(server_name);
@@ -83,8 +83,8 @@ void Ifc::handle_unusual_ifc(std::string error,
                              int instance_id,
                              SAS::TrailId trail)
 {
-  TRC_INFO("Continue processing unusual iFC for %s: %s", 
-           server_name.c_str(), 
+  TRC_INFO("Continue processing unusual iFC for %s: %s",
+           server_name.c_str(),
            error.c_str());
   SAS::Event event(trail, sas_event_id, instance_id);
   event.add_var_param(server_name);
@@ -331,7 +331,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                          "the hostport of a SIP URI or a telephone number.",
                          server_name, SASEvent::IFC_UNUSUAL, 0, trail);
     }
-    
+
     req_uri_regex = boost::regex(req_uri,
                                  boost::regex_constants::no_except);
     if (req_uri_regex.status())
@@ -444,7 +444,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
   rapidxml::print(std::back_inserter(ifc_str), *_ifc, 0);
 
   SAS::Event event(trail, SASEvent::IFC_TESTING, 0);
-  event.add_compressed_param(ifc_str, &SASEvent::PROFILE_SERVICE_PROFILE);
+  event.add_var_param(ifc_str);
   SAS::report_event(event);
   std::string server_name;
 
@@ -453,14 +453,14 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     xml_node<>* as = _ifc->first_node(RegDataXMLUtils::APPLICATION_SERVER);
     if (as == NULL)
     {
-      handle_invalid_ifc("iFC missing ApplicationServer element", server_name, 
+      handle_invalid_ifc("iFC missing ApplicationServer element", server_name,
                          SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
     server_name = XMLUtils::get_first_node_value(as, RegDataXMLUtils::SERVER_NAME);
     if (server_name.empty())
     {
-      handle_invalid_ifc("iFC has no ServerName", server_name, 
+      handle_invalid_ifc("iFC has no ServerName", server_name,
                          SASEvent::INVALID_IFC_IGNORED, 0, trail);
     }
 
@@ -547,7 +547,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
         }
         else
         {
-          groups[group_id] = cnf ? (groups[group_id] || spt_matched) : 
+          groups[group_id] = cnf ? (groups[group_id] || spt_matched) :
             (groups[group_id] && spt_matched);
         }
 
@@ -592,8 +592,8 @@ bool Ifc::filter_matches(const SessionCase& session_case,
   catch (xml_error err)
   {
     // Generic SAS event to log skipping iFC due to syntactic error in parsing
-    // XML, most likely thrown by utility libraries. 
-    std::string err_str = "iFC XML is syntactically invalid: " 
+    // XML, most likely thrown by utility libraries.
+    std::string err_str = "iFC XML is syntactically invalid: "
       + std::string(err.what());
     TRC_ERROR(err_str.c_str());
     SAS::Event event(trail, SASEvent::INVALID_XML_IGNORED, 0);
