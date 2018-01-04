@@ -634,7 +634,7 @@ std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header
 
   // If we cloned the message, release the original PJSIP pool so we get
   // valgrind warnings if it was incompletely copied.
-  if (ct != CloneType::None)
+  if (ct == CloneType::Full)
   {
     pj_pool_release(main_pool);
   }
@@ -657,7 +657,7 @@ std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header
 
   pj_pool_release(clone_pool);
 
-  if (ct == CloneType::None)
+  if (ct != CloneType::Full)
   {
     pj_pool_release(main_pool);
   }
