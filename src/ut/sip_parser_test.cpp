@@ -45,7 +45,6 @@ public:
 
   std::vector<std::string> parse_and_print_multi(std::string header, std::string hname, CloneType ct = CloneType::None);
   std::string parse_and_print_one(std::string header, std::string hname, CloneType ct = CloneType::None);
-  bool verify_parses(std::string header, std::string hname);
 };
 
 TEST_F(SipParserTest, PChargingVector)
@@ -554,12 +553,17 @@ TEST_F(SipParserTest, SessionExpiresUAC)
   EXPECT_STREQ("Session-Expires: 600;refresher=uac;other-param=10;more-param=42", buf);
 }
 
+// Puts a SIP header through the PJSIP parser, then serialises it back to a string and returns the string.
 std::string SipParserTest::parse_and_print_one(std::string header, std::string hname, CloneType ct)
 {
   std::vector<std::string> ret = parse_and_print_multi(header, hname, ct);
   return ret[0];
 }
 
+// Puts a multi-value SIP header through the PJSIP parser, then serialises them
+// back to strings and returns a vector containing one string per header value.
+//
+// If the header fails to parse, this will throw a PJSIP exception.
 std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header, std::string hname, CloneType ct)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
@@ -572,6 +576,7 @@ std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header
   std::vector<pjsip_hdr*> initial_headers;
   std::vector<pjsip_hdr*> final_headers;
 
+  // Build a SIP message containing the header and parse it.
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
              "Max-Forwards: 63\n"
@@ -586,6 +591,7 @@ std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header
   pjsip_rx_data* rdata = build_rxdata(str, _tp_default, main_pool);
   parse_rxdata(rdata);
 
+  // Retrieve the headers from the parsed message.
   pj_str_t header_name;
   pj_cstr(&header_name, hname.c_str());
   pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
@@ -600,6 +606,10 @@ std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header
                                                             hdr->next);
   }
 
+  // We've seen issues where we didn't copy PJSIP data between pools correctly,
+  // resulting in headers being randomly corrupted when their original pool was
+  // freed. To avoid issues like that, tests can ask that a header be cloned
+  // before the pool is freed.
   for (pjsip_hdr* initial_hdr : initial_headers)
   {
     pjsip_hdr* hdr_to_print;
@@ -622,11 +632,14 @@ std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header
 
   initial_headers.clear();
 
+  // If we cloned the message, release the original PJSIP pool so we get
+  // valgrind warnings if it was incompletely copied.
   if (ct != CloneType::None)
   {
     pj_pool_release(main_pool);
   }
 
+  // Serialise each header back to a string.
   for (pjsip_hdr* hdr : final_headers)
   {
     char buf[1024] = {0};
