@@ -1,4 +1,4 @@
-TARGETS := sprout call-diversion-as.so gemini-as.so memento-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so
+TARGETS := sprout call-diversion-as.so gemini-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so
 
 TEST_TARGETS := sprout_test
 
@@ -185,17 +185,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
-                       cassandra_connection_pool.cpp \
-                       cassandra_store.cpp \
-                       call_list_store.cpp \
-                       mementosaslogger.cpp \
-                       call_list_store_processor.cpp \
-                       httpnotifier.cpp \
-                       mockhttpnotifier.cpp \
-                       mementoappserver.cpp \
-                       call_list_store_processor_test.cpp \
-                       mementoappserver_test.cpp \
-                       httpnotifier_test.cpp \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
                        authenticationsproutlet.cpp \
@@ -212,7 +201,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_rph_service.cpp
 
 COVERAGE_ROOT := ..
-sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include
+sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include
 
 SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
                           -I../include \
@@ -226,8 +215,6 @@ sprout_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS}
 sprout_test_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS} \
                         -I../modules/sipp \
                         -I../modules/app-servers/test \
-                        -I../modules/memento-as/include \
-                        -I../modules/memento-as/modules/memento-common/include \
                         -I../modules/gemini/include \
                         -I../include/mangelwurzel \
                         -Iut \
@@ -268,8 +255,6 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
 # SPROUT_COMMON_LDFLAGS.
 sprout_LDFLAGS := -Wl,--whole-archive -lpjsip-x86_64-unknown-linux-gnu -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject` ${SPROUT_COMMON_LDFLAGS}
 sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \
-                       -lthrift \
-                       -lcassandra \
                        -lboost_date_time \
                        `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
 
@@ -285,10 +270,6 @@ PLUGIN_COMMON_LDFLAGS := -shared -L../usr/lib
 gemini-as.so_SOURCES := mobiletwinned.cpp sproutletappserver.cpp geminiasplugin.cpp
 gemini-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/gemini/include
 gemini-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
-
-memento-as.so_SOURCES := sproutletappserver.cpp mementoasplugin.cpp cassandra_store.cpp cassandra_connection_pool.cpp call_list_store.cpp mementosaslogger.cpp call_list_store_processor.cpp httpnotifier.cpp mementoappserver.cpp
-memento-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/memento-as/include -I../modules/memento-as/modules/memento-common/include
-memento-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS} -lthrift -lcassandra
 
 call-diversion-as.so_SOURCES := mmtel.cpp sproutletappserver.cpp cdivasplugin.cpp
 call-diversion-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
@@ -314,7 +295,7 @@ mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
 mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
 mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut ../modules/memento-as/src ../modules/memento-as/src/ut ../modules/memento-as/modules/memento-common/src mangelwurzel mangelwurzel/ut ut
+VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
 
 # Use valgrind suppression file for UT
 sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp
@@ -351,9 +332,3 @@ ALARM_DEFINITION_FILES := ${sprout_test_OBJECT_DIR}/hssconnection_test.o \
                           ${sprout_scscf.so_OBJECT_DIR}/scscfplugin.o
 
 ${ALARM_DEFINITION_FILES} : ../usr/include/sprout_alarmdefinition.h
-
-../usr/include/memento_as_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
-	$< -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
-	mv memento_as_alarmdefinition.h $@
-${memento-as.so_OBJECT_DIR}/mementoasplugin.o : ../usr/include/memento_as_alarmdefinition.h
-CLEANS += ../usr/include/memento_as_alarmdefinition.h
