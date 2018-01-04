@@ -1372,5 +1372,4 @@ TEST_F(SipParserTest, ResourcePriority)
   EXPECT_STREQ("Resource-Priority: dsn.flash, wps.4", buf);
 
   pj_pool_release(clone_pool);
-  EXPECT_EQ("", parse_and_print_one("rEsOurce-pRioRiTY :     *-.%   , *.''\n", "Resource-Priority"));
 }
