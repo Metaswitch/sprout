@@ -156,6 +156,7 @@ const static struct pj_getopt_option long_opt[] =
   { "domain",                       required_argument, 0, 'D'},
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
   { "alias",                        required_argument, 0, 'n'},
+  { "gr-alias",                     required_argument, 0, 'b'},
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},
@@ -241,7 +242,7 @@ const static struct pj_getopt_option long_opt[] =
   { NULL,                           0,                 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:N:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:b:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:N:dth";
 
 static sem_t term_sem;
 
@@ -700,6 +701,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'n':
       options->alias_hosts = std::string(pj_optarg);
       TRC_INFO("Alias host names = %s", pj_optarg);
+      break;
+
+    case 'b':
+      options->gr_alias_hosts = std::string(pj_optarg);
+      TRC_INFO("GR Alias host names = %s", pj_optarg);
       break;
 
     case 'r':
@@ -2091,6 +2097,7 @@ int main(int argc, char* argv[])
                       opt.uri_scscf,
                       opt.sprout_hostname,
                       opt.alias_hosts,
+                      opt.gr_alias_hosts,
                       sip_resolver,
                       opt.record_routing_model,
                       opt.default_session_expires,
@@ -2344,19 +2351,24 @@ int main(int argc, char* argv[])
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
-    std::unordered_set<std::string> host_aliases;
-    host_aliases.insert(opt.local_host);
-    host_aliases.insert(opt.public_host);
-    host_aliases.insert(opt.home_domain);
-    host_aliases.insert(stack_data.home_domains.begin(),
-                        stack_data.home_domains.end());
-    host_aliases.insert(stack_data.aliases.begin(),
-                        stack_data.aliases.end());
+    std::unordered_set<std::string> host_local_aliases;
+    host_local_aliases.insert(opt.local_host);
+    host_local_aliases.insert(opt.public_host);
+    host_local_aliases.insert(opt.home_domain);
+    host_local_aliases.insert(stack_data.home_domains.begin(),
+                              stack_data.home_domains.end());
+    host_local_aliases.insert(stack_data.aliases.begin(),
+                              stack_data.aliases.end());
+
+    std::unordered_set<std::string> host_gr_aliases;
+    host_gr_aliases.insert(stack_data.gr_aliases.begin(),
+                           stack_data.gr_aliases.end());
 
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
                                          opt.sprout_hostname,
-                                         host_aliases,
+                                         host_local_aliases,
+                                         host_gr_aliases,
                                          sproutlets,
                                          opt.stateless_proxies,
                                          opt.max_sproutlet_depth);

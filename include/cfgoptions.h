@@ -68,6 +68,7 @@ struct options
   std::string                          sprout_hostname;
   std::string                          additional_home_domains;
   std::string                          alias_hosts;
+  std::string                          gr_alias_hosts;
   std::string                          trusted_hosts;
   bool                                 auth_enabled;
   std::string                          auth_realm;

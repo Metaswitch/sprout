@@ -848,6 +848,7 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "proxy1.homedomain",
                                 host_aliases,
+                                std::unordered_set<std::string>(), // TJW2 TODO
                                 _sproutlets,
                                 std::set<std::string>());
 
@@ -910,7 +911,8 @@ public:
     Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
                                                             unused_alias,
                                                             unused_local_hostname,
-                                                            unused_selection_type);
+                                                            unused_selection_type,
+                                                            true); //TJW2 TODO
     if (sproutlet != NULL)
     {
       service_name = sproutlet->service_name();

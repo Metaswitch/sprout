@@ -33,7 +33,8 @@ const ForkState NULL_FORK_STATE = {PJSIP_TSX_STATE_NULL, NONE};
 SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                int priority,
                                const std::string& root_uri,
-                               const std::unordered_set<std::string>& host_aliases,
+                               const std::unordered_set<std::string>& host_local_aliases,
+                               const std::unordered_set<std::string>& host_gr_aliases,
                                const std::list<Sproutlet*>& sproutlets,
                                const std::set<std::string>& stateless_proxies,
                                int max_sproutlet_depth) :
@@ -43,7 +44,8 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
              false,
              stateless_proxies),
   _root_uri(NULL),
-  _host_aliases(host_aliases),
+  _host_local_aliases(host_local_aliases),
+  _host_gr_aliases(host_gr_aliases),
   _sproutlets(sproutlets),
   _max_sproutlet_depth(max_sproutlet_depth)
 {
@@ -160,6 +162,7 @@ bool SproutletProxy::register_sproutlet(Sproutlet* sproutlet)
 Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                             int port,
                                             std::string& alias,
+                                            bool allow_gr_aliases,
                                             SAS::TrailId trail)
 {
   TRC_DEBUG("Find target Sproutlet for request");
@@ -203,7 +206,8 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     sproutlet = match_sproutlet_from_uri((pjsip_uri*)uri,
                                          alias,
                                          local_hostname_unused,
-                                         selection_type);
+                                         selection_type,
+                                         allow_gr_aliases); // TJW2 TODO
 
     if (selection_type != NONE_SELECTED)
     {
@@ -217,7 +221,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
     if ((port == 0) &&
         (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-        (is_host_local(&((pjsip_sip_uri*)uri)->host)))
+        (is_host_local_alias(&((pjsip_sip_uri*)uri)->host)))
     {
       // No port was specified by the caller, and the URI is local, so use the URI port instead.
       port = uri->port;
@@ -238,7 +242,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
     if ((route == NULL) ||
         ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
-         (is_host_local(&((pjsip_sip_uri*)route->name_addr.uri)->host))))
+         (is_host_local_alias(&((pjsip_sip_uri*)route->name_addr.uri)->host))))
     {
       TRC_DEBUG("Find default service for port %d", port);
       SAS::Event event(trail, SASEvent::STARTING_SPROUTLET_SELECTION_PORT, 0);
@@ -273,7 +277,8 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
                                                     std::string& alias,
                                                     std::string& local_hostname,
-                                                    SPROUTLET_SELECTION_TYPES& selection_type) const
+                                                    SPROUTLET_SELECTION_TYPES& selection_type,
+                                                    bool allow_gr_aliases) const
 {
   Sproutlet* sproutlet = NULL;
 
@@ -301,7 +306,7 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
               services_param->value.slen,
               services_param->value.ptr);
 
-    if (is_host_local(&sip_uri->host))
+    if (is_host_alias(&sip_uri->host, allow_gr_aliases))
     {
       // Check if this service matches a sproutlet.
       service_name = PJUtils::pj_str_to_string(&services_param->value);
@@ -341,7 +346,7 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
                 hostname.slen,
                 hostname.ptr);
 
-      if (is_host_local(&hostname))
+      if (is_host_alias(&hostname, allow_gr_aliases))
       {
         // Check if the part of the hostname before the first '.' matches
         // a sproutlet.
@@ -364,7 +369,7 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
   {
     TRC_DEBUG("Found user part - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
 
-    if (is_host_local(&sip_uri->host))
+    if (is_host_alias(&sip_uri->host, allow_gr_aliases))
     {
       // Check if the user part matches a sproutlet.
       service_name = PJUtils::pj_str_to_string(&sip_uri->user);
@@ -457,12 +462,12 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   return uri;
 }
 
-bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
+bool SproutletProxy::is_uri_local(const pjsip_uri* uri, bool allow_gr_aliases)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     pj_str_t hostname = ((pjsip_sip_uri*)uri)->host;
-    if (is_host_local(&hostname))
+    if (is_host_alias(&hostname, allow_gr_aliases))
     {
       return true;
     }
@@ -474,7 +479,7 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
       hostname.slen -= sep - hostname.ptr + 1;
       hostname.ptr = sep + 1;
 
-      return is_host_local(&hostname);
+      return is_host_alias(&hostname, allow_gr_aliases);
     }
   }
   //LCOV_EXCL_START
@@ -517,7 +522,8 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
   (void*)match_sproutlet_from_uri((pjsip_uri*)uri,
                                   unused_alias,
                                   local_hostname,
-                                  unused_selection_type);
+                                  unused_selection_type,
+                                  true); // TJW2 TODO
 
   if (local_hostname.empty())
   {
@@ -530,7 +536,7 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
   return local_hostname;
 }
 
-bool SproutletProxy::is_host_local(const pj_str_t* host) const
+bool SproutletProxy::is_host_local_alias(const pj_str_t* host) const
 {
   bool rc = false;
 
@@ -539,8 +545,8 @@ bool SproutletProxy::is_host_local(const pj_str_t* host) const
     rc = true;
   }
 
-  for (std::unordered_set<std::string>::const_iterator it = _host_aliases.begin();
-       (rc != true) && (it != _host_aliases.end());
+  for (std::unordered_set<std::string>::const_iterator it = _host_local_aliases.begin();
+       (rc != true) && (it != _host_local_aliases.end());
        ++it)
   {
     if (!pj_stricmp2(host, it->c_str()))
@@ -552,6 +558,35 @@ bool SproutletProxy::is_host_local(const pj_str_t* host) const
   return rc;
 }
 
+// TJW2 TODO: Comment
+bool SproutletProxy::is_host_gr_alias(const pj_str_t* host) const //TJW2 TODO:Name
+{
+  if (is_host_local_alias(host))
+  {
+    // Local aliases are trivially GR aliases (TJW2 TODO: Name)
+    return true;
+  }
+
+  for (std::unordered_set<std::string>::const_iterator it = _host_gr_aliases.begin();
+       it != _host_gr_aliases.end();
+       ++it)
+  {
+    if (!pj_stricmp2(host, it->c_str()))
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// TJW2 TODO: Comment
+bool SproutletProxy::is_host_alias(const pj_str_t* host,
+                                   bool allow_gr_aliases) const
+{
+  return allow_gr_aliases ? is_host_gr_alias(host) : is_host_local_alias(host);
+}
+
 bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
                                       const Sproutlet* sproutlet) const
 {
@@ -561,7 +596,8 @@ bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
   Sproutlet* matched_sproutlet = match_sproutlet_from_uri(uri,
                                                           alias_unused,
                                                           local_hostname_unused,
-                                                          selection_type_unused);
+                                                          selection_type_unused,
+                                                          true); // TJW2 TODO
 
   return (sproutlet == matched_sproutlet);
 }
@@ -681,7 +717,8 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
     SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(_req,
                                                     rdata->tp_info.transport->local_name.port,
-                                                    alias);
+                                                    alias,
+                                                    true);
 
     if (sproutlet_tsx == NULL)
     {
@@ -956,7 +993,7 @@ void SproutletProxy::UASTsx::schedule_requests()
     else
     {
       std::string alias;
-      SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(req.req, 0, alias);
+      SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(req.req, 0, alias, false);
 
       if (sproutlet_tsx != NULL)
       {
@@ -1235,14 +1272,17 @@ void SproutletProxy::UASTsx::check_destroy()
 
 SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
                                                         int port,
-                                                        std::string& alias)
+                                                        std::string& alias,
+                                                        bool allow_gr_aliases)
 {
+  TRC_DEBUG("TJW2 Getting sproutlet tsx");
   SproutletTsx* sproutlet_tsx = NULL;
 
   // Do an initial lookup for the target sproutlet.
   Sproutlet* sproutlet = _sproutlet_proxy->target_sproutlet(req->msg,
                                                             port,
                                                             alias,
+                                                            allow_gr_aliases,
                                                             trail());
 
   // Keep cycling though sproutlets until we either find a sproutlet that
@@ -1271,7 +1311,7 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
                                                                   PJSIP_H_ROUTE,
                                                                   NULL);
     if ((route != NULL) &&
-        (_sproutlet_proxy->is_uri_local(route->name_addr.uri)))
+        (_sproutlet_proxy->is_uri_local(route->name_addr.uri, allow_gr_aliases)))
     {
       TRC_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(route).c_str());
       pj_list_erase(route);
@@ -1287,6 +1327,7 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
     sproutlet = _sproutlet_proxy->target_sproutlet(req->msg,
                                                    0,
                                                    alias,
+                                                   allow_gr_aliases,
                                                    trail());
   }
 
@@ -1841,7 +1882,7 @@ bool SproutletWrapper::is_uri_reflexive(const pjsip_uri* uri) const
 
 bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
 {
-  return _proxy->is_uri_local(uri);
+  return _proxy->is_uri_local(uri, true); // TJW2 TODO
 }
 
 pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const

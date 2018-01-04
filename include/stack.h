@@ -51,6 +51,7 @@ struct stack_data_struct
   pj_str_t             default_home_domain;
   std::unordered_set<std::string> home_domains;
   std::unordered_set<std::string> aliases;
+  std::unordered_set<std::string> gr_aliases;
   std::string          sprout_hostname;
   pj_str_t             cdf_domain;
   pj_str_t             scscf_uri_str;
@@ -146,6 +147,7 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const std::string& sproutlet_uri,
                               const std::string& sprout_hostname,
                               const std::string& alias_hosts,
+                              const std::string& gr_alias_hosts,
                               SIPResolver* sipresolver,
                               int record_routing_model,
                               const int default_session_expires,

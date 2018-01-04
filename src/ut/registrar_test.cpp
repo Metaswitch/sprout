@@ -263,6 +263,7 @@ public:
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "homedomain",
                                           additional_home_domains,
+                                          std::unordered_set<std::string>(), // TJW2 TODO
                                           sproutlets,
                                           std::set<std::string>());
   }
@@ -3381,12 +3382,14 @@ public:
     sproutlets.push_back(_registrar_sproutlet);
 
     std::unordered_set<std::string> additional_home_domains;
+    std::unordered_set<std::string> host_gr_aliases; // TJW2 TODO
     additional_home_domains.insert("sprout.homedomain");
 
     _registrar_proxy = new SproutletProxy(stack_data.endpt,
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "homedomain",
                                           additional_home_domains,
+                                          host_gr_aliases, // TJW2 TODO
                                           sproutlets,
                                           std::set<std::string>());
 

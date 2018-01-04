@@ -616,6 +616,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& scscf_uri,
                        const std::string& sprout_hostname,
                        const std::string& alias_hosts,
+                       const std::string& gr_alias_hosts,
                        SIPResolver* sipresolver,
                        int record_routing_model,
                        const int default_session_expires,
@@ -893,6 +894,26 @@ pj_status_t init_stack(const std::string& system_name,
     TRC_STATUS(" %.*s",
                (int)(*it).slen,
                (*it).ptr);
+  }
+
+  // TJW2 TODO: Avoid duplication
+  // TJW2 TODO: Add to stack_data.name?
+  stack_data.gr_aliases = std::unordered_set<std::string>();
+
+  if (gr_alias_hosts != "")
+  {
+    std::list<std::string> gr_aliases;
+    Utils::split_string(gr_alias_hosts, ',', gr_aliases, 0, true);
+    stack_data.gr_aliases.insert(gr_aliases.begin(), gr_aliases.end());
+  }
+
+  TRC_STATUS("GR host aliases:");
+  for (std::unordered_set<std::string>::iterator it = stack_data.gr_aliases.begin();
+       it != stack_data.gr_aliases.end();
+       ++it)
+  {
+    TRC_STATUS(" %s",
+               it->c_str());
   }
 
   // Set up the Last Value Cache, accumulators and counters.

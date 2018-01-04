@@ -84,6 +84,7 @@ get_settings()
         mmtel=5055
 
         alias_list=""
+        gr_alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
         blacklisted_scscf_uris=""
@@ -240,6 +241,7 @@ get_daemon_args()
                      --log-file=$log_directory
                      --log-level=$log_level
                      --alias=$public_ip,$public_hostname,$alias_list
+                     --gr-alias=$gr_alias_list
                      --homestead-timeout=$sprout_homestead_timeout_ms"
 
         if [ -n "$reg_max_expires" ]

@@ -34,7 +34,8 @@ public:
   ///
   /// @param  endpt               - The pjsip endpoint to associate with.
   /// @param  priority            - The pjsip priority to load at.
-  /// @param  host_aliases        - The IP addresses/domains that refer to this proxy.
+  /// @param  host_local_aliases  - TJW2 TODO
+  /// @param  host_gr_aliases     - TJW2 TODO
   /// @param  sproutlets          - Sproutlets to load in this proxy.
   /// @param  stateless_proxies   - A set of next-hops that are considered to be
   ///                               stateless proxies.
@@ -43,7 +44,8 @@ public:
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
-                 const std::unordered_set<std::string>& host_aliases,
+                 const std::unordered_set<std::string>& host_local_aliases,
+                 const std::unordered_set<std::string>& host_gr_aliases,
                  const std::list<Sproutlet*>& sproutlets,
                  const std::set<std::string>& stateless_proxies,
                  int max_sproutlet_depth=DEFAULT_MAX_SPROUTLET_DEPTH);
@@ -83,13 +85,15 @@ protected:
   Sproutlet* target_sproutlet(pjsip_msg* req,
                               int port,
                               std::string& alias,
+                              bool allow_gr_aliases,
                               SAS::TrailId trail);
 
   /// Return the sproutlet that matches the URI supplied.
   Sproutlet* match_sproutlet_from_uri(const pjsip_uri* uri,
                                       std::string& alias,
                                       std::string& local_hostname,
-                                      SPROUTLET_SELECTION_TYPES& selection_type) const;
+                                      SPROUTLET_SELECTION_TYPES& selection_type,
+                                      bool allow_gr_aliases) const;
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -109,11 +113,15 @@ protected:
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
-  bool is_uri_local(const pjsip_uri* uri);
+  bool is_uri_local(const pjsip_uri* uri, bool allow_gr_aliases);
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
-  bool is_host_local(const pj_str_t* host) const;
+
+  bool is_host_local_alias(const pj_str_t* host) const;
+  bool is_host_gr_alias(const pj_str_t* host) const;
+  bool is_host_alias(const pj_str_t* host, bool allow_gr_aliases) const;
+
   bool is_uri_reflexive(const pjsip_uri* uri,
                         const Sproutlet* sproutlet) const;
 
@@ -208,7 +216,8 @@ protected:
     /// Finds a SproutletTsx willing to handle a request
     SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
                                     int port,
-                                    std::string& alias);
+                                    std::string& alias,
+                                    bool allow_gr_aliases);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;
@@ -269,7 +278,8 @@ protected:
   pjsip_sip_uri* _root_uri;
   std::map<std::string, pjsip_sip_uri*> _root_uris;
 
-  std::unordered_set<std::string> _host_aliases;
+  std::unordered_set<std::string> _host_local_aliases;
+  std::unordered_set<std::string> _host_gr_aliases; // TJW2 TODO
 
   std::map<std::string, Sproutlet*> _services;
 
