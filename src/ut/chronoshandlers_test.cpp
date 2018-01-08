@@ -453,6 +453,9 @@ TEST_F(ChronosAoRTimeoutTasksMockStoreTest, DeregisterAS)
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   EXPECT_THAT(r1.uri(), testing::MatchesRegex(".*sip:1.2.3.4:56789.*"));
+
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
 }
 
 TEST_F(ChronosAoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
