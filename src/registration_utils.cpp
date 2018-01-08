@@ -311,6 +311,7 @@ void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
   }
   else
   {
+    TRC_DEBUG("Creating third party deregistration for %s", served_user.c_str());
     RegistrationUtils::register_with_application_servers(ifcs,
                                                          fifc_service,
                                                          ifc_configuration,
