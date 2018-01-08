@@ -309,6 +309,7 @@ void AoR::Binding::
     }
     writer.EndArray();
 
+    // SDM-REFACTOR-TODO: We don't need this upgrade code anymore. Delete it.
     writer.String(JSON_PATHS);
     writer.StartArray();
     {
@@ -362,6 +363,7 @@ void AoR::Binding::from_json(const rapidjson::Value& b_obj)
     }
   }
 
+  // SDM-REFACTOR-TODO: We don't need this upgrade code anymore. Delete it.
   if (b_obj.HasMember(JSON_PATHS))
   {
     JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
