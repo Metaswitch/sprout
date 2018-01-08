@@ -118,8 +118,6 @@ protected:
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
-  bool is_host_local_alias(const pj_str_t* host) const;
-  bool is_host_gr_alias(const pj_str_t* host) const;
   bool is_host_alias(const pj_str_t* host, bool allow_gr_aliases) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,

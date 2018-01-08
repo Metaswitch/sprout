@@ -79,7 +79,8 @@ SproutletProxy::~SproutletProxy()
 }
 
 
-/// Utility method to create a UASTsx object for incoming requests.
+/// Utility method to create a UASTsx object for incoming requests. The UASTsx
+/// object persists for the duration of the transaction.
 BasicProxy::UASTsx* SproutletProxy::create_uas_tsx()
 {
   return (BasicProxy::UASTsx*)new SproutletProxy::UASTsx(this);
@@ -159,6 +160,7 @@ bool SproutletProxy::register_sproutlet(Sproutlet* sproutlet)
 
 
 /// Utility method to find the appropriate Sproutlet to handle a request.
+/// Returns NULL if no local Sproutlet can be found.
 Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                             int port,
                                             std::string& alias,
@@ -193,6 +195,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
   if (uri != NULL)
   {
+    // Try to find a Sproutlet based on the given URI
     std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                                  (pjsip_uri*)uri);
     SAS::Event event(trail, SASEvent::STARTING_SPROUTLET_SELECTION_URI, 0);
@@ -207,7 +210,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                          alias,
                                          local_hostname_unused,
                                          selection_type,
-                                         allow_gr_aliases); // TJW2 TODO
+                                         allow_gr_aliases);
 
     if (selection_type != NONE_SELECTED)
     {
@@ -221,7 +224,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
     if ((port == 0) &&
         (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-        (is_host_local_alias(&((pjsip_sip_uri*)uri)->host)))
+        (is_host_alias(&((pjsip_sip_uri*)uri)->host, allow_gr_aliases)))
     {
       // No port was specified by the caller, and the URI is local, so use the URI port instead.
       port = uri->port;
@@ -242,7 +245,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
     if ((route == NULL) ||
         ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
-         (is_host_local_alias(&((pjsip_sip_uri*)route->name_addr.uri)->host))))
+         (is_host_alias(&((pjsip_sip_uri*)route->name_addr.uri)->host, allow_gr_aliases))))
     {
       TRC_DEBUG("Find default service for port %d", port);
       SAS::Event event(trail, SASEvent::STARTING_SPROUTLET_SELECTION_PORT, 0);
@@ -482,9 +485,7 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri, bool allow_gr_aliases)
       return is_host_alias(&hostname, allow_gr_aliases);
     }
   }
-  //LCOV_EXCL_START
   return false;
-  //LCOV_EXCL_STOP
 }
 
 pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req,
@@ -523,7 +524,7 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
                                   unused_alias,
                                   local_hostname,
                                   unused_selection_type,
-                                  true); // TJW2 TODO
+                                  true);
 
   if (local_hostname.empty())
   {
@@ -536,7 +537,23 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
   return local_hostname;
 }
 
-bool SproutletProxy::is_host_local_alias(const pj_str_t* host) const
+// Checks if the given host is an alias of this node.
+//
+// 'local aliases' are hostnames which correspond to services provided by this
+// node. For example, if this node is in site 1, scscf.site-1.homedomain.com is
+// a local alias.
+// Requests for local aliases of this node will be treated as local throughout.
+//
+// 'GR aliases' are hostnames which correspond to services provided by remote
+// nodes for which this node can accept traffic. For example, if this node is in
+// site 2, scscf.site-2.homedomain.com may be a GR alias.
+// Requests for GR aliases of this node will be accepted off the wire, but will
+// be routed externally if recieved from an internal Sproutlet.
+//
+// The allow_gr_aliases flag determines whether the method will return true on
+// hosts that are 'gr' but not 'local' aliases.
+bool SproutletProxy::is_host_alias(const pj_str_t* host,
+                                   bool allow_gr_aliases) const
 {
   bool rc = false;
 
@@ -546,7 +563,7 @@ bool SproutletProxy::is_host_local_alias(const pj_str_t* host) const
   }
 
   for (std::unordered_set<std::string>::const_iterator it = _host_local_aliases.begin();
-       (rc != true) && (it != _host_local_aliases.end());
+       (!rc) && (it != _host_local_aliases.end());
        ++it)
   {
     if (!pj_stricmp2(host, it->c_str()))
@@ -555,36 +572,20 @@ bool SproutletProxy::is_host_local_alias(const pj_str_t* host) const
     }
   }
 
-  return rc;
-}
-
-// TJW2 TODO: Comment
-bool SproutletProxy::is_host_gr_alias(const pj_str_t* host) const //TJW2 TODO:Name
-{
-  if (is_host_local_alias(host))
+  if (allow_gr_aliases)
   {
-    // Local aliases are trivially GR aliases (TJW2 TODO: Name)
-    return true;
-  }
-
-  for (std::unordered_set<std::string>::const_iterator it = _host_gr_aliases.begin();
-       it != _host_gr_aliases.end();
-       ++it)
-  {
-    if (!pj_stricmp2(host, it->c_str()))
+    for (std::unordered_set<std::string>::const_iterator it = _host_gr_aliases.begin();
+        (!rc) && it != _host_gr_aliases.end();
+         ++it)
     {
-      return true;
+      if (!pj_stricmp2(host, it->c_str()))
+      {
+        rc = true;
+      }
     }
   }
 
-  return false;
-}
-
-// TJW2 TODO: Comment
-bool SproutletProxy::is_host_alias(const pj_str_t* host,
-                                   bool allow_gr_aliases) const
-{
-  return allow_gr_aliases ? is_host_gr_alias(host) : is_host_local_alias(host);
+  return rc;
 }
 
 bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
@@ -597,7 +598,7 @@ bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
                                                           alias_unused,
                                                           local_hostname_unused,
                                                           selection_type_unused,
-                                                          true); // TJW2 TODO
+                                                          true);
 
   return (sproutlet == matched_sproutlet);
 }
@@ -701,7 +702,9 @@ SproutletProxy::UASTsx::~UASTsx()
 }
 
 
-/// Initialise the UAS transaction object.
+/// Initialise the UAS transaction object. UASTsx objects persist for the
+/// duration of the SIP transaction, and are created as requests are recieved
+/// off the wire.
 pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
 {
   // Do the BasicProxy initialization first.
@@ -715,6 +718,11 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     Sproutlet* sproutlet = NULL;
     pjsip_route_hdr* route = (pjsip_route_hdr*)
                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
+
+    // For the purpose of redundancy, we allow GR aliases here, that is, accept
+    // requests intended for a GR alias of this site off the wire. This means
+    // that this node can handle traffic destined for a remote site in the case
+    // that the remote site has failed.
     SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(_req,
                                                     rdata->tp_info.transport->local_name.port,
                                                     alias,
@@ -993,6 +1001,10 @@ void SproutletProxy::UASTsx::schedule_requests()
     else
     {
       std::string alias;
+
+      // Do not allow GR aliases. Requests intended for another site should be
+      // routed to that site - this means that the terminating side of a call
+      // will be handled in the site that subscriber is registered.
       SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(req.req, 0, alias, false);
 
       if (sproutlet_tsx != NULL)
@@ -1275,7 +1287,8 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
                                                         std::string& alias,
                                                         bool allow_gr_aliases)
 {
-  TRC_DEBUG("TJW2 Getting sproutlet tsx");
+  TRC_DEBUG("%s gr aliases.",
+            allow_gr_aliases ? "Allowing" : "Not allowing");
   SproutletTsx* sproutlet_tsx = NULL;
 
   // Do an initial lookup for the target sproutlet.
@@ -1882,7 +1895,7 @@ bool SproutletWrapper::is_uri_reflexive(const pjsip_uri* uri) const
 
 bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
 {
-  return _proxy->is_uri_local(uri, true); // TJW2 TODO
+  return _proxy->is_uri_local(uri, true);
 }
 
 pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const

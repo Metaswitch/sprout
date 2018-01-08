@@ -156,7 +156,7 @@ const static struct pj_getopt_option long_opt[] =
   { "domain",                       required_argument, 0, 'D'},
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
   { "alias",                        required_argument, 0, 'n'},
-  { "gr-alias",                     required_argument, 0, 'b'},
+  { "gr-alias",                     required_argument, 0, 'b'}, // TJW2 TODO: Code here?
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},

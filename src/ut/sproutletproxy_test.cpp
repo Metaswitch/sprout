@@ -654,6 +654,37 @@ public:
   }
 };
 
+class FakeSproutletGRForwarder : public CompositeSproutletTsx
+{
+public:
+  FakeSproutletGRForwarder(Sproutlet* sproutlet) :
+   CompositeSproutletTsx(sproutlet, static_cast<FakeSproutlet<FakeSproutletGRForwarder>*>(sproutlet)->_next_hop)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    // Regardless of what we receive, forward the request on using a Route
+    // header to route the message to the specified (external) URI.  This is
+    // used to test Tel URIs, which are not themselves routable.
+    string forwarding_uri = "sip:proxy1.homedomain-remote;transport=TCP;lr";
+    TRC_DEBUG("Forwarding to URI: %s", forwarding_uri.c_str());
+    pj_pool_t* pool = get_pool(req);
+    pjsip_route_hdr* route = pjsip_route_hdr_create(pool);
+    route->name_addr.uri = PJUtils::uri_from_string(forwarding_uri, pool, PJ_FALSE);
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)route);
+
+    // Add a foo header so we can check that this sproutlet actually received
+    // the message.
+    pj_str_t foo = pj_str((char*)"Foo");
+    pjsip_route_hdr* foo_hdr = identity_hdr_create(pool, foo);
+    foo_hdr->name_addr.uri = PJUtils::uri_from_string("sip:bar@baz", pool, PJ_FALSE);
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)foo_hdr);
+
+    send_request(req);
+  }
+};
+
 class FakeSproutletRestrict : public FakeSproutletTsxNextHop
 {
 public:
@@ -805,6 +836,7 @@ public:
     add_host_mapping("proxy2.awaydomain", "10.10.20.2");
     add_host_mapping("node1.awaydomain", "10.10.28.1");
     add_host_mapping("node2.awaydomain", "10.10.28.2");
+    add_host_mapping("proxy1.homedomain-remote", "10.10.30.1");
 
     // Create the Test Sproutlets.
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, "sip:fwd.homedomain;transport=tcp", ""));
@@ -834,21 +866,26 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletForkErrors>("forkerr", 0, "sip:forkerr.homedomain;transport=tcp", "", "", NULL, NULL, "fork-nf", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("teltest1", 44555, "sip:teltest1.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", "teltest2"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletURIForwarder>("teltest2", 0, "sip:teltest2.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletGRForwarder>("graliastest", 0, "sip:graliastest.homedomain;transport=tcp", "", "", NULL, NULL, "", ""));
     _sproutlets.push_back(new UninterestedSproutlet<FakeSproutletTsxNextHop>("teltest3", 44666, "sip:teltest3.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", "teltest2"));
 
-    // Create a host alias.
-    std::unordered_set<std::string> host_aliases;
-    host_aliases.insert("proxy1.homedomain-alias");
+    // Create a local alias.
+    std::unordered_set<std::string> host_local_aliases;
+    host_local_aliases.insert("proxy1.homedomain-alias");
 
     // We need to add this one for a UT.
-    host_aliases.insert("scscf.proxy1.homedomain");
+    host_local_aliases.insert("scscf.proxy1.homedomain");
+
+    // Create a GR alias.
+    std::unordered_set<std::string> host_gr_aliases;
+    host_gr_aliases.insert("proxy1.homedomain-remote");
 
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "proxy1.homedomain",
-                                host_aliases,
-                                std::unordered_set<std::string>(), // TJW2 TODO
+                                host_local_aliases,
+                                host_gr_aliases,
                                 _sproutlets,
                                 std::set<std::string>());
 
@@ -3301,7 +3338,7 @@ TEST_F(SproutletProxyTest, SproutletSelection)
   std::string uri_str = "sip:b2bua@scscf.proxy1.homedomain:44444;service=fwd";
   pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri_str, stack_data.pool, PJ_FALSE);
 
-  // Shoud match fwd.
+  // Should match fwd.
   service_name = match_sproutlet_from_uri((pjsip_uri*)uri);
   ASSERT_EQ("fwd", service_name);
 
@@ -3400,4 +3437,120 @@ TEST_F(SproutletProxyTest, SproutletCopiesOriginalTransport)
 
   delete tp1;
   delete tp2;
+}
+
+TEST_F(SproutletProxyTest, AcceptGrAliasExternal)
+{
+  // Tests that requests off the wire with a Route header corresponsing to a GR
+  // alias of this node are accepted.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing a GR alias of this node.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@awaydomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy1.homedomain-remote;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting a 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
+  free_txdata();
+
+  // Check the INVITE
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that the first Route header has been removed.
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, ForwardGrAliasInternal)
+{
+  // Tests that requests recieved from sproutlets with a Route header
+  // corresponsing to a GR (but not local)  alias of this node are forwarded.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing a GR alias of this node.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@awaydomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:graliastest.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting a 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
+  free_txdata();
+
+  // Check the INVITE
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.30.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that the Route header has been removed.
+  EXPECT_EQ("Route: <sip:proxy1.homedomain-remote;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
 }
