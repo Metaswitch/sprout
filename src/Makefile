@@ -144,6 +144,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
                        subscriber_data_manager_test.cpp \
+                       subscriber_manager_test.cpp \
                        astaire_impistore_test.cpp \
                        registrar_test.cpp \
                        bono_test.cpp \
