@@ -9,7 +9,6 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-
 #ifndef SUBSCRIBER_MANAGER_H__
 #define SUBSCRIBER_MANAGER_H__
 
@@ -29,6 +28,7 @@ extern "C" {
 #include "hssconnection.h"
 #include "ifchandler.h"
 
+// SDM-REFACTOR-TODO: Add Doxygen comments.
 class SubscriberManager
 {
 public:
@@ -41,7 +41,7 @@ public:
   class Binding
   {
   public:
-    Binding(std::string binding_id): _uri(binding_id) {};
+    Binding() {};
 
     /// This is binding ID.
     /// The registered contact URI, e.g.,
@@ -91,7 +91,7 @@ public:
   class Subscription
   {
   public:
-    Subscription(std::string subscription_id): _to_tag(subscription_id), _refreshed(false) {};
+    Subscription(std::string subscription_id): _refreshed(false) {};
 
     /// The Contact URI for the subscription dialog (used as the Request URI
     /// of the NOTIFY)
