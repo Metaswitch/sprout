@@ -32,6 +32,7 @@ using ::testing::HasSubstr;
 using ::testing::Not;
 using ::testing::_;
 using ::testing::Return;
+using ::testing::An;
 
 /// Fixture for SubscriptionTest.
 class SubscriptionTest : public SipTest
@@ -1766,10 +1767,10 @@ protected:
 // This is a repro for https://github.com/Metaswitch/sprout/issues/977
 TEST_F(SubscriptionTestMockStore, SubscriberDataManagerWritesFail)
 {
-  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::NOT_FOUND));
 
-  EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _))
+  EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::ERROR));
 
   SubscribeMessage msg;
