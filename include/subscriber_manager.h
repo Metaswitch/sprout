@@ -193,8 +193,8 @@ public:
                             SAS::TrailId trail) { return true; }
 
 private:
-  AnalyticsLogger* _analytics;
   HSSConnection* _hss_connection;
+  AnalyticsLogger* _analytics;
 };
 
 #endif

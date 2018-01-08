@@ -31,6 +31,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          impistore.cpp \
                          astaire_impistore.cpp \
                          subscriber_data_manager.cpp \
+                         subscriber_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \
                          enumservice.cpp \
