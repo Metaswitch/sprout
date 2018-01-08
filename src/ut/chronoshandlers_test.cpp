@@ -398,10 +398,9 @@ class ChronosAoRTimeoutTasksMockStoreTest : public SipTest
 
 };
 
-
+// Test that deregister is sent to AS when all bindings expired
 TEST_F(ChronosAoRTimeoutTasksMockStoreTest, DeregisterAS)
 {
-  // Test that deregister is sent to AS when all bindings expired
   AoR* aor = new AoR("sip:6505550231@homedomain");
   AoR* aor2 = new AoR(*aor);
   AoRPair* aor_pair = new AoRPair(aor, aor2);
@@ -438,7 +437,6 @@ TEST_F(ChronosAoRTimeoutTasksMockStoreTest, DeregisterAS)
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // Parse and handle the request
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
@@ -454,6 +452,7 @@ TEST_F(ChronosAoRTimeoutTasksMockStoreTest, DeregisterAS)
   pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_THAT(r1.uri(), testing::MatchesRegex(".*sip:1.2.3.4:56789.*"));
 }
 
 TEST_F(ChronosAoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
