@@ -295,8 +295,8 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
                                      _ifc_configuration,
                                      aor,
                                      binding_id,
-                                     HSSConnection::DEREG_TIMEOUT,
-                                     SubscriberDataManager::EventTrigger::TIMEOUT,
+                                     HSSConnection::DEREG_TIMEOUT, // SDM-REFACTOR-TODO: switch to DEREG_USER
+                                     SubscriberDataManager::EventTrigger::TIMEOUT, // SDM-REFACTOR-TODO: switch to USER
                                      trail);
 }
 

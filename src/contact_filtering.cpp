@@ -237,6 +237,8 @@ bool binding_to_target(const std::string& aor,
   {
     // Fill in the paths parameter for the target. If _path_headers is non-empty
     // we use that, otherwise we use the _path_uris field.
+    //
+    // SDM-REFACTOR-TODO: _path_uris is unncessary upgrade code now, delete it.
     if (!binding._path_headers.empty())
     {
       for (std::string path : binding._path_headers)

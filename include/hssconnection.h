@@ -41,7 +41,7 @@ public:
     std::string _wildcard;
     bool _cache_allowed;
 
-    irs_query() : 
+    irs_query() :
       _public_id(""),
       _private_id(""),
       _req_type(""),
@@ -52,6 +52,8 @@ public:
    }
   };
 
+  // SDM-REFACTOR-TODO: irs_info is the same as SubscriberManager::SubscriberInfo.
+  // Delete this once all clients have been moved to use the SM.
   struct irs_info
   {
     std::string _regstate;
@@ -62,7 +64,7 @@ public:
     std::deque<std::string> _ccfs;
     std::deque<std::string> _ecfs;
 
-    irs_info() : 
+    irs_info() :
       _regstate(""),
       _prev_regstate(""),
       _service_profiles(),
