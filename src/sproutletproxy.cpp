@@ -851,6 +851,8 @@ void SproutletProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx,
 
     // Final response, so break the linkage between the UAC transaction and
     // the Sproutlets.
+    // We do this here (before we create and run the Callback) while we've got
+    // the lock to avoid races.
     _dmap_uac.erase(i->second);
     _umap.erase(i);
 
