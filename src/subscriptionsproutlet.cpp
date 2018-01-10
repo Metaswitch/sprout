@@ -342,6 +342,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   std::string aor;
   if (!irs_info._associated_uris.get_default_impu(aor, false))
   {
+    TRC_ERROR("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
+    TRC_ERROR("Could not determine default URI, Subscribe is being rejected with 403");
     pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
     send_response(rsp);
     free_msg(req);
@@ -349,7 +351,6 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     return;
   }
 
-  TRC_DEBUG("aor = %s", aor.c_str());
   TRC_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   // Create a subscription object from the request that we can pass down to
