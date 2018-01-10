@@ -1,6 +1,6 @@
 /**
- * @file scscfsproutlet.cpp Definition of the S-CSCF Sproutlet classes,
- *                          implementing S-CSCF specific SIP proxy functions.
+ * @file scscfsproutlet.h Definition of the S-CSCF Sproutlet classes,
+ *                        implementing S-CSCF specific SIP proxy functions.
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory

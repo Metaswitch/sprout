@@ -374,6 +374,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
                                      const std::string& next_hop_service,
                                      pjsip_method_e req_type) :
   CompositeSproutletTsx(scscf, next_hop_service),
+  _hss_cache_helper(new HssCacheHelper),
   _scscf(scscf),
   _cancelled(false),
   _session_case(NULL),
@@ -393,7 +394,6 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
   _base_req(nullptr)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
-  _hss_cache_helper = new HssCacheHelper;
 }
 
 
@@ -1011,7 +1011,10 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
   // the original URI doesn't count as a retarget, so get the aliases ready to
   // check.
   std::vector<std::string> aliases;
-  _hss_cache_helper->get_aliases(old_served_user, aliases, trail(), _scscf);
+  _hss_cache_helper->get_aliases(old_served_user,
+                                 aliases,
+                                 trail(),
+                                 _scscf->_hss);
 
   if (new_served_user == old_served_user)
   {
@@ -1110,7 +1113,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         long http_code = _hss_cache_helper->lookup_ifcs(served_user,
                                                         ifcs,
                                                         trail(),
-                                                        _scscf);
+                                                        _scscf->_hss);
         if (http_code == HTTP_OK)
         {
           TRC_DEBUG("Creating originating CDIV AS chain");
@@ -1245,7 +1248,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       long http_code = _hss_cache_helper->lookup_ifcs(served_user,
                                                       ifcs,
                                                       trail(),
-                                                      _scscf);
+                                                      _scscf->_hss);
       if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");
@@ -1585,7 +1588,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // URI for this S-CSCF node (not the cluster) to ensure any forwarded
     // requests are routed to this node.
     pjsip_sip_uri* odi_uri = (pjsip_sip_uri*)
-                             pjsip_uri_clone(get_pool(req), scscf->scscf_node_uri());
+                             pjsip_uri_clone(get_pool(req), _scscf->scscf_node_uri());
     pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
     odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
 
@@ -1784,7 +1787,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     bool success = _hss_cache_helper->get_associated_uris(public_id,
                                                           uris,
                                                           trail(),
-                                                          _scscf);
+                                                          _scscf->_hss);
 
     if ((success) && (uris.size() > 0))
     {
