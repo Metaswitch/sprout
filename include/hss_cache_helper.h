@@ -10,8 +10,8 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef COMMON_SPROUTLET_HELPER_H__
-#define COMMON_SPROUTLET_HELPER_H__
+#ifndef HSS_CACHE_HELPER_H__
+#define HSS_CACHE_HELPER_H__
 
 #include "sas.h"
 #include "aschain.h"
@@ -90,7 +90,7 @@ public:
 private:
 
   /// Reads data for a public user identity from the HSS, and stores it in
-  /// member fields for sproutlet.
+  /// member fields for the sproutlet.
   /// Returns the HTTP result code obtained from homestead.
   long read_hss_data(const HSSConnection::irs_query& irs_query,
                      HSSConnection::irs_info& irs_info,
@@ -98,8 +98,8 @@ private:
                      Sproutlet* sproutlet);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
-  /// the HSS and stores cached values. Returns the HTTP result code obtained
-  /// from homestead.
+  /// the HSS and stores cached values.
+  /// Returns the HTTP result code obtained from homestead.
   long get_data_from_hss(std::string public_id,
                          SAS::TrailId trail,
                          Sproutlet* sproutlet);
