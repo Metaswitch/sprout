@@ -32,10 +32,11 @@ HssCacheHelper::~HssCacheHelper()
 
 
 bool HssCacheHelper::get_associated_uris(std::string public_id,
-                                                std::vector<std::string>& uris,
-                                                SAS::TrailId trail)
+                                         std::vector<std::string>& uris,
+                                         SAS::TrailId trail,
+                                         Sproutlet* sproutlet)
 {
-  long http_code = get_data_from_hss(public_id, trail);
+  long http_code = get_data_from_hss(public_id, trail, sproutlet);
   if (http_code == HTTP_OK)
   {
     uris = _irs_info._associated_uris.get_all_uris();
@@ -45,10 +46,11 @@ bool HssCacheHelper::get_associated_uris(std::string public_id,
 
 
 bool HssCacheHelper::get_aliases(std::string public_id,
-                                        std::vector<std::string>& aliases,
-                                        SAS::TrailId trail)
+                                 std::vector<std::string>& aliases,
+                                 SAS::TrailId trail,
+                                 Sproutlet* sproutlet)
 {
-  long http_code = get_data_from_hss(public_id, trail);
+  long http_code = get_data_from_hss(public_id, trail, sproutlet);
   if (http_code == HTTP_OK)
   {
     aliases = _irs_info._aliases;
@@ -58,10 +60,11 @@ bool HssCacheHelper::get_aliases(std::string public_id,
 
 
 long HssCacheHelper::lookup_ifcs(std::string public_id,
-                                        Ifcs& ifcs,
-                                        SAS::TrailId trail)
+                                 Ifcs& ifcs,
+                                 SAS::TrailId trail,
+                                 Sproutlet* sproutlet)
 {
-  long http_code = get_data_from_hss(public_id, trail);
+  long http_code = get_data_from_hss(public_id, trail, sproutlet);
   if (http_code == HTTP_OK)
   {
     ifcs = _ifcs;
@@ -71,10 +74,11 @@ long HssCacheHelper::lookup_ifcs(std::string public_id,
 
 
 long HssCacheHelper::read_hss_data(const HSSConnection::irs_query& irs_query,
-                                          HSSConnection::irs_info& irs_info,
-                                          SAS::TrailId trail)
+                                   HSSConnection::irs_info& irs_info,
+                                   SAS::TrailId trail,
+                                   Sproutlet* sproutlet)
 {
-  long http_code = _scscf->_hss->update_registration_state(irs_query,
+  long http_code = sproutlet->_hss->update_registration_state(irs_query,
                                                            irs_info,
                                                            trail);
 
@@ -96,7 +100,8 @@ long HssCacheHelper::read_hss_data(const HSSConnection::irs_query& irs_query,
 
 
 long HssCacheHelper::get_data_from_hss(std::string public_id,
-                                              SAS::TrailId trail)
+                                       SAS::TrailId trail,
+                                       Sproutlet* sproutlet)
 {
   long http_code = HTTP_OK;
 
@@ -113,7 +118,8 @@ long HssCacheHelper::get_data_from_hss(std::string public_id,
 
     http_code = read_hss_data(irs_query,
                               _irs_info,
-                              trail);
+                              trail,
+                              sproutlet);
 
     if (http_code == HTTP_OK)
     {

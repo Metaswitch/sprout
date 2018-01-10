@@ -15,6 +15,8 @@
 
 #include "sas.h"
 #include "aschain.h"
+#include "hssconnection.h"
+#include "sproutlet.h"
 
 class HssCacheHelper
 {
@@ -52,10 +54,6 @@ public:
   /// pulled from the P-Profile-Key header (RFC 5002).
   static std::string _wildcard;
 
-  /// Pointer to the parent SCSCFSproutlet object - used for various operations
-  /// that require access to global configuration or services.
-  static SCSCFSproutlet* _scscf;
-
   /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
   /// HSS. This field should not be changed once it has been set by the
   /// on_rx_intial_request() call.
@@ -67,7 +65,8 @@ public:
   /// returns true.
   bool get_associated_uris(std::string public_id,
                            std::vector<std::string>& uris,
-                           SAS::TrailId trail);
+                           SAS::TrailId trail,
+                           Sproutlet* sproutlet);
 
   /// Look up the aliases for the given public ID, using the cache if
   /// possible (and caching them and the iFC otherwise).
@@ -75,7 +74,8 @@ public:
   /// returns true.
   bool get_aliases(std::string public_id,
                    std::vector<std::string>& aliases,
-                   SAS::TrailId trail);
+                   SAS::TrailId trail,
+                   Sproutlet* sproutlet);
 
   /// Look up the Ifcs for the given public ID, using the cache if possible
   /// (and caching them and the associated URIs otherwise).
@@ -84,7 +84,8 @@ public:
   /// returns HTTP_OK.
   long lookup_ifcs(std::string public_id,
                    Ifcs& ifcs,
-                   SAS::TrailId trail);
+                   SAS::TrailId trail,
+                   Sproutlet* sproutlet);
 
 private:
 
@@ -93,13 +94,15 @@ private:
   /// Returns the HTTP result code obtained from homestead.
   long read_hss_data(const HSSConnection::irs_query& irs_query,
                      HSSConnection::irs_info& irs_info,
-                     SAS::TrailId trail);
+                     SAS::TrailId trail,
+                     Sproutlet* sproutlet);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS and stores cached values. Returns the HTTP result code obtained
   /// from homestead.
   long get_data_from_hss(std::string public_id,
-                         SAS::TrailId trail);
+                         SAS::TrailId trail,
+                         Sproutlet* sproutlet);
 
 };
 

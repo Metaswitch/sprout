@@ -38,6 +38,7 @@ extern "C" {
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
 #include "compositesproutlet.h"
+#include "hss_cache_helper.h"
 
 class SCSCFSproutletTsx;
 
@@ -233,6 +234,8 @@ public:
   virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
   virtual void on_timer_expiry(void* context) override;
 
+  HssCacheHelper* _hss_cache_helper;
+
 private:
   /// Examines the top route header to determine the relevant AS chain
   /// (from the ODI token) and the session case (based on the presence of
@@ -327,6 +330,10 @@ private:
   /// @param fork_id  - The fork's number.
   /// @param sip_code - The reported SIP return code
   std::string fork_failure_reason_as_string(int fork_id, int sip_code);
+
+  /// Pointer to the parent SCSCFSproutlet object - used for various operations
+  /// that require access to global configuration or services.
+  SCSCFSproutlet* _scscf;
 
   /// Flag indicating if the transaction has been cancelled.
   bool _cancelled;

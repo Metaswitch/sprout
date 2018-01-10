@@ -374,6 +374,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
                                      const std::string& next_hop_service,
                                      pjsip_method_e req_type) :
   CompositeSproutletTsx(scscf, next_hop_service),
+  _scscf(scscf),
   _cancelled(false),
   _session_case(NULL),
   _as_chain_link(),
@@ -392,6 +393,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
   _base_req(nullptr)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
+  _hss_cache_helper = new HssCacheHelper;
 }
 
 
@@ -433,6 +435,11 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
   {
     free_msg(_base_req);
   }
+
+  if (_hss_cache_helper)
+  {
+    delete _hss_cache_helper;
+  }
 }
 
 
@@ -452,13 +459,13 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     if ((pjsip_param_find(&uri->other_param, &STR_ORIG) != NULL) &&
         (pjsip_param_find(&uri->other_param, &STR_AUTO_REG) != NULL))
     {
-      HssCacheHelper::_auto_reg = true;
+      _hss_cache_helper->_auto_reg = true;
 
       pjsip_proxy_authorization_hdr* proxy_auth_hdr =
         (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(req,
                                                            PJSIP_H_PROXY_AUTHORIZATION,
                                                            NULL);
-      HssCacheHelper::_impi = PJUtils::extract_username(proxy_auth_hdr,
+      _hss_cache_helper->_impi = PJUtils::extract_username(proxy_auth_hdr,
                                         PJUtils::orig_served_user(req,
                                                                   get_pool(req),
                                                                   trail()));
@@ -476,16 +483,16 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     std::string escaped_wildcard = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                                           (pjsip_uri*)(&ppk_hdr->name_addr));
-    HssCacheHelper::_wildcard = PJUtils::unescape_string_for_uri(std::string(escaped_wildcard),
+    _hss_cache_helper->_wildcard = PJUtils::unescape_string_for_uri(std::string(escaped_wildcard),
                                                                         get_pool(req));
 
     // If the URI is surrounded with angle brackets remove them.
-    if ((boost::starts_with(HssCacheHelper::_wildcard, "<")) &&
-        (boost::ends_with(HssCacheHelper::_wildcard, ">")))
+    if ((boost::starts_with(_hss_cache_helper->_wildcard, "<")) &&
+        (boost::ends_with(_hss_cache_helper->_wildcard, ">")))
     {
-      HssCacheHelper::_wildcard =
-        HssCacheHelper::_wildcard.substr(1,
-                                                HssCacheHelper::_wildcard.size() - 2);
+      _hss_cache_helper->_wildcard =
+        _hss_cache_helper->_wildcard.substr(1,
+                                                _hss_cache_helper->_wildcard.size() - 2);
     }
   }
 
@@ -521,16 +528,16 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // Check if the served user is barred. If it is barred, we reject the request
     // unless it is a terminating request to a binding that is using an
     // emergency registration in which case we let it through.
-    if (HssCacheHelper::_barred)
+    if (_hss_cache_helper->_barred)
     {
       bool emergency = false;
 
       if (_session_case->is_terminating())
       {
         // The bindings are keyed off the default IMPU.
-        std::string aor = HssCacheHelper::_default_uri;
+        std::string aor = _hss_cache_helper->_default_uri;
         AoRPair* aor_pair = NULL;
-        HssCacheHelper::_scscf->get_bindings(aor, &aor_pair, trail());
+        _scscf->get_bindings(aor, &aor_pair, trail());
 
         if ((aor_pair != NULL) &&
             (aor_pair->get_current() != NULL))
@@ -581,7 +588,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           CL_SPROUT_TERM_PARTY_BARRED.log(served_user.c_str());
         }
 
-        HssCacheHelper::_scscf->_barred_calls_tbl->increment();
+        _scscf->_barred_calls_tbl->increment();
 
         send_response(rsp);
         free_msg(req);
@@ -594,8 +601,8 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // (which we should do).
     PJUtils::add_pcfa_header(req,
                              get_pool(req),
-                             HssCacheHelper::_irs_info._ccfs,
-                             HssCacheHelper::_irs_info._ecfs,
+                             _hss_cache_helper->_irs_info._ccfs,
+                             _hss_cache_helper->_irs_info._ecfs,
                              false);
 
     // Add a second P-Asserted-Identity header if required on originating calls.
@@ -661,7 +668,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   if (bill_request)
   {
     // Create an ACR for this request and pass the request to it.
-    _in_dialog_acr = HssCacheHelper::_scscf->get_acr(trail(),
+    _in_dialog_acr = _scscf->get_acr(trail(),
                                                     ACR::CALLING_PARTY,
                                                     billing_role);
 
@@ -738,19 +745,19 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     {
       // We're the auth proxy and the flow we used failed, so delete the binding
       // corresponding to this flow.
-      HssCacheHelper::_scscf->remove_binding(_target_aor, i->second, trail());
+      _scscf->remove_binding(_target_aor, i->second, trail());
     }
   }
 
-  if ((st_code >= PJSIP_SC_OK) && (HssCacheHelper::_hss_data_cached))
+  if ((st_code >= PJSIP_SC_OK) && (_hss_cache_helper->_hss_data_cached))
   {
     // Final response. Add a P-Charging-Function-Addresses header if one is
     // not already present for some reason. We only do this if we have
     // the charging addresses cached (which we should do).
     PJUtils::add_pcfa_header(rsp,
                              get_pool(rsp),
-                             HssCacheHelper::_irs_info._ccfs,
-                             HssCacheHelper::_irs_info._ecfs,
+                             _hss_cache_helper->_irs_info._ccfs,
+                             _hss_cache_helper->_irs_info._ecfs,
                              false);
   }
 
@@ -778,7 +785,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       {
         // Default handling will be triggered. Track this as a failed
         // communication.
-        HssCacheHelper::_scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+        _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
                                                            fork_failure_reason_as_string(fork_id, st_code),
                                                            _as_chain_link.default_handling());
 
@@ -817,7 +824,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         // receive we only track one success.
         if ((st_code > PJSIP_SC_TRYING) && (!_seen_1xx))
         {
-          HssCacheHelper::_scscf->track_app_serv_comm_success(_as_chain_link.uri(),
+          _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
                                                              _as_chain_link.default_handling());
         }
       }
@@ -858,7 +865,7 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
       ((st_code == PJSIP_SC_RINGING) ||
        PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
   {
-    HssCacheHelper::_scscf->track_session_setup_time(_tsx_start_time_usec,
+    _scscf->track_session_setup_time(_tsx_start_time_usec,
                                                     _video_call);
     _record_session_setup_time = false;
   }
@@ -874,11 +881,11 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
   {
     if (_seen_1xx)
     {
-      HssCacheHelper::_scscf->_invites_cancelled_after_1xx_tbl->increment();
+      _scscf->_invites_cancelled_after_1xx_tbl->increment();
     }
     else
     {
-      HssCacheHelper::_scscf->_invites_cancelled_before_1xx_tbl->increment();
+      _scscf->_invites_cancelled_before_1xx_tbl->increment();
     }
   }
 
@@ -894,7 +901,7 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
     {
       role = ACR::NODE_ROLE_TERMINATING;
     }
-    ACR* cancel_acr = HssCacheHelper::_scscf->get_acr(trail(),
+    ACR* cancel_acr = _scscf->get_acr(trail(),
                                                      ACR::CALLING_PARTY,
                                                      role);
 
@@ -939,7 +946,7 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
       std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
                                           uri->user.slen - STR_ODI_PREFIX.slen);
       TRC_DEBUG("Found ODI token %s", odi_token.c_str());
-      _as_chain_link = HssCacheHelper::_scscf->as_chain_table()->lookup(odi_token);
+      _as_chain_link = _scscf->as_chain_table()->lookup(odi_token);
 
       if (_as_chain_link.is_set())
       {
@@ -1003,7 +1010,7 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
   // TS 24.229 section 5.4.3.3 says that changing the Request-URI to an alias of the original URI
   // doesn't count as a retarget, so get the aliases ready to check
   std::vector<std::string> aliases;
-  HssCacheHelper::get_aliases(old_served_user, aliases, trail());
+  _hss_cache_helper->get_aliases(old_served_user, aliases, trail(), _scscf);
 
   if (new_served_user == old_served_user)
   {
@@ -1042,7 +1049,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
   if (_as_chain_link.is_set())
   {
     // Set the S-CSCF URI to the one we stored in the AsChain
-    HssCacheHelper::_scscf_uri = _as_chain_link.scscf_uri();
+    _hss_cache_helper->_scscf_uri = _as_chain_link.scscf_uri();
 
     bool retargeted = false;
     std::string served_user = served_user_from_msg(req);
@@ -1056,7 +1063,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         // directly to the target. Interrupt the AS chain link to prevent any
         // more app servers from being triggered.
         TRC_INFO("Preloaded route - interrupt AS processing");
-        HssCacheHelper::_scscf->_routed_by_preloaded_route_tbl->increment(); // Update SNMP statistics.
+        _scscf->_routed_by_preloaded_route_tbl->increment(); // Update SNMP statistics.
         SAS::Event preloaded_route(trail(), SASEvent::AS_SUPPLIED_PRELOADED_ROUTE, 0);
         SAS::report_event(preloaded_route);
         _as_chain_link.interrupt();
@@ -1099,9 +1106,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         }
 
         Ifcs ifcs;
-        long http_code = HssCacheHelper::lookup_ifcs(served_user,
-                                                            ifcs,
-                                                            trail());
+        long http_code = _hss_cache_helper->lookup_ifcs(served_user,
+                                                     ifcs,
+                                                     trail(),
+                                                     _scscf);
         if (http_code == HTTP_OK)
         {
           TRC_DEBUG("Creating originating CDIV AS chain");
@@ -1163,7 +1171,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     std::string served_user = served_user_from_msg(req);
 
     // Create a new ACR for this request.
-    ACR* acr = HssCacheHelper::_scscf->get_acr(trail(),
+    ACR* acr = _scscf->get_acr(trail(),
                                               ACR::CALLING_PARTY,
                                               _session_case->is_originating() ?
                                               ACR::NODE_ROLE_ORIGINATING : ACR::NODE_ROLE_TERMINATING);
@@ -1217,7 +1225,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       // Before looking up the iFCs, calculate the S-CSCF URI to use for this
       // transaction, using the configured S-CSCF URI as a starting point.
       pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
-                                                                 HssCacheHelper::_scscf->_scscf_cluster_uri);
+                                                                 _scscf->_scscf_cluster_uri);
       pjsip_sip_uri* routing_uri = get_routing_uri(req);
       if (routing_uri != NULL)
       {
@@ -1227,15 +1235,16 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
                                   scscf_uri);
       }
 
-      HssCacheHelper::_scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+      _hss_cache_helper->_scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                                                  (pjsip_uri*)scscf_uri);
 
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
 
       Ifcs ifcs;
-      long http_code = HssCacheHelper::lookup_ifcs(served_user,
-                                                          ifcs,
-                                                          trail());
+      long http_code = _hss_cache_helper->lookup_ifcs(served_user,
+                                                   ifcs,
+                                                   trail(),
+                                                   _scscf);
       if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");
@@ -1354,16 +1363,16 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
 {
   bool is_registered = is_user_registered(served_user);
 
-  AsChainLink ret = AsChainLink::create_as_chain(HssCacheHelper::_scscf->as_chain_table(),
+  AsChainLink ret = AsChainLink::create_as_chain(_scscf->as_chain_table(),
                                                  *_session_case,
                                                  served_user,
                                                  is_registered,
                                                  chain_trail,
                                                  ifcs,
                                                  acr,
-                                                 HssCacheHelper::_scscf->fifcservice(),
-                                                 HssCacheHelper::_scscf->ifc_configuration(),
-                                                 HssCacheHelper::_scscf_uri);
+                                                 _scscf->fifcservice(),
+                                                 _scscf->ifc_configuration(),
+                                                 _hss_cache_helper->_scscf_uri);
   acr = NULL;
   TRC_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
             this, ret.to_string().c_str());
@@ -1418,11 +1427,11 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       add_to_dialog(req, false, ACR::NODE_ROLE_ORIGINATING);
     }
 
-    if (HssCacheHelper::_scscf->_enum_service)
+    if (_scscf->_enum_service)
     {
       // Attempt to translate the RequestURI using ENUM or an alternative
       // database.
-      HssCacheHelper::_scscf->translate_request_uri(req, get_pool(req), trail());
+      _scscf->translate_request_uri(req, get_pool(req), trail());
 
       URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri, true, true);
       std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
@@ -1576,13 +1585,13 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // requests are routed to this node.
     pjsip_sip_uri* odi_uri = (pjsip_sip_uri*)
                              pjsip_uri_clone(get_pool(req),
-                                             HssCacheHelper::_scscf->scscf_node_uri());
+                                             _scscf->scscf_node_uri());
     pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
     odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
 
     PJUtils::add_parameter_to_sip_uri(odi_uri,
                                       STR_SERVICE,
-                                      HssCacheHelper::_scscf->scscf_service_name().c_str(),
+                                      _scscf->scscf_service_name().c_str(),
                                       get_pool(req));
 
     if (_session_case->is_originating())
@@ -1647,8 +1656,8 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
     // Start the liveness timer for the AS.
     int timeout = ((_as_chain_link.default_handling() == SESSION_CONTINUED) ?
-                   HssCacheHelper::_scscf->_session_continued_timeout_ms :
-                   HssCacheHelper::_scscf->_session_terminated_timeout_ms);
+                   _scscf->_session_continued_timeout_ms :
+                   _scscf->_session_terminated_timeout_ms);
 
     if (timeout != 0)
     {
@@ -1680,7 +1689,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 /// Route the request to the I-CSCF.
 void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
 {
-  const pjsip_uri* icscf_uri = HssCacheHelper::_scscf->icscf_uri();
+  const pjsip_uri* icscf_uri = _scscf->icscf_uri();
 
   if (icscf_uri != NULL)
   {
@@ -1694,7 +1703,7 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
   else
   {
     // I-CSCF is disabled, so route directly to the local S-CSCF.
-    const pjsip_uri* scscf_uri = HssCacheHelper::_scscf->scscf_cluster_uri();
+    const pjsip_uri* scscf_uri = _scscf->scscf_cluster_uri();
     TRC_INFO("Routing directly to S-CSCF %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, scscf_uri).c_str());
     PJUtils::add_route_header(req,
@@ -1710,10 +1719,10 @@ void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
 {
   TRC_INFO("Routing to BGCF %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  HssCacheHelper::_scscf->bgcf_uri()).c_str());
+                                  _scscf->bgcf_uri()).c_str());
   PJUtils::add_route_header(req,
                             (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
-                                                            HssCacheHelper::_scscf->bgcf_uri()),
+                                                            _scscf->bgcf_uri()),
                             get_pool(req));
   send_request(req);
 }
@@ -1772,9 +1781,10 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     // User is registered, so look up bindings.  Determine the canonical public
     // ID, and look up the set of associated URIs on the HSS.
     std::vector<std::string> uris;
-    bool success = HssCacheHelper::get_associated_uris(public_id,
-                                                              uris,
-                                                              trail());
+    bool success = _hss_cache_helper->get_associated_uris(public_id,
+                                                       uris,
+                                                       trail(),
+                                                       _scscf);
 
     if ((success) && (uris.size() > 0))
     {
@@ -1782,7 +1792,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       {
         if (WildcardUtils::check_users_equivalent(uri, public_id))
         {
-          aor = HssCacheHelper::_default_uri;
+          aor = _hss_cache_helper->_default_uri;
           break;
         }
       }
@@ -1800,7 +1810,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
     // Get the bindings from the store and filter/sort them for the request.
     AoRPair* aor_pair = NULL;
-    HssCacheHelper::_scscf->get_bindings(aor, &aor_pair, trail());
+    _scscf->get_bindings(aor, &aor_pair, trail());
 
     if ((aor_pair != NULL) &&
         (aor_pair->get_current() != NULL) &&
@@ -1814,7 +1824,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
                                  pool,
                                  MAX_FORKING,
                                  targets,
-                                 HssCacheHelper::_barred,
+                                 _hss_cache_helper->_barred,
                                  trail());
     }
     else
@@ -1885,7 +1895,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       {
         // Increment stat tracking the number of additional INVITEs generated
         // due to there being multiple registered targets.
-        HssCacheHelper::_scscf->_forked_invite_tbl->increment();
+        _scscf->_forked_invite_tbl->increment();
       }
     }
   }
@@ -1896,7 +1906,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 /// per-transaction cache, which will be present at this point
 bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 {
-  return HssCacheHelper::_registered;
+  return _hss_cache_helper->_registered;
 }
 
 
@@ -1930,7 +1940,7 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
     // Get the cluster URI. Don't use `get_reflexive_uri` here as we want to
     // record route the entire S-CSCF service, not just this sproutlet.
     pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool,
-                                                         HssCacheHelper::_scscf->scscf_cluster_uri());
+                                                         _scscf->scscf_cluster_uri());
     uri->lr_param = 1;
 
     rr = pjsip_rr_hdr_create(pool);
@@ -2070,7 +2080,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
   if (_as_chain_link.is_set())
   {
     // The AS has timed out so track this as a communication failure.
-    HssCacheHelper::_scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+    _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
                                                        "Default handling timeout",
                                                        _as_chain_link.default_handling());
 
@@ -2167,9 +2177,9 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       // If the SIP URI has a alias tel URI with the same username we add this
       // tel URI to the P-Asserted-Identity header. If not we select the first
       // tel URI in the alias list to add to the P-Asserted-Identity header.
-      if (find(HssCacheHelper::_irs_info._aliases.begin(),
-               HssCacheHelper::_irs_info._aliases.end(),
-               new_p_a_i_str) != HssCacheHelper::_irs_info._aliases.end())
+      if (find(_hss_cache_helper->_irs_info._aliases.begin(),
+               _hss_cache_helper->_irs_info._aliases.end(),
+               new_p_a_i_str) != _hss_cache_helper->_irs_info._aliases.end())
       {
         TRC_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
         PJUtils::add_asserted_identity(msg,
@@ -2179,7 +2189,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       }
       else
       {
-        for (std::string alias : HssCacheHelper::_irs_info._aliases)
+        for (std::string alias : _hss_cache_helper->_irs_info._aliases)
         {
           std::string tel_URI_prefix = "tel:";
           bool has_tel_prefix = (alias.rfind(tel_URI_prefix.c_str(), 4) != std::string::npos);

@@ -23,7 +23,6 @@ extern "C" {
 #include "baseresolver.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
 #include "fork_error_state.h"
-#include "hss_cache_helper.h"
 
 #define API_VERSION 1
 
@@ -131,7 +130,6 @@ protected:
     _aliases(aliases),
     _network_function(network_function.empty() ? service_name : network_function)
   {
-    HssCacheHelper();
   }
 
 private:
