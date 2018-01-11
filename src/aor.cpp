@@ -122,9 +122,9 @@ void AoR::clear(bool clear_emergency_bindings)
 /// Retrieve a binding by binding identifier, creating an empty one if
 /// necessary.  The created binding is completely empty, even the Contact URI
 /// field.
-AoR::Binding* AoR::get_binding(const std::string& binding_id)
+Binding* AoR::get_binding(const std::string& binding_id)
 {
-  AoR::Binding* b;
+  Binding* b;
   AoR::Bindings::const_iterator i = _bindings.find(binding_id);
   if (i != _bindings.end())
   {
@@ -155,9 +155,9 @@ void AoR::remove_binding(const std::string& binding_id)
 
 /// Retrieve a subscription by To tag, creating an empty subscription if
 /// necessary.
-AoR::Subscription* AoR::get_subscription(const std::string& to_tag)
+Subscription* AoR::get_subscription(const std::string& to_tag)
 {
-  AoR::Subscription* s;
+  Subscription* s;
   AoR::Subscriptions::const_iterator i = _subscriptions.find(to_tag);
   if (i != _subscriptions.end())
   {
@@ -201,7 +201,7 @@ void AoR::clear_bindings()
 
 // Generates the public GRUU for this binding from the address of record and
 // instance-id. Returns NULL if this binding has no valid GRUU.
-pjsip_sip_uri* AoR::Binding::pub_gruu(pj_pool_t* pool) const
+pjsip_sip_uri* Binding::pub_gruu(pj_pool_t* pool) const
 {
   pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(_address_of_record, pool);
 
@@ -247,7 +247,7 @@ pjsip_sip_uri* AoR::Binding::pub_gruu(pj_pool_t* pool) const
 
 // Utility method to return the public GRUU as a string.
 // Returns "" if this binding has no GRUU.
-std::string AoR::Binding::pub_gruu_str(pj_pool_t* pool) const
+std::string Binding::pub_gruu_str(pj_pool_t* pool) const
 {
   pjsip_sip_uri* pub_gruu_uri = pub_gruu(pool);
 
@@ -261,7 +261,7 @@ std::string AoR::Binding::pub_gruu_str(pj_pool_t* pool) const
 
 // Utility method to return the public GRUU surrounded by quotes.
 // Returns "" if this binding has no GRUU.
-std::string AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
+std::string Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
 {
   std::string unquoted_pub_gruu = pub_gruu_str(pool);
 
@@ -274,7 +274,7 @@ std::string AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
   return ret;
 }
 
-void AoR::Binding::
+void Binding::
   to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const
 {
   writer.StartObject();
@@ -328,7 +328,7 @@ void AoR::Binding::
   writer.EndObject();
 }
 
-void AoR::Binding::from_json(const rapidjson::Value& b_obj)
+void Binding::from_json(const rapidjson::Value& b_obj)
 {
 
   JSON_GET_STRING_MEMBER(b_obj, JSON_URI, _uri);
@@ -382,7 +382,7 @@ void AoR::Binding::from_json(const rapidjson::Value& b_obj)
   JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, _emergency_registration);
 }
 
-void AoR::Subscription::
+void Subscription::
   to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const
 {
   writer.StartObject();
@@ -411,7 +411,7 @@ void AoR::Subscription::
   writer.EndObject();
 }
 
-void AoR::Subscription::from_json(const rapidjson::Value& s_obj)
+void Subscription::from_json(const rapidjson::Value& s_obj)
 {
   JSON_GET_STRING_MEMBER(s_obj, JSON_REQ_URI, _req_uri);
   JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_URI, _from_uri);
@@ -506,11 +506,11 @@ AoR::Bindings AoRPair::get_updated_bindings()
 
   // Iterate over the bindings in the current AoR. Figure out if the bindings
   // have been created or updated.
-  for (std::pair<std::string, AoR::Binding*> current_aor_binding :
+  for (std::pair<std::string, Binding*> current_aor_binding :
          _current_aor->bindings())
   {
     std::string b_id = current_aor_binding.first;
-    AoR::Binding* binding = current_aor_binding.second;
+    Binding* binding = current_aor_binding.second;
 
     // Find any binding match in the original AoR
     AoR::Bindings::const_iterator orig_aor_binding_match =
@@ -545,11 +545,11 @@ AoR::Subscriptions AoRPair::get_updated_subscriptions()
 
   // Iterate over the subscriptions in the current AoR. Figure out if the
   // subscriptions have been created or updated.
-  for (std::pair<std::string, AoR::Subscription*> current_aor_subscription :
+  for (std::pair<std::string, Subscription*> current_aor_subscription :
          _current_aor->subscriptions())
   {
     std::string s_id = current_aor_subscription.first;
-    AoR::Subscription* subscription = current_aor_subscription.second;
+    Subscription* subscription = current_aor_subscription.second;
 
     // Find any subscriptions match in the original AoR
     AoR::Subscriptions::const_iterator orig_aor_subscription_match =
@@ -584,7 +584,7 @@ AoR::Bindings AoRPair::get_removed_bindings()
   AoR::Bindings removed_bindings;
 
   // Iterate over original bindings and record those not in current AoR
-  for (std::pair<std::string, AoR::Binding*> orig_aor_binding :
+  for (std::pair<std::string, Binding*> orig_aor_binding :
          _orig_aor->bindings())
   {
     if (_current_aor->bindings().find(orig_aor_binding.first) ==
@@ -605,7 +605,7 @@ AoR::Subscriptions AoRPair::get_removed_subscriptions()
   AoR::Subscriptions removed_subscriptions;
 
   // Iterate over original subscriptions and record those not in current AoR
-  for (std::pair<std::string, AoR::Subscription*> orig_aor_subscription :
+  for (std::pair<std::string, Subscription*> orig_aor_subscription :
          _orig_aor->subscriptions())
   {
     // Is this subscription present in the new AoR?

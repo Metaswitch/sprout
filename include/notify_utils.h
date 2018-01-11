@@ -33,13 +33,13 @@ namespace NotifyUtils
   enum class RegistrationState { ACTIVE, TERMINATED };
   enum class ContactState { ACTIVE, TERMINATED };
   enum class SubscriptionState { ACTIVE, TERMINATED };
-  enum class ContactEvent { 
-    REGISTERED, 
-    CREATED, 
-    REFRESHED, 
+  enum class ContactEvent {
+    REGISTERED,
+    CREATED,
+    REFRESHED,
     SHORTENED,
-    EXPIRED, 
-    DEACTIVATED, 
+    EXPIRED,
+    DEACTIVATED,
     UNREGISTERED
   };
 
@@ -47,7 +47,7 @@ namespace NotifyUtils
   // the binding itself, a unique ID for it and the contact event
   struct BindingNotifyInformation {
     BindingNotifyInformation(std::string id,
-                             AoR::Binding* b,
+                             Binding* b,
                              NotifyUtils::ContactEvent event) :
       _id(id),
       _b(b),
@@ -55,12 +55,12 @@ namespace NotifyUtils
     {}
 
     std::string _id;
-    AoR::Binding* _b;
+    Binding* _b;
     NotifyUtils::ContactEvent _contact_event;
   };
 
   pj_status_t create_subscription_notify(pjsip_tx_data** tdata_notify,
-                                         AoR::Subscription* s,
+                                         Subscription* s,
                                          std::string aor,
                                          AssociatedURIs* associated_uris,
                                          AoR* aor_data,
@@ -70,7 +70,7 @@ namespace NotifyUtils
                                          SAS::TrailId trail);
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
-                            AoR::Subscription* subscription,
+                            Subscription* subscription,
                             std::string aor,
                             AssociatedURIs* associated_uris,
                             int cseq,

@@ -256,7 +256,7 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   delete_bindings(classified_bindings);
 
   // 1/2: Iterate over original bindings and record those not in current AoR
-  for (std::pair<std::string, AoR::Binding*> aor_orig_b :
+  for (std::pair<std::string, Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
     if (aor_pair->get_current()->bindings().find(aor_orig_b.first) ==
@@ -275,7 +275,7 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   }
 
   // 2/2: Iterate over the bindings in the current AoR.
-  for (std::pair<std::string, AoR::Binding*> aor_current_b :
+  for (std::pair<std::string, Binding*> aor_current_b :
          aor_pair->get_current()->bindings())
   {
     AoR::Bindings::const_iterator aor_orig_b_match =
@@ -292,12 +292,12 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
     }
     else
     {
-      // The binding is in both AoRs. 
+      // The binding is in both AoRs.
       if (aor_orig_b_match->second->_uri.compare(aor_current_b.second->_uri) != 0)
       {
         // Change of Contact URI. If the contact URI has been changed, we need to
-        // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2	
-        // "Notification about registration state") and create a new one.  
+        // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2
+        // "Notification about registration state") and create a new one.
         // We do this by adding a DEACTIVATED and then a CREATED ClassifiedBinding.
         ClassifiedBinding* deactivated_record =
            new ClassifiedBinding(aor_orig_b_match->first,
@@ -407,7 +407,7 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
        i != aor_pair->get_current()->_subscriptions.end();
       )
   {
-    AoR::Subscription* s = i->second;
+    Subscription* s = i->second;
 
     if ((force_expire) || (s->_expires <= now))
     {
@@ -429,7 +429,7 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
 
       if (aor_orig_s == aor_pair->get_orig()->subscriptions().end())
       {
-        AoR::Subscription* s_copy = aor_pair->get_orig()->get_subscription(i->first);
+        Subscription* s_copy = aor_pair->get_orig()->get_subscription(i->first);
         *s_copy = *i->second;
       }
 
@@ -459,7 +459,7 @@ int SubscriberDataManager::expire_bindings(AoR* aor_data,
        i != aor_data->_bindings.end();
       )
   {
-    AoR::Binding* b = i->second;
+    Binding* b = i->second;
     std::string b_id = i->first;
 
     if (b->_expires <= now)
@@ -633,10 +633,10 @@ void SubscriberDataManager::NotifySender::send_notifys(
   // missing from the current AoR to build up a list.
   // The reason they are missing is determined from EventTrigger. Add
   // corresponding ContactEvent to the NOTIFY message.
-  for (std::pair<std::string, AoR::Binding*> aor_orig_b :
+  for (std::pair<std::string, Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
-    AoR::Binding* binding = aor_orig_b.second;
+    Binding* binding = aor_orig_b.second;
     std::string b_id = aor_orig_b.first;
 
     // Emergency bindings are excluded from notifications.
@@ -657,10 +657,10 @@ void SubscriberDataManager::NotifySender::send_notifys(
 
   // Iterate over the bindings in the current AoR. Figure out if the bindings
   // have been CREATED, REFRESHED, REGISTERED or SHORTENED.
-  for (std::pair<std::string, AoR::Binding*> aor_current_b :
+  for (std::pair<std::string, Binding*> aor_current_b :
          aor_pair->get_current()->bindings())
   {
-    AoR::Binding* binding = aor_current_b.second;
+    Binding* binding = aor_current_b.second;
     std::string b_id = aor_current_b.first;
 
     if (!binding->_emergency_registration)
@@ -681,16 +681,16 @@ void SubscriberDataManager::NotifySender::send_notifys(
       }
       else
       {
-        // The binding is in both AoRs. 
+        // The binding is in both AoRs.
         NotifyUtils::ContactEvent event;
 
         if (aor_orig_b_match->second->_uri.compare(binding->_uri) != 0)
         {
           // Change of Contact URI. If the contact URI has been changed, we need to
-          // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2	
-          // "Notification about registration state") and create a new one.  
+          // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2
+          // "Notification about registration state") and create a new one.
           // We do this by adding a DEACTIVATED and then a CREATED ClassifiedBinding.
-          TRC_DEBUG("Binding %s has changed URIs from %s to %s", 
+          TRC_DEBUG("Binding %s has changed URIs from %s to %s",
                                       b_id.c_str(),
                                       aor_orig_b_match->second->_uri.c_str(),
                                       binding->_uri.c_str());
@@ -755,7 +755,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
   for (const AoR::Subscriptions::value_type& current_sub :
         aor_pair->get_current()->subscriptions())
   {
-    AoR::Subscription* subscription = current_sub.second;
+    Subscription* subscription = current_sub.second;
     const std::string& s_id = current_sub.first;
 
     // Find the subscription in the original AoR to determine if the current subscription
@@ -884,7 +884,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
        aor_orig_s != aor_pair->get_orig()->subscriptions().end();
        ++aor_orig_s)
   {
-    AoR::Subscription* s = aor_orig_s->second;
+    Subscription* s = aor_orig_s->second;
     std::string s_id = aor_orig_s->first;
 
     if (((std::find(missing_binding_uris.begin(), missing_binding_uris.end(), s->_req_uri)

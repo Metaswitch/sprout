@@ -98,10 +98,10 @@ protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
 
-  AoR::Subscription create_subscription(pjsip_msg* req, int expiry);
+  Subscription create_subscription(pjsip_msg* req, int expiry);
 
   Store::Status update_subscription_in_stores(SubscriptionSproutlet* _subscription,
-                                              AoR::Subscription& new_subscription,
+                                              Subscription& new_subscription,
                                               std::string aor,
                                               AssociatedURIs* associated_uris,
                                               pjsip_msg* req,
@@ -115,7 +115,7 @@ protected:
                                      std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
 
   void update_subscription(SubscriptionSproutlet* _subscription,
-                           AoR::Subscription& new_subscription,
+                           Subscription& new_subscription,
                            std::string aor,
                            AoRPair* aor_pair,
                            std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);

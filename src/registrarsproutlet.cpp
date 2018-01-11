@@ -648,7 +648,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
        i != aor_pair->get_current()->bindings().end();
        ++i)
   {
-    AoR::Binding* binding = i->second;
+    Binding* binding = i->second;
     if (binding->_expires > now)
     {
       // The binding hasn't expired.  Parse the Contact URI from the store,
@@ -959,7 +959,7 @@ void RegistrarSproutletTsx::update_bindings_from_req(AoRPair* aor_pair,      ///
       TRC_DEBUG("Binding identifier for contact = %s", binding_id.c_str());
 
       // Find the appropriate binding in the bindings list for this AoR.
-      AoR::Binding* binding = aor_pair->get_current()->get_binding(binding_id);
+      Binding* binding = aor_pair->get_current()->get_binding(binding_id);
 
       if ((cid != binding->_cid) ||
           (cseq > binding->_cseq))
@@ -1252,7 +1252,7 @@ void RegistrarSproutletTsx::log_bindings(const std::string& aor_name,
        i != aor_data->bindings().end();
        ++i)
   {
-    AoR::Binding* binding = i->second;
+    Binding* binding = i->second;
     TRC_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d private_id=%s emergency_registration=%s",
               i->first.c_str(),
               binding->_uri.c_str(),

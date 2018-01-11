@@ -9611,7 +9611,7 @@ TEST_F(SCSCFTest, TestAddStoredPathHeader)
   string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
   AoRPair* aor = _sdm->get_aor_data(uri, 0);
-  AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
@@ -9643,7 +9643,7 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
   AoRPair* aor = _sdm->get_aor_data(uri, 0);
-  AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;

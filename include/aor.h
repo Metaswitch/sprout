@@ -53,133 +53,133 @@ static const char* const JSON_ROUTES = "routes";
 static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
 static const char* const JSON_SCSCF_URI = "scscf-uri";
 
+/// @class Binding
+///
+/// A single registered address.
+class Binding
+{
+public:
+  Binding(std::string address_of_record): _address_of_record(address_of_record) {};
+
+  /// The address of record, e.g. "sip:name@example.com".
+  std::string _address_of_record;
+
+  /// The registered contact URI, e.g.,
+  /// "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931"
+  std::string _uri;
+
+  /// The Call-ID: of the registration.  Per RFC3261, this is the same for
+  /// all registrations from a given UAC to this registrar (for this AoR).
+  /// E.g., "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq"
+  std::string _cid;
+
+  /// Contains any path headers (in order) that were present on the
+  /// register.  Empty if there were none. This is the full path header,
+  /// including the disply name, URI and any header parameters.
+  std::list<std::string> _path_headers;
+
+  /// Contains the URI part of any path headers (in order) that were
+  /// present on the register. Empty if there were none.
+  std::list<std::string> _path_uris;
+
+  /// The CSeq value of the REGISTER request.
+  int _cseq;
+
+  /// The time (in seconds since the epoch) at which this binding should
+  /// expire.  Based on the expires parameter of the Contact: header.
+  int _expires;
+
+  /// The Contact: header q parameter (qvalue), times 1000.  This is used
+  /// to prioritise the registrations (highest value first), per RFC3261
+  /// s10.2.1.2.
+  int _priority;
+
+  /// Any other parameters found in the Contact: header, stored as key ->
+  /// value.  E.g., "+sip.ice" -> "".
+  std::map<std::string, std::string> _params;
+
+  /// The private ID this binding was registered with.
+  std::string _private_id;
+
+  /// Whether this is an emergency registration.
+  bool _emergency_registration;
+
+  pjsip_sip_uri* pub_gruu(pj_pool_t* pool) const;
+  std::string pub_gruu_str(pj_pool_t* pool) const;
+  std::string pub_gruu_quoted_string(pj_pool_t* pool) const;
+
+  /// Serialize the binding as a JSON object.
+  ///
+  /// @param writer - a rapidjson writer to write to.
+  void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
+
+  // Deserialize a binding from a JSON object.
+  //
+  // @param b_obj - The binding as a JSON object.
+  //
+  // @return      - Nothing. If this function fails (because the JSON is not
+  //                semantically valid) this method throws JsonFormError.
+  void from_json(const rapidjson::Value& b_obj);
+};
+
+/// @class Subscription
+///
+/// Represents a subscription to registration events for the AoR.
+class Subscription
+{
+public:
+  Subscription(): _refreshed(false) {};
+
+  /// The Contact URI for the subscription dialog (used as the Request URI
+  /// of the NOTIFY)
+  std::string _req_uri;
+
+  /// The From URI for the subscription dialog (used in the to header of
+  /// the NOTIFY)
+  std::string _from_uri;
+
+  /// The From tag for the subscription dialog.
+  std::string _from_tag;
+
+  /// The To URI for the subscription dialog.
+  std::string _to_uri;
+
+  /// The To tag for the subscription dialog.
+  std::string _to_tag;
+
+  /// The call ID for the subscription dialog.
+  std::string _cid;
+
+  /// Whether the subscription has been refreshed since the last NOTIFY.
+  bool _refreshed;
+
+  /// The list of Record Route URIs from the subscription dialog.
+  std::list<std::string> _route_uris;
+
+  /// The time (in seconds since the epoch) at which this subscription
+  /// should expire.
+  int _expires;
+
+  /// Serialize the subscription as a JSON object.
+  ///
+  /// @param writer - a rapidjson writer to write to.
+  void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
+
+  // Deserialize a subscription from a JSON object.
+  //
+  // @param s_obj - The subscription as a JSON object.
+  //
+  // @return      - Nothing. If this function fails (because the JSON is not
+  //                semantically valid) this method throws JsonFormError.
+  void from_json(const rapidjson::Value& s_obj);
+};
+
 /// @class AoR
 ///
 /// Addresses that are registered for this address of record.
 class AoR
 {
 public:
-  /// @class AoR::Binding
-  ///
-  /// A single registered address.
-  class Binding
-  {
-  public:
-    Binding(std::string address_of_record): _address_of_record(address_of_record) {};
-
-    /// The address of record, e.g. "sip:name@example.com".
-    std::string _address_of_record;
-
-    /// The registered contact URI, e.g.,
-    /// "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931"
-    std::string _uri;
-
-    /// The Call-ID: of the registration.  Per RFC3261, this is the same for
-    /// all registrations from a given UAC to this registrar (for this AoR).
-    /// E.g., "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq"
-    std::string _cid;
-
-    /// Contains any path headers (in order) that were present on the
-    /// register.  Empty if there were none. This is the full path header,
-    /// including the disply name, URI and any header parameters.
-    std::list<std::string> _path_headers;
-
-    /// Contains the URI part of any path headers (in order) that were
-    /// present on the register. Empty if there were none.
-    std::list<std::string> _path_uris;
-
-    /// The CSeq value of the REGISTER request.
-    int _cseq;
-
-    /// The time (in seconds since the epoch) at which this binding should
-    /// expire.  Based on the expires parameter of the Contact: header.
-    int _expires;
-
-    /// The Contact: header q parameter (qvalue), times 1000.  This is used
-    /// to prioritise the registrations (highest value first), per RFC3261
-    /// s10.2.1.2.
-    int _priority;
-
-    /// Any other parameters found in the Contact: header, stored as key ->
-    /// value.  E.g., "+sip.ice" -> "".
-    std::map<std::string, std::string> _params;
-
-    /// The private ID this binding was registered with.
-    std::string _private_id;
-
-    /// Whether this is an emergency registration.
-    bool _emergency_registration;
-
-    pjsip_sip_uri* pub_gruu(pj_pool_t* pool) const;
-    std::string pub_gruu_str(pj_pool_t* pool) const;
-    std::string pub_gruu_quoted_string(pj_pool_t* pool) const;
-
-    /// Serialize the binding as a JSON object.
-    ///
-    /// @param writer - a rapidjson writer to write to.
-    void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
-
-    // Deserialize a binding from a JSON object.
-    //
-    // @param b_obj - The binding as a JSON object.
-    //
-    // @return      - Nothing. If this function fails (because the JSON is not
-    //                semantically valid) this method throws JsonFormError.
-    void from_json(const rapidjson::Value& b_obj);
-  };
-
-  /// @class AoR::Subscription
-  ///
-  /// Represents a subscription to registration events for the AoR.
-  class Subscription
-  {
-  public:
-    Subscription(): _refreshed(false) {};
-
-    /// The Contact URI for the subscription dialog (used as the Request URI
-    /// of the NOTIFY)
-    std::string _req_uri;
-
-    /// The From URI for the subscription dialog (used in the to header of
-    /// the NOTIFY)
-    std::string _from_uri;
-
-    /// The From tag for the subscription dialog.
-    std::string _from_tag;
-
-    /// The To URI for the subscription dialog.
-    std::string _to_uri;
-
-    /// The To tag for the subscription dialog.
-    std::string _to_tag;
-
-    /// The call ID for the subscription dialog.
-    std::string _cid;
-
-    /// Whether the subscription has been refreshed since the last NOTIFY.
-    bool _refreshed;
-
-    /// The list of Record Route URIs from the subscription dialog.
-    std::list<std::string> _route_uris;
-
-    /// The time (in seconds since the epoch) at which this subscription
-    /// should expire.
-    int _expires;
-
-    /// Serialize the subscription as a JSON object.
-    ///
-    /// @param writer - a rapidjson writer to write to.
-    void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
-
-    // Deserialize a subscription from a JSON object.
-    //
-    // @param s_obj - The subscription as a JSON object.
-    //
-    // @return      - Nothing. If this function fails (because the JSON is not
-    //                semantically valid) this method throws JsonFormError.
-    void from_json(const rapidjson::Value& s_obj);
- };
-
   /// Default Constructor.
   AoR(std::string sip_uri);
 

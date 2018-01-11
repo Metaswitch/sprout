@@ -199,7 +199,7 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
          ++bindings_it)
     {
       TRC_DEBUG("  Binding: %s", bindings_it->name.GetString());
-      AoR::Binding* b = aor->get_binding(bindings_it->name.GetString());
+      Binding* b = aor->get_binding(bindings_it->name.GetString());
 
       JSON_ASSERT_OBJECT(bindings_it->value);
       const rapidjson::Value& b_obj = bindings_it->value;
@@ -216,7 +216,7 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
          ++subscriptions_it)
     {
       TRC_DEBUG("  Subscription: %s", subscriptions_it->name.GetString());
-      AoR::Subscription* s = aor->get_subscription(subscriptions_it->name.GetString());
+      Subscription* s = aor->get_subscription(subscriptions_it->name.GetString());
 
       JSON_ASSERT_OBJECT(subscriptions_it->value);
       const rapidjson::Value& s_obj = subscriptions_it->value;

@@ -71,12 +71,12 @@ class TestWithMockSdms : public SipTest
     return aor_pair;
   }
 
-  AoR::Binding*
+  Binding*
     build_binding(AoR* aor,
                   int now,
                   const std::string& id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1")
   {
-    AoR::Binding* b = aor->get_binding(std::string(id));
+    Binding* b = aor->get_binding(std::string(id));
     b->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
     b->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
     b->_cseq = 17038;
@@ -91,12 +91,12 @@ class TestWithMockSdms : public SipTest
     return b;
   }
 
-  AoR::Subscription*
+  Subscription*
     build_subscription(AoR* aor,
                        int now,
                        const std::string& id = "1234")
   {
-    AoR::Subscription* s = aor->get_subscription(id);
+    Subscription* s = aor->get_subscription(id);
     s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
     s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
     s->_from_tag = std::string("4321");

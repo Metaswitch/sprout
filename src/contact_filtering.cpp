@@ -211,7 +211,7 @@ void filter_bindings_to_targets(const std::string& aor,
 // false and the target parameter should not be used.
 bool binding_to_target(const std::string& aor,
                        const std::string& binding_id,
-                       const AoR::Binding& binding,
+                       const Binding& binding,
                        bool deprioritized,
                        pj_pool_t* pool,
                        Target& target)
