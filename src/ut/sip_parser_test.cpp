@@ -962,17 +962,17 @@ TEST_F(SipParserTest, RejectContactMultiple)
   parse_rxdata(rdata);
 
   pj_str_t header_name = pj_str("Reject-Contact");
-  pjsip_accept_contact_hdr* hdr =
-      (pjsip_accept_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+  pjsip_reject_contact_hdr* hdr =
+      (pjsip_reject_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
                                                             &header_name,
                                                             NULL);
-  EXPECT_NE(hdr, (pjsip_accept_contact_hdr*)NULL);
+  EXPECT_NE(hdr, (pjsip_reject_contact_hdr*)NULL);
   EXPECT_EQ(2u, pj_list_size(&hdr->feature_set));
 
-  hdr = (pjsip_accept_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+  hdr = (pjsip_reject_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
                                                               &header_name,
                                                               hdr->next);
-  EXPECT_NE(hdr, (pjsip_accept_contact_hdr*)NULL);
+  EXPECT_NE(hdr, (pjsip_reject_contact_hdr*)NULL);
   EXPECT_EQ(1u, pj_list_size(&hdr->feature_set));
 
   pj_pool_release(main_pool);
