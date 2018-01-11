@@ -918,42 +918,7 @@ HTTPCode PushProfileTask::get_associated_uris(std::string body,
 
 HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
-  HTTPCode rc = HTTP_OK;
-  bool all_bindings_expired = false;
-
-  AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
-                                                 _default_public_id,
-                                                 SubscriberDataManager::EventTrigger::ADMIN,
-                                                 &_associated_uris,
-                                                 NULL,
-                                                 _cfg->_remote_sdms,
-                                                 all_bindings_expired,
-                                                 trail);
-
-  if (aor_pair != NULL)
-  {
-    set_remote_aor_data(_default_public_id,
-                        SubscriberDataManager::EventTrigger::ADMIN,
-                        &_associated_uris,
-                        aor_pair,
-                        _cfg->_remote_sdms,
-                        _cfg->_hss,
-                        trail);
-
-    if (all_bindings_expired)
-    {
-      update_hss_on_aor_expiry(_default_public_id,
-                               *aor_pair,
-                               _cfg->_hss,
-                               trail);
-    }
-  }
-  else
-  {
-    TRC_DEBUG("Unable to update the associated URIs");
-    rc = HTTP_SERVER_ERROR;
-  }
-
-  delete aor_pair; aor_pair = NULL;
-  return rc;
+  return _cfg->_sm->update_associated_uris(_default_public_id,
+                                           _associated_uris,
+                                           trail);
 }

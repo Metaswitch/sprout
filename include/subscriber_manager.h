@@ -160,10 +160,10 @@ public:
   /// @param hss_connection     -
   /// @param analytics_logger   - AnalyticsLogger for reporting registration events
   SubscriberManager(HSSConnection* hss_connection,
-                    AnalyticsLogger* analytics_logger);
+                    AnalyticsLogger* analytics_logger) {};
 
   /// Destructor.
-  virtual ~SubscriberManager();
+  virtual ~SubscriberManager() {};
 
   bool update_binding(const Binding& binding,
                       std::vector<Binding>& bindings,
@@ -192,6 +192,9 @@ public:
                             SubscriberInfo& subscriber_info,
                             SAS::TrailId trail) { return true; }
 
+  virtual HTTPCode update_associated_uris(const std::string& public_id,
+                                          AssociatedURIs& associated_uris,
+                                          SAS::TrailId trail) { return HTTP_OK; }
 private:
   AnalyticsLogger* _analytics;
   HSSConnection* _hss_connection;
