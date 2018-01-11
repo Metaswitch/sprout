@@ -1301,7 +1301,7 @@ pjsip_hdr* parse_hdr_accept_contact( pjsip_parse_ctx *ctx )
     pjsip_accept_contact_hdr *hdr = pjsip_accept_contact_hdr_create(pool);
     if (first == NULL)
     {
-        first = hdr;
+      first = hdr;
     }
     else
     {

@@ -564,7 +564,9 @@ std::string SipParserTest::parse_and_print_one(std::string header, std::string h
 // back to strings and returns a vector containing one string per header value.
 //
 // If the header fails to parse, this will throw a PJSIP exception.
-std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header, std::string hname, CloneType ct)
+std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header,
+                                                              std::string hname,
+                                                              CloneType ct)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -595,15 +597,15 @@ std::vector<std::string> SipParserTest::parse_and_print_multi(std::string header
   pj_str_t header_name;
   pj_cstr(&header_name, hname.c_str());
   pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
-                                                            &header_name,
-                                                            NULL);
+                                                          &header_name,
+                                                          NULL);
 
   while (hdr != NULL)
   {
     initial_headers.push_back(hdr);
     hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
-                                                            &header_name,
-                                                            hdr->next);
+                                                 &header_name,
+                                                 hdr->next);
   }
 
   // We've seen issues where we didn't copy PJSIP data between pools correctly,
@@ -728,8 +730,8 @@ TEST_F(SipParserTest, AcceptContactMultiple)
   EXPECT_EQ(2u, pj_list_size(&hdr->feature_set));
 
   hdr = (pjsip_accept_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
-                                                            &header_name,
-                                                            hdr->next);
+                                                              &header_name,
+                                                              hdr->next);
   EXPECT_NE(hdr, (pjsip_accept_contact_hdr*)NULL);
   EXPECT_EQ(true, hdr->required_match);
   EXPECT_NE(true, hdr->explicit_match);
@@ -738,68 +740,32 @@ TEST_F(SipParserTest, AcceptContactMultiple)
   pj_pool_release(main_pool);
 }
 
-
-
 TEST_F(SipParserTest, AcceptContactCloning)
 {
   EXPECT_EQ("Accept-Contact: *;+sip.instance=\"<i:am:a:robot>\";explicit;require",
-          parse_and_print_one("Accept-Contact   :    hello_world ; +sip.instance =  \"<i:am:a:robot>\" ;explicit ;             require\n",
-                              "Accept-Contact",
-                              CloneType::Full));
+            parse_and_print_one("Accept-Contact   :    hello_world ; +sip.instance =  \"<i:am:a:robot>\" ;explicit ;             require\n",
+                                "Accept-Contact",
+                                CloneType::Full));
 
   EXPECT_EQ("Accept-Contact: *;+sip.instance=\"<i:am:a:robot>\";explicit;require",
-          parse_and_print_one("Accept-Contact   :    hello_world ; +sip.instance =  \"<i:am:a:robot>\" ;explicit ;             require\n",
-                              "Accept-Contact",
-                              CloneType::Shallow));
+            parse_and_print_one("Accept-Contact   :    hello_world ; +sip.instance =  \"<i:am:a:robot>\" ;explicit ;             require\n",
+                                "Accept-Contact",
+                                CloneType::Shallow));
 }
 
 TEST_F(SipParserTest, AcceptContactQuotedPair)
 {
   EXPECT_EQ("Accept-Contact: *;c=\"\\j\"",
-          parse_and_print_one("Accept-Contact: *;c=\"\\j\"\n",
-                              "Accept-Contact"));
-}
-
-TEST_F(SipParserTest, DISABLED_AcceptContact_QuotedStringLWS)
-{
-
-  EXPECT_EQ("Accept-Contact: *;a=\"\r\n  \"\n",
-            parse_and_print_one("Accept-Contact: *;a=\"\r\n	 \"\n",
+            parse_and_print_one("Accept-Contact: *;c=\"\\j\"\n",
                                 "Accept-Contact"));
-
-  // Further failures with a similar root cause:
-  parse_and_print_multi("a	 : *,			 	*	 ;\n	+q'S= \n	 	\"< 	 	 \n >\",* ,*\n",
-                        "Accept-Contact");
-}
-
-TEST_F(SipParserTest, DISABLED_AcceptContact_VariousABNF_NonASCIICharacters)
-{
-
-  parse_and_print_multi("accEpt-cONtacT			:  *\n  ;DATA;+k!R	  ;\n			reQUire\n		 	;rEQuiRe \n ;~%,*			 ;+'!- \n	=[::Ec]\n				; \n 	 +r50=	  	\"<>\" \n	; 	 eXPLIcit;	REquiRE;%%.*_=\n	\"\"\n	 		 	 	;			aCtOR		\n = 	 		 		\"<\\z>\"   \n ;+%=\" 			\n		\",*\n  ;EXpLiciT	\n	 	;_= \n	 \"\\!e\"\n",
-                        "Accept-Contact");
-
-  // Further failures with a similar root cause:
-  parse_and_print_multi("aCcePt-ConTact:\n  *  ;~g=	\n 	\"\\  \n		  	\\\"	,	*, \n	  *\n ,\n  *	,  \n	 *  \n ,\n   *\n",
-                        "Accept-Contact");
-  parse_and_print_multi("A:*; +P17%=\"<8\\b\\>\";EXPliciT  \n ;requiRe 	; ~		\n	=\"	\n		\\\\\n	\";\n	 REQUIre\n",
-                        "Accept-Contact");
-  parse_and_print_multi("A :*;+X	 		\n	 ;\n	REQUirE	  		 \n	 				;	\n 	ReQUire;\n		`%~-~,*,\n  *; 	+g%-=\"TRUe,#>=-47\"  ,* 	\n 		  	 ;\n *=\n 		\n	 	\"A	\";	+h! 	  ,\n	*;  -=\n	 	 \"\\\"	,	*,*, *	,*  , \n 	* ;aUtOMATA=	\n	\"!+-,!#<=387.421\"\n ;ReqUIRE,* ;ExpLICIT\n",
-                        "Accept-Contact");
-}
-
-TEST_F(SipParserTest, DISABLED_AcceptContact_VariousABNF_NullCharacter)
-{
-  std::string with_null("A: *;b=\"\\\0qwertyuiopasdfghjkl\"\n", 31);
-  parse_and_print_multi(with_null,
-                        "Accept-Contact");
 }
 
 TEST_F(SipParserTest, AcceptContact_VariousABNF_ManyCommas)
 {
-      std::vector<std::string> expected = { "Accept-Contact: *;explicit", "Accept-Contact: *", "Accept-Contact: *", "Accept-Contact: *", "Accept-Contact: *" };
-      EXPECT_EQ(expected,
-                parse_and_print_multi("a:*;ExpLiciT\n		 		,\n 	*\n	,*,	\n *,  \n  *\n",
-                                "Accept-Contact"));
+  std::vector<std::string> expected = { "Accept-Contact: *;explicit", "Accept-Contact: *", "Accept-Contact: *", "Accept-Contact: *", "Accept-Contact: *" };
+  EXPECT_EQ(expected,
+            parse_and_print_multi("a:*;ExpLiciT\n		 		,\n 	*\n	,*,	\n *,  \n  *\n",
+                                  "Accept-Contact"));
 }
 
 TEST_F(SipParserTest, AcceptContact_ShortFormWithCommas)
@@ -851,12 +817,60 @@ TEST_F(SipParserTest, AcceptContact_VariousABNF_MultiExplicit)
                                   "Accept-Contact"));
 }
 
+/* The following block of tests are disabled - they were randomly generated
+ * tests which cause the PJSIP parser to fail. Once the parser bugs in question
+ * are fixed we should:
+ * - re-enable the test that is fixed
+ * - check that the form the header is normalised into looks sensible
+ * - add EXPECT_EQ statements to ensure we don't regress the parsing
+ *
+ * We haven't proactively added EXPECT_EQ statements because we can't confirm
+ * that they're expecting the right thing, and a typo in the EXPECT_EQ may be
+ * confusing later.
+ *
+ * */
+
+TEST_F(SipParserTest, DISABLED_AcceptContact_QuotedStringLWS)
+{
+
+  parse_and_print_one("Accept-Contact: *;a=\"\r\n	 \"\n",
+                      "Accept-Contact");
+
+  // Further failures with a similar root cause:
+  parse_and_print_multi("a	 : *,			 	*	 ;\n	+q'S= \n	 	\"< 	 	 \n >\",* ,*\n",
+                        "Accept-Contact");
+}
+
+TEST_F(SipParserTest, DISABLED_AcceptContact_VariousABNF_NonASCIICharacters)
+{
+
+  parse_and_print_multi("accEpt-cONtacT			:  *\n  ;DATA;+k!R	  ;\n			reQUire\n		 	;rEQuiRe \n ;~%,*			 ;+'!- \n	=[::Ec]\n				; \n 	 +r50=	  	\"<>\" \n	; 	 eXPLIcit;	REquiRE;%%.*_=\n	\"\"\n	 		 	 	;			aCtOR		\n = 	 		 		\"<\\z>\"   \n ;+%=\" 			\n		\",*\n  ;EXpLiciT	\n	 	;_= \n	 \"\\!e\"\n",
+                        "Accept-Contact");
+
+  // Further failures with a similar root cause:
+  parse_and_print_multi("aCcePt-ConTact:\n  *  ;~g=	\n 	\"\\  \n		  	\\\"	,	*, \n	  *\n ,\n  *	,  \n	 *  \n ,\n   *\n",
+                        "Accept-Contact");
+  parse_and_print_multi("A:*; +P17%=\"<8\\b\\>\";EXPliciT  \n ;requiRe 	; ~		\n	=\"	\n		\\\\\n	\";\n	 REQUIre\n",
+                        "Accept-Contact");
+  parse_and_print_multi("A :*;+X	 		\n	 ;\n	REQUirE	  		 \n	 				;	\n 	ReQUire;\n		`%~-~,*,\n  *; 	+g%-=\"TRUe,#>=-47\"  ,* 	\n 		  	 ;\n *=\n 		\n	 	\"A	\";	+h! 	  ,\n	*;  -=\n	 	 \"\\\"	,	*,*, *	,*  , \n 	* ;aUtOMATA=	\n	\"!+-,!#<=387.421\"\n ;ReqUIRE,* ;ExpLICIT\n",
+                        "Accept-Contact");
+}
+
+TEST_F(SipParserTest, DISABLED_AcceptContact_VariousABNF_NullCharacter)
+{
+  std::string with_null("A: *;b=\"\\\0qwertyuiopasdfghjkl\"\n", 31);
+  parse_and_print_multi(with_null,
+                        "Accept-Contact");
+}
+
 TEST_F(SipParserTest, DISABLED_AcceptContact_VariousABNF_MultipleLWS)
 {
   std::vector<std::string> expected = { "Accept-Contact: *;MOBiLitY=\"<>\"" };
+  // This expectation (without multiple LWS elements in a row) passes.
   EXPECT_EQ(expected,
             parse_and_print_multi("A:*;MOBiLitY=\n \"<>\"	\n",
                                   "Accept-Contact"));
+  // This expectation (with multiple LWS elements in a row) fails.
   EXPECT_EQ(expected,
             parse_and_print_multi("A:*;MOBiLitY=\n \n \"<>\"	\n",
                                   "Accept-Contact"));
