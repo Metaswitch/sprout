@@ -54,7 +54,7 @@ public:
   /// @param expiry               The expiry time associated with the AoR
   /// @param trail                SAS trail
   virtual Store::Status set_aor_data(const std::string& aor_id,
-                                     AoRPair* aor_pair,
+                                     AoR* aor,
                                      int expiry,
                                      SAS::TrailId trail) = 0;
 };

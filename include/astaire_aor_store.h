@@ -34,8 +34,6 @@ public:
   // Called through to from handlers code.
   virtual bool has_servers() override { return _connector->underlying_store_has_servers(); }
 
-
-
   /// Get the data for a particular address of record (registered SIP URI,
   /// in format "sip:2125551212@example.com"), creating it if necessary.
   /// May return NULL in case of error.  Result is owned
@@ -53,7 +51,7 @@ public:
   /// @param expiry               The expiry time associated with the AoR
   /// @param trail                SAS trail
   virtual Store::Status set_aor_data(const std::string& aor_id,
-                                     AoRPair* aor_pair,
+                                     AoR* aor,
                                      int expiry,
                                      SAS::TrailId trail) override;
 

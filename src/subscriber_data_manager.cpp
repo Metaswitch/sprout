@@ -215,7 +215,7 @@ Store::Status SubscriberDataManager::set_aor_data(
             aor_pair->get_current()->_notify_cseq);
 
   Store::Status rc = _aor_store->set_aor_data(aor_id,
-                                              aor_pair,
+                                              aor_pair->get_current(),
                                               max_expires - now,
                                               trail);
 

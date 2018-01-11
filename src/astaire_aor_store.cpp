@@ -40,12 +40,12 @@ AoR* AstaireAoRStore::get_aor_data(const std::string& aor_id,
 
 
 Store::Status AstaireAoRStore::set_aor_data(const std::string& aor_id,
-                                            AoRPair* aor_data,
+                                            AoR* aor,
                                             int expiry,
                                             SAS::TrailId trail)
 {
   return _connector->set_aor_data(aor_id,
-                                  aor_data->get_current(),
+                                  aor,
                                   expiry,
                                   trail);
 }
