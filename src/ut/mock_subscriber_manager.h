@@ -24,6 +24,11 @@ public:
   MOCK_METHOD3(update_associated_uris, HTTPCode(std::string aor_id,
                                                 AssociatedURIs associated_uris,
                                                 SAS::TrailId trail));
+
+  MOCK_METHOD4(remove_bindings, HTTPCode(std::vector<std::string> binding_ids,
+                                         EventTrigger event_trigger,
+                                         std::vector<Binding>& bindings,
+                                         SAS::TrailId trail));
 };
 
 #endif

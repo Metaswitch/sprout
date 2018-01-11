@@ -872,6 +872,7 @@ HTTPCode PushProfileTask::get_associated_uris(std::string body,
 
 HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
+  printf("\nlllllllllllllll\n");
   return _cfg->_sm->update_associated_uris(_default_public_id,
                                            _associated_uris,
                                            trail);

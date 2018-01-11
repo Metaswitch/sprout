@@ -172,7 +172,7 @@ public:
                            std::vector<Binding>& all_bindings,
                            SAS::TrailId trail) { return HTTP_OK; }
 
-  HTTPCode remove_bindings(std::vector<std::string> binding_ids,
+  virtual HTTPCode remove_bindings(std::vector<std::string> binding_ids,
                            EventTrigger event_trigger,
                            std::vector<Binding>& bindings,
                            SAS::TrailId trail) { return HTTP_OK; }
@@ -204,7 +204,7 @@ public:
                                 SubscriberInfo& subscriber_info,
                                 SAS::TrailId trail) { return HTTP_OK; }
 
-  HTTPCode update_associated_uris(std::string public_id,
+  virtual HTTPCode update_associated_uris(std::string public_id,
                                   AssociatedURIs associated_uris,
                                   SAS::TrailId trail) { return HTTP_OK; }
 private:
