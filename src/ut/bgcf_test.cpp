@@ -197,7 +197,7 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
                                 aliases,
-                                std::unordered_set<std::string>(), // TJW2 TODO
+                                std::unordered_set<std::string>(),
                                 sproutlets,
                                 std::set<std::string>());
 

@@ -144,7 +144,9 @@ enum OptionTypes
   OPT_HOMESTEAD_TIMEOUT,
   OPT_ORIG_SIP_TO_TEL_COERCE,
   OPT_REQUEST_ON_QUEUE_TIMEOUT,
-  OPT_BLACKLISTED_SCSCFS
+  OPT_BLACKLISTED_SCSCFS,
+  OPT_LOCAL_ALIASES,
+  OPT_REMOTE_ALIASES
 };
 
 
@@ -156,7 +158,8 @@ const static struct pj_getopt_option long_opt[] =
   { "domain",                       required_argument, 0, 'D'},
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
   { "alias",                        required_argument, 0, 'n'},
-  { "gr-alias",                     required_argument, 0, 'b'}, // TJW2 TODO: Code here?
+  { "local-alias-list",             required_argument, 0, OPT_LOCAL_ALIASES},
+  { "remote-alias-list",                required_argument, 0, OPT_REMOTE_ALIASES},
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},
@@ -242,7 +245,7 @@ const static struct pj_getopt_option long_opt[] =
   { NULL,                           0,                 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:b:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:N:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:N:dth";
 
 static sem_t term_sem;
 
@@ -274,7 +277,9 @@ static void usage(void)
        " -D, --domain <name>        The home domain name\n"
        "     --additional-domains <names>\n"
        "                            Comma-separated list of additional home domain names\n"
-       " -n, --alias <names>        Optional list of alias host names\n"
+       " -n, --alias <names>        (DEPRECATED) Optional list of alias host names\n"
+       "     --local-alias-list     TJW2 TODO\n"
+       "     --remote-alias-list    TJW2 TODO\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
        "                            as the upstream routing proxy.  Optionally specifies the port,\n"
@@ -699,13 +704,18 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'n':
-      options->alias_hosts = std::string(pj_optarg);
-      TRC_INFO("Alias host names = %s", pj_optarg);
+      options->deprecated_alias_hosts = std::string(pj_optarg);
+      TRC_WARNING("Deprecated --alias (-n) used. Alias host names = %s", pj_optarg);
       break;
 
-    case 'b':
-      options->gr_alias_hosts = std::string(pj_optarg);
-      TRC_INFO("GR Alias host names = %s", pj_optarg);
+    case OPT_LOCAL_ALIASES:
+      options->local_alias_hosts = std::string(pj_optarg);
+      TRC_INFO("Local alias host names = %s", pj_optarg);
+      break;
+
+    case OPT_REMOTE_ALIASES:
+      options->remote_alias_hosts = std::string(pj_optarg);
+      TRC_INFO("GR alias host names = %s", pj_optarg);
       break;
 
     case 'r':
@@ -2096,8 +2106,9 @@ int main(int argc, char* argv[])
                       opt.additional_home_domains,
                       opt.uri_scscf,
                       opt.sprout_hostname,
-                      opt.alias_hosts,
-                      opt.gr_alias_hosts,
+                      opt.deprecated_alias_hosts,
+                      opt.local_alias_hosts,
+                      opt.remote_alias_hosts,
                       sip_resolver,
                       opt.record_routing_model,
                       opt.default_session_expires,
@@ -2357,18 +2368,18 @@ int main(int argc, char* argv[])
     host_local_aliases.insert(opt.home_domain);
     host_local_aliases.insert(stack_data.home_domains.begin(),
                               stack_data.home_domains.end());
-    host_local_aliases.insert(stack_data.aliases.begin(),
-                              stack_data.aliases.end());
+    host_local_aliases.insert(stack_data.local_aliases.begin(),
+                              stack_data.local_aliases.end());
 
-    std::unordered_set<std::string> host_gr_aliases;
-    host_gr_aliases.insert(stack_data.gr_aliases.begin(),
-                           stack_data.gr_aliases.end());
+    std::unordered_set<std::string> host_remote_aliases;
+    host_remote_aliases.insert(stack_data.remote_aliases.begin(),
+                           stack_data.remote_aliases.end());
 
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
                                          opt.sprout_hostname,
                                          host_local_aliases,
-                                         host_gr_aliases,
+                                         host_remote_aliases,
                                          sproutlets,
                                          opt.stateless_proxies,
                                          opt.max_sproutlet_depth);

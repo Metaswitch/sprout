@@ -877,15 +877,15 @@ public:
     host_local_aliases.insert("scscf.proxy1.homedomain");
 
     // Create a GR alias.
-    std::unordered_set<std::string> host_gr_aliases;
-    host_gr_aliases.insert("proxy1.homedomain-remote");
+    std::unordered_set<std::string> host_remote_aliases;
+    host_remote_aliases.insert("proxy1.homedomain-remote");
 
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "proxy1.homedomain",
                                 host_local_aliases,
-                                host_gr_aliases,
+                                host_remote_aliases,
                                 _sproutlets,
                                 std::set<std::string>());
 
@@ -949,7 +949,7 @@ public:
                                                             unused_alias,
                                                             unused_local_hostname,
                                                             unused_selection_type,
-                                                            true); //TJW2 TODO
+                                                            true);
     if (sproutlet != NULL)
     {
       service_name = sproutlet->service_name();

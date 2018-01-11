@@ -101,7 +101,7 @@ public:
                                              PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                              "homedomain",
                                              std::unordered_set<std::string>(),
-                                             std::unordered_set<std::string>(), //TJW2 TODO
+                                             std::unordered_set<std::string>(),
                                              sproutlets,
                                              std::set<std::string>());
 
@@ -874,7 +874,7 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
-// Check data contention in a remote store 
+// Check data contention in a remote store
 TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
 {
   // Add the base AoR to the remote store
@@ -1694,7 +1694,7 @@ public:
                                              PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                              "homedomain",
                                              std::unordered_set<std::string>(),
-                                             std::unordered_set<std::string>(), // TJW2 TODO
+                                             std::unordered_set<std::string>(),
                                              sproutlets,
                                              std::set<std::string>());
   }
