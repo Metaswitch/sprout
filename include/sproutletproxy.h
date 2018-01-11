@@ -20,6 +20,7 @@
 #include "basicproxy.h"
 #include "pjutils.h"
 #include "sproutlet.h"
+#include "snmp_counter_table.h"
 #include "snmp_sip_request_types.h"
 #include "sproutlet_options.h"
 
@@ -290,6 +291,8 @@ protected:
   const int _max_sproutlet_depth;
 
   static const pj_str_t STR_SERVICE;
+
+  SNMP::CounterTable* _route_to_remote_alias_tbl;
 
   friend class UASTsx;
   friend class SproutletWrapper;

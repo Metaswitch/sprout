@@ -70,12 +70,16 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
 
     register_sproutlet(*it);
   }
+
+  _route_to_remote_alias_tbl = SNMP::CounterTable::create("route_to_remote_alias",
+                                                          "1.2.826.0.1.1578918.9.3.44");
 }
 
 
 /// Destructor.
 SproutletProxy::~SproutletProxy()
 {
+  delete _route_to_remote_alias_tbl;
 }
 
 
@@ -1002,8 +1006,8 @@ void SproutletProxy::UASTsx::schedule_requests()
     {
       std::string alias;
 
-      // Do not allow GR aliases. Requests intended for another site should be
-      // routed to that site - this means that the terminating side of a call
+      // Do not allow remote aliases. Requests intended for another site should
+      // be routed to that site - this means that the terminating side of a call
       // will be handled in the site that subscriber is registered.
       SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(req.req, 0, alias, false);
 
@@ -1055,6 +1059,14 @@ void SproutletProxy::UASTsx::schedule_requests()
         // No local Sproutlet, proxy the request.
         TRC_DEBUG("No local sproutlet matches request");
         size_t index;
+
+        // TJW2 TODO: Increment stat
+        bool remote_alias = false;
+
+        if (remote_alias)
+        {
+          _sproutlet_proxy->_route_to_remote_alias_tbl->increment();
+        }
 
         pj_status_t status = allocate_uac(req.req, index, req.allowed_host_state);
 
