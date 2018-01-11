@@ -21,6 +21,10 @@ public:
   MockSubscriberManager();
   virtual ~MockSubscriberManager();
 
+  MOCK_METHOD3(get_bindings, HTTPCode(std::string public_id,
+                                      std::vector<Binding>& bindings,
+                                      SAS::TrailId trail));
+
   MOCK_METHOD3(update_associated_uris, HTTPCode(std::string aor_id,
                                                 AssociatedURIs associated_uris,
                                                 SAS::TrailId trail));

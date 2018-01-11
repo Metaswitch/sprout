@@ -187,7 +187,7 @@ public:
                                  EventTrigger event_trigger,
                                  SAS::TrailId trail) { return HTTP_OK; }
 
-  HTTPCode get_bindings(std::string public_id,
+  virtual HTTPCode get_bindings(std::string public_id,
                         std::vector<Binding>& bindings,
                         SAS::TrailId trail) { return HTTP_OK; }
 

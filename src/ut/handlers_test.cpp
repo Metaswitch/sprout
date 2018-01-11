@@ -54,6 +54,7 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
 class DeregistrationTaskTest : public SipTest
 {
   MockSubscriberDataManager* _subscriber_data_manager;
+  MockSubscriberManager* _subscriber_manager;
   MockImpiStore* _local_impi_store;
   MockImpiStore* _remote_impi_store;
   MockHttpStack* _httpstack;
@@ -74,6 +75,7 @@ class DeregistrationTaskTest : public SipTest
     _remote_impi_store = new MockImpiStore();
     _httpstack = new MockHttpStack();
     _subscriber_data_manager = new MockSubscriberDataManager();
+    _subscriber_manager = new MockSubscriberManager();
     _hss = new FakeHSSConnection();
   }
 
@@ -83,6 +85,7 @@ class DeregistrationTaskTest : public SipTest
     delete _cfg;
     delete _hss;
     delete _subscriber_data_manager;
+    delete _subscriber_manager;
     delete _httpstack;
     delete _local_impi_store; _local_impi_store = NULL;
     delete _remote_impi_store; _remote_impi_store = NULL;
@@ -99,12 +102,7 @@ class DeregistrationTaskTest : public SipTest
          "send-notifications=" + notify,
          body,
          method);
-     IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
-     _cfg = new DeregistrationTask::Config(_subscriber_data_manager,
-                                           {},
-                                           _hss,
-                                           NULL,
-                                           ifc_configuration,
+     _cfg = new DeregistrationTask::Config(_subscriber_manager,
                                            NULL,
                                           _local_impi_store,
                                           {_remote_impi_store});
@@ -114,20 +112,18 @@ class DeregistrationTaskTest : public SipTest
   void expect_sdm_updates(std::vector<std::string> aor_ids,
                           std::vector<AoRPair*> aors)
   {
-    for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
+    for (std::string aor_id : aor_ids)
     {
-      // Get the information from the local store
-      EXPECT_CALL(*_subscriber_data_manager, get_aor_data(aor_ids[ii], _)).WillOnce(Return(aors[ii]));
+      //HTTPCode rc;
+      //std::vector<SubscriberManager::Binding> bindings;
+      EXPECT_CALL(*_subscriber_manager, 
+                  get_bindings(aor_id, _, _));
+        //.WillOnce(Return(rc));
+                  //DoAll(SetArgReferee<1>(bindings)),Return(rc));
 
-      if (aors[ii] != NULL)
-      {
-        // Write the information to the local store
-        EXPECT_CALL(*_subscriber_data_manager,
-                    set_aor_data(aor_ids[ii],
-                                 SubscriberDataManager::EventTrigger::ADMIN,
-                                 _, _, _))
-          .WillOnce(Return(Store::OK));
-      }
+      EXPECT_CALL(*_subscriber_manager, 
+                  remove_bindings(_, SubscriberManager::EventTrigger::ADMIN, _, _))
+        .WillOnce(Return(HTTP_OK));
     }
   }
 
