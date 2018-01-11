@@ -99,7 +99,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          aor.cpp \
                          astaire_aor_store.cpp \
                          sprout_xml_utils.cpp \
-                         rphservice.cpp
+                         rphservice.cpp \
+                         s4.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -198,7 +199,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        testingcommon.cpp \
                        thread_dispatcher_test.cpp \
                        rphservice_test.cpp \
-                       mock_rph_service.cpp
+                       mock_rph_service.cpp \
+                       s4_test.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include

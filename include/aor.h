@@ -174,6 +174,20 @@ public:
   void from_json(const rapidjson::Value& s_obj);
 };
 
+// SDM-REFACTOR-TODO: prototype
+struct PatchObject
+{
+  PatchObject() : _increment(false) {}
+
+  std::vector<Binding> _bindings_to_update;
+  std::vector<std::string> _bindings_to_remove;
+  Subscription _subscription_to_update;
+  std::string _subscription_to_remove;
+  AssociatedURIs _associated_uris;
+  int _min_cseq;
+  bool _increment;
+};
+
 /// @class AoR
 ///
 /// Addresses that are registered for this address of record.
@@ -245,6 +259,12 @@ public:
   ///
   /// @param source_aor           Source AoR for the copy
   void copy_aor(AoR* source_aor);
+
+  // SDM-REFACTOR-TODO: Implement/comment/test
+  int get_expiry() { return 1; }
+  void patch_aor(PatchObject* po) {};
+  void convert_aor_to_patch(PatchObject* po) {};
+  void convert_patch_to_aor(PatchObject* po) {};
 
   /// CSeq value for event notifications for this AoR.  This is initialised
   /// to one when the AoR record is first set up and incremented every time
