@@ -276,12 +276,17 @@ void SCSCFSproutlet::remove_binding(std::string binding_id,
   std::vector<Binding*> bindings;
   bindings.push_back(binding);
 
-  bool rc = _sm->remove_bindings(binding_ids,
-                                 event_trigger,
-                                 bindings,
-                                 trail)
+  // HSSConnection::DEREG_TIMEOUT was reason, should make it
+  // HSSConnection::DEREG_USER if need to pass it through in future.
+  //
+  // Event trigger was SubscriberDataManager::EventTrigger::TIMEOUT, should
+  // change it to USER and pass that through as the event trigger.
+  long http_code = _sm->remove_bindings(binding_ids,
+                                             event_trigger,
+                                             bindings,
+                                             trail)
 
- if (!rc)
+ if (http_code != HTTP_OK)
  {
    // What to do here?? Just log? (surely that was done already?)
    TRC_INFO("Error removing binding with id %s in subscriber manager",

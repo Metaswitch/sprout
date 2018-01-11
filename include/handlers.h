@@ -17,6 +17,7 @@
 #include "chronosconnection.h"
 #include "hssconnection.h"
 #include "subscriber_data_manager.h"
+#include "subscriber_manager.h"
 #include "sipresolver.h"
 #include "impistore.h"
 #include "fifcservice.h"
@@ -52,14 +53,20 @@ public:
   {
     Config(SubscriberDataManager* sdm,
            std::vector<SubscriberDataManager*> remote_sdms,
-           HSSConnection* hss) :
+           HSSConnection* hss,
+           FIFCService* fifc_service,
+           IFCConfiguration ifc_configuration) :
       _sdm(sdm),
       _remote_sdms(remote_sdms),
-      _hss(hss)
+      _hss(hss),
+      _fifc_service(fifc_service),
+      _ifc_configuration(ifc_configuration)
     {}
     SubscriberDataManager* _sdm;
     std::vector<SubscriberDataManager*> _remote_sdms;
     HSSConnection* _hss;
+    FIFCService* _fifc_service;
+    IFCConfiguration _ifc_configuration;
   };
 
   AoRTimeoutTask(HttpStack::Request& req,
@@ -267,17 +274,11 @@ class PushProfileTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(SubscriberDataManager* sdm,
-           std::vector<SubscriberDataManager*> remote_sdms,
-	   HSSConnection* hss):
-      _sdm(sdm),
-      _remote_sdms(remote_sdms),
-      _hss(hss)
+    Config(SubscriberManager* sm):
+      _sm(sm)
     {}
 
-    SubscriberDataManager* _sdm;
-    std::vector<SubscriberDataManager*> _remote_sdms;
-    HSSConnection* _hss;
+    SubscriberManager* _sm;
   };
 
   PushProfileTask(HttpStack::Request& req,

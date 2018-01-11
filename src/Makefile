@@ -185,6 +185,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_sproutlet.cpp \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
+                       mock_subscriber_manager.cpp \
                        mock_chronos_connection.cpp \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
