@@ -949,7 +949,7 @@ public:
                                                             unused_alias,
                                                             unused_local_hostname,
                                                             unused_selection_type,
-                                                            true);
+                                                            true).first;
     if (sproutlet != NULL)
     {
       service_name = sproutlet->service_name();
@@ -3439,7 +3439,7 @@ TEST_F(SproutletProxyTest, SproutletCopiesOriginalTransport)
   delete tp2;
 }
 
-TEST_F(SproutletProxyTest, AcceptGrAliasExternal)
+TEST_F(SproutletProxyTest, AcceptRemoteAliasExternal)
 {
   // Tests that requests off the wire with a Route header corresponsing to a GR
   // alias of this node are accepted.
@@ -3497,7 +3497,7 @@ TEST_F(SproutletProxyTest, AcceptGrAliasExternal)
   delete tp;
 }
 
-TEST_F(SproutletProxyTest, ForwardGrAliasInternal)
+TEST_F(SproutletProxyTest, ForwardRemoteAliasInternal)
 {
   // Tests that requests recieved from sproutlets with a Route header
   // corresponsing to a GR (but not local)  alias of this node are forwarded.

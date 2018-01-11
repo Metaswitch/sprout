@@ -77,6 +77,16 @@ protected:
   /// Pre-declaration
   class UASTsx;
 
+  enum ALIAS_MATCH_TYPE
+  {
+    NO_MATCH,
+    MATCH,
+    REMOTE_MATCH_REJECTED
+  };
+
+  typedef std::pair<bool, ALIAS_MATCH_TYPE> AliasMatch;
+  typedef std::pair<Sproutlet*, ALIAS_MATCH_TYPE> SproutletMatch;
+
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
@@ -85,18 +95,20 @@ protected:
 
   /// Gets the next target Sproutlet for the message by analysing the top
   /// Route header.
-  Sproutlet* target_sproutlet(pjsip_msg* req,
+  SproutletMatch target_sproutlet(pjsip_msg* req,
                               int port,
                               std::string& alias,
                               bool allow_remote_aliases,
                               SAS::TrailId trail);
 
   /// Return the sproutlet that matches the URI supplied.
-  Sproutlet* match_sproutlet_from_uri(const pjsip_uri* uri,
-                                      std::string& alias,
-                                      std::string& local_hostname,
-                                      SPROUTLET_SELECTION_TYPES& selection_type,
-                                      bool allow_remote_aliases) const;
+  // TJW2 TODO: Comments
+  SproutletMatch match_sproutlet_from_uri(
+    const pjsip_uri* uri,
+    std::string& alias,
+    std::string& local_hostname,
+    SPROUTLET_SELECTION_TYPES& selection_type,
+    bool allow_remote_aliases) const;
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -121,7 +133,8 @@ protected:
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
-  bool is_host_alias(const pj_str_t* host, bool allow_remote_aliases) const;
+  std::pair<bool, ALIAS_MATCH_TYPE> is_host_alias(const pj_str_t* host,
+                                                  bool allow_remote_aliases) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,
                         const Sproutlet* sproutlet) const;
@@ -218,7 +231,8 @@ protected:
     SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
                                     int port,
                                     std::string& alias,
-                                    bool allow_remote_aliases);
+                                    bool allow_remote_aliases,
+                                    bool& remote_match_rejected);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;
