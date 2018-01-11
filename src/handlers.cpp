@@ -918,8 +918,11 @@ HTTPCode PushProfileTask::get_associated_uris(std::string body,
 
 HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
-  HTTPCode rc = HTTP_OK;
-  bool all_bindings_expired = false;
+  return _cfg->_sm->update_associated_uris(_default_public_id,
+                                           _associated_uris,
+                                         trail);
+
+/*  bool all_bindings_expired = false;
 
   AoRPair* aor_pair = get_and_set_local_aor_data(_cfg->_sdm,
                                                  _default_public_id,
@@ -955,5 +958,5 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
   }
 
   delete aor_pair; aor_pair = NULL;
-  return rc;
+  */
 }
