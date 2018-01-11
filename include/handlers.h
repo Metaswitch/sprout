@@ -185,14 +185,11 @@ class GetCachedDataTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(SubscriberDataManager* sdm,
-           std::vector<SubscriberDataManager*> remote_sdms) :
-      _sdm(sdm),
-      _remote_sdms(remote_sdms)
+    Config(SubscriberManager* sm) :
+      _sm(sm)
     {}
 
-    SubscriberDataManager* _sdm;
-    std::vector<SubscriberDataManager*> _remote_sdms;
+    SubscriberManager* _sm;
   };
 
   GetCachedDataTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :

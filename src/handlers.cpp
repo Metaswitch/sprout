@@ -652,45 +652,11 @@ void GetCachedDataTask::run()
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  // Lookup the IMPU in the store.
-  AoRPair* aor_pair = nullptr;
-  if (!RegistrationUtils::get_aor_data(&aor_pair,
-                                       impu,
-                                       _cfg->_sdm,
-                                       _cfg->_remote_sdms,
-                                       nullptr,
-                                       trail()))
-  {
-    send_http_reply(HTTP_SERVER_ERROR);
+  std::vector<SubscriberManager::Binding> bindings;
+  std::vector<SubscriberManager::Subscription> subscriptions;
+  HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, bindings, subscriptions, trail());
 
-    SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
-    SAS::report_marker(end_marker);
-
-    delete this;
-    return;
-  }
-
-  // If there are no bindings we can't have any data data for the requested
-  // subscriber (including subscriptions) so return a 404.
-  if (aor_pair->get_current()->bindings().empty())
-  {
-    send_http_reply(HTTP_NOT_FOUND);
-    delete aor_pair; aor_pair = NULL;
-
-    SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
-    SAS::report_marker(end_marker);
-
-    delete this;
-    return;
-  }
-
-  // Now we've got everything we need. Serialize the data that has been
-  // requested and return a 200 OK.
-  std::string content = serialize_data(aor_pair->get_current());
-  _req.add_content(content);
-  send_http_reply(HTTP_OK);
-
-  delete aor_pair; aor_pair = NULL;
+  send_http_reply(rc);
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
@@ -872,7 +838,6 @@ HTTPCode PushProfileTask::get_associated_uris(std::string body,
 
 HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
-  printf("\nlllllllllllllll\n");
   return _cfg->_sm->update_associated_uris(_default_public_id,
                                            _associated_uris,
                                            trail);

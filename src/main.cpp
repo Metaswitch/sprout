@@ -2360,8 +2360,9 @@ int main(int argc, char* argv[])
 
   SubscriberManager* sm = new SubscriberManager(hss_connection,
                                                 analytics_logger); 
+
   PushProfileTask::Config push_profile_config(sm);
-  GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
+  GetCachedDataTask::Config get_cached_data_config(sm);
   DeleteImpuTask::Config delete_impu_config(sm);
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm,
