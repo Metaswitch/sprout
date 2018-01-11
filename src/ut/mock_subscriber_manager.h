@@ -29,6 +29,15 @@ public:
                                          EventTrigger event_trigger,
                                          std::vector<Binding>& bindings,
                                          SAS::TrailId trail));
+
+  MOCK_METHOD3(get_cached_subscriber_state, HTTPCode(std::string public_id,
+                                                     SubscriberInfo& subscriber_info,
+                                                     SAS::TrailId trail));
+
+  MOCK_METHOD4(get_bindings_and_subscriptions, HTTPCode(std::string public_id,
+                                                        std::vector<Binding>& bindings,
+                                                        std::vector<Subscription>& subscriptions,
+                                                        SAS::TrailId trail));
 };
 
 #endif

@@ -173,9 +173,9 @@ public:
                            SAS::TrailId trail) { return HTTP_OK; }
 
   virtual HTTPCode remove_bindings(std::vector<std::string> binding_ids,
-                           EventTrigger event_trigger,
-                           std::vector<Binding>& bindings,
-                           SAS::TrailId trail) { return HTTP_OK; }
+                                   EventTrigger event_trigger,
+                                   std::vector<Binding>& bindings,
+                                   SAS::TrailId trail) { return HTTP_OK; }
 
   HTTPCode update_subscription(const Subscription& subscription,
                                SAS::TrailId trail) { return HTTP_OK; }
@@ -191,22 +191,22 @@ public:
                         std::vector<Binding>& bindings,
                         SAS::TrailId trail) { return HTTP_OK; }
 
-  HTTPCode get_bindings_and_subscriptions(std::string public_id,
+  virtual HTTPCode get_bindings_and_subscriptions(std::string public_id,
                                           std::vector<Binding>& bindings,
                                           std::vector<Subscription>& subscriptions,
                                           SAS::TrailId trail) { return HTTP_OK; }
 
-  HTTPCode get_cached_subscriber_state(std::string public_id,
-                                       SubscriberInfo& subscriber_info,
-                                       SAS::TrailId trail) { return HTTP_OK; }
+  virtual HTTPCode get_cached_subscriber_state(std::string public_id,
+                                               SubscriberInfo& subscriber_info,
+                                               SAS::TrailId trail) { return HTTP_OK; }
 
   HTTPCode get_subscriber_state(std::string public_id,
                                 SubscriberInfo& subscriber_info,
                                 SAS::TrailId trail) { return HTTP_OK; }
 
   virtual HTTPCode update_associated_uris(std::string public_id,
-                                  AssociatedURIs associated_uris,
-                                  SAS::TrailId trail) { return HTTP_OK; }
+                                          AssociatedURIs associated_uris,
+                                          SAS::TrailId trail) { return HTTP_OK; }
 private:
   AnalyticsLogger* _analytics;
   HSSConnection* _hss_connection;

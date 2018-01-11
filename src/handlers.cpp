@@ -656,6 +656,9 @@ void GetCachedDataTask::run()
   std::vector<SubscriberManager::Subscription> subscriptions;
   HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, bindings, subscriptions, trail());
 
+  // std::string content = serialize_data(aor_pair->get_current());
+  _req.add_content("");
+
   send_http_reply(rc);
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
