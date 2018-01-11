@@ -770,60 +770,14 @@ void DeleteImpuTask::run()
   const std::string prefix = "/impu/";
   std::string impu = _req.full_path().substr(prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
-
-  HTTPCode hss_sc;
-  int sc;
-
-  // Expire all the bindings. This will handle deregistering with the HSS and
-  // sending NOTIFYs and 3rd party REGISTERs.
-  bool all_bindings_expired =
-    RegistrationUtils::remove_bindings(_cfg->_sdm,
-                                       _cfg->_remote_sdms,
-                                       _cfg->_hss,
-                                       _cfg->_fifc_service,
-                                       _cfg->_ifc_configuration,
-                                       impu,
-                                       "*",
-                                       HSSConnection::DEREG_ADMIN,
-                                       SubscriberDataManager::EventTrigger::ADMIN,
-                                       trail(),
-                                       &hss_sc);
-
-  // Work out what status code to return.
-  if (all_bindings_expired)
-  {
-    // All bindings expired successfully, so the status code is determined by
-    // the response from homestead.
-    if ((hss_sc >= 200) && (hss_sc < 300))
-    {
-      // 2xx -> 200.
-      sc = HTTP_OK;
-    }
-    else if (hss_sc == HTTP_NOT_FOUND)
-    {
-      // 404 -> 404.
-      sc = HTTP_NOT_FOUND;
-    }
-    else if ((hss_sc >= 400) && (hss_sc < 500))
-    {
-      // Any other 4xx -> 400
-      sc = HTTP_BAD_REQUEST;
-    }
-    else
-    {
-      // Everything else is mapped to 502 Bad Gateway. This covers 5xx responses
-      // (which indicate homestead went wrong) or 3xx responses (which homestead
-      // should not return).
-      sc = HTTP_BAD_GATEWAY;
-    }
-
-    TRC_DEBUG("All bindings expired. Homestead returned %d (-> %d)", hss_sc, sc);
-  }
-  else
-  {
-    TRC_DEBUG("Failed to expire bindings");
-    sc = HTTP_SERVER_ERROR;
-  }
+  
+  std::vector<SubscriberManager::Binding> bindings;
+  std::vector<std::string> binding_ids = {"*"};
+  // Assuming the logic to determine sc is now with SM
+  HTTPCode sc = _cfg->_sm->remove_bindings(binding_ids,
+                                    SubscriberManager::EventTrigger::ADMIN,
+                                    bindings,
+                                    trail());
   send_http_reply(sc);
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 4u);

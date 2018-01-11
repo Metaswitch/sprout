@@ -236,23 +236,11 @@ class DeleteImpuTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(SubscriberDataManager* sdm,
-           std::vector<SubscriberDataManager*> remote_sdms,
-           HSSConnection* hss,
-           FIFCService* fifc_service,
-           IFCConfiguration ifc_configuration) :
-      _sdm(sdm),
-      _remote_sdms(remote_sdms),
-      _hss(hss),
-      _fifc_service(fifc_service),
-      _ifc_configuration(ifc_configuration)
+    Config(SubscriberManager* sm) :
+      _sm(sm)
     {}
 
-    SubscriberDataManager* _sdm;
-    std::vector<SubscriberDataManager*> _remote_sdms;
-    HSSConnection* _hss;
-    FIFCService* _fifc_service;
-    IFCConfiguration _ifc_configuration;
+    SubscriberManager* _sm;
   };
 
   DeleteImpuTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
@@ -274,7 +262,7 @@ class PushProfileTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(SubscriberManager* sm):
+    Config(SubscriberManager* sm) :
       _sm(sm)
     {}
 

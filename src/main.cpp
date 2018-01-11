@@ -2362,15 +2362,7 @@ int main(int argc, char* argv[])
                                                 analytics_logger); 
   PushProfileTask::Config push_profile_config(sm);
   GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
-  DeleteImpuTask::Config delete_impu_config(local_sdm,
-                                            remote_sdms,
-                                            hss_connection,
-                                            fifc_service,
-                                            IFCConfiguration(opt.apply_fallback_ifcs,
-                                                             opt.reject_if_no_matching_ifcs,
-                                                             opt.dummy_app_server,
-                                                             NULL,
-                                                             NULL));
+  DeleteImpuTask::Config delete_impu_config(sm);
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm,
                                             remote_sdms,
