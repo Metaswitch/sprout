@@ -345,61 +345,15 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
 
 HTTPCode DeregistrationTask::handle_request()
 {
+  HTTPCode rc = HTTP_OK;
   std::set<std::string> impis_to_delete;
 
-  for (std::map<std::string, std::string>::iterator it=_bindings.begin();
-       it!=_bindings.end();
-       ++it)
+  for (std::pair<std::string, std::string> binding : _bindings)
   {
-    AoRPair* aor_pair = deregister_bindings(_cfg->_sdm,
-                                            _cfg->_hss,
-                                            _cfg->_fifc_service,
-                                            _cfg->_ifc_configuration,
-                                            it->first,
-                                            it->second,
-                                            NULL,
-                                            _cfg->_remote_sdms,
-                                            impis_to_delete);
+    rc = deregister_bindings(binding.first,
+                             binding.second,
+                             impis_to_delete);
 
-    // LCOV_EXCL_START
-    if ((aor_pair != NULL) &&
-        (aor_pair->get_current() != NULL))
-    {
-      // If we have any remote stores, try to store this in them too.  We don't worry
-      // about failures in this case.
-      for (std::vector<SubscriberDataManager*>::const_iterator sdm = _cfg->_remote_sdms.begin();
-           sdm != _cfg->_remote_sdms.end();
-           ++sdm)
-      {
-        if ((*sdm)->has_servers())
-        {
-          AoRPair* remote_aor_pair = deregister_bindings(*sdm,
-                                                         _cfg->_hss,
-                                                         _cfg->_fifc_service,
-                                                         _cfg->_ifc_configuration,
-                                                         it->first,
-                                                         it->second,
-                                                         aor_pair,
-                                                         {},
-                                                         impis_to_delete);
-          delete remote_aor_pair;
-        }
-      }
-    }
-    // LCOV_EXCL_STOP
-    else
-    {
-      // Can't connect to memcached, return 500. If this isn't the first AoR being edited
-      // then this will lead to an inconsistency between the HSS and Sprout, as
-      // Sprout will have changed some of the AoRs, but HSS will believe they all failed.
-      // Sprout accepts changes to AoRs that don't exist though.
-      TRC_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
-
-      delete aor_pair;
-      return HTTP_SERVER_ERROR;
-    }
-
-    delete aor_pair;
   }
 
   // Delete IMPIs from the store.
@@ -416,7 +370,7 @@ HTTPCode DeregistrationTask::handle_request()
     }
   }
 
-  return HTTP_OK;
+  return rc;
 }
 
 void DeregistrationTask::delete_impi_from_store(ImpiStore* store,
@@ -443,102 +397,43 @@ void DeregistrationTask::delete_impi_from_store(ImpiStore* store,
 }
 
 
-AoRPair* DeregistrationTask::deregister_bindings(
-                             SubscriberDataManager* current_sdm,
-                             HSSConnection* hss,
-                             FIFCService* fifc_service,
-                             IFCConfiguration ifc_configuration,
-                             std::string aor_id,
-                             std::string private_id,
-                             AoRPair* previous_aor_pair,
-                             std::vector<SubscriberDataManager*> remote_sdms,
-                             std::set<std::string>& impis_to_delete)
+HTTPCode DeregistrationTask::deregister_bindings(
+                                         std::string aor_id,
+                                         std::string private_id,
+                                         std::set<std::string>& impis_to_delete)
 {
-  AoRPair* aor_pair = NULL;
-  bool all_bindings_expired = false;
-  bool got_ifcs;
-  Store::Status set_rc;
-  std::vector<std::string> impis_to_dereg;
+  std::vector<SubscriberManager::Binding> bindings;
 
-  // Get registration data
-  HSSConnection::irs_info irs_info;
-  got_ifcs = get_reg_data(_cfg->_hss, aor_id, irs_info, trail());
-
-  do
+  HTTPCode rc = _cfg->_sm->get_bindings(aor_id,
+                                        bindings,
+                                        trail());
+  if (rc != HTTP_OK)
   {
-    if (!RegistrationUtils::get_aor_data(&aor_pair,
-                                         aor_id,
-                                         current_sdm,
-                                         remote_sdms,
-                                         previous_aor_pair,
-                                         trail()))
+    return rc;
+  }
+  
+  std::vector<std::string> binding_ids;
+
+  for (SubscriberManager::Binding binding : bindings)
+  {
+    if (private_id.empty() || private_id == binding._private_id)
     {
-      break;
-    }
-
-    std::vector<std::string> binding_ids;
-
-    for (AoR::Bindings::const_iterator i =
-           aor_pair->get_current()->bindings().begin();
-         i != aor_pair->get_current()->bindings().end();
-         ++i)
-    {
-      // Get a list of the bindings to iterate over
-      binding_ids.push_back(i->first);
-    }
-
-    for (std::vector<std::string>::const_iterator i = binding_ids.begin();
-         i != binding_ids.end();
-         ++i)
-    {
-      std::string b_id = *i;
-      AoR::Binding* b = aor_pair->get_current()->get_binding(b_id);
-
-      if (private_id.empty() || private_id == b->_private_id)
+      if (!binding._private_id.empty())
       {
-        if (!b->_private_id.empty())
-        {
-          // Record the IMPIs that we need to delete as a result of deleting
-          // this binding.
-          impis_to_delete.insert(b->_private_id);
-        }
-        aor_pair->get_current()->remove_binding(b_id);
+        // Record the IMPIs that we need to delete as a result of deleting
+        // this binding.
+        impis_to_delete.insert(binding._private_id);
       }
-    }
-
-    aor_pair->get_current()->_associated_uris = irs_info._associated_uris;
-    set_rc = current_sdm->set_aor_data(aor_id,
-                                       SubscriberDataManager::EventTrigger::ADMIN,
-                                       aor_pair,
-                                       trail(),
-                                       all_bindings_expired);
-
-    if (set_rc != Store::OK)
-    {
-      delete aor_pair; aor_pair = NULL;
-    }
-  }
-  while (set_rc == Store::DATA_CONTENTION);
-
-  if (private_id == "")
-  {
-    // Deregister with any application servers
-    TRC_INFO("ID %s", aor_id.c_str());
-
-    if (got_ifcs)
-    {
-      RegistrationUtils::deregister_with_application_servers(irs_info._service_profiles[aor_id],
-                                                             fifc_service,
-                                                             ifc_configuration,
-                                                             current_sdm,
-                                                             remote_sdms,
-                                                             hss,
-                                                             aor_id,
-                                                             trail());
+ 
+      binding_ids.push_back(binding.get_id());
     }
   }
 
-  return aor_pair;
+  std::vector<SubscriberManager::Binding> unused_bindings;
+  return _cfg->_sm->remove_bindings(binding_ids,
+                                    SubscriberManager::EventTrigger::ADMIN,
+                                    unused_bindings,
+                                    trail());
 }
 
 HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
@@ -740,9 +635,8 @@ void DeleteImpuTask::run()
   std::string impu = _req.full_path().substr(prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
   
-  std::vector<SubscriberManager::Binding> bindings;
   std::vector<std::string> binding_ids = {"*"};
-  // Assuming the logic to determine sc is now with SM
+  std::vector<SubscriberManager::Binding> bindings;
   HTTPCode sc = _cfg->_sm->remove_bindings(binding_ids,
                                     SubscriberManager::EventTrigger::ADMIN,
                                     bindings,

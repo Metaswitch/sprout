@@ -2345,21 +2345,13 @@ int main(int argc, char* argv[])
   // be invoked. We don't increment any statistics relating to the fallback
   // iFCs in these flows though (as they should only be used on initial
   // registration).
-  DeregistrationTask::Config deregistration_config(local_sdm,
-                                                   remote_sdms,
-                                                   hss_connection,
-                                                   fifc_service,
-                                                   IFCConfiguration(opt.apply_fallback_ifcs,
-                                                                    opt.reject_if_no_matching_ifcs,
-                                                                    opt.dummy_app_server,
-                                                                    NULL,
-                                                                    NULL),
+  SubscriberManager* sm = new SubscriberManager(hss_connection,
+                                                analytics_logger); 
+
+  DeregistrationTask::Config deregistration_config(sm,
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
-
-  SubscriberManager* sm = new SubscriberManager(hss_connection,
-                                                analytics_logger); 
 
   PushProfileTask::Config push_profile_config(sm);
   GetCachedDataTask::Config get_cached_data_config(sm);

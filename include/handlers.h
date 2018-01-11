@@ -118,28 +118,16 @@ class DeregistrationTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(SubscriberDataManager* sdm,
-           std::vector<SubscriberDataManager*> remote_sdms,
-           HSSConnection* hss,
-           FIFCService* fifc_service,
-           IFCConfiguration ifc_configuration,
+    Config(SubscriberManager* sm,
            SIPResolver* sipresolver,
            ImpiStore* local_impi_store,
            std::vector<ImpiStore*> remote_impi_stores) :
-      _sdm(sdm),
-      _remote_sdms(remote_sdms),
-      _hss(hss),
-      _fifc_service(fifc_service),
-      _ifc_configuration(ifc_configuration),
+      _sm(sm),
       _sipresolver(sipresolver),
       _local_impi_store(local_impi_store),
       _remote_impi_stores(remote_impi_stores)
     {}
-    SubscriberDataManager* _sdm;
-    std::vector<SubscriberDataManager*> _remote_sdms;
-    HSSConnection* _hss;
-    FIFCService* _fifc_service;
-    IFCConfiguration _ifc_configuration;
+    SubscriberManager* _sm;
     SIPResolver* _sipresolver;
     ImpiStore* _local_impi_store;
     std::vector<ImpiStore*> _remote_impi_stores;
@@ -155,14 +143,8 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  AoRPair* deregister_bindings(SubscriberDataManager* current_sdm,
-                               HSSConnection* hss,
-                               FIFCService* fifc_service,
-                               IFCConfiguration ifc_configuration,
-                               std::string aor_id,
+  HTTPCode deregister_bindings(std::string aor_id,
                                std::string private_id,
-                               AoRPair* previous_aor_data,
-                               std::vector<SubscriberDataManager*> remote_sdms,
                                std::set<std::string>& impis_to_delete);
 
 protected:
