@@ -1214,7 +1214,7 @@ pjsip_hdr* parse_hdr_reject_contact(pjsip_parse_ctx* ctx)
 
   // We're done parsing this header.
   pjsip_parse_end_hdr_imp(scanner);
-  return (pjsip_hdr*)hdr;
+  return (pjsip_hdr*)first;
 }
 
 pjsip_reject_contact_hdr* pjsip_reject_contact_hdr_create(pj_pool_t* pool)
