@@ -192,9 +192,9 @@ public:
                             SubscriberInfo& subscriber_info,
                             SAS::TrailId trail) { return true; }
 
-  HTTPCode update_associated_uris(std::string public_id,
-                            AssociatedURIs& associated_uris,
-                            SAS::TrailId trail) { return HTTP_OK; }
+  virtual HTTPCode update_associated_uris(const std::string& public_id,
+                                          AssociatedURIs& associated_uris,
+                                          SAS::TrailId trail) { return HTTP_OK; }
 private:
   AnalyticsLogger* _analytics;
   HSSConnection* _hss_connection;
