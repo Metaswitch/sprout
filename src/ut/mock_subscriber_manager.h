@@ -21,8 +21,8 @@ public:
   MockSubscriberManager();
   virtual ~MockSubscriberManager();
 
-  MOCK_METHOD3(update_associated_uris, HTTPCode(const std::string& aor_id,
-                                                AssociatedURIs& associated_uris,
+  MOCK_METHOD3(update_associated_uris, HTTPCode(std::string aor_id,
+                                                AssociatedURIs associated_uris,
                                                 SAS::TrailId trail));
 };
 
