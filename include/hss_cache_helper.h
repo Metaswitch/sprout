@@ -15,7 +15,7 @@
 
 #include "sas.h"
 #include "aschain.h"
-#include "hssconnection.h"
+#include "subscriber_manager.h"
 #include "sproutlet.h"
 
 class HssCacheHelper
@@ -66,7 +66,7 @@ public:
   bool get_associated_uris(std::string public_id,
                            std::vector<std::string>& uris,
                            SAS::TrailId trail,
-                           HSSConnection* hss_connection);
+                           SubscriberManager* sm);
 
   /// Look up the aliases for the given public ID, using the cache if
   /// possible (and caching them and the iFC otherwise).
@@ -75,7 +75,7 @@ public:
   bool get_aliases(std::string public_id,
                    std::vector<std::string>& aliases,
                    SAS::TrailId trail,
-                   HSSConnection* hss_connection);
+                   SubscriberManager* sm);
 
   /// Look up the Ifcs for the given public ID, using the cache if possible
   /// (and caching them and the associated URIs otherwise).
@@ -85,7 +85,7 @@ public:
   long lookup_ifcs(std::string public_id,
                    Ifcs& ifcs,
                    SAS::TrailId trail,
-                   HSSConnection* hss_connection);
+                   SubscriberManager* sm);
 
 private:
 
@@ -95,14 +95,14 @@ private:
   long read_hss_data(const HSSConnection::irs_query& irs_query,
                      HSSConnection::irs_info& irs_info,
                      SAS::TrailId trail,
-                     HSSConnection* hss_connection);
+                     SubscriberManager* sm);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS and stores cached values.
   /// Returns the HTTP result code obtained from homestead.
   long get_data_from_hss(std::string public_id,
                          SAS::TrailId trail,
-                         HSSConnection* hss_connection);
+                         SubscriberManager* sm);
 
 };
 

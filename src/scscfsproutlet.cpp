@@ -38,9 +38,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                const std::string& uri,
                                const std::string& network_function,
                                const std::string& next_hop_service,
-                               SubscriberDataManager* sdm,
-                               std::vector<SubscriberDataManager*> remote_sdms,
-                               HSSConnection* hss,
+                               SubscriberManager* sm,
                                EnumService* enum_service,
                                ACRFactory* acr_factory,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
@@ -66,9 +64,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
   _next_hop_service(next_hop_service),
-  _sdm(sdm),
-  _remote_sdms(remote_sdms),
-  _hss(hss),
+  _sm(sm),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
   _override_npdi(override_npdi),
@@ -241,63 +237,57 @@ IFCConfiguration SCSCFSproutlet::ifc_configuration() const
   return _ifc_configuration;
 }
 
-/// Gets all bindings for the specified Address of Record from the local or
-/// remote registration stores.
-void SCSCFSproutlet::get_bindings(const std::string& aor,
-                                  AoRPair** aor_pair,
+/// Gets all bindings for the specified public id from the SM.
+void SCSCFSproutlet::get_bindings(std::string public_id,
+                                  std::vector<Binding>& bindings,
                                   SAS::TrailId trail)
 {
-  // Look up the target in the registration data store.
-  TRC_INFO("Look up targets in registration store: %s", aor.c_str());
-  *aor_pair = _sdm->get_aor_data(aor, trail);
+  // Look up the target in the subscriber manager.
+  TRC_INFO("Look up bindings for %s in subscriber manager", public_id.c_str());
+  bool rc = _sm->get_bindings(public_id,
+                              bindings,
+                              trail);
 
-  // If we didn't get bindings from the local store and we have any remote
-  // stores, try them.
-  if ((*aor_pair == NULL) ||
-      (!(*aor_pair)->current_contains_bindings()))
+  if (!rc)
   {
-    // scan-build currently detects this loop as double freeing memory, as it
-    // doesn't recognise that the value of aor_pair changes each loop iteration.
-    // Excluding from analysis while this bug is present
-    // (https://bugs.llvm.org/show_bug.cgi?id=18222).
-    #ifndef __clang_analyzer__
-    std::vector<SubscriberDataManager*>::iterator it = _remote_sdms.begin();
-
-    while ((it != _remote_sdms.end()) &&
-           ((*aor_pair == NULL) || !(*aor_pair)->current_contains_bindings()))
-    {
-      delete *aor_pair;
-
-      if ((*it)->has_servers())
-      {
-        *aor_pair = (*it)->get_aor_data(aor, trail);
-      }
-
-      ++it;
-    }
-    #endif
+    // Error getting bindings from SM. Wipe bindings since this shows they can't
+    // be trusted.
+    // Is this the right this to do? Is there anything else I need to do here?
+    bindings.clear();
+    // Do I need this log? Presumably already logged where error occurred?
+    TRC_INFO("Error looking up bindings for %s in subscriber manager",
+             public_id.c_str());
   }
 
   // TODO - Log bindings to SAS
 }
 
 
-/// Removes the specified binding for the specified Address of Record from
-/// the local or remote registration stores.
-void SCSCFSproutlet::remove_binding(const std::string& aor,
-                                    const std::string& binding_id,
+/// Removes the specified binding for the provided binding id by requesting the
+/// SM does this.
+void SCSCFSproutlet::remove_binding(std::string binding_id,
+                                    EventTrigger event_trigger,
+                                    Binding& binding,
                                     SAS::TrailId trail)
 {
-  RegistrationUtils::remove_bindings(_sdm,
-                                     _remote_sdms,
-                                     _hss,
-                                     _fifcservice,
-                                     _ifc_configuration,
-                                     aor,
-                                     binding_id,
-                                     HSSConnection::DEREG_TIMEOUT,
-                                     SubscriberDataManager::EventTrigger::TIMEOUT,
-                                     trail);
+  std::vector<std::string> binding_ids;
+  binding_ids.push_back(binding_id);
+
+  std::vector<Binding*> bindings;
+  bindings.push_back(binding);
+
+  bool rc = _sm->remove_bindings(binding_ids,
+                                 event_trigger,
+                                 bindings,
+                                 trail)
+
+ if (!rc)
+ {
+   // What to do here?? Just log? (surely that was done already?)
+   TRC_INFO("Error removing binding with id %s in subscriber manager",
+            binding_id.c_str());
+ }
+
 }
 
 
@@ -1014,7 +1004,7 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
   _hss_cache_helper->get_aliases(old_served_user,
                                  aliases,
                                  trail(),
-                                 _scscf->_hss);
+                                 _scscf->_sm);
 
   if (new_served_user == old_served_user)
   {
@@ -1113,7 +1103,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         long http_code = _hss_cache_helper->lookup_ifcs(served_user,
                                                         ifcs,
                                                         trail(),
-                                                        _scscf->_hss);
+                                                        _scscf->_sm);
         if (http_code == HTTP_OK)
         {
           TRC_DEBUG("Creating originating CDIV AS chain");
@@ -1248,7 +1238,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       long http_code = _hss_cache_helper->lookup_ifcs(served_user,
                                                       ifcs,
                                                       trail(),
-                                                      _scscf->_hss);
+                                                      _scscf->_sm);
       if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");
@@ -1787,7 +1777,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     bool success = _hss_cache_helper->get_associated_uris(public_id,
                                                           uris,
                                                           trail(),
-                                                          _scscf->_hss);
+                                                          _scscf->_sm);
 
     if ((success) && (uris.size() > 0))
     {

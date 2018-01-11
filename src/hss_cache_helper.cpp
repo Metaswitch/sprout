@@ -34,9 +34,9 @@ HssCacheHelper::~HssCacheHelper()
 bool HssCacheHelper::get_associated_uris(std::string public_id,
                                          std::vector<std::string>& uris,
                                          SAS::TrailId trail,
-                                         HSSConnection* hss_connection)
+                                         SubscriberManager* sm)
 {
-  long http_code = get_data_from_hss(public_id, trail, hss_connection);
+  long http_code = get_data_from_hss(public_id, trail, sm);
   if (http_code == HTTP_OK)
   {
     uris = _irs_info._associated_uris.get_all_uris();
@@ -48,9 +48,9 @@ bool HssCacheHelper::get_associated_uris(std::string public_id,
 bool HssCacheHelper::get_aliases(std::string public_id,
                                  std::vector<std::string>& aliases,
                                  SAS::TrailId trail,
-                                 HSSConnection* hss_connection)
+                                 SubscriberManager* sm)
 {
-  long http_code = get_data_from_hss(public_id, trail, hss_connection);
+  long http_code = get_data_from_hss(public_id, trail, sm);
   if (http_code == HTTP_OK)
   {
     aliases = _irs_info._aliases;
@@ -62,9 +62,9 @@ bool HssCacheHelper::get_aliases(std::string public_id,
 long HssCacheHelper::lookup_ifcs(std::string public_id,
                                  Ifcs& ifcs,
                                  SAS::TrailId trail,
-                                 HSSConnection* hss_connection)
+                                 SubscriberManager* sm)
 {
-  long http_code = get_data_from_hss(public_id, trail, hss_connection);
+  long http_code = get_data_from_hss(public_id, trail, sm);
   if (http_code == HTTP_OK)
   {
     ifcs = _ifcs;
@@ -76,11 +76,13 @@ long HssCacheHelper::lookup_ifcs(std::string public_id,
 long HssCacheHelper::read_hss_data(const HSSConnection::irs_query& irs_query,
                                    HSSConnection::irs_info& irs_info,
                                    SAS::TrailId trail,
-                                   HSSConnection* hss_connection)
+                                   SubscriberManager* sm)
 {
-  long http_code = hss_connection->update_registration_state(irs_query,
-                                                             irs_info,
-                                                             trail);
+  long http_code = sm->XXX(); //Need to choose the function
+// OLD
+//long http_code = hss_connection->update_registration_state(irs_query,
+//                                                           irs_info,
+//                                                           trail);
 
   if (http_code == HTTP_OK)
   {
@@ -101,7 +103,7 @@ long HssCacheHelper::read_hss_data(const HSSConnection::irs_query& irs_query,
 
 long HssCacheHelper::get_data_from_hss(std::string public_id,
                                        SAS::TrailId trail,
-                                       HSSConnection* hss_connection)
+                                       SubscriberManager* sm)
 {
   long http_code = HTTP_OK;
 
@@ -116,7 +118,7 @@ long HssCacheHelper::get_data_from_hss(std::string public_id,
     irs_query._wildcard = _wildcard;
     irs_query._cache_allowed = !_auto_reg;
 
-    http_code = read_hss_data(irs_query, _irs_info, trail, hss_connection);
+    http_code = read_hss_data(irs_query, _irs_info, trail, sm);
 
     if (http_code == HTTP_OK)
     {
