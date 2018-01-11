@@ -160,41 +160,53 @@ public:
   /// @param hss_connection     -
   /// @param analytics_logger   - AnalyticsLogger for reporting registration events
   SubscriberManager(HSSConnection* hss_connection,
-                    AnalyticsLogger* analytics_logger) {};
+                    AnalyticsLogger* analytics_logger) {}
 
   /// Destructor.
-  virtual ~SubscriberManager() {};
+  virtual ~SubscriberManager() {}
 
-  bool update_binding(const Binding& binding,
-                      std::vector<Binding>& bindings,
-                      SAS::TrailId trail) { return true; }
+  HTTPCode update_bindings(std::string public_id,
+                           std::string server_name,
+                           const std::vector<Binding>& updated_bindings,
+                           std::vector<std::string> binding_ids_to_remove,
+                           std::vector<Binding>& all_bindings,
+                           SAS::TrailId trail) { return HTTP_OK; }
 
-  bool remove_bindings(std::vector<std::string> binding_ids,
-                       EventTrigger event_trigger,
-                       std::vector<Binding>& bindings,
-                       SAS::TrailId trail) { return true; }
+  HTTPCode remove_bindings(std::vector<std::string> binding_ids,
+                           EventTrigger event_trigger,
+                           std::vector<Binding>& bindings,
+                           SAS::TrailId trail) { return HTTP_OK; }
 
-  bool update_subscription(const Subscription& subscription,
-                           SAS::TrailId trail) { return true; }
+  HTTPCode update_subscription(const Subscription& subscription,
+                               SAS::TrailId trail) { return HTTP_OK; }
 
-  bool remove_subscription(std::string subscription_id,
-                           SAS::TrailId trail) { return true; }
+  HTTPCode remove_subscription(std::string subscription_id,
+                               SAS::TrailId trail) { return HTTP_OK; }
 
-  bool deregister_subscriber(std::string public_id,
-                             EventTrigger event_trigger,
-                             SAS::TrailId trail) { return true; }
+  HTTPCode deregister_subscriber(std::string public_id,
+                                 EventTrigger event_trigger,
+                                 SAS::TrailId trail) { return HTTP_OK; }
 
-  bool get_bindings(std::string public_id,
-                    std::vector<Binding>& bindings,
-                    SAS::TrailId trail) { return true; }
+  HTTPCode get_bindings(std::string public_id,
+                        std::vector<Binding>& bindings,
+                        SAS::TrailId trail) { return HTTP_OK; }
 
-  bool get_subscriber_state(std::string public_id,
-                            SubscriberInfo& subscriber_info,
-                            SAS::TrailId trail) { return true; }
-
-  virtual HTTPCode update_associated_uris(const std::string& public_id,
-                                          AssociatedURIs& associated_uris,
+  HTTPCode get_bindings_and_subscriptions(std::string public_id,
+                                          std::vector<Binding>& bindings,
+                                          std::vector<Subscription>& subscriptions,
                                           SAS::TrailId trail) { return HTTP_OK; }
+
+  HTTPCode get_cached_subscriber_state(std::string public_id,
+                                       SubscriberInfo& subscriber_info,
+                                       SAS::TrailId trail) { return HTTP_OK; }
+
+  HTTPCode get_subscriber_state(std::string public_id,
+                                SubscriberInfo& subscriber_info,
+                                SAS::TrailId trail) { return HTTP_OK; }
+
+  HTTPCode update_associated_uris(std::string public_id,
+                                  AssociatedURIs associated_uris,
+                                  SAS::TrailId trail) { return HTTP_OK; }
 private:
   AnalyticsLogger* _analytics;
   HSSConnection* _hss_connection;
