@@ -1318,6 +1318,13 @@ void signal_handler(int sig)
   // will trigger the log files to be copied to the diags bundle
   TRC_COMMIT();
 
+  // Dump out the RAM trace buffer
+  char ramname[64];
+  sprintf(ramname, "/var/log/sprout/ramtrace.%ld.txt", time(NULL));
+  FILE *ramtrace = fopen(ramname, "w");
+  Log::ramDecode(ramtrace);
+  fclose(ramtrace);
+
   // Dump a core.
   abort();
 }

@@ -237,6 +237,7 @@ static void pjsip_log_handler(int level,
   // Note that we mustn't pass data as the format string (with no parameters),
   // because it may contain % characters which we don't want to be accidentally
   // interpreted as format specifiers.
+  TRC_RAMTRACE("%s", data);
   Log::write(level, "pjsip", 0, "%s", data);
 }
 
