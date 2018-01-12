@@ -86,7 +86,7 @@ public:
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
     _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
-    _sm = new MockSubscriberManager(_hss_connection, NULL);
+    _sm = new SubscriberManager(_hss_connection, NULL);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -250,7 +250,7 @@ protected:
   static FakeChronosConnection* _chronos_connection;
   static AstaireAoRStore* _local_aor_store;
   static SubscriberDataManager* _sdm;
-  static MockSubscriberManager* _sm;
+  static SubscriberManager* _sm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static MockHSSConnection* _hss_connection_observer;
@@ -299,7 +299,7 @@ LocalStore* SCSCFTestBase::_local_data_store;
 FakeChronosConnection* SCSCFTestBase::_chronos_connection;
 AstaireAoRStore* SCSCFTestBase::_local_aor_store;
 SubscriberDataManager* SCSCFTestBase::_sdm; // DO WE STILL NEED THIS (for other sproulet used in file?)
-MockSubscriberManager* SCSCFTestBase::_sm;
+SubscriberManager* SCSCFTestBase::_sm;
 AnalyticsLogger* SCSCFTestBase::_analytics;
 FakeHSSConnection* SCSCFTestBase::_hss_connection;
 MockHSSConnection* SCSCFTestBase::_hss_connection_observer;
