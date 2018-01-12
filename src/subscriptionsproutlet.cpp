@@ -407,7 +407,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   {
     // Failed to connect to the local store.  Reject the subscribe with a 500
     // response.
-    TRC_ERROR("Failed to connect to local store for SUBSCRIBE, aor=%s", aor);
+    TRC_ERROR("Failed to connect to local store for SUBSCRIBE, aor=%s", aor.c_str());
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
 
     // Build and send the reply.
