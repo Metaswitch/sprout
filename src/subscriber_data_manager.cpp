@@ -34,6 +34,7 @@
 #include "chronosconnection.h"
 #include "sproutsasevent.h"
 #include "constants.h"
+#include "pjutils.h"
 
 
 /// Helper to delete vectors of bindings safely

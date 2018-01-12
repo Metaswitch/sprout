@@ -25,6 +25,7 @@ extern "C" {
 #include "constants.h"
 #include "wildcard_utils.h"
 #include "sproutsasevent.h"
+#include "aor_utils.h"
 
 // Return a XML registration node with the attributes populated
 pj_xml_node* create_reg_node(pj_pool_t *pool,
@@ -246,7 +247,7 @@ pj_xml_node* notify_create_reg_state_xml(
       pj_str_t gruu;
       pj_strdup2(pool,
                  &gruu,
-                 Utils::xml_escape((*bni)->_b->pub_gruu_str(pool)).c_str());
+                 Utils::xml_escape(AoRUtils::pub_gruu_str((*bni)->_b, pool)).c_str());
 
       // Add all 'unknown parameters' from the contact header into the contact
       // element as <unknown-param> elements. For example, a contact header that

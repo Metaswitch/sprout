@@ -10,7 +10,7 @@
  */
 
 
-// Common STL includes.
+#include "log.h"
 #include "astaire_aor_store.h"
 #include "json_parse_utils.h"
 #include "rapidjson/error/en.h"
