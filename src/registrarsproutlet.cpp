@@ -529,6 +529,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // Failed to connect to the local store.  Reject the register with a 500
     // response.
     // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
+    TRC_ERROR("Failed to connect to local store, private_id= %s", private_id.c_str());
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
 
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED_REGSTORE, 0);
@@ -604,7 +605,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   if (gen_hdr == NULL)
   {
     // LCOV_EXCL_START - can't see how this could ever happen
-    TRC_ERROR("Failed to add RFC 5626 headers");
+    TRC_ERROR("Failed to add RFC 5626 headers to reply");
 
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED_5636, 0);
     event.add_var_param(public_id);

@@ -254,7 +254,7 @@ bool process_queue_element()
             if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
                (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
             {
-              TRC_DEBUG("Returning 500 response following exception");
+              TRC_ERROR("Returning 500 response following exception");
               reject_with_retry_header(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
             }
 

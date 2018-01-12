@@ -871,7 +871,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // We've failed to store the nonce in memcached, so we have no hope of
       // successfully authenticating any repsonse to a 401 Unauthorized.  Send
       // a 500 Server Internal Error instead.
-      TRC_DEBUG("Failed to store nonce in memcached");
+      TRC_ERROR("Failed to store nonce in memcached, for impi %s", impi.c_str());
       rsp->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
       rsp->line.status.reason = *pjsip_get_status_text(PJSIP_SC_INTERNAL_SERVER_ERROR);
 
