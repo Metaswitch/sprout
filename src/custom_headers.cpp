@@ -1157,64 +1157,7 @@ pjsip_hdr* parse_hdr_reject_contact(pjsip_parse_ctx* ctx)
   //
   // But we allow any value for the header (not just *).
 
-  pjsip_reject_contact_hdr* first = NULL;
-  pj_pool_t* pool = ctx->pool;
-  pj_scanner* scanner = ctx->scanner;
-  const pjsip_parser_const_t* pc = pjsip_parser_const();
-  pj_str_t name;
-  pj_str_t value;
-  pjsip_param *param;
-
-  while (true)
-  {
-    pjsip_reject_contact_hdr* hdr = pjsip_reject_contact_hdr_create(pool);
-    if (first == NULL)
-    {
-      first = hdr;
-    }
-    else
-    {
-      pj_list_insert_before(first, hdr);
-    }
-
-    // Read and ignore the value.
-    pj_str_t header_value;
-    pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC, &header_value);
-
-    // If we're EOF or looking at a newline, we're done.
-    // If we're looking at a "," , we've hit another rc-value. 
-    while (!pj_scan_is_eof(scanner) &&
-           (*scanner->curptr != ',') &&
-           (*scanner->curptr != '\r') &&
-           (*scanner->curptr != '\n'))
-    {
-      // We might need to swallow the ";"
-      if (*scanner->curptr == ';')
-      {
-        pj_scan_get_char(scanner);
-      }
-
-      pjsip_parse_param_imp(scanner, pool, &name, &value, 0);
-      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      param->name = name;
-      param->value = value;
-      pj_list_insert_before(&hdr->feature_set, param);
-
-      // Skip any following whitespace (to the end of the line)
-      pj_scan_skip_whitespace(scanner);
-    }
-
-    if (*scanner->curptr != ',')
-    {
-      break;
-    }
-
-    pj_scan_get_char(scanner);
-  }
-
-  // We're done parsing this header.
-  pjsip_parse_end_hdr_imp(scanner);
-  return (pjsip_hdr*)first;
+  return parse_hdr_accept_or_reject_contact(ctx, false);
 }
 
 pjsip_reject_contact_hdr* pjsip_reject_contact_hdr_create(pj_pool_t* pool)
@@ -1293,7 +1236,7 @@ int pjsip_reject_contact_hdr_print_on(void* void_hdr,
   return buf-startbuf;
 }
 
-pjsip_hdr* parse_hdr_accept_contact( pjsip_parse_ctx *ctx )
+pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
 {
   // The Accept-Contact header has the following ABNF:
   //
@@ -1306,76 +1249,7 @@ pjsip_hdr* parse_hdr_accept_contact( pjsip_parse_ctx *ctx )
   //
   // But we allow any value for the header (not just *).
 
-  pjsip_accept_contact_hdr *first = NULL;
-  pj_pool_t* pool = ctx->pool;
-  pj_scanner* scanner = ctx->scanner;
-  const pjsip_parser_const_t* pc = pjsip_parser_const();
-  pj_str_t name;
-  pj_str_t value;
-  pjsip_param *param;
-
-  while (true)
-  {
-    pjsip_accept_contact_hdr *hdr = pjsip_accept_contact_hdr_create(pool);
-    if (first == NULL)
-    {
-      first = hdr;
-    }
-    else
-    {
-      pj_list_insert_before(first, hdr);
-    }
-
-    // Read and ignore the value.
-    pj_str_t header_value;
-    pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC, &header_value);
-
-    // If we're EOF or looking at a newline, we're done.
-    while (!pj_scan_is_eof(scanner) &&
-           (*scanner->curptr != ',') &&
-           (*scanner->curptr != '\r') &&
-           (*scanner->curptr != '\n'))
-    {
-      // We might need to swallow the ';'.
-      if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
-      {
-        pj_scan_get_char(scanner);
-      }
-
-      pjsip_parse_param_imp(scanner, pool, &name, &value, 0);
-      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      param->name = name;
-      param->value = value;
-
-      if (!pj_stricmp2(&name, "require"))
-      {
-        hdr->required_match = true;
-      }
-      else if (!pj_stricmp2(&name, "explicit"))
-      {
-        hdr->explicit_match = true;
-      }
-      else
-      {
-        pj_list_insert_before(&hdr->feature_set, param);
-      }
-
-      // Skip any following whitespace (to the end of the line)
-      pj_scan_skip_whitespace(scanner);
-    }
-
-    if (*scanner->curptr != ',')
-    {
-      break;
-    }
-
-    pj_scan_get_char(scanner);
-
-  }
-
-  // We're done parsing this header.
-  pjsip_parse_end_hdr_imp(scanner);
-  return (pjsip_hdr*)first;
+  return parse_hdr_accept_or_reject_contact(ctx, true);
 }
 
 pjsip_accept_contact_hdr* pjsip_accept_contact_hdr_create(pj_pool_t* pool)
@@ -1468,6 +1342,89 @@ int pjsip_accept_contact_hdr_print_on(void* void_hdr,
   }
 
   return buf-startbuf;
+}
+
+pjsip_hdr* parse_hdr_accept_or_reject_contact(pjsip_parse_ctx* ctx, bool accept)
+{
+  pjsip_hdr* first = NULL;
+  pjsip_hdr* hdr = NULL;
+
+  pj_pool_t* pool = ctx->pool;
+  pj_scanner* scanner = ctx->scanner;
+  const pjsip_parser_const_t* pc = pjsip_parser_const();
+  pj_str_t name;
+  pj_str_t value;
+  pjsip_param *param;
+
+  while (true)
+  {
+    hdr = accept ? (pjsip_hdr*)pjsip_accept_contact_hdr_create(pool) : (pjsip_hdr*)pjsip_reject_contact_hdr_create(pool);
+    if (first == NULL)
+    {
+      first = hdr;
+    }
+    else
+    {
+      pj_list_insert_before(first, hdr);
+    }
+
+    // Read and ignore the value.
+    pj_str_t header_value;
+    pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC, &header_value);
+
+    // If we're EOF or looking at a newline, we're done.
+    while (!pj_scan_is_eof(scanner) &&
+           (*scanner->curptr != ',') &&
+           (*scanner->curptr != '\r') &&
+           (*scanner->curptr != '\n'))
+    {
+      // We might need to swallow the ';'.
+      if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
+      {
+        pj_scan_get_char(scanner);
+      }
+
+      pjsip_parse_param_imp(scanner, pool, &name, &value, 0);
+      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = name;
+      param->value = value;
+
+      if (accept)
+      {
+        pjsip_accept_contact_hdr* achdr = (pjsip_accept_contact_hdr*)hdr;
+        if (!pj_stricmp2(&name, "require"))
+        {
+          achdr->required_match = true;
+        }
+        else if (!pj_stricmp2(&name, "explicit"))
+        {
+          achdr->explicit_match = true;
+        }
+        else
+        {
+          pj_list_insert_before(&achdr->feature_set, param);
+        }
+      }
+      else
+      {
+        pj_list_insert_before(&((pjsip_reject_contact_hdr*)hdr)->feature_set, param);
+      }
+
+      // Skip any following whitespace (to the end of the line)
+      pj_scan_skip_whitespace(scanner);
+    }
+
+    if (*scanner->curptr != ',')
+    {
+      break;
+    }
+
+    pj_scan_get_char(scanner);
+  }
+
+  // We're done parsing this header.
+  pjsip_parse_end_hdr_imp(scanner);
+  return (pjsip_hdr*)first;
 }
 
 static pjsip_hdr_vptr pjsip_resource_priority_vptr = {
