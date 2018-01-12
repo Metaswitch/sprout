@@ -1148,15 +1148,6 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
 
 pjsip_hdr* parse_hdr_reject_contact(pjsip_parse_ctx* ctx)
 {
-  // The Reject-Contact header has the following ABNF:
-  //
-  // Reject-Contact  =  ("Reject-Contact" / "j") HCOLON rc-value
-  //                       *(COMMA rc-value)
-  // rc-value        =  "*" *(SEMI rc-params)
-  // rc-params       =  feature-param / generic-param
-  //
-  // But we allow any value for the header (not just *).
-
   return parse_hdr_accept_or_reject_contact(ctx, false);
 }
 
@@ -1238,17 +1229,6 @@ int pjsip_reject_contact_hdr_print_on(void* void_hdr,
 
 pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
 {
-  // The Accept-Contact header has the following ABNF:
-  //
-  // Accept-Contact  =  ("Accept-Contact" / "j") HCOLON ac-value
-  //                       *(COMMA ac-value)
-  // ac-value        =  "*" *(SEMI ac-params)
-  // ac-params       =  feature-param / req-param / explicit-param / generic-param
-  // req-param       =  "require"
-  // explicit-param  =  "explicit"
-  //
-  // But we allow any value for the header (not just *).
-
   return parse_hdr_accept_or_reject_contact(ctx, true);
 }
 
@@ -1346,6 +1326,24 @@ int pjsip_accept_contact_hdr_print_on(void* void_hdr,
 
 pjsip_hdr* parse_hdr_accept_or_reject_contact(pjsip_parse_ctx* ctx, bool accept)
 {
+  // The Accept-Contact header has the following ABNF:
+  //
+  // Accept-Contact  =  ("Accept-Contact" / "j") HCOLON ac-value
+  //                       *(COMMA ac-value)
+  // ac-value        =  "*" *(SEMI ac-params)
+  // ac-params       =  feature-param / req-param / explicit-param / generic-param
+  // req-param       =  "require"
+  // explicit-param  =  "explicit"
+  //
+  // The Reject-Contact header has the following ABNF:
+  //
+  // Reject-Contact  =  ("Reject-Contact" / "j") HCOLON rc-value
+  //                       *(COMMA rc-value)
+  // rc-value        =  "*" *(SEMI rc-params)
+  // rc-params       =  feature-param / generic-param
+  //
+  // But we allow any value for the header (not just *).
+
   pjsip_hdr* first = NULL;
   pjsip_hdr* hdr = NULL;
 
