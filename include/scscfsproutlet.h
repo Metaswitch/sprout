@@ -58,9 +58,7 @@ public:
                  const std::string& uri,
                  const std::string& network_function,
                  const std::string& next_hop_service,
-                 SubscriberDataManager* sdm,
-                 std::vector<SubscriberDataManager*> remote_sdms,
-                 HSSConnection* hss,
+                 SubscriberManager* sm,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
                  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
@@ -116,16 +114,15 @@ private:
   FIFCService* fifcservice() const;
   IFCConfiguration ifc_configuration() const;
 
-  /// Gets all bindings for the specified Address of Record from the local or
-  /// remote registration stores.
-  void get_bindings(const std::string& aor,
-                    AoRPair** aor_pair,
+  /// Gets all bindings for the specified public id from the Subscriber Manager.
+  void get_bindings(const std::string& public_id,
+                    std::vector<SubscriberManager::Binding>& bindings,
                     SAS::TrailId trail);
 
-  /// Removes the specified binding for the specified Address of Record from
-  /// the local or remote registration stores.
-  void remove_binding(const std::string& aor,
-                      const std::string& binding_id,
+  /// Removes the binding, specified by it's binding id, using the Subscriber
+  /// Manager.
+  void remove_binding(const std::string& binding_id,
+                      std::vector<SubscriberManager::Binding>& binding,
                       SAS::TrailId trail);
 
   /// Record that communication with an AS failed.
@@ -180,10 +177,7 @@ private:
 
   std::string _next_hop_service;
 
-  SubscriberDataManager* _sdm;
-  std::vector<SubscriberDataManager*> _remote_sdms;
-
-  HSSConnection* _hss;
+  SubscriberManager* _sm;
 
   EnumService* _enum_service;
 
@@ -256,7 +250,8 @@ private:
                               SAS::TrailId chain_trail);
 
   /// Check whether the request has been retargeted, given the updated URI.
-  bool is_retarget(std::string new_served_user);
+  bool is_retarget(std::string new_served_user,
+                   std::string public_id);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);

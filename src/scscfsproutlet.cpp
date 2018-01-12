@@ -238,8 +238,8 @@ IFCConfiguration SCSCFSproutlet::ifc_configuration() const
 }
 
 /// Gets all bindings for the specified public id from the SM.
-void SCSCFSproutlet::get_bindings(std::string public_id,
-                                  std::vector<Binding>& bindings,
+void SCSCFSproutlet::get_bindings(const std::string& public_id,
+                                  std::vector<SubscriberManager::Binding>& bindings,
                                   SAS::TrailId trail)
 {
   // Look up the target in the subscriber manager.
@@ -265,26 +265,19 @@ void SCSCFSproutlet::get_bindings(std::string public_id,
 
 /// Removes the specified binding for the provided binding id by requesting the
 /// SM does this.
-void SCSCFSproutlet::remove_binding(std::string binding_id,
-                                    EventTrigger event_trigger,
-                                    Binding& binding,
+void SCSCFSproutlet::remove_binding(const std::string& binding_id,
+                                    std::vector<SubscriberManager::Binding>& bindings,
                                     SAS::TrailId trail)
 {
   std::vector<std::string> binding_ids;
   binding_ids.push_back(binding_id);
 
-  std::vector<Binding*> bindings;
-  bindings.push_back(binding);
-
-  // HSSConnection::DEREG_TIMEOUT was reason, should make it
+  // HSSConnection::DEREG_TIMEOUT was dereg_type, should make it
   // HSSConnection::DEREG_USER if need to pass it through in future.
-  //
-  // Event trigger was SubscriberDataManager::EventTrigger::TIMEOUT, should
-  // change it to USER and pass that through as the event trigger.
   long http_code = _sm->remove_bindings(binding_ids,
-                                             event_trigger,
-                                             bindings,
-                                             trail)
+                                        SubscriberManager::EventTrigger::USER,
+                                        bindings,
+                                        trail);
 
  if (http_code != HTTP_OK)
  {
@@ -532,7 +525,12 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // The bindings are keyed off the default IMPU.
         std::string aor = _hss_cache_helper->_default_uri;
         AoRPair* aor_pair = NULL;
-        _scscf->get_bindings(aor, &aor_pair, trail());
+        pjsip_uri* req_uri = req->line.req.uri;
+        std::string public_id = PJUtils::public_id_from_uri(req_uri);
+        // This empty vector will be returned by the get_bindings function
+        // containing all non-expired bindings for the given public id.
+        std::vector<SubscriberManager::Binding> bindings;
+        _scscf->get_bindings(public_id, bindings, trail());
 
         if ((aor_pair != NULL) &&
             (aor_pair->get_current() != NULL))
@@ -740,7 +738,10 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     {
       // We're the auth proxy and the flow we used failed, so delete the binding
       // corresponding to this flow.
-      _scscf->remove_binding(_target_aor, i->second, trail());
+      // This empty bindings vector will be returned containing the complete set
+      // of binding objects.
+      std::vector<SubscriberManager::Binding> bindings;
+      _scscf->remove_binding(i->second, bindings, trail());
     }
   }
 
@@ -998,7 +999,8 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
   }
 }
 
-bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
+bool SCSCFSproutletTsx::is_retarget(std::string new_served_user,
+                                    std::string public_id)
 {
   std::string old_served_user = _as_chain_link.served_user();
 
@@ -1006,7 +1008,12 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
   // the original URI doesn't count as a retarget, so get the aliases ready to
   // check.
   std::vector<std::string> aliases;
-  _hss_cache_helper->get_aliases(old_served_user,
+// Once have all tests passing, add this in since this will be better code.
+//  bool rc = _hss_cache_helper->get_aliases(public_id,
+//                                           aliases,
+//                                           trail(),
+//                                           _scscf->_sm);
+  _hss_cache_helper->get_aliases(public_id,
                                  aliases,
                                  trail(),
                                  _scscf->_sm);
@@ -1016,6 +1023,8 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
     // URIs match exactly - this is not a retarget
     return false;
   }
+// And add this in as well.
+//  else if (rc &&
   else if (std::find(aliases.begin(), aliases.end(), new_served_user) != aliases.end())
   {
     TRC_DEBUG("Application server has changed URI %s to the aliased URI %s - "
@@ -1052,9 +1061,11 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
     bool retargeted = false;
     std::string served_user = served_user_from_msg(req);
+    pjsip_uri* req_uri = req->line.req.uri;
+    std::string public_id = PJUtils::public_id_from_uri(req_uri);
 
     if ((_session_case->is_terminating()) &&
-        is_retarget(served_user))
+        is_retarget(served_user, public_id))
     {
       if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
       {
@@ -1105,7 +1116,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         }
 
         Ifcs ifcs;
-        long http_code = _hss_cache_helper->lookup_ifcs(served_user,
+        // Get the public user identity corresponding to the RequestURI.
+        pjsip_uri* req_uri = req->line.req.uri;
+        std::string public_id = PJUtils::public_id_from_uri(req_uri);
+        long http_code = _hss_cache_helper->lookup_ifcs(public_id,
                                                         ifcs,
                                                         trail(),
                                                         _scscf->_sm);
@@ -1240,7 +1254,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
 
       Ifcs ifcs;
-      long http_code = _hss_cache_helper->lookup_ifcs(served_user,
+      // Get the public user identity corresponding to the RequestURI.
+      pjsip_uri* req_uri = req->line.req.uri;
+      std::string public_id = PJUtils::public_id_from_uri(req_uri);
+      long http_code = _hss_cache_helper->lookup_ifcs(public_id,
                                                       ifcs,
                                                       trail(),
                                                       _scscf->_sm);
@@ -1808,7 +1825,11 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
     // Get the bindings from the store and filter/sort them for the request.
     AoRPair* aor_pair = NULL;
-    _scscf->get_bindings(aor, &aor_pair, trail());
+
+    // This empty vector will be returned by the get_bindings function
+    // containing all non-expired bindings for the given public id.
+    std::vector<SubscriberManager::Binding> bindings;
+    _scscf->get_bindings(public_id, bindings, trail());
 
     if ((aor_pair != NULL) &&
         (aor_pair->get_current() != NULL) &&
