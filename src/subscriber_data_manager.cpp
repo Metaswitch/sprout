@@ -414,7 +414,7 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
     {
       if (trail != 0)
       {
-        SAS::Event event(trail, SASEvent::REGSTORE_SUBSCRIPTION_EXPIRED, 0);
+        SAS::Event event(trail, SASEvent::SUBSCRIPTION_EXPIRED, 0);
         event.add_var_param(s->_from_uri);
         event.add_static_param(force_expire);
         event.add_static_param(s->_expires);
@@ -467,7 +467,7 @@ int SubscriberDataManager::expire_bindings(AoR* aor_data,
     {
       if (trail != 0)
       {
-        SAS::Event event(trail, SASEvent::REGSTORE_BINDING_EXPIRED, 0);
+        SAS::Event event(trail, SASEvent::BINDING_EXPIRED, 0);
         event.add_var_param(b->_address_of_record);
         event.add_var_param(b->_uri);
         event.add_var_param(b->_cid);
