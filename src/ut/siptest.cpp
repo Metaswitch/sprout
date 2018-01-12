@@ -594,6 +594,50 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
+void SipTest::register_uri_with_sm(SubscriberManager* sm,
+                                   const std::string& user,
+                                   const std::string& domain,
+                                   const std::string& contact,
+                                   int lifetime,
+                                   std::string instance_id,
+                                   bool emergency)
+{
+  std::string uri("sip:");
+  uri.append(user).append("@").append(domain);
+
+  // Need some sort of way to set the fake data in the SM here.
+
+  std::vector<SubscriberManager::Binding> bindings;
+  long http_code = sm->get_bindings(uri, bindings, 0);
+  EXPECT_EQ(http_code, HTTP_OK);
+  EXPECT_EQ(bindings.size(), 0);
+
+  SubscriberManager::Binding binding;
+  binding._uri = contact;
+  binding._cid = "1";
+  binding._cseq = 1;
+  binding._expires = time(NULL) + lifetime;
+  binding._priority = 1000;
+  binding._emergency_registration = emergency;
+  if (!instance_id.empty())
+  {
+    binding._params["+sip.instance"] = instance_id;
+  }
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(uri, false);
+  bindings.push_back(binding);
+
+  std::string server_name = "sprout.homedomain"; //is this right??
+  std::vector<std::string> bindings_to_remove; // Not removing any, so empty.
+  http_code = sm->update_bindings(uri,
+                                  server_name,
+                                  bindings, //updating the binding updated this, right?
+                                  bindings_to_remove,
+                                  bindings, //all are updated, so this is right?
+                                  0);
+  EXPECT_EQ(http_code, HTTP_OK);
+}
+
 void SipTest::register_uri(SubscriberDataManager* sdm,
                            FakeHSSConnection* hss,
                            const std::string& user,

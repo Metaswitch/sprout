@@ -37,6 +37,7 @@
 #include "mock_ralf_processor.h"
 #include "acr.h"
 #include "testingcommon.h"
+#include "mock_subscriber_manager.h"
 
 using namespace std;
 using namespace TestingCommon;
@@ -86,7 +87,7 @@ public:
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
     _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
-    _sm = new SubscriberManager(_hss_connection, NULL);
+    _sm = new MockSubscriberManager();
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -250,7 +251,7 @@ protected:
   static FakeChronosConnection* _chronos_connection;
   static AstaireAoRStore* _local_aor_store;
   static SubscriberDataManager* _sdm;
-  static SubscriberManager* _sm;
+  static MockSubscriberManager* _sm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static MockHSSConnection* _hss_connection_observer;
@@ -299,7 +300,7 @@ LocalStore* SCSCFTestBase::_local_data_store;
 FakeChronosConnection* SCSCFTestBase::_chronos_connection;
 AstaireAoRStore* SCSCFTestBase::_local_aor_store;
 SubscriberDataManager* SCSCFTestBase::_sdm; // DO WE STILL NEED THIS (for other sproulet used in file?)
-SubscriberManager* SCSCFTestBase::_sm;
+MockSubscriberManager* SCSCFTestBase::_sm;
 AnalyticsLogger* SCSCFTestBase::_analytics;
 FakeHSSConnection* SCSCFTestBase::_hss_connection;
 MockHSSConnection* SCSCFTestBase::_hss_connection_observer;
@@ -1105,7 +1106,11 @@ void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
 TEST_F(SCSCFTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  EXPECT_CALL(*_sm, get_bindings(_, _, _)).WillRepeatedly(Return(HTTP_OK));
+  EXPECT_CALL(*_sm, update_bindings(_, _, _, _, _, _)).WillRepeatedly(Return(HTTP_OK));
+
+  register_uri_with_sm(_sm, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);

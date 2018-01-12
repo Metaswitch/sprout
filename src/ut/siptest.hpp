@@ -29,6 +29,7 @@ extern "C" {
 #include "subscriber_data_manager.h"
 #include "fakelogger.h"
 #include "fakehssconnection.hpp"
+#include "subscriber_manager.h"
 
 using std::string;
 using testing::MatchesRegex;
@@ -157,6 +158,15 @@ protected:
   int txdata_count();
 
   static SipTest* _current_instance;
+
+  // Register the specified URI with the SM.
+  void register_uri_with_sm(SubscriberManager* sm,
+                            const std::string& user,
+                            const std::string& domain,
+                            const std::string& contact,
+                            int lifetime = 3600,
+                            std::string instance_id="",
+                            bool emergency=false);
 
   /// Register the specified URI.
   void register_uri(SubscriberDataManager* sdm,
