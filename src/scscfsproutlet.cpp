@@ -1015,8 +1015,8 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user,
 //                                           _scscf->_sm);
   _hss_cache_helper->get_aliases(public_id,
                                  aliases,
-                                 trail(),
-                                 _scscf->_sm);
+                                 _scscf->_sm,
+                                 trail());
 
   if (new_served_user == old_served_user)
   {
@@ -1121,8 +1121,8 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         std::string public_id = PJUtils::public_id_from_uri(req_uri);
         long http_code = _hss_cache_helper->lookup_ifcs(public_id,
                                                         ifcs,
-                                                        trail(),
-                                                        _scscf->_sm);
+                                                        _scscf->_sm,
+                                                        trail());
         if (http_code == HTTP_OK)
         {
           TRC_DEBUG("Creating originating CDIV AS chain");
@@ -1259,8 +1259,8 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       std::string public_id = PJUtils::public_id_from_uri(req_uri);
       long http_code = _hss_cache_helper->lookup_ifcs(public_id,
                                                       ifcs,
-                                                      trail(),
-                                                      _scscf->_sm);
+                                                      _scscf->_sm,
+                                                      trail());
       if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");
@@ -1798,8 +1798,8 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     std::vector<std::string> uris;
     bool success = _hss_cache_helper->get_associated_uris(public_id,
                                                           uris,
-                                                          trail(),
-                                                          _scscf->_sm);
+                                                          _scscf->_sm,
+                                                          trail());
 
     if ((success) && (uris.size() > 0))
     {

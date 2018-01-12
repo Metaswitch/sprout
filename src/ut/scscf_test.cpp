@@ -86,6 +86,7 @@ public:
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
     _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
+    _sm = new MockSubscriberManager(_hss_connection, NULL);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -112,6 +113,7 @@ public:
     delete _fifc_service; _fifc_service = NULL;
     delete _acr_factory; _acr_factory = NULL;
     delete _sdm; _sdm = NULL;
+    delete _sm; _sm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
@@ -248,6 +250,7 @@ protected:
   static FakeChronosConnection* _chronos_connection;
   static AstaireAoRStore* _local_aor_store;
   static SubscriberDataManager* _sdm;
+  static MockSubscriberManager* _sm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static MockHSSConnection* _hss_connection_observer;
@@ -295,7 +298,8 @@ protected:
 LocalStore* SCSCFTestBase::_local_data_store;
 FakeChronosConnection* SCSCFTestBase::_chronos_connection;
 AstaireAoRStore* SCSCFTestBase::_local_aor_store;
-SubscriberDataManager* SCSCFTestBase::_sdm;
+SubscriberDataManager* SCSCFTestBase::_sdm; // DO WE STILL NEED THIS (for other sproulet used in file?)
+MockSubscriberManager* SCSCFTestBase::_sm;
 AnalyticsLogger* SCSCFTestBase::_analytics;
 FakeHSSConnection* SCSCFTestBase::_hss_connection;
 MockHSSConnection* SCSCFTestBase::_hss_connection_observer;
@@ -335,9 +339,7 @@ public:
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           "scscf",
                                           "",
-                                          _sdm,
-                                          {},
-                                          _hss_connection,
+                                          _sm,
                                           _enum_service,
                                           _acr_factory,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
@@ -1116,6 +1118,9 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   // It also shouldn't result in any forked INVITEs
   EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
+
+
+/**
 
 // Test route request to Maddr
 TEST_F(SCSCFTest, TestSimpleMainlineMaddr)
@@ -10375,8 +10380,7 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           "scscf",
                                           "",
-                                          _sdm,
-                                          {},
+                                          _sm,
                                           _hss_connection,
                                           _enum_service,
                                           _acr_factory,
@@ -10462,7 +10466,9 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
     _remote_data_store = new LocalStore();
     _remote_aor_store = new AstaireAoRStore(_remote_data_store);
     _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, NULL, true);
-  }
+    // Do I need something here? I don't expect to.. Can prob delete line above
+    // as well...
+
   static void TearDownTestCase()
   {
     delete _remote_sdm; _remote_sdm = NULL;
@@ -10485,8 +10491,7 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           "scscf",
                                           "",
-                                          _sdm,
-                                          {_remote_sdm},
+                                          _sm,
                                           _hss_connection,
                                           _enum_service,
                                           _acr_factory,
@@ -10617,8 +10622,7 @@ class SCSCFTestWithRalf : public SCSCFTestBase
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           "scscf",
                                           "",
-                                          _sdm,
-                                          {},
+                                          _sm,
                                           _hss_connection,
                                           _enum_service,
                                           _ralf_acr_factory,
@@ -10855,4 +10859,4 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
 
 }
 
-
+**/

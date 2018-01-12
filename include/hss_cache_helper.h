@@ -66,8 +66,8 @@ public:
   /// returns true.
   bool get_associated_uris(std::string public_id,
                            std::vector<std::string>& uris,
-                           SAS::TrailId trail,
-                           SubscriberManager* sm);
+                           SubscriberManager* sm,
+                           SAS::TrailId trail);
 
   /// Look up the aliases for the given public ID, using the cache if
   /// possible (and caching them and the iFC otherwise).
@@ -75,8 +75,8 @@ public:
   /// returns true.
   bool get_aliases(std::string public_id,
                    std::vector<std::string>& aliases,
-                   SAS::TrailId trail,
-                   SubscriberManager* sm);
+                   SubscriberManager* sm,
+                   SAS::TrailId trail);
 
   /// Look up the Ifcs for the given public ID, using the cache if possible
   /// (and caching them and the associated URIs otherwise).
@@ -85,26 +85,25 @@ public:
   /// returns HTTP_OK.
   HTTPCode lookup_ifcs(std::string public_id,
                        Ifcs& ifcs,
-                       SAS::TrailId trail,
-                       SubscriberManager* sm);
+                       SubscriberManager* sm,
+                       SAS::TrailId trail);
 
 private:
-
-  /// Reads data for a public user identity from the HSS, and stores it in
-  /// member fields for the sproutlet.
-  /// Returns the HTTP result code obtained from the SM.
-  HTTPCode read_hss_data(const HSSConnection::irs_query& irs_query,
-                         HSSConnection::irs_info& irs_info,
-                         SAS::TrailId trail,
-                         SubscriberManager* sm,
-                         std::string public_id);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS and stores cached values.
   /// Returns the HTTP result code obtained from the SM.
   HTTPCode get_data_from_hss(std::string public_id,
-                             SAS::TrailId trail,
-                             SubscriberManager* sm);
+                             SubscriberManager* sm,
+                             SAS::TrailId trail);
+
+  /// Reads data for a public user identity from the HSS, and stores it in
+  /// member fields for the sproutlet.
+  /// Returns the HTTP result code obtained from the SM.
+  HTTPCode read_hss_data(std::string public_id,
+                         const HSSConnection::irs_query& irs_query,
+                         SubscriberManager* sm,
+                         SAS::TrailId trail);
 
 };
 

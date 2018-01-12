@@ -33,10 +33,10 @@ HssCacheHelper::~HssCacheHelper()
 
 bool HssCacheHelper::get_associated_uris(std::string public_id,
                                          std::vector<std::string>& uris,
-                                         SAS::TrailId trail,
-                                         SubscriberManager* sm)
+                                         SubscriberManager* sm,
+                                         SAS::TrailId trail)
 {
-  long http_code = get_data_from_hss(public_id, trail, sm);
+  long http_code = get_data_from_hss(public_id, sm, trail);
   if (http_code == HTTP_OK)
   {
     uris = _irs_info._associated_uris.get_all_uris();
@@ -47,10 +47,10 @@ bool HssCacheHelper::get_associated_uris(std::string public_id,
 
 bool HssCacheHelper::get_aliases(std::string public_id,
                                  std::vector<std::string>& aliases,
-                                 SAS::TrailId trail,
-                                 SubscriberManager* sm)
+                                 SubscriberManager* sm,
+                                 SAS::TrailId trail)
 {
-  long http_code = get_data_from_hss(public_id, trail, sm);
+  long http_code = get_data_from_hss(public_id, sm, trail);
   if (http_code == HTTP_OK)
   {
     aliases = _irs_info._aliases;
@@ -61,10 +61,10 @@ bool HssCacheHelper::get_aliases(std::string public_id,
 
 HTTPCode HssCacheHelper::lookup_ifcs(std::string public_id,
                                      Ifcs& ifcs,
-                                     SAS::TrailId trail,
-                                     SubscriberManager* sm)
+                                     SubscriberManager* sm,
+                                     SAS::TrailId trail)
 {
-  HTTPCode http_code = get_data_from_hss(public_id, trail, sm);
+  HTTPCode http_code = get_data_from_hss(public_id, sm, trail);
   if (http_code == HTTP_OK)
   {
     ifcs = _ifcs;
@@ -73,44 +73,9 @@ HTTPCode HssCacheHelper::lookup_ifcs(std::string public_id,
 }
 
 
-HTTPCode HssCacheHelper::read_hss_data(const HSSConnection::irs_query& irs_query,
-                                       HSSConnection::irs_info& irs_info,
-                                       SAS::TrailId trail,
-                                       SubscriberManager* sm,
-                                       std::string public_id)
-{
-  SubscriberManager::SubscriberInfo subscriber_info;
-  HTTPCode http_code = sm->get_subscriber_state(public_id,
-                                                subscriber_info,
-                                                irs_query,
-                                                trail);
-  // Have I picked the right function here? (Previous was
-  // HSSConnection::update_registration_state.)
-  //
-  // Pull info out of irs query and put it into irs_info.
-  // Also - do we stil need to pass the subscriber info back up <- and confirm
-  // we will use it at some point.
-
-  if (http_code == HTTP_OK)
-  {
-    _ifcs = irs_info._service_profiles[irs_query._public_id];
-
-    // Get the default URI. This should always succeed.
-    irs_info._associated_uris.get_default_impu(_default_uri, true);
-
-    // We may want to route to bindings that are barred (in case of an
-    // emergency), so get all the URIs.
-    _registered = (irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED);
-    _barred = irs_info._associated_uris.is_impu_barred(irs_query._public_id);
-  }
-
-  return http_code;
-}
-
-
 HTTPCode HssCacheHelper::get_data_from_hss(std::string public_id,
-                                           SAS::TrailId trail,
-                                           SubscriberManager* sm)
+                                           SubscriberManager* sm,
+                                           SAS::TrailId trail)
 {
   HTTPCode http_code = HTTP_OK;
 
@@ -125,12 +90,52 @@ HTTPCode HssCacheHelper::get_data_from_hss(std::string public_id,
     irs_query._wildcard = _wildcard;
     irs_query._cache_allowed = !_auto_reg;
 
-    http_code = read_hss_data(irs_query, _irs_info, trail, sm, public_id);
+    http_code = read_hss_data(public_id, irs_query, sm, trail);
 
     if (http_code == HTTP_OK)
     {
       _hss_data_cached = true;
     }
+  }
+
+  return http_code;
+}
+
+
+HTTPCode HssCacheHelper::read_hss_data(std::string public_id,
+                                       const HSSConnection::irs_query& irs_query,
+                                       SubscriberManager* sm,
+                                       SAS::TrailId trail)
+{
+  SubscriberManager::SubscriberInfo subscriber_info;
+  HTTPCode http_code = sm->get_subscriber_state(public_id,
+                                                subscriber_info,
+                                                irs_query,
+                                                trail);
+  // Have I picked the right function here? (Previous was
+  // HSSConnection::update_registration_state.)
+
+  // Take all of this out once can just pass in _irs_info, not subscriber_info,
+  // above.
+  _irs_info._regstate = subscriber_info._regstate;
+  _irs_info._prev_regstate = subscriber_info._prev_regstate;
+  _irs_info._service_profiles = subscriber_info._service_profiles;
+  _irs_info._associated_uris = subscriber_info._associated_uris;
+  _irs_info._aliases = subscriber_info._aliases;
+  _irs_info._ccfs = subscriber_info._ccfs;
+  _irs_info._ecfs = subscriber_info._ecfs;
+
+  if (http_code == HTTP_OK)
+  {
+    _ifcs = _irs_info._service_profiles[irs_query._public_id];
+
+    // Get the default URI. This should always succeed.
+    _irs_info._associated_uris.get_default_impu(_default_uri, true);
+
+    // We may want to route to bindings that are barred (in case of an
+    // emergency), so get all the URIs.
+    _registered = (_irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED);
+    _barred = _irs_info._associated_uris.is_impu_barred(irs_query._public_id);
   }
 
   return http_code;
