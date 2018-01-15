@@ -109,22 +109,15 @@ class DeregistrationTaskTest : public SipTest
     _task = new DeregistrationTask(*_req, _cfg, 0);
   }
 
-  void expect_sdm_updates(std::vector<std::string> aor_ids,
-                          std::vector<AoRPair*> aors)
+  void expect_sdm_updates(const std::string& aor_id,
+                          std::vector<SubscriberManager::Binding> bindings,
+                          std::vector<std::string>& binding_ids)
   {
-    for (std::string aor_id : aor_ids)
-    {
-      //HTTPCode rc;
-      //std::vector<SubscriberManager::Binding> bindings;
-      EXPECT_CALL(*_subscriber_manager, 
-                  get_bindings(aor_id, _, _));
-        //.WillOnce(Return(rc));
-                  //DoAll(SetArgReferee<1>(bindings)),Return(rc));
-
-      EXPECT_CALL(*_subscriber_manager, 
-                  remove_bindings(_, SubscriberManager::EventTrigger::ADMIN, _, _))
-        .WillOnce(Return(HTTP_OK));
-    }
+    EXPECT_CALL(*_subscriber_manager, get_bindings(aor_id, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(bindings), Return(HTTP_OK)));
+        
+    EXPECT_CALL(*_subscriber_manager, remove_bindings(_, SubscriberManager::EventTrigger::ADMIN, _, _))
+          .WillRepeatedly(DoAll(SaveArg<0>(&binding_ids), Return(HTTP_OK)));
   }
 
   void expect_impi_deletes(std::string private_id, MockImpiStore* impi_store)
@@ -144,147 +137,30 @@ class DeregistrationTaskTest : public SipTest
 // Mainline case
 TEST_F(DeregistrationTaskTest, MainlineTest)
 {
-  // Set HSS result
-  _hss->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>REGISTER</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>1</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-
   // Build the request
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
   build_dereg_request(body);
 
-  // Get an initial empty AoR record and add a standard binding
   std::string aor_id = "sip:6505550231@homedomain";
-  AoR* aor = new AoR(aor_id);
-  int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
-  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
-  b1->_cseq = 17038;
-  b1->_expires = now + 300;
-  b1->_priority = 0;
-  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
-  b1->_params["reg-id"] = "1";
-  b1->_params["+sip.ice"] = "";
-  b1->_emergency_registration = false;
-  b1->_private_id = "6505550231";
+  std::string private_id = "6505550231";
 
-  // Set up the subscriber_data_manager expectations
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<AoRPair*> aors = {aor_pair};
+  SubscriberManager::Binding binding;
+  binding._uri = "sip:6505550231@homedomain";
+  binding._private_id = private_id;
+  std::vector<SubscriberManager::Binding> bindings = {binding};
+  std::vector<std::string> binding_ids; 
 
-  expect_sdm_updates(aor_ids, aors);
+  expect_sdm_updates(aor_id, bindings, binding_ids);
 
   // The IMPI is also deleted from the local and remote stores.
-  expect_gr_impi_deletes("6505550231");
+  expect_gr_impi_deletes(private_id);
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
 
-  _hss->flush_all();
-}
-
-// Test where there are multiple pairs of AoRs and Private IDs and single AoRs
-TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
-{
-  // Build the request
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip:6505552002@homedomain\", \"impi\": \"6505552002\"}, {\"primary-impu\": \"sip:6505552003@homedomain\"}, {\"primary-impu\": \"sip:6505552004@homedomain\"}]}";
-  build_dereg_request(body, "false");
-
-  // Set up the subscriber_data_manager expectations
-  std::string aor_id_1 = "sip:6505552001@homedomain";
-  std::string aor_id_2 = "sip:6505552002@homedomain";
-  std::string aor_id_3 = "sip:6505552003@homedomain";
-  std::string aor_id_4 = "sip:6505552004@homedomain";
-  AoR* aor_1 = new AoR(aor_id_1);
-  AoR* aor_11 = new AoR(*aor_1);
-  AoRPair* aor_pair_1 = new AoRPair(aor_1, aor_11);
-  AoR* aor_2 = new AoR(aor_id_2);
-  AoR* aor_22 = new AoR(*aor_2);
-  AoRPair* aor_pair_2 = new AoRPair(aor_2, aor_22);
-  AoR* aor_3 = new AoR(aor_id_3);
-  AoR* aor_33 = new AoR(*aor_3);
-  AoRPair* aor_pair_3 = new AoRPair(aor_3, aor_33);
-  AoR* aor_4 = new AoR(aor_id_4);
-  AoR* aor_44 = new AoR(*aor_4);
-  AoRPair* aor_pair_4 = new AoRPair(aor_4, aor_44);
-  std::vector<std::string> aor_ids = {aor_id_1, aor_id_2, aor_id_3, aor_id_4};
-  std::vector<AoRPair*> aors = {aor_pair_1, aor_pair_2, aor_pair_3, aor_pair_4};
-
-  expect_sdm_updates(aor_ids, aors);
-
-  // Run the task
-  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
-  _task->run();
-}
-
-// Test when the SubscriberDataManager can't be accessed.
-TEST_F(DeregistrationTaskTest, SubscriberDataManagerFailureTest)
-{
-  // Build the request
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
-  build_dereg_request(body, "false");
-
-  // Set up the subscriber_data_manager expectations
-  std::string aor_id = "sip:6505552001@homedomain";
-  AoRPair* aor_pair = NULL;
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<AoRPair*> aors = {aor_pair};
-
-  expect_sdm_updates(aor_ids, aors);
-
-  // Run the task
-  EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
-  _task->run();
-}
-
-// Test that an invalid SIP URI doesn't get sent on third party registers.
-TEST_F(DeregistrationTaskTest, InvalidIMPUTest)
-{
-  _hss->set_result("/impu/notavalidsipuri/reg-data", HSS_NOT_REG_STATE);
-  CapturingTestLogger log;
-
-  // Build the request
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"notavalidsipuri\"}]}";
-  build_dereg_request(body, "false");
-
-  // Set up the subscriber_data_manager expectations
-  std::string aor_id = "notavalidsipuri";
-  AoR* aor = new AoR(aor_id);
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<AoRPair*> aors = {aor_pair};
-
-  expect_sdm_updates(aor_ids, aors);
-
-  // Run the task
-  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
-  _task->run();
-
-  EXPECT_TRUE(log.contains("Unable to create third party registration"));
-  _hss->flush_all();
+  ASSERT_EQ(1u, binding_ids.size());
+  EXPECT_EQ(binding_ids[0], aor_id);
 }
 
 // Test that a dereg request that isn't a delete gets rejected.
@@ -331,49 +207,48 @@ TEST_F(DeregistrationTaskTest, MissingPrimaryIMPUJSONTest)
   EXPECT_TRUE(log.contains("Invalid JSON - registration doesn't contain primary-impu"));
 }
 
-TEST_F(DeregistrationTaskTest, SubscriberDataManagerWritesFail)
+TEST_F(DeregistrationTaskTest, SubscriberManagerAccessFail)
 {
   // Build the request
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
-  build_dereg_request(body);
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
+  build_dereg_request(body, "false");
 
-  AoR* aor = new AoR("sip:6505550231@homedomain");
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  EXPECT_CALL(*_subscriber_data_manager, get_aor_data(_, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
-
+  // get_bindings comes back with an error, remove_bindings won't get called
+  std::string aor_id = "sip:6505552001@homedomain";
+  EXPECT_CALL(*_subscriber_manager, 
+              get_bindings(aor_id, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+      
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
   _task->run();
 }
 
-TEST_F(DeregistrationTaskTest, ImpiNotClearedWhenBindingNotDeregistered)
+TEST_F(DeregistrationTaskTest, SubscriberManagerWritesFail)
 {
-  // Build a request that will not deregister any bindings.
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"wrong-impi\"}]}";
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
   build_dereg_request(body);
 
-  // Create an AoR with a minimal binding.
+  // Set up the subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  AoR* aor = new AoR(aor_id);
-  int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_expires = now + 300;
-  b1->_emergency_registration = false;
-  b1->_private_id = "impi1";
+  std::string private_id = "sip:6505550231";
+  SubscriberManager::Binding binding;
+  binding._uri = aor_id;
+  binding._private_id = private_id;
 
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<AoRPair*> aors = {aor_pair};
-
-  expect_sdm_updates(aor_ids, aors);
-
-  // Nothing is deleted from the IMPI store.
+  std::vector<SubscriberManager::Binding> bindings = {binding};
+  EXPECT_CALL(*_subscriber_manager, 
+              get_bindings(aor_id, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(bindings),
+                    Return(HTTP_OK)));
+  
+  EXPECT_CALL(*_subscriber_manager, 
+              remove_bindings(_, SubscriberManager::EventTrigger::ADMIN, _, _))
+    .WillOnce(Return(HTTP_NOT_FOUND));
 
   // Run the task
-  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  EXPECT_CALL(*_httpstack, send_reply(_, 404, _));
   _task->run();
 }
 
@@ -384,21 +259,14 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\"}]}";
   build_dereg_request(body);
 
-  // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  AoR* aor = new AoR(aor_id);
-  int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_expires = now + 300;
-  b1->_emergency_registration = false;
-  b1->_private_id = "impi1";
+  SubscriberManager::Binding binding;
+  binding._uri = "sip:6505550231@homedomain";
+  binding._private_id = "impi1";
+  std::vector<SubscriberManager::Binding> bindings = {binding};
+  std::vector<std::string> binding_ids; 
 
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<AoRPair*> aors = {aor_pair};
-
-  expect_sdm_updates(aor_ids, aors);
+  expect_sdm_updates(aor_id, bindings, binding_ids);
 
   // The corresponding IMPI is also deleted.
   expect_gr_impi_deletes("impi1");
@@ -410,67 +278,34 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
 
 TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 {
-  // Set HSS result
-  _hss->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>REGISTER</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>1</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-
   // Build the request
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\"}, {\"primary-impu\": \"sip:6505550232@homedomain\"}]}";
   build_dereg_request(body);
 
-  int now = time(NULL);
-
   // Create an AoR with two bindings.
   std::string aor_id = "sip:6505550231@homedomain";
-  AoR* aor = new AoR(aor_id);
+  SubscriberManager::Binding binding;
+  binding._uri = "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>";
+  binding._private_id = "impi1";
+  SubscriberManager::Binding binding2;
+  binding2._uri = aor_id;
+  binding2._private_id = "impi2";
+  std::vector<SubscriberManager::Binding> bindings = {binding, binding2};
+  std::vector<std::string> binding_ids; 
 
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_expires = now + 300;
-  b1->_emergency_registration = false;
-  b1->_private_id = "impi1";
-
-  AoR::Binding* b2 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:2"));
-  b2->_expires = now + 300;
-  b2->_emergency_registration = false;
-  b2->_private_id = "impi2";
-
-  AoR* backup_aor = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, backup_aor);
+  expect_sdm_updates(aor_id, bindings, binding_ids);
+  EXPECT_EQ(0u, binding_ids.size());
 
   // create another AoR with one binding.
   std::string aor_id2 = "sip:6505550232@homedomain";
-  AoR* aor2 = new AoR(aor_id2);
+  SubscriberManager::Binding binding3;
+  binding3._uri = aor_id2;
+  binding3._private_id = "impi3";
+  std::vector<SubscriberManager::Binding> bindings2 = {binding3};
+  std::vector<std::string> binding_ids2; 
 
-  AoR::Binding* b3 = aor2->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:3"));
-  b3->_expires = now + 300;
-  b3->_emergency_registration = false;
-  b3->_private_id = "impi3";
-
-  AoR* backup_aor2 = new AoR(*aor2);
-  AoRPair* aor_pair2 = new AoRPair(aor2, backup_aor2);
-
-  std::vector<std::string> aor_ids = {aor_id, aor_id2};
-  std::vector<AoRPair*> aors = {aor_pair, aor_pair2};
-  expect_sdm_updates(aor_ids, aors);
+  expect_sdm_updates(aor_id2, bindings2, binding_ids2);
+  ASSERT_EQ(0u, binding_ids2.size());
 
   // The corresponding IMPIs are also deleted.
   expect_gr_impi_deletes("impi1");
@@ -480,19 +315,6 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
-
-  // Expect a 3rd-party deregister to be sent to the AS in the iFCs
-  ASSERT_EQ(1, txdata_count());
-  // REGISTER passed on to AS
-  pjsip_msg* out = current_txdata()->msg;
-  ReqMatcher r1("REGISTER");
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS.expect_target(current_txdata(), false);
-  inject_msg(respond_to_current_txdata(200));
-  free_txdata();
-
-  _hss->flush_all();
 }
 
 TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
@@ -503,18 +325,13 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  AoR* aor = new AoR(aor_id);
-  int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_expires = now + 300;
-  b1->_emergency_registration = false;
-  b1->_private_id = "impi1";
+  SubscriberManager::Binding binding;
+  binding._uri = aor_id;
+  binding._private_id = "impi1";
+  std::vector<SubscriberManager::Binding> bindings = {binding};
+  std::vector<std::string> binding_ids; 
 
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<AoRPair*> aors = {aor_pair};
-  expect_sdm_updates(aor_ids, aors);
+  expect_sdm_updates(aor_id, bindings, binding_ids);
 
   // Simulate the IMPI not being found in the store. The handler does not go on
   // to try and delete the IMPI.
@@ -535,18 +352,13 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  AoR* aor = new AoR(aor_id);
-  int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_expires = now + 300;
-  b1->_emergency_registration = false;
-  b1->_private_id = "impi1";
+  SubscriberManager::Binding binding;
+  binding._uri = aor_id;
+  binding._private_id = "impi1";
+  std::vector<SubscriberManager::Binding> bindings = {binding};
+  std::vector<std::string> binding_ids; 
 
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<AoRPair*> aors = {aor_pair};
-  expect_sdm_updates(aor_ids, aors);
+  expect_sdm_updates(aor_id, bindings, binding_ids);
 
   // Simulate the IMPI store failing when deleting the IMPI. The handler does
   // not retry the delete.
@@ -568,18 +380,13 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  AoR* aor = new AoR(aor_id);
-  int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_expires = now + 300;
-  b1->_emergency_registration = false;
-  b1->_private_id = "impi1";
+  SubscriberManager::Binding binding;
+  binding._uri = aor_id;
+  binding._private_id = "impi1";
+  std::vector<SubscriberManager::Binding> bindings = {binding};
+  std::vector<std::string> binding_ids; 
 
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<AoRPair*> aors = {aor_pair};
-  expect_sdm_updates(aor_ids, aors);
+  expect_sdm_updates(aor_id, bindings, binding_ids);
 
   // We need to create two IMPIs when we return one on a call to get_impi we
   // lose ownership of it.

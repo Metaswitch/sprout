@@ -28,7 +28,7 @@ public:
                                          HSSConnection::irs_info& irs_info,
                                          SAS::TrailId trail));
 
-  MOCK_METHOD4(remove_bindings, HTTPCode(std::vector<std::string> binding_ids,
+  MOCK_METHOD4(remove_bindings, HTTPCode(const std::vector<std::string>& binding_ids,
                                          EventTrigger event_trigger,
                                          std::vector<Binding>& bindings,
                                          SAS::TrailId trail));

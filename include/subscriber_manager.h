@@ -151,7 +151,7 @@ public:
                                    HSSConnection::irs_info& irs_info,
                                    SAS::TrailId trail) { return HTTP_OK; }
 
-  virtual HTTPCode remove_bindings(std::vector<std::string> binding_ids,
+  virtual HTTPCode remove_bindings(const std::vector<std::string>& binding_ids,
                                    EventTrigger event_trigger,
                                    std::vector<Binding>& bindings,
                                    SAS::TrailId trail) { return HTTP_OK; }
