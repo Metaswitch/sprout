@@ -27,6 +27,7 @@ extern "C" {
 #include "associated_uris.h"
 #include "hssconnection.h"
 #include "ifchandler.h"
+#include "aor.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
 class SubscriberManager
