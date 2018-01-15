@@ -151,6 +151,22 @@ protected:
     static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
 
   protected:
+
+    // A Callback object to be run on a worker thread
+    class Callback : public PJUtils::Callback
+    {
+    public:
+      Callback(UASTsx* tsx, std::function<void()> run_fn);
+      virtual void run() override;
+
+    private:
+      // The UASTsx whose context should be entered before running _run_fn
+      UASTsx* _tsx;
+
+      // The function to run inside the UASTsx's context
+      std::function<void()> _run_fn;
+    };
+
     /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
                                         pjsip_tx_data *tdata);
@@ -162,6 +178,9 @@ protected:
 
     virtual void on_tsx_state(pjsip_event* event);
 
+    // A count of the number of pending Callbacks that are queued for this
+    // UASTsx. A non-zero count prevents the UASTsx from being destroyed
+    int _pending_callbacks = 0;
 
   private:
     /// Defintion of a timer set by a sproutlet transaction.
