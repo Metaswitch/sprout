@@ -637,12 +637,10 @@ void DeleteImpuTask::run()
   std::string impu = _req.full_path().substr(prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
   
-  std::vector<std::string> binding_ids = {"*"};
-  std::vector<SubscriberManager::Binding> bindings;
-  HTTPCode sc = _cfg->_sm->remove_bindings(binding_ids,
-                                    SubscriberManager::EventTrigger::ADMIN,
-                                    bindings,
-                                    trail());
+  HTTPCode sc = _cfg->_sm->deregister_subscriber(impu,
+                                                 SubscriberManager::EventTrigger::ADMIN,
+                                                 trail());
+
   send_http_reply(sc);
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 4u);

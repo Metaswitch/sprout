@@ -564,7 +564,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
 
   {
     InSequence s;
-      EXPECT_CALL(*sm, remove_bindings(_, _, _, _)).WillOnce(Return(HTTP_OK));
+      EXPECT_CALL(*sm, deregister_subscriber(_, _, _)).WillOnce(Return(HTTP_OK));
       EXPECT_CALL(*stack, send_reply(_, 200, _));
   }
 
