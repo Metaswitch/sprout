@@ -3519,6 +3519,8 @@ TEST_F(SproutletProxyTest, ForwardRemoteAliasInternal)
                                         "1.2.3.4",
                                         49152);
 
+  EXPECT_CALL(*_mock_counter_table, increment());
+
   // Inject a request with a Route header referencing a GR alias of this node.
   Message msg1;
   msg1._method = "INVITE";
@@ -3528,6 +3530,7 @@ TEST_F(SproutletProxyTest, ForwardRemoteAliasInternal)
   msg1._via = tp->to_string(false);
   msg1._route = "Route: <sip:graliastest.proxy1.homedomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
+
 
   // Expecting a 100 Trying and forwarded INVITE
   ASSERT_EQ(2, txdata_count());
