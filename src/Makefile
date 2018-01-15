@@ -97,9 +97,11 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          fifcservice.cpp \
                          event_statistic_accumulator.cpp \
                          aor.cpp \
+                         aor_utils.cpp \
                          astaire_aor_store.cpp \
                          sprout_xml_utils.cpp \
-                         rphservice.cpp
+                         rphservice.cpp \
+                         s4.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -199,7 +201,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        testingcommon.cpp \
                        thread_dispatcher_test.cpp \
                        rphservice_test.cpp \
-                       mock_rph_service.cpp
+                       mock_rph_service.cpp \
+                       s4_test.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include
@@ -207,6 +210,7 @@ sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-comm
 SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
                           -I../include \
                           -I../modules/cpp-common/include \
+                          -I../modules/clearwater-s4/include \
                           -I../modules/app-servers/include \
                           -I../usr/include \
                           -I../modules/rapidjson/include \
@@ -263,6 +267,7 @@ sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \
 PLUGIN_COMMON_CPPFLAGS := -fPIC \
                           -I../include \
                           -I../modules/cpp-common/include \
+                          -I../modules/clearwater-s4/include \
                           -I../modules/app-servers/include \
                           -I../modules/rapidjson/include \
                           `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --cflags libpjproject`
@@ -296,7 +301,7 @@ mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
 mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
 mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
+VPATH = ../modules/cpp-common/src ../modules/clearwater-s4/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
 
 # Use valgrind suppression file for UT
 sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp
