@@ -402,7 +402,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
                                          std::string private_id,
                                          std::set<std::string>& impis_to_delete)
 {
-  std::vector<SubscriberManager::Binding> bindings;
+  std::vector<Binding> bindings;
 
   HTTPCode rc = _cfg->_sm->get_bindings(aor_id,
                                         bindings,
@@ -414,7 +414,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
   
   std::vector<std::string> binding_ids;
 
-  for (SubscriberManager::Binding binding : bindings)
+  for (Binding binding : bindings)
   {
     if (private_id.empty() || private_id == binding._private_id)
     {
@@ -429,7 +429,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
     }
   }
 
-  std::vector<SubscriberManager::Binding> unused_bindings;
+  std::vector<Binding> unused_bindings;
   return _cfg->_sm->remove_bindings(binding_ids,
                                     SubscriberManager::EventTrigger::ADMIN,
                                     unused_bindings,
@@ -547,8 +547,8 @@ void GetCachedDataTask::run()
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  std::vector<SubscriberManager::Binding> bindings;
-  std::vector<SubscriberManager::Subscription> subscriptions;
+  std::vector<Binding> bindings;
+  std::vector<Subscription> subscriptions;
   HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, bindings, subscriptions, trail());
 
   // std::string content = serialize_data(aor_pair->get_current());

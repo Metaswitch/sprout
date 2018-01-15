@@ -22,6 +22,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "aor.h"
 #include "sas.h"
 #include "analyticslogger.h"
 #include "associated_uris.h"
