@@ -107,17 +107,20 @@ HTTPCode HssCacheHelper::read_hss_data(std::string public_id,
                                        SubscriberManager* sm,
                                        SAS::TrailId trail)
 {
+  printf("attempting to read data from HSS\n");
   SubscriberManager::SubscriberInfo subscriber_info;
   HTTPCode http_code = sm->get_subscriber_state(public_id,
                                                 subscriber_info,
                                                 irs_query,
                                                 trail);
+  printf("ok... went through get_subscriber_state here!\n");
   // Have I picked the right function here? (Previous was
   // HSSConnection::update_registration_state.)
 
   // Take all of this out once can just pass in _irs_info, not subscriber_info,
   // above.
   _irs_info._regstate = subscriber_info._regstate;
+  printf("subscriber_info regstate is %d\n", (subscriber_info._regstate ==RegDataXMLUtils::STATE_REGISTERED));
   _irs_info._prev_regstate = subscriber_info._prev_regstate;
   _irs_info._service_profiles = subscriber_info._service_profiles;
   _irs_info._associated_uris = subscriber_info._associated_uris;
@@ -135,6 +138,7 @@ HTTPCode HssCacheHelper::read_hss_data(std::string public_id,
     // We may want to route to bindings that are barred (in case of an
     // emergency), so get all the URIs.
     _registered = (_irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED);
+    printf("marked _registered as %d, where 0 is false\n", (_irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED));
     _barred = _irs_info._associated_uris.is_impu_barred(irs_query._public_id);
   }
 

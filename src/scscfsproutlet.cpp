@@ -239,7 +239,7 @@ IFCConfiguration SCSCFSproutlet::ifc_configuration() const
 
 /// Gets all bindings for the specified public id from the SM.
 void SCSCFSproutlet::get_bindings(const std::string& public_id,
-                                  std::vector<SubscriberManager::Binding>& bindings,
+                                  std::map<std::string, SubscriberManager::Binding*>& bindings,
                                   SAS::TrailId trail)
 {
   // Look up the target in the subscriber manager.
@@ -529,7 +529,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         std::string public_id = PJUtils::public_id_from_uri(req_uri);
         // This empty vector will be returned by the get_bindings function
         // containing all non-expired bindings for the given public id.
-        std::vector<SubscriberManager::Binding> bindings;
+        std::map<std::string, SubscriberManager::Binding*> bindings;
         _scscf->get_bindings(public_id, bindings, trail());
 
         if ((aor_pair != NULL) &&
@@ -1261,6 +1261,8 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
                                                       ifcs,
                                                       _scscf->_sm,
                                                       trail());
+      printf("regustered is indeed %d, where 0 is false\n",
+             (_hss_cache_helper->_irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED));
       if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");
@@ -1823,22 +1825,18 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       aor = public_id;
     }
 
-    // Get the bindings from the store and filter/sort them for the request.
-    AoRPair* aor_pair = NULL;
-
     // This empty vector will be returned by the get_bindings function
     // containing all non-expired bindings for the given public id.
-    std::vector<SubscriberManager::Binding> bindings;
+    std::map<std::string, SubscriberManager::Binding*> bindings;
     _scscf->get_bindings(public_id, bindings, trail());
 
-    if ((aor_pair != NULL) &&
-        (aor_pair->get_current() != NULL) &&
-        (!aor_pair->get_current()->bindings().empty()))
+    if (!bindings.empty())
     {
+      printf("bindings not empty at least.\n");
       // Retrieved bindings from the store so filter them to an ordered list
       // of targets.
       filter_bindings_to_targets(aor,
-                                 aor_pair->get_current(),
+                                 bindings,
                                  req,
                                  pool,
                                  MAX_FORKING,
@@ -1858,7 +1856,6 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       SAS::report_event(event);
     }
 
-    delete aor_pair; aor_pair = NULL;
   }
   else
   {

@@ -51,6 +51,8 @@ using testing::NiceMock;
 using testing::HasSubstr;
 using ::testing::Return;
 using ::testing::SaveArg;
+using ::testing::SetArgReferee;
+using ::testing::DoAll;
 
 // TODO - make this class more consistent with the
 // TestingCommon::SubscriptionBuilder class (ie. have function "set_route",
@@ -1107,10 +1109,19 @@ TEST_F(SCSCFTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
 
-  EXPECT_CALL(*_sm, get_bindings(_, _, _)).WillRepeatedly(Return(HTTP_OK));
-  EXPECT_CALL(*_sm, update_bindings(_, _, _, _, _, _)).WillRepeatedly(Return(HTTP_OK));
+  SubscriberManager::SubscriberInfo subscriber_info;
+  set_subscriber_info(subscriber_info, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(subscriber_info),
+                    Return(HTTP_OK)));
 
-  register_uri_with_sm(_sm, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  std::vector<SubscriberManager::Binding> bindings;
+  SubscriberManager::Binding binding;
+  bindings.push_back(binding);
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(bindings),
+                    Return(HTTP_OK)));
+
   SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);

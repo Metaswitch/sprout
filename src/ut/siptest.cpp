@@ -594,48 +594,35 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
-void SipTest::register_uri_with_sm(SubscriberManager* sm,
-                                   const std::string& user,
-                                   const std::string& domain,
-                                   const std::string& contact,
-                                   int lifetime,
-                                   std::string instance_id,
-                                   bool emergency)
+void SipTest::set_subscriber_info(SubscriberManager::SubscriberInfo& subscriber_info,
+                                  std::string user,
+                                  const std::string& domain,
+                                  const std::string& contact,
+                                  int lifetime,
+                                  std::string instance_id,
+                                  bool emergency)
 {
-  std::string uri("sip:");
+  printf("actually went through set_subscriber_info function\n");
+  std::string uri = "sip:";
   uri.append(user).append("@").append(domain);
 
-  // Need some sort of way to set the fake data in the SM here.
-
-  std::vector<SubscriberManager::Binding> bindings;
-  long http_code = sm->get_bindings(uri, bindings, 0);
-  EXPECT_EQ(http_code, HTTP_OK);
-  EXPECT_EQ(bindings.size(), 0);
-
-  SubscriberManager::Binding binding;
-  binding._uri = contact;
-  binding._cid = "1";
-  binding._cseq = 1;
-  binding._expires = time(NULL) + lifetime;
-  binding._priority = 1000;
-  binding._emergency_registration = emergency;
-  if (!instance_id.empty())
-  {
-    binding._params["+sip.instance"] = instance_id;
-  }
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bindings.push_back(binding);
 
-  std::string server_name = "sprout.homedomain"; //is this right??
-  std::vector<std::string> bindings_to_remove; // Not removing any, so empty.
-  http_code = sm->update_bindings(uri,
-                                  server_name,
-                                  bindings, //updating the binding updated this, right?
-                                  bindings_to_remove,
-                                  bindings, //all are updated, so this is right?
-                                  0);
-  EXPECT_EQ(http_code, HTTP_OK);
+  subscriber_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  subscriber_info._prev_regstate = "";
+
+  std::map<std::string, Ifcs> service_profiles;
+  Ifcs ifcs;
+  service_profiles.insert(std::make_pair("first_key" , ifcs));
+  subscriber_info._service_profiles = service_profiles;
+
+  subscriber_info._associated_uris = associated_uris;
+
+  // Don't want any aliases - enough just to not set any?
+
+  subscriber_info._ccfs = {"priority=\"1\">ccf1"};
+  subscriber_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
 }
 
 void SipTest::register_uri(SubscriberDataManager* sdm,

@@ -20,7 +20,7 @@
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
 void filter_bindings_to_targets(const std::string& aor,
-                                const AoR* aor_data,
+                                std::map<std::string, SubscriberManager::Binding*>& bindings,
                                 pjsip_msg* msg,
                                 pj_pool_t* pool,
                                 int max_targets,
@@ -71,7 +71,6 @@ void filter_bindings_to_targets(const std::string& aor,
 
   // Iterate over the Bindings, checking if they're valid and creating a target
   // if so.
-  const AoR::Bindings bindings = aor_data->bindings();
   int bindings_rejected_due_to_gruu = 0;
   bool request_uri_is_gruu = false;
   std::string requri;
@@ -83,7 +82,7 @@ void filter_bindings_to_targets(const std::string& aor,
   }
 
   // Loop over the bindings, trying to match each.
-  for (AoR::Bindings::const_iterator binding = bindings.begin();
+  for (std::map<std::string, SubscriberManager::Binding*>::const_iterator binding = bindings.begin();
        binding != bindings.end();
        ++binding)
   {
@@ -211,7 +210,7 @@ void filter_bindings_to_targets(const std::string& aor,
 // false and the target parameter should not be used.
 bool binding_to_target(const std::string& aor,
                        const std::string& binding_id,
-                       const AoR::Binding& binding,
+                       const SubscriberManager::Binding& binding,
                        bool deprioritized,
                        pj_pool_t* pool,
                        Target& target)
@@ -268,26 +267,8 @@ bool binding_to_target(const std::string& aor,
     }
     else
     {
-      for (std::list<std::string>::const_iterator path = binding._path_uris.begin();
-           path != binding._path_uris.end();
-           ++path)
-      {
-        pjsip_uri* path_uri = PJUtils::uri_from_string(*path, pool);
-        if (path_uri != NULL)
-        {
-          pjsip_route_hdr* path_hdr = pjsip_route_hdr_create(pool);
-          path_hdr->name_addr.uri = path_uri;
-          target.paths.push_back(path_hdr);
-        }
-        else
-        {
-          TRC_WARNING("Ignoring contact %s for target %s because of badly formed path URI %s",
-                      binding._uri.c_str(), aor.c_str(), (*path).c_str());
-          // TODO SAS log
-          valid = false;
-          break;
-        }
-      }
+      TRC_WARNING("Empty path headers field for contact %s, implying no path headers were present on a register",
+                  binding._uri.c_str());
     }
   }
 

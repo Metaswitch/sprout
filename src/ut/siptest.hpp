@@ -160,13 +160,13 @@ protected:
   static SipTest* _current_instance;
 
   // Register the specified URI with the SM.
-  void register_uri_with_sm(SubscriberManager* sm,
-                            const std::string& user,
-                            const std::string& domain,
-                            const std::string& contact,
-                            int lifetime = 3600,
-                            std::string instance_id="",
-                            bool emergency=false);
+  void set_subscriber_info(SubscriberManager::SubscriberInfo& subscriber_info,
+                           std::string user,
+                           const std::string& domain,
+                           const std::string& contact,
+                           int lifetime = 3600,
+                           std::string instance_id="",
+                           bool emergency=false);
 
   /// Register the specified URI.
   void register_uri(SubscriberDataManager* sdm,
