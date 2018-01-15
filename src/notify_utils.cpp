@@ -25,6 +25,7 @@ extern "C" {
 #include "constants.h"
 #include "wildcard_utils.h"
 #include "sproutsasevent.h"
+#include "aor_utils.h"
 
 // Return a XML registration node with the attributes populated
 pj_xml_node* create_reg_node(pj_pool_t *pool,
@@ -79,7 +80,7 @@ pj_xml_node* notify_create_reg_state_xml(
                          pj_pool_t *pool,
                          std::string& aor,
                          AssociatedURIs* associated_uris,
-                         AoR::Subscription* subscription,
+                         Subscription* subscription,
                          std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                          NotifyUtils::RegistrationState reg_state,
                          SAS::TrailId trail)
@@ -246,7 +247,7 @@ pj_xml_node* notify_create_reg_state_xml(
       pj_str_t gruu;
       pj_strdup2(pool,
                  &gruu,
-                 Utils::xml_escape((*bni)->_b->pub_gruu_str(pool)).c_str());
+                 Utils::xml_escape(AoRUtils::pub_gruu_str((*bni)->_b, pool)).c_str());
 
       // Add all 'unknown parameters' from the contact header into the contact
       // element as <unknown-param> elements. For example, a contact header that
@@ -326,7 +327,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
                                pj_pool_t *pool,
                                std::string& aor,
                                AssociatedURIs* associated_uris,
-                               AoR::Subscription* subscription,
+                               Subscription* subscription,
                                std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                NotifyUtils::RegistrationState reg_state,
                                SAS::TrailId trail)
@@ -363,7 +364,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
 
 pj_status_t create_request_from_subscription(
                                      pjsip_tx_data** p_tdata,
-                                     AoR::Subscription* subscription,
+                                     Subscription* subscription,
                                      int cseq,
                                      pj_str_t* body)
 {
@@ -394,7 +395,7 @@ pj_status_t create_request_from_subscription(
 // Pass the correct subscription parameters in to create_notify
 pj_status_t NotifyUtils::create_subscription_notify(
                                     pjsip_tx_data** tdata_notify,
-                                    AoR::Subscription* s,
+                                    Subscription* s,
                                     std::string aor,
                                     AssociatedURIs* associated_uris,
                                     AoR* aor_data,
@@ -428,7 +429,7 @@ pj_status_t NotifyUtils::create_subscription_notify(
 // Create the request with to and from headers and a null body string, then add the body.
 pj_status_t NotifyUtils::create_notify(
                                     pjsip_tx_data** tdata_notify,
-                                    AoR::Subscription* subscription,
+                                    Subscription* subscription,
                                     std::string aor,
                                     AssociatedURIs* associated_uris,
                                     int cseq,

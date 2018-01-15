@@ -36,6 +36,7 @@ using ::testing::SaveArg;
 using ::testing::InSequence;
 using ::testing::SetArgReferee;
 using ::testing::HasSubstr;
+using ::testing::An;
 
 class Message
 {
@@ -2965,7 +2966,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
   AssociatedURIs associated_uris = {};
   aor_pair->get_current()->_associated_uris = associated_uris;
-  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -3068,7 +3069,7 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
   AssociatedURIs associated_uris = {};
   aor_pair->get_current()->_associated_uris = associated_uris;
-  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = msg._contact;
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -3127,7 +3128,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
   AssociatedURIs associated_uris = {};
   aor_pair->get_current()->_associated_uris = associated_uris;
-  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -3199,7 +3200,7 @@ TEST_F(RegistrarTest, StoreFullPathHeader)
   aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
-  AoR::Binding* binding = aor_data->get_current()->bindings().begin()->second;
+  Binding* binding = aor_data->get_current()->bindings().begin()->second;
 
   // Chck that the path header fields are filled in correctly.
   EXPECT_EQ(1u, binding->_path_headers.size());
@@ -3472,10 +3473,10 @@ protected:
 // This is a repro for https://github.com/Metaswitch/sprout/issues/977
 TEST_F(RegistrarTestMockStore, SubscriberDataManagerWritesFail)
 {
-  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::NOT_FOUND));
 
-  EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _))
+  EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::ERROR));
 
   // We have a private ID in this test, so set up the expect response
@@ -3495,7 +3496,7 @@ TEST_F(RegistrarTestMockStore, SubscriberDataManagerWritesFail)
 
 TEST_F(RegistrarTestMockStore, SubscriberDataManagerGetsFail)
 {
-  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::ERROR));
 
   // We have a private ID in this test, so set up the expect response
@@ -3523,7 +3524,7 @@ TEST_F(RegistrarTestMockStore, DontReadOnInitialRegister)
   _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "", "?private_id=Alice");
 
   // Expect the data to be set with a CAS of 0.
-  EXPECT_CALL(*_local_data_store, set_data(_, _, _, 0, _, _))
+  EXPECT_CALL(*_local_data_store, set_data(_, _, _, 0, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::OK));
 
   Message msg;
@@ -3552,7 +3553,7 @@ TEST_F(RegistrarTestMockStore, InitialRegisterAddFailure)
 
   // Check that the registrar initially tries to ADD the data (set_data with cas=0). Simulate
   // this ADD failing with a DATA_CONTENTION error.
-  EXPECT_CALL(*_local_data_store, set_data("reg", "sip:6505550231@homedomain", _, 0, _, _))
+  EXPECT_CALL(*_local_data_store, set_data("reg", "sip:6505550231@homedomain", _, 0, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::DATA_CONTENTION));
 
   // The ADD failed because there was data and so the Registrar should now try
@@ -3565,7 +3566,7 @@ TEST_F(RegistrarTestMockStore, InitialRegisterAddFailure)
        "},"
        "\"subscriptions\":{},"
        "\"associated-uris\":{\"uris\":[{\"uri\":\"sip:6505550231@homedomain\",\"barring\":false}],\"wildcard-mapping\":{}},\"notify_cseq\":2,\"timer_id\":\"post_identity\",\"scscf-uri\":\"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  EXPECT_CALL(*_local_data_store, get_data("reg", "sip:6505550231@homedomain", _, _, _))
+  EXPECT_CALL(*_local_data_store, get_data("reg", "sip:6505550231@homedomain", _, _, _, An<Store::Format>()))
     .WillOnce(DoAll(SetArgReferee<2>(initial_data), // Returned data
                     SetArgReferee<3>(1), // Returned CAS value
                     Return(Store::OK)));
@@ -3579,7 +3580,7 @@ TEST_F(RegistrarTestMockStore, InitialRegisterAddFailure)
                                            AllOf(HasSubstr("10.114.61.214"),
                                                  HasSubstr("10.114.61.213")), // Updated data should contain both contacts
                                            1, // CAS Value
-                                           _, _))
+                                           _, _, An<Store::Format>()))
     .WillOnce(Return(Store::OK));
 
   Message msg;

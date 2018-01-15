@@ -590,7 +590,7 @@ TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilterWithEvent)
 class ContactFilteringCreateBindingFixture : public ContactFilteringTest
 {
 public:
-  void create_binding(AoR::Binding& binding)
+  void create_binding(Binding& binding)
   {
     binding._uri = "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931";
     binding._cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
@@ -614,7 +614,7 @@ class ContactFilteringBindingToTargetTest : public ContactFilteringCreateBinding
 TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   Target target;
@@ -654,7 +654,7 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversionPathUri)
   // binding.
 
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding);
   binding._path_headers.clear();
   std::string binding_id = "<sip:user@10.1.2.3>";
@@ -692,7 +692,7 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversionPathUri)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._uri = "banana";
@@ -707,7 +707,7 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._path_headers.push_back("banana");
@@ -722,7 +722,7 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidPathDownlevel)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding);
   binding._path_headers.clear();
   std::string binding_id = "<sip:user@10.1.2.3>";
@@ -743,7 +743,7 @@ class ContactFilteringFullStackTest :
 TEST_F(ContactFilteringFullStackTest, NoFiltering)
 {
   AoR* aor_data = new AoR(aor);
-  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -767,7 +767,7 @@ TEST_F(ContactFilteringFullStackTest, NoFiltering)
 TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 {
   AoR* aor_data = new AoR(aor);
-  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   // Pick a method the contact doesn't support
@@ -794,7 +794,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 {
   AoR* aor_data = new AoR(aor);
-  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
   binding->_params.erase("methods");
 
@@ -823,7 +823,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 {
   AoR* aor_data = new AoR(aor);
-  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -862,7 +862,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 {
   AoR* aor_data = new AoR(aor);
-  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -900,7 +900,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 {
   AoR* aor_data = new AoR(aor);
-  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -937,7 +937,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 {
   AoR* aor_data = new AoR(aor);
-  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -976,7 +976,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 {
   AoR* aor_data = new AoR(aor);
-  AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -1020,7 +1020,7 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    AoR::Binding* binding = aor_data->get_binding(binding_id);
+    Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     // Change the features on some of the bindings.
@@ -1089,7 +1089,7 @@ TEST_F(ContactFilteringFullStackTest, GRUUNoMatch)
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    AoR::Binding* binding = aor_data->get_binding(binding_id);
+    Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     binding->_expires = ii * 100;
@@ -1123,7 +1123,7 @@ TEST_F(ContactFilteringFullStackTest, GRUUMatch)
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    AoR::Binding* binding = aor_data->get_binding(binding_id);
+    Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     // Change the features on some of the bindings.

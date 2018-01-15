@@ -426,11 +426,9 @@ HTTPCode DeregistrationTask::deregister_bindings(
       }
  
       binding_ids.push_back(binding.get_id());
-      printf("\n\n%s\n\n", binding.get_id().c_str());
     }
   }
 
-  printf("\nhhhhhhhh\n");
   std::vector<SubscriberManager::Binding> unused_bindings;
   return _cfg->_sm->remove_bindings(binding_ids,
                                     SubscriberManager::EventTrigger::ADMIN,
