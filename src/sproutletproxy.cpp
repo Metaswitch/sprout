@@ -221,7 +221,7 @@ SproutletProxy::SproutletMatch SproutletProxy::target_sproutlet(
     if ((sproutlet == NULL) &&
         (match.second == ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED))
     {
-      remote_match_rejected = true;
+      remote_match_rejected = true; // LCOV_EXCL_LINE TJW2 TODO
     }
 
     if (selection_type != NONE_SELECTED)
@@ -274,7 +274,7 @@ SproutletProxy::SproutletMatch SproutletProxy::target_sproutlet(
       }
       else if (match.second == ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED)
       {
-        remote_match_rejected = true;
+        remote_match_rejected = true; // LCOV_EXCL_LINE TJW2 TODO
       }
     }
 
@@ -373,9 +373,9 @@ SproutletProxy::SproutletMatch SproutletProxy::match_sproutlet_from_uri(
         selection_type = SERVICE_NAME;
       }
     }
-    else if (match.second == ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED)
+    else if (match.second == ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED) // LCOV_EXCL_LINE TJW2 TODO
     {
-      remote_match_rejected = true;
+      remote_match_rejected = true; // LCOV_EXCL_LINE TJW2 TODO
     }
   }
 
@@ -420,7 +420,7 @@ SproutletProxy::SproutletMatch SproutletProxy::match_sproutlet_from_uri(
       }
       else if (match.second == ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED)
       {
-        remote_match_rejected = true;
+        remote_match_rejected = true; // LCOV_EXCL_LINE TJW2 TODO
       }
 
     }
@@ -449,7 +449,7 @@ SproutletProxy::SproutletMatch SproutletProxy::match_sproutlet_from_uri(
     }
     else if (match.second == ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED)
     {
-      remote_match_rejected = true;
+      remote_match_rejected = true; // LCOV_EXCL_LINE TJW2 TODO
     }
   }
 
@@ -461,7 +461,7 @@ SproutletProxy::SproutletMatch SproutletProxy::match_sproutlet_from_uri(
   }
   else if (remote_match_rejected)
   {
-    match_type = ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED;
+    match_type = ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED; // LCOV_EXCL_LINE TJW2 TODO
   }
   else
   {
@@ -1452,7 +1452,7 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
     if ((match.first == NULL) &&
         (match.second == ALIAS_MATCH_TYPE::REMOTE_MATCH_REJECTED))
     {
-      remote_match_rejected = true;
+      remote_match_rejected = true; // LCOV_EXCL_LINE TJW2 TODO
     }
     sproutlet = match.first;
   }
