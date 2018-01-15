@@ -22,6 +22,7 @@
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "mock_subscriber_data_manager.h"
+#include "mock_subscriber_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
 #include "gtest/gtest.h"
@@ -30,6 +31,8 @@
 // Base class used for testing handlers with Mock SDMs.
 class TestWithMockSdms : public SipTest
 {
+  MockSubscriberManager* sm;
+
   MockSubscriberDataManager* store;
   MockSubscriberDataManager* remote_store1;
   MockSubscriberDataManager* remote_store2;
@@ -38,6 +41,8 @@ class TestWithMockSdms : public SipTest
 
   virtual void SetUp()
   {
+    sm = new MockSubscriberManager();
+
     store = new MockSubscriberDataManager();
     remote_store1 = new MockSubscriberDataManager();
     remote_store2 = new MockSubscriberDataManager();
@@ -48,6 +53,7 @@ class TestWithMockSdms : public SipTest
   virtual void TearDown()
   {
     delete stack;
+    delete sm; sm = NULL;
     delete remote_store1; remote_store1 = NULL;
     delete remote_store2; remote_store2 = NULL;
     delete store; store = NULL;

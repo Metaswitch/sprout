@@ -40,6 +40,7 @@ extern "C" {
 #include "sasevent.h"
 #include "analyticslogger.h"
 #include "subscriber_data_manager.h"
+#include "subscriber_manager.h"
 #include "stack.h"
 #include "bono.h"
 #include "hssconnection.h"
@@ -2356,9 +2357,10 @@ int main(int argc, char* argv[])
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
-  PushProfileTask::Config push_profile_config(local_sdm,
-                                              remote_sdms,
-                                              hss_connection);
+
+  SubscriberManager* sm = new SubscriberManager(hss_connection,
+                                                analytics_logger); 
+  PushProfileTask::Config push_profile_config(sm);
   GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
   DeleteImpuTask::Config delete_impu_config(local_sdm,
                                             remote_sdms,

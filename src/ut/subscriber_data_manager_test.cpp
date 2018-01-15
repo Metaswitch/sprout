@@ -36,6 +36,7 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgReferee;
 using ::testing::AtLeast;
+using ::testing::An;
 
 /// Fixture for BasicSubscriberDataManagerTest.
 class BasicSubscriberDataManagerTest : public SipTest
@@ -817,7 +818,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, BadlyFormedJson)
 {
   AoRPair* aor_data1;
 
-  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(DoAll(SetArgReferee<2>(std::string("{\"bindings\": {}")),
                     SetArgReferee<3>(1), // CAS
                     Return(Store::OK)));
@@ -832,7 +833,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, SemanticallyInvalidJson)
 {
   AoRPair* aor_data1;
 
-  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(DoAll(SetArgReferee<2>(
                     std::string("{\"bindings\": {}, \"subscriptions\" :{}, \"notify_cseq\": \"123\"}")),
                     SetArgReferee<3>(1), // CAS
@@ -848,7 +849,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, EmptyJsonObject)
 {
   AoRPair* aor_data1;
 
-  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(DoAll(SetArgReferee<2>(std::string("{}")),
                     SetArgReferee<3>(1), // CAS
                     Return(Store::OK)));

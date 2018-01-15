@@ -1224,7 +1224,7 @@ class PushProfileTaskTest : public TestWithMockSdms
       remote_stores.push_back(remote_store1);
     }
 
-    cfg = new PushProfileTask::Config(store, remote_stores, mock_hss);
+    cfg = new PushProfileTask::Config(sm);
     task = new PushProfileTask(*req, cfg, 0);
   }
 };
@@ -1255,13 +1255,9 @@ TEST_F(PushProfileTaskTest, MainlineTest)
                               "</ServiceProfile></IMSSubscription>";
   std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
 
-  AoR* aor = new AoR(default_uri);
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
   build_pushprofile_request(body, default_uri);
 
-  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(default_uri, _, aor_pair, _, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*sm, update_associated_uris(default_uri, _, _)).WillOnce(Return(HTTP_OK));
   EXPECT_CALL(*stack, send_reply(_, 200, _));
   task->run();
 }
@@ -1359,75 +1355,3 @@ TEST_F(PushProfileTaskTest, MissingPublicIdentityXML)
   task->run();
 }
 
-// get_aor_data returns a NULL pointer. Sends HTTP_SERVER_ERROR
-TEST_F(PushProfileTaskTest, SubscriberDataManagerFails)
-{
-  std::string default_uri = "sip:6505550231@homedomain";
-  std::string user_data =     "<IMSSubscription><ServiceProfile>"
-                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-                              "</ServiceProfile></IMSSubscription>";
-  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
-
-  AoRPair* aor_pair;
-  aor_pair = NULL;
-  build_pushprofile_request(body, default_uri);
-
-  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*stack, send_reply(_, 500, _));
-  task->run();
-}
-
-// set_aor_data fails. Sends HTTP_SERVER_ERROR
-TEST_F(PushProfileTaskTest, SubscriberDataManagerWriteFails)
-{
-  std::string default_uri = "sip:6505550231@homedomain";
-  std::string user_data =     "<IMSSubscription><ServiceProfile>"
-                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-                              "</ServiceProfile></IMSSubscription>";
-  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
-
-  AoR* aor = new AoR(default_uri);
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  build_pushprofile_request(body, default_uri);
-
-  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(default_uri, _, aor_pair, _, _)).WillOnce(Return(Store::ERROR));
-  EXPECT_CALL(*stack, send_reply(_, 500, _));
-  task->run();
-}
-
-// all bindings are expired - triggers a deregistration
-TEST_F(PushProfileTaskTest, AllBindingExpired)
-{
-  std::string default_uri = "sip:6505550231@homedomain";
-  std::string user_data =     "<IMSSubscription><ServiceProfile>"
-                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-                              "</ServiceProfile></IMSSubscription>";
-  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
-
-  AoR* aor = new AoR(default_uri);
-  AoR* aor2 = new AoR(*aor);
-  AoRPair* aor_pair = new AoRPair(aor, aor2);
-  build_pushprofile_request(body, default_uri);
-
-  HSSConnection::irs_query irs_query;
-
-  {
-    InSequence s;
-
-    EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
-    EXPECT_CALL(*store, set_aor_data(default_uri, _, aor_pair,_, _))
-      .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings are expired.
-                      Return(Store::OK)));
-    EXPECT_CALL(*mock_hss, update_registration_state(_, _, _))
-      .WillOnce(DoAll(SaveArg<0>(&irs_query),
-                      Return(200)));
-    EXPECT_CALL(*stack, send_reply(_, 200, _));
-  }
-
-  task->run();
-
-  ASSERT_EQ(irs_query._public_id, default_uri);
-  ASSERT_EQ(irs_query._req_type, HSSConnection::DEREG_TIMEOUT);
-}
