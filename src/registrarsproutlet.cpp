@@ -43,6 +43,7 @@ extern "C" {
 #include "uri_classifier.h"
 #include "associated_uris.h"
 #include "scscf_utils.h"
+#include "aor_utils.h"
 
 // RegistrarSproutlet constructor.
 RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
@@ -680,7 +681,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
           // The pub-gruu parameter on the Contact header is calculated
           // from the instance-id, to avoid unnecessary storage in
           // memcached.
-          std::string gruu = binding->pub_gruu_quoted_string(get_pool(rsp));
+          std::string gruu = AoRUtils::pub_gruu_quoted_string(binding, get_pool(rsp));
           if (!gruu.empty())
           {
             pjsip_param *new_param = PJ_POOL_ALLOC_T(get_pool(rsp), pjsip_param);
