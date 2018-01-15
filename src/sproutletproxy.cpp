@@ -37,6 +37,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::unordered_set<std::string>& host_remote_aliases,
                                const std::list<Sproutlet*>& sproutlets,
                                const std::set<std::string>& stateless_proxies,
+                               SNMP::CounterTable* route_to_remote_alias_tbl,
                                int max_sproutlet_depth) :
   BasicProxy(endpt,
              "mod-sproutlet-controller",
@@ -47,6 +48,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
   _host_local_aliases(host_local_aliases),
   _host_remote_aliases(host_remote_aliases),
   _sproutlets(sproutlets),
+  _route_to_remote_alias_tbl(route_to_remote_alias_tbl),
   _max_sproutlet_depth(max_sproutlet_depth)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
@@ -70,16 +72,12 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
 
     register_sproutlet(*it);
   }
-
-  _route_to_remote_alias_tbl = SNMP::CounterTable::create("route_to_remote_alias",
-                                                          "1.2.826.0.1.1578918.9.3.44");
 }
 
 
 /// Destructor.
 SproutletProxy::~SproutletProxy()
 {
-  delete _route_to_remote_alias_tbl;
 }
 
 

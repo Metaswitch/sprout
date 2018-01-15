@@ -51,6 +51,7 @@ public:
                  const std::unordered_set<std::string>& host_remote_aliases,
                  const std::list<Sproutlet*>& sproutlets,
                  const std::set<std::string>& stateless_proxies,
+                 SNMP::CounterTable* route_to_remote_alias_tbl,
                  int max_sproutlet_depth=DEFAULT_MAX_SPROUTLET_DEPTH);
 
   /// Destructor.
@@ -302,11 +303,11 @@ protected:
 
   std::list<Sproutlet*> _sproutlets;
 
-  const int _max_sproutlet_depth;
-
   static const pj_str_t STR_SERVICE;
 
   SNMP::CounterTable* _route_to_remote_alias_tbl;
+
+  const int _max_sproutlet_depth;
 
   friend class UASTsx;
   friend class SproutletWrapper;

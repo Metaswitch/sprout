@@ -34,6 +34,7 @@ extern "C" {
 #include "md5.h"
 #include "fakesnmp.hpp"
 #include "mock_sas.h"
+#include "mock_snmp_counter_table.hpp"
 
 using namespace std;
 using namespace std;
@@ -95,13 +96,16 @@ public:
     std::unordered_set<std::string> additional_home_domains;
     additional_home_domains.insert("sprout-site2.homedomain");
 
+    _mock_counter_table = new MockSnmpCounterTable();
+
     _sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "sprout.homedomain",
                                           additional_home_domains,
                                           std::unordered_set<std::string>(),
                                           sproutlets,
-                                          std::set<std::string>());
+                                          std::set<std::string>(),
+                                          _mock_counter_table);
 
     _tp = new TransportFlow(TransportFlow::Protocol::TCP,
                             stack_data.scscf_port,
@@ -141,6 +145,7 @@ public:
     delete _auth_sproutlet; _auth_sproutlet = NULL;
     delete _sproutlet_proxy; _sproutlet_proxy = NULL;
     delete _tp; _tp = NULL;
+    delete _mock_counter_table;
 
     // Clear out transactions
     cwtest_advance_time_ms(33000L);
@@ -281,6 +286,7 @@ protected:
   AuthenticationSproutlet* _auth_sproutlet;
   SproutletProxy* _sproutlet_proxy;
   TransportFlow* _tp;
+  MockSnmpCounterTable* _mock_counter_table;
 };
 
 LocalStore* BaseAuthenticationTest::_local_data_store;

@@ -1979,6 +1979,8 @@ int main(int argc, char* argv[])
   SNMP::ScalarByScopeTable* penalties_scalar = NULL;
   SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
+  SNMP::CounterTable* route_to_remote_alias_tbl = NULL;
+
   if (opt.pcscf_enabled)
   {
     latency_table = SNMP::EventAccumulatorByScopeTable::create("bono_latency",
@@ -2029,6 +2031,9 @@ int main(int argc, char* argv[])
                                                         ".1.2.826.0.1.1578918.9.3.30");
     token_rate_scalar = SNMP::ScalarByScopeTable::create("sprout_current_token_rate",
                                                          ".1.2.826.0.1.1578918.9.3.31");
+
+    route_to_remote_alias_tbl = SNMP::CounterTable::create("route_to_remote_alias",
+                                                           "1.2.826.0.1.1578918.9.3.44");
   }
 
   // Create Sprout's alarm objects.
@@ -2383,6 +2388,7 @@ int main(int argc, char* argv[])
                                          host_remote_aliases,
                                          sproutlets,
                                          opt.stateless_proxies,
+                                         route_to_remote_alias_tbl,
                                          opt.max_sproutlet_depth);
     if (sproutlet_proxy == NULL)
     {
@@ -2673,6 +2679,8 @@ int main(int argc, char* argv[])
   delete target_latency_scalar;
   delete penalties_scalar;
   delete token_rate_scalar;
+
+  delete route_to_remote_alias_tbl;
 
   hc->stop_thread();
   delete hc;

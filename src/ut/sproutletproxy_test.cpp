@@ -19,6 +19,7 @@
 #include "pjsip.h"
 #include "pjsip_simple.h"
 #include "boost/algorithm/string_regex.hpp"
+#include "mock_snmp_counter_table.hpp"
 
 #include <mutex>
 
@@ -880,6 +881,9 @@ public:
     std::unordered_set<std::string> host_remote_aliases;
     host_remote_aliases.insert("proxy1.homedomain-remote");
 
+    // Create a mock SNMP counter.
+    _mock_counter_table = new MockSnmpCounterTable();
+
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
@@ -887,7 +891,8 @@ public:
                                 host_local_aliases,
                                 host_remote_aliases,
                                 _sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                _mock_counter_table);
 
     // Schedule timers.
     SipTest::poll();
@@ -900,6 +905,8 @@ public:
     pjsip_tsx_layer_destroy();
 
     delete _proxy;
+
+    delete _mock_counter_table;
 
     for (std::list<Sproutlet*>::iterator i = _sproutlets.begin();
          i != _sproutlets.end();
@@ -1119,8 +1126,10 @@ protected:
 
   static SproutletProxy* _proxy;
   static std::list<Sproutlet*> _sproutlets;
+  static MockSnmpCounterTable* _mock_counter_table;
 };
 
+MockSnmpCounterTable* SproutletProxyTest::_mock_counter_table; // TJW2 Why?
 SproutletProxy* SproutletProxyTest::_proxy;
 std::list<Sproutlet*> SproutletProxyTest::_sproutlets;
 

@@ -28,6 +28,7 @@
 #include "rapidxml/rapidxml.hpp"
 #include "mock_hss_connection.h"
 #include "hssconnection.h"
+#include "mock_snmp_counter_table.hpp"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
@@ -259,13 +260,16 @@ public:
     additional_home_domains.insert("sprout.homedomain");
     additional_home_domains.insert("sprout-site2.homedomain");
 
+    _mock_counter_table = new MockSnmpCounterTable();
+
     _registrar_proxy = new SproutletProxy(stack_data.endpt,
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "homedomain",
                                           additional_home_domains,
                                           std::unordered_set<std::string>(),
                                           sproutlets,
-                                          std::set<std::string>());
+                                          std::set<std::string>(),
+                                          _mock_counter_table);
   }
 
   ~RegistrarTest()
@@ -301,6 +305,7 @@ public:
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->reset_count();
 
     delete _registrar_proxy; _registrar_proxy = NULL;
+    delete _mock_counter_table; _mock_counter_table = NULL;
     delete _registrar_sproutlet; _registrar_sproutlet = NULL;
   }
 
@@ -373,6 +378,7 @@ protected:
   static FakeChronosConnection* _chronos_connection;
   RegistrarSproutlet* _registrar_sproutlet;
   SproutletProxy* _registrar_proxy;
+  MockSnmpCounterTable* _mock_counter_table;
 };
 
 /// Fixture for RegistrarTest, which observes a HSS Connection
@@ -3384,13 +3390,16 @@ public:
     std::unordered_set<std::string> additional_home_domains;
     additional_home_domains.insert("sprout.homedomain");
 
+    _mock_counter_table = new MockSnmpCounterTable();
+
     _registrar_proxy = new SproutletProxy(stack_data.endpt,
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "homedomain",
                                           additional_home_domains,
                                           std::unordered_set<std::string>(),
                                           sproutlets,
-                                          std::set<std::string>());
+                                          std::set<std::string>(),
+                                          _mock_counter_table);
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
@@ -3448,6 +3457,7 @@ public:
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->reset_count();
 
     delete _registrar_proxy; _registrar_proxy = NULL;
+    delete _mock_counter_table; _mock_counter_table = NULL;
     delete _registrar_sproutlet; _registrar_sproutlet = NULL;
   }
 
@@ -3463,6 +3473,7 @@ protected:
   FakeChronosConnection* _chronos_connection;
   RegistrarSproutlet* _registrar_sproutlet;
   SproutletProxy* _registrar_proxy;
+  MockSnmpCounterTable* _mock_counter_table;
 };
 
 

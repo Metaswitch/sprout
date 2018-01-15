@@ -20,7 +20,7 @@ class MockSproutletProxy : public SproutletProxy
 {
 public:
   MockSproutletProxy(pjsip_endpoint* endpt) :
-    SproutletProxy(endpt, 0, "", {}, {}, {}) {}
+    SproutletProxy(endpt, 0, "", {}, {}, {}, NULL) {}
 };
 
 #endif
