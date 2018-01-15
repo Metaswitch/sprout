@@ -27,6 +27,7 @@ extern "C" {
 #include "associated_uris.h"
 #include "hssconnection.h"
 #include "ifchandler.h"
+#include "s4.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
 class SubscriberManager
@@ -138,59 +139,62 @@ public:
   ///                             SDM-REFACTOR-TODO: We don't know what this looks like yet. Add it in when we do.
   /// @param hss_connection     -
   /// @param analytics_logger   - AnalyticsLogger for reporting registration events
-  SubscriberManager(HSSConnection* hss_connection,
-                    AnalyticsLogger* analytics_logger) {}
+  SubscriberManager(S4* s4,
+                    HSSConnection* hss_connection,
+                    AnalyticsLogger* analytics_logger);
 
   /// Destructor.
-  virtual ~SubscriberManager() {}
+  virtual ~SubscriberManager();
 
   virtual HTTPCode update_bindings(HSSConnection::irs_query irs_query,
                                    const std::vector<Binding>& updated_bindings,
                                    std::vector<std::string> binding_ids_to_remove,
                                    std::vector<Binding>& all_bindings,
                                    HSSConnection::irs_info& irs_info,
-                                   SAS::TrailId trail) { return HTTP_OK; }
+                                   SAS::TrailId trail);
 
   virtual HTTPCode remove_bindings(std::vector<std::string> binding_ids,
                                    EventTrigger event_trigger,
                                    std::vector<Binding>& bindings,
-                                   SAS::TrailId trail) { return HTTP_OK; }
+                                   SAS::TrailId trail);
 
   virtual HTTPCode update_subscription(std::string public_id,
                                        const Subscription& subscription,
                                        HSSConnection::irs_info& irs_info,
-                                       SAS::TrailId trail) { return HTTP_OK; }
+                                       SAS::TrailId trail);
 
   virtual HTTPCode remove_subscription(std::string public_id,
                                        std::string subscription_id,
                                        HSSConnection::irs_info& irs_info,
-                                       SAS::TrailId trail) { return HTTP_OK; }
+                                       SAS::TrailId trail);
 
   virtual HTTPCode deregister_subscriber(std::string public_id,
                                          EventTrigger event_trigger,
-                                         SAS::TrailId trail) { return HTTP_OK; }
+                                         SAS::TrailId trail);
 
   virtual HTTPCode get_bindings(std::string public_id,
                                 std::vector<Binding>& bindings,
-                                SAS::TrailId trail) { return HTTP_OK; }
+                                SAS::TrailId trail);
 
   virtual HTTPCode get_bindings_and_subscriptions(std::string public_id,
                                                   std::vector<Binding>& bindings,
                                                   std::vector<Subscription>& subscriptions,
-                                                  SAS::TrailId trail) { return HTTP_OK; }
+                                                  SAS::TrailId trail);
 
   virtual HTTPCode get_cached_subscriber_state(std::string public_id,
                                                HSSConnection::irs_info& irs_info,
-                                               SAS::TrailId trail) { return HTTP_OK; }
+                                               SAS::TrailId trail);
 
   virtual HTTPCode get_subscriber_state(HSSConnection::irs_query irs_query,
                                         HSSConnection::irs_info& irs_info,
-                                        SAS::TrailId trail) { return HTTP_OK; }
+                                        SAS::TrailId trail);
 
   virtual HTTPCode update_associated_uris(std::string public_id,
                                           AssociatedURIs associated_uris,
-                                          SAS::TrailId trail) { return HTTP_OK; }
+                                          SAS::TrailId trail);
+
 private:
+  S4* _s4;
   HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;
 };
