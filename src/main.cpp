@@ -1394,7 +1394,6 @@ Store* local_impi_data_store = NULL;
 std::vector<Store*> remote_impi_data_stores;
 AoRStore* local_aor_store = NULL;
 std::vector<AoRStore*> remote_aor_stores;
-SubscriberManager* sm = NULL;
 SubscriberDataManager* local_sdm = NULL;
 std::vector<SubscriberDataManager*> remote_sdms;
 ImpiStore* local_impi_store = NULL;
@@ -2346,7 +2345,7 @@ int main(int argc, char* argv[])
   // be invoked. We don't increment any statistics relating to the fallback
   // iFCs in these flows though (as they should only be used on initial
   // registration).
-  SubscriberManager* sm = new SubscriberManager(hss_connection,
+  SubscriberManager sm = new SubscriberManager(hss_connection,
                                                 analytics_logger); 
 
   DeregistrationTask::Config deregistration_config(sm,

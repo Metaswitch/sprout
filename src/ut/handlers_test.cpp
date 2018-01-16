@@ -436,8 +436,8 @@ TEST_F(GetBindingsTest, NoBindings)
 {
   // Build request
   MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
-  GetBindingsTask::Config* config(*sm);
-  GetBindingsTask* task = new GetBindingsTask(req, config, 0);
+  GetBindingsTask::Config config(sm);
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
@@ -450,6 +450,71 @@ TEST_F(GetBindingsTest, NoBindings)
 }
 
 // Test getting an IMPU with one binding.
+TEST_F(GetBindingsTest, OneBinding)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
+  GetBindingsTask::Config config(sm);
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+
+  EXPECT_CALL(*sm, get_bindings(aor_id, _, _))
+    .WillOnce(Return(HTTP_OK));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+
+  task->run();
+
+  // Check that the JSON document is correct.
+  rapidjson::Document document;
+  document.Parse(req.content().c_str());
+
+  // The document should be of the form {"bindings":{...}}
+  EXPECT_TRUE(document.IsObject());
+  EXPECT_TRUE(document.HasMember("bindings"));
+  EXPECT_TRUE(document["bindings"].IsObject());
+
+  // Check there is only one  binding.
+  EXPECT_EQ(1, document["bindings"].MemberCount());
+  const rapidjson::Value& binding_id = document["bindings"].MemberBegin()->name;
+  const rapidjson::Value& binding = document["bindings"].MemberBegin()->value;
+
+  // Check the fields in the binding. Don't check every value. It makes the
+  // test unnecessarily verbose.
+  EXPECT_TRUE(binding.HasMember("uri"));
+  EXPECT_TRUE(binding.HasMember("cid"));
+  EXPECT_TRUE(binding.HasMember("cseq"));
+  EXPECT_TRUE(binding.HasMember("expires"));
+  EXPECT_TRUE(binding.HasMember("priority"));
+  EXPECT_TRUE(binding.HasMember("params"));
+  EXPECT_TRUE(binding.HasMember("paths"));
+  EXPECT_TRUE(binding.HasMember("private_id"));
+  EXPECT_TRUE(binding.HasMember("emergency_reg"));
+
+  // Do check the binding ID and URI as a representative test.
+  EXPECT_EQ(aor_id, binding_id.GetString());
+  //EXPECT_EQ(contact, binding["uri"].GetString());
+}
+
+// Test getting an IMPU when the local store is down.
+TEST_F(GetBindingsTest, LocalStoreDown)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
+  GetBindingsTask::Config config(sm);
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+
+  EXPECT_CALL(*sm, get_bindings(aor_id, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+  EXPECT_CALL(*stack, send_reply(_, 500, _));
+
+  task->run();
+}
+
 TEST_F(GetBindingsTest, BadMethod)
 {
   // Build request
@@ -459,8 +524,8 @@ TEST_F(GetBindingsTest, BadMethod)
                              "",
                              "",
                              htp_method_PUT);
-  GetBindingsTask::Config* config(*sm);
-  GetBindingsTask* task = new GetBindingsTask(req, config, 0);
+  GetBindingsTask::Config config(sm);
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
 
   EXPECT_CALL(*stack, send_reply(_, 405, _));
   task->run();
@@ -474,13 +539,13 @@ class GetSubscriptionsTest : public TestWithMockSdms
 {
 };
 
-// Test getting an IMPU that does not have any bindings.
+// Get an IMPU that does not have any subscription.
 TEST_F(GetSubscriptionsTest, NoSubscriptions)
 {
   // Build request
   MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
-  GetSubscriptionsTask::Config* config(sm);
-  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, config, 0);
+  GetSubscriptionsTask::Config config(sm);
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
@@ -488,11 +553,86 @@ TEST_F(GetSubscriptionsTest, NoSubscriptions)
   {
     InSequence s;
       EXPECT_CALL(*sm, get_bindings_and_subscriptions(aor_id, _, _, _)).WillOnce(Return(HTTP_OK));
-
       EXPECT_CALL(*stack, send_reply(_, 200, _));
   }
 
   task->run();
+}
+
+// Get an IMPU that has one subscription
+TEST_F(GetSubscriptionsTest, OneSubscription)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
+  GetSubscriptionsTask::Config config(sm);
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
+
+  // Set up subscriber_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+
+  {
+    InSequence s;
+      EXPECT_CALL(*sm, get_bindings_and_subscriptions(aor_id, _, _, _)).WillOnce(Return(HTTP_OK));
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
+  task->run();
+
+  // Check that the JSON document is correct.
+  rapidjson::Document document;
+  document.Parse(req.content().c_str());
+
+  // The document should be of the form {"subscriptions":{...}}
+  EXPECT_TRUE(document.IsObject());
+  EXPECT_TRUE(document.HasMember("subscriptions"));
+  EXPECT_TRUE(document["subscriptions"].IsObject());
+
+  // Check there is only one subscription.
+  EXPECT_EQ(1, document["subscriptions"].MemberCount());
+  const rapidjson::Value& subscription_id = document["subscriptions"].MemberBegin()->name;
+  const rapidjson::Value& subscription = document["subscriptions"].MemberBegin()->value;
+
+  // Check the fields in the subscription. Don't check every value. It makes the
+  // test unnecessarily verbose.
+  EXPECT_TRUE(subscription.HasMember("req_uri"));
+  EXPECT_TRUE(subscription.HasMember("from_uri"));
+  EXPECT_TRUE(subscription.HasMember("from_tag"));
+  EXPECT_TRUE(subscription.HasMember("to_uri"));
+  EXPECT_TRUE(subscription.HasMember("to_tag"));
+  EXPECT_TRUE(subscription.HasMember("cid"));
+  EXPECT_TRUE(subscription.HasMember("routes"));
+  EXPECT_TRUE(subscription.HasMember("expires"));
+
+  // Do check the subscription ID and URI as a representative test.
+  EXPECT_EQ(aor_id, subscription_id.GetString());
+  //EXPECT_EQ(uri, subscription["req_uri"].GetString());
+}
+
+// Get an IMPU with two subscriptions.
+TEST_F(GetSubscriptionsTest, TwoSubscriptions)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
+  GetSubscriptionsTask::Config config(sm);
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
+
+  // Set up subscriber_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+
+  {
+    InSequence s;
+      EXPECT_CALL(*sm, get_bindings_and_subscriptions(aor_id, _, _, _)).WillOnce(Return(HTTP_OK));
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
+  task->run();
+
+  // Check that the JSON document has two bindings.
+  rapidjson::Document document;
+  document.Parse(req.content().c_str());
+  EXPECT_EQ(2, document["subscriptions"].MemberCount());
+  EXPECT_TRUE(document["subscriptions"].HasMember("456"));
+  EXPECT_TRUE(document["subscriptions"].HasMember("789"));
 }
 
 // Test getting an IMPU with one binding.
@@ -505,8 +645,8 @@ TEST_F(GetSubscriptionsTest, BadMethod)
                              "",
                              "",
                              htp_method_PUT);
-  GetSubscriptionsTask::Config* config(sm);
-  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, config, 0);
+  GetSubscriptionsTask::Config config(sm);
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
 
   EXPECT_CALL(*stack, send_reply(_, 405, _));
   task->run();
