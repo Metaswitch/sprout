@@ -1648,6 +1648,18 @@ pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
 
   status = pjsip_tsx_send_msg(uas_tsx, tdata);
 
+  if (status != PJ_SUCCESS)
+  {
+    // The message is owned by the transaction, which will get a on_tsx_state
+    // callback. However, we still have a reference count if tsx_send_msg
+    // fails, which we should decrement, to prevent a leak.
+    pjsip_tx_data_dec_ref(tdata);
+
+    // Even if we failed to send, we should treat it as a success, as the
+    // message may be resent by the transaction owner.
+    status = PJ_SUCCESS;
+  }
+
   return status;
 }
 
