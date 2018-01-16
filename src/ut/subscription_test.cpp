@@ -1765,7 +1765,6 @@ protected:
 // -  Returns ERROR to all sets.
 //
 // This is a repro for https://github.com/Metaswitch/sprout/issues/977
-/*
 TEST_F(SubscriptionTestMockStore, SubscriberDataManagerWritesFail)
 {
   EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _, An<Store::Format>()))
@@ -1782,4 +1781,3 @@ TEST_F(SubscriptionTestMockStore, SubscriberDataManagerWritesFail)
   EXPECT_EQ(500, out->line.status.code);
   free_txdata();
 }
-*/

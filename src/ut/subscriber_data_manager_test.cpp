@@ -813,7 +813,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   SubscriberDataManager* _store;
   AnalyticsLogger* _analytics_logger;
 };
-/*
+
 TEST_F(SubscriberDataManagerCorruptDataTest, BadlyFormedJson)
 {
   AoRPair* aor_data1;
@@ -858,7 +858,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, EmptyJsonObject)
   ASSERT_TRUE(aor_data1 == NULL);
   delete aor_data1;
 }
-*/
+
 /// Test using a Mock Chronos connection that doesn't just swallow requests
 class SubscriberDataManagerChronosRequestsTest : public SipTest
 {

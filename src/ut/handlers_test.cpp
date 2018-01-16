@@ -110,14 +110,15 @@ class DeregistrationTaskTest : public SipTest
   }
 
   void expect_sdm_updates(const std::string& aor_id,
-                          std::vector<Binding> bindings,
+                          AoR::Bindings bindings,
                           std::vector<std::string>& binding_ids)
   {
     EXPECT_CALL(*_subscriber_manager, get_bindings(aor_id, _, _))
       .WillOnce(DoAll(SetArgReferee<1>(bindings), Return(HTTP_OK)));
         
-    EXPECT_CALL(*_subscriber_manager, remove_bindings(_, SubscriberManager::EventTrigger::ADMIN, _, _))
-          .WillRepeatedly(DoAll(SaveArg<0>(&binding_ids), Return(HTTP_OK)));
+    EXPECT_CALL(*_subscriber_manager, 
+                remove_bindings_with_default_id(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
+          .WillRepeatedly(DoAll(SaveArg<1>(&binding_ids), Return(HTTP_OK)));
   }
 
   void expect_impi_deletes(std::string private_id, MockImpiStore* impi_store)
@@ -144,9 +145,10 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   std::string aor_id = "sip:6505550231@homedomain";
   std::string private_id = "6505550231";
 
-  Binding binding("sip:6505550231@homedomain");
+  Binding binding(aor_id);
   binding._private_id = private_id;
-  std::vector<Binding> bindings = {binding};
+  AoR::Bindings bindings;
+  bindings[""] = &binding;
   std::vector<std::string> binding_ids; 
 
   expect_sdm_updates(aor_id, bindings, binding_ids);
@@ -159,7 +161,7 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   _task->run();
 
   ASSERT_EQ(1u, binding_ids.size());
-  //EXPECT_EQ(binding_ids[0], aor_id);
+  EXPECT_EQ(binding_ids[0], aor_id);
 }
 
 // Test that a dereg request that isn't a delete gets rejected.
@@ -235,14 +237,15 @@ TEST_F(DeregistrationTaskTest, SubscriberManagerWritesFail)
   Binding binding(aor_id);
   binding._private_id = private_id;
 
-  std::vector<Binding> bindings = {binding};
+  AoR::Bindings bindings;
+  bindings[""] = &binding;
   EXPECT_CALL(*_subscriber_manager, 
               get_bindings(aor_id, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
   
   EXPECT_CALL(*_subscriber_manager, 
-              remove_bindings(_, SubscriberManager::EventTrigger::ADMIN, _, _))
+              remove_bindings_with_default_id(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
 
   // Run the task
@@ -258,9 +261,10 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   build_dereg_request(body);
 
   std::string aor_id = "sip:6505550231@homedomain";
-  Binding binding("sip:6505550231@homedomain");
+  Binding binding(aor_id);
   binding._private_id = "impi1";
-  std::vector<Binding> bindings = {binding};
+  AoR::Bindings bindings;
+  bindings[""] = &binding;
   std::vector<std::string> binding_ids; 
 
   expect_sdm_updates(aor_id, bindings, binding_ids);
@@ -281,25 +285,29 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 
   // Create an AoR with two bindings.
   std::string aor_id = "sip:6505550231@homedomain";
-  Binding binding("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  Binding binding(aor_id);
   binding._private_id = "impi1";
   Binding binding2(aor_id);
   binding2._private_id = "impi2";
-  std::vector<Binding> bindings = {binding, binding2};
+  AoR::Bindings bindings;
+  bindings["binding_id"] = &binding; 
+  bindings["binding_id2"] = &binding2; 
+
   std::vector<std::string> binding_ids; 
 
   expect_sdm_updates(aor_id, bindings, binding_ids);
-  EXPECT_EQ(0u, binding_ids.size());
+  EXPECT_EQ(1u, binding_ids.size());
 
   // create another AoR with one binding.
   std::string aor_id2 = "sip:6505550232@homedomain";
   Binding binding3(aor_id2);
   binding3._private_id = "impi3";
-  std::vector<Binding> bindings2 = {binding3};
+  AoR::Bindings bindings2;
+  bindings2["binding_id3"] = &binding3; 
+
   std::vector<std::string> binding_ids2; 
 
   expect_sdm_updates(aor_id2, bindings2, binding_ids2);
-  ASSERT_EQ(0u, binding_ids2.size());
 
   // The corresponding IMPIs are also deleted.
   expect_gr_impi_deletes("impi1");
@@ -321,7 +329,9 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
   std::string aor_id = "sip:6505550231@homedomain";
   Binding binding(aor_id);
   binding._private_id = "impi1";
-  std::vector<Binding> bindings = {binding};
+  AoR::Bindings bindings;
+  bindings[""] = &binding; 
+
   std::vector<std::string> binding_ids; 
 
   expect_sdm_updates(aor_id, bindings, binding_ids);
@@ -347,7 +357,9 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
   std::string aor_id = "sip:6505550231@homedomain";
   Binding binding(aor_id);
   binding._private_id = "impi1";
-  std::vector<Binding> bindings = {binding};
+  AoR::Bindings bindings;
+  bindings[""] = &binding; 
+
   std::vector<std::string> binding_ids; 
 
   expect_sdm_updates(aor_id, bindings, binding_ids);
@@ -374,7 +386,9 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
   std::string aor_id = "sip:6505550231@homedomain";
   Binding binding(aor_id);
   binding._private_id = "impi1";
-  std::vector<Binding> bindings = {binding};
+  AoR::Bindings bindings;
+  bindings[""] = &binding; 
+
   std::vector<std::string> binding_ids; 
 
   expect_sdm_updates(aor_id, bindings, binding_ids);
@@ -406,7 +420,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 class GetBindingsTest : public TestWithMockSdms
 {
 };
-
+/*
 // Test getting an IMPU that does not have any bindings.
 TEST_F(GetBindingsTest, NoBindings)
 {
@@ -417,13 +431,13 @@ TEST_F(GetBindingsTest, NoBindings)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
+  AoR* aor = nullptr;
 
-  {
-    InSequence s;
-      EXPECT_CALL(*sm, get_bindings_and_subscriptions(aor_id, _, _, _)).WillOnce(Return(HTTP_OK));
-
-      EXPECT_CALL(*stack, send_reply(_, 200, _));
-  }
+  EXPECT_CALL(*sm, get_bindings_and_subscriptions(aor_id, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(aor->bindings()),
+                    SetArgReferee<2>(aor->subscriptions()),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
 
   task->run();
 }
@@ -490,7 +504,7 @@ TEST_F(GetSubscriptionsTest, BadMethod)
   EXPECT_CALL(*stack, send_reply(_, 405, _));
   task->run();
 }
-
+*/
 //
 // Tests for deleting sprout's cached data.
 //

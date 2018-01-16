@@ -19,6 +19,7 @@ extern "C" {
 #include <pjlib.h>
 }
 
+#include "aor.h"
 #include "handlers.h"
 #include "log.h"
 #include "subscriber_data_manager.h"
@@ -402,7 +403,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
                                          std::string private_id,
                                          std::set<std::string>& impis_to_delete)
 {
-  std::vector<Binding> bindings;
+  AoR::Bindings bindings;
 
   HTTPCode rc = _cfg->_sm->get_bindings(aor_id,
                                         bindings,
@@ -414,26 +415,28 @@ HTTPCode DeregistrationTask::deregister_bindings(
   
   std::vector<std::string> binding_ids;
 
-  for (Binding binding : bindings)
+  for (std::pair<std::string, Binding*> binding : bindings)
   {
-    if (private_id.empty() || private_id == binding._private_id)
+    if (private_id.empty() || private_id == binding.second->_private_id)
     {
-      if (!binding._private_id.empty())
+      if (!binding.second->_private_id.empty())
       {
         // Record the IMPIs that we need to delete as a result of deleting
         // this binding.
-        impis_to_delete.insert(binding._private_id);
+        impis_to_delete.insert(binding.second->_private_id);
       }
  
-      binding_ids.push_back(binding.get_id());
+      binding_ids.push_back(binding.second->get_id());
     }
   }
 
-  std::vector<Binding> unused_bindings;
-  return _cfg->_sm->remove_bindings(binding_ids,
-                                    SubscriberManager::EventTrigger::ADMIN,
-                                    unused_bindings,
-                                    trail());
+  AoR::Bindings unused_bindings;
+  return _cfg->_sm->remove_bindings_with_default_id(
+                                         aor_id,
+                                         binding_ids,
+                                         SubscriberManager::EventTrigger::ADMIN,
+                                         unused_bindings,
+                                         trail());
 }
 
 HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
@@ -547,14 +550,16 @@ void GetCachedDataTask::run()
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  std::vector<Binding> bindings;
-  std::vector<Subscription> subscriptions;
-  HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, bindings, subscriptions, trail());
+  AoR* aor = nullptr;
+  HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, aor->_bindings, aor->_subscriptions, trail());
 
-  // std::string content = serialize_data(aor_pair->get_current());
+  // Now we've got everything we need. Serialize the data that has been
+  // requested and return a 200 OK.
+  std::string content = serialize_data(aor);
   _req.add_content("");
 
   send_http_reply(rc);
+  delete aor; aor = NULL;
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
@@ -573,12 +578,10 @@ std::string GetBindingsTask::serialize_data(AoR* aor)
     writer.String(JSON_BINDINGS);
     writer.StartObject();
     {
-      for (AoR::Bindings::const_iterator it = aor->bindings().begin();
-           it != aor->bindings().end();
-           ++it)
+      for (std::pair<std::string, Binding*> it : aor->bindings())
       {
-        writer.String(it->first.c_str());
-        it->second->to_json(writer);
+        writer.String(it.first.c_str());
+        it.second->to_json(writer);
       }
     }
     writer.EndObject();
@@ -598,12 +601,10 @@ std::string GetSubscriptionsTask::serialize_data(AoR* aor)
     writer.String(JSON_SUBSCRIPTIONS);
     writer.StartObject();
     {
-      for (AoR::Subscriptions::const_iterator it = aor->subscriptions().begin();
-           it != aor->subscriptions().end();
-           ++it)
+      for (std::pair<std::string, Subscription*>it : aor->subscriptions())
       {
-        writer.String(it->first.c_str());
-        it->second->to_json(writer);
+        writer.String(it.first.c_str());
+        it.second->to_json(writer);
       }
     }
     writer.EndObject();
