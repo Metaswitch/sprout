@@ -214,35 +214,25 @@ HTTPCode SubscriberManager::get_bindings_and_subscriptions(const std::string& ao
                                                            AoR::Subscriptions& subscriptions,
                                                            SAS::TrailId trail)
 {
-  // Sequence:
-  // - Admin tasks will(should) provide the default public_id
-  // - Lookup AoR from S4.
-  // - Get bindings/subscriptions off AoR and return.
+  // Get the current AoR from S4.
+  AoR* aor = NULL;
+  uint64_t version;
+  HTTPCode rc = _s4->handle_get(aor_id,
+                                &aor,
+                                version,
+                                trail);
 
-  // Get the current AoR from S4, if one exists.
-  /*AoR* aor = _s4->get(aor_id);
-  if (aor != NULL)
+  if (rc != HTTP_OK)
   {
-    // Get bindings off the AoR.
-    for (std::map<std::string, Binding*>::iterator b_it = aor->bindings().begin();
-         b_it != aor->bindings().end();
-         b_it++)
-    {
-      bindings.push_back(*b_it->second);
-    }
-
-    // Get subscriptions off the AoR.
-    for (std::map<std::string, Subscription*>::iterator s_it = aor->subscriptions().begin();
-         s_it != aor->subscriptions().end();
-         s_it++)
-    {
-      subscriptions.push_back(*s_it->second);
-    }
+    // TODO error handling.
+    return rc;
   }
-  else
-  {
-    return HTTP_SERVER_ERROR;
-  }*/
+
+  // Set the bindings and subscriptions to return to the caller.
+  bindings = aor->_bindings;
+  subscriptions = aor->_subscriptions;
+
+  delete aor; aor = NULL;
 
   return HTTP_OK;
 }

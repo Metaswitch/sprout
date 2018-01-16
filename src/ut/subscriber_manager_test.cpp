@@ -175,6 +175,38 @@ TEST_F(SubscriberManagerTest, TestGetSubscriberState)
                                                       DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
 }
 
+TEST_F(SubscriberManagerTest, TestGetBindingsAndSubscriptions)
+{
+  // Set up a default ID.
+  std::string default_id = "sip:example.com";
+
+  // Set up AoRs to be returned by S4.
+  AoR* get_aor = new AoR(default_id);
+  get_aor->get_binding("binding_id");
+  get_aor->get_subscription("subscription_id");
+
+  // Set up expect calls to S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(default_id, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(get_aor),
+                      Return(HTTP_OK)));
+  }
+
+  // Call update associated URIs on SM.
+  AoR::Bindings bindings;
+  AoR::Subscriptions subscriptions;
+  HTTPCode rc = _subscriber_manager->get_bindings_and_subscriptions(default_id,
+                                                                    bindings,
+                                                                    subscriptions,
+                                                                    DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+
+  // Check that there is one binding and one subscription with the correct IDs.
+  EXPECT_TRUE(bindings.find("binding_id") != bindings.end());
+  EXPECT_TRUE(subscriptions.find("subscription_id") != subscriptions.end());
+}
+
 TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
 {
   // Set up a default ID and a second ID in the IRS.
