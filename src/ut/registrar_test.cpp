@@ -2966,7 +2966,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
   AssociatedURIs associated_uris = {};
   aor_pair->get_current()->_associated_uris = associated_uris;
-  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -3069,7 +3069,7 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
   AssociatedURIs associated_uris = {};
   aor_pair->get_current()->_associated_uris = associated_uris;
-  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = msg._contact;
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -3128,7 +3128,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
   AssociatedURIs associated_uris = {};
   aor_pair->get_current()->_associated_uris = associated_uris;
-  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -3200,7 +3200,7 @@ TEST_F(RegistrarTest, StoreFullPathHeader)
   aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
-  AoR::Binding* binding = aor_data->get_current()->bindings().begin()->second;
+  Binding* binding = aor_data->get_current()->bindings().begin()->second;
 
   // Chck that the path header fields are filled in correctly.
   EXPECT_EQ(1u, binding->_path_headers.size());

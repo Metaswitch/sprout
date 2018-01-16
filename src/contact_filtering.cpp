@@ -13,6 +13,7 @@
 #include "constants.h"
 #include "pjutils.h"
 #include "sproutsasevent.h"
+#include "aor_utils.h"
 
 #include <limits>
 #include <boost/algorithm/string.hpp>
@@ -101,7 +102,7 @@ void filter_bindings_to_targets(const std::string& aor,
     // Perform GRUU filtering.
     if (request_uri_is_gruu)
     {
-      pjsip_sip_uri* pub_gruu = binding->second->pub_gruu(pool);
+      pjsip_sip_uri* pub_gruu = AoRUtils::pub_gruu(binding->second, pool);
       if ((pub_gruu == NULL) ||
           (pjsip_uri_cmp(PJSIP_URI_IN_REQ_URI,
                          msg->line.req.uri,

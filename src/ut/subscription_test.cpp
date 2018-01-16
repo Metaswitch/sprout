@@ -109,7 +109,7 @@ public:
     // Get an initial empty AoR record and add a binding.
     int now = time(NULL);
     AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
-    AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+    Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
     b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
     b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
     b1->_cseq = 17038;
@@ -171,7 +171,7 @@ public:
     // Get an initial empty AoR record and add a binding (with the Tel URI)
     int now = time(NULL);
     AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
-    AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+    Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
     b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
     b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
     b1->_cseq = 17038;
@@ -800,7 +800,7 @@ TEST_F(SubscriptionTest, LocalStoreNoSubscriptions)
   // Add the main AoR to the remote store, including a subscription
   int now = time(NULL);
   AoRPair* aor_pair = _remote_sdm->get_aor_data(aor, 0);
-  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -814,7 +814,7 @@ TEST_F(SubscriptionTest, LocalStoreNoSubscriptions)
   b1->_emergency_registration = false;
 
   std::string s_id = "1234";
-  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription(s_id);
+  Subscription* s1 = aor_pair->get_current()->get_subscription(s_id);
   s1->_req_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -874,14 +874,14 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
-// Check data contention in a remote store 
+// Check data contention in a remote store
 TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
 {
   // Add the base AoR to the remote store
   std::string aor = "sip:6505550231@homedomain";
   int now = time(NULL);
   AoRPair* aor_pair = _remote_sdm->get_aor_data(aor, 0);
-  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1065,7 +1065,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
   AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550233@homedomain"), 0);
-  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1119,7 +1119,7 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   int now = time(NULL);
 
   AoRPair* aor_data1 = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
-  AoR::Binding* b1 = aor_data1->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  Binding* b1 = aor_data1->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;sos;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1131,7 +1131,7 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   b1->_params["+sip.ice"] = "";
   b1->_emergency_registration = true;
 
-  AoR::Binding* b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  Binding* b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b2->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
@@ -1244,7 +1244,7 @@ TEST_F(SubscriptionTest, SubscriptionWithWildcard)
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
   AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505551231@homedomain"), 0);
-  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505551231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1303,7 +1303,7 @@ TEST_F(SubscriptionTest, SubscriptionWithBarredIdentity)
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
   AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505551231@homedomain"), 0);
-  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505551231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
