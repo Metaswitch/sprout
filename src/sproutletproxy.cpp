@@ -1930,14 +1930,7 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req, int allowed_host_state)
   event.add_var_param(_service_name);
   SAS::report_event(event);
 
-  // Log the request at VERBOSE level before we send it out to aid in
-  // tracking its path through the sproutlets.
-  if (Log::enabled(Log::VERBOSE_LEVEL))
-  {
-    log_inter_sproutlet(req, true);
-  }
-
-  // Keep an immutable reference to the request.
+  // Store a reference to the request.
   _req = req;
 
   if (is_network_func_boundary())
@@ -1967,6 +1960,13 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req, int allowed_host_state)
                      _upstream_network_func + "." + stack_data.sprout_hostname;
     pj_strdup2(req->pool, &hvia->sent_by.host, network_func_host.c_str());
     pj_strdup2(req->pool, &hvia->transport, "TCP");
+  }
+
+  // Log the request at VERBOSE level before we send it out to aid in
+  // tracking its path through the sproutlets.
+  if (Log::enabled(Log::VERBOSE_LEVEL))
+  {
+    log_inter_sproutlet(req, true);
   }
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
