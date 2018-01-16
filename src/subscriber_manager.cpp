@@ -24,10 +24,10 @@ SubscriberManager::~SubscriberManager()
 {
 }
 
-HTTPCode SubscriberManager::update_bindings(HSSConnection::irs_query irs_query,
-                                            const std::vector<Binding>& updated_bindings,
-                                            std::vector<std::string> binding_ids_to_remove,
-                                            std::vector<Binding>& all_bindings,
+HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_query,
+                                            const AoR::Bindings& updated_bindings,
+                                            const std::vector<std::string>& binding_ids_to_remove,
+                                            AoR::Bindings& all_bindings,
                                             HSSConnection::irs_info& irs_info,
                                             SAS::TrailId trail)
 {
@@ -59,9 +59,11 @@ HTTPCode SubscriberManager::update_bindings(HSSConnection::irs_query irs_query,
   bool emergency;
   // Can any of the deleted bindings be for emergencies - yes so need to pass
   // that information along with the binding IDs to delete. TODO
-  for (Binding b : updated_bindings)
+  for (AoR::Bindings::const_iterator it = updated_bindings.begin();
+       it != updated_bindings.end();
+       ++it)
   {
-    if (b._emergency_registration)
+    if (it->second->_emergency_registration)
     {
       emergency = true;
       break;
@@ -78,11 +80,11 @@ HTTPCode SubscriberManager::update_bindings(HSSConnection::irs_query irs_query,
   }
 
   // Get the current AoR from S4, if one exists.
-  AoR* aor = _s4->get(aor_id);
+  /*AoR* aor = _s4->get(aor_id);
   if (aor == NULL)
   {
     // Create a brand new AoR.
-  }
+  }*/
 
   //aor->add_binding(binding.get_id(), TODO add this method to the AoR.
                    //binding);
@@ -90,19 +92,20 @@ HTTPCode SubscriberManager::update_bindings(HSSConnection::irs_query irs_query,
   // Write back to S4.
   // SDM-REFACTOR-TODO: We're going to write to memcached in sequence if we have
   // multiple bindings. Surely that's wrong?
-  success = _s4->send_patch(aor_id, aor);
+  /*success = _s4->send_patch(aor_id, aor);
   if (!success)
   {
     // We can't do anything if we fail to write to memcached, so break out.
     return HTTP_SERVER_ERROR;
-  }
+  }*/
 
   // Send NOTIFYs
 
   // Update HSS if all bindings expired.
   if (false)
   {
-    irs_query._req_type = HSSConnection::DEREG_USER;
+    HSSConnection::irs_query irs_query_2 = irs_query;
+    irs_query_2._req_type = HSSConnection::DEREG_USER;
     get_subscriber_state(irs_query,
                          irs_info,
                          trail); // Can't do anything with the return code here.
@@ -113,15 +116,16 @@ HTTPCode SubscriberManager::update_bindings(HSSConnection::irs_query irs_query,
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::remove_bindings(std::vector<std::string> binding_ids,
-                                            EventTrigger event_trigger,
-                                            std::vector<Binding>& bindings,
-                                            SAS::TrailId trail)
+HTTPCode SubscriberManager::remove_bindings_with_default_id(const std::string& aor_id,
+                                                            const std::vector<std::string>& binding_ids,
+                                                            const EventTrigger& event_trigger,
+                                                            AoR::Bindings& bindings,
+                                                            SAS::TrailId trail)
 {
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::update_subscription(std::string public_id,
+HTTPCode SubscriberManager::update_subscription(const std::string& public_id,
                                                 const Subscription& subscription,
                                                 HSSConnection::irs_info& irs_info,
                                                 SAS::TrailId trail)
@@ -155,11 +159,11 @@ HTTPCode SubscriberManager::update_subscription(std::string public_id,
   }
 
   // Get the current AoR from S4, if one exists.
-  AoR* aor = _s4->get(aor_id);
+  /*AoR* aor = _s4->get(aor_id);
   if (aor == NULL)
   {
     // Create a brand new AoR.
-  }
+  }*/
 
   //aor->add_subscription(subscription.get_id(), TODO add this method to the AoR.
                         //subscription);
@@ -167,20 +171,20 @@ HTTPCode SubscriberManager::update_subscription(std::string public_id,
   // Write back to S4.
   // SDM-REFACTOR-TODO: We're going to write to memcached in sequence if we have
   // multiple bindings. Surely that's wrong?
-  bool success = _s4->send_patch(aor_id, aor);
+  /*bool success = _s4->send_patch(aor_id, aor);
   if (!success)
   {
     // We can't do anything if we fail to write to memcached, so break out.
     return HTTP_SERVER_ERROR;
-  }
+  }*/
 
   // Send NOTIFYs
 
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::remove_subscription(std::string public_id,
-                                                std::string subscription_id,
+HTTPCode SubscriberManager::remove_subscription(const std::string& public_id,
+                                                const std::string& subscription_id,
                                                 HSSConnection::irs_info& irs_info,
                                                 SAS::TrailId trail)
 {
@@ -191,23 +195,23 @@ HTTPCode SubscriberManager::remove_subscription(std::string public_id,
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::deregister_subscriber(std::string public_id,
-                                                  EventTrigger event_trigger,
+HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
+                                                  const EventTrigger& event_trigger,
                                                   SAS::TrailId trail)
 {
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::get_bindings(std::string public_id,
-                                         std::vector<Binding>& bindings,
+HTTPCode SubscriberManager::get_bindings(const std::string& public_id,
+                                         AoR::Bindings& bindings,
                                          SAS::TrailId trail)
 {
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::get_bindings_and_subscriptions(std::string aor_id,
-                                                           std::vector<Binding>& bindings,
-                                                           std::vector<Subscription>& subscriptions,
+HTTPCode SubscriberManager::get_bindings_and_subscriptions(const std::string& aor_id,
+                                                           AoR::Bindings& bindings,
+                                                           AoR::Subscriptions& subscriptions,
                                                            SAS::TrailId trail)
 {
   // Sequence:
@@ -216,11 +220,11 @@ HTTPCode SubscriberManager::get_bindings_and_subscriptions(std::string aor_id,
   // - Get bindings/subscriptions off AoR and return.
 
   // Get the current AoR from S4, if one exists.
-  AoR* aor = _s4->get(aor_id);
+  /*AoR* aor = _s4->get(aor_id);
   if (aor != NULL)
   {
     // Get bindings off the AoR.
-    /*for (std::map<std::string, Binding*>::iterator b_it = aor->bindings().begin();
+    for (std::map<std::string, Binding*>::iterator b_it = aor->bindings().begin();
          b_it != aor->bindings().end();
          b_it++)
     {
@@ -233,17 +237,17 @@ HTTPCode SubscriberManager::get_bindings_and_subscriptions(std::string aor_id,
          s_it++)
     {
       subscriptions.push_back(*s_it->second);
-    }*/
+    }
   }
   else
   {
     return HTTP_SERVER_ERROR;
-  }
+  }*/
 
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::get_cached_subscriber_state(std::string public_id,
+HTTPCode SubscriberManager::get_cached_subscriber_state(const std::string& public_id,
                                                         HSSConnection::irs_info& irs_info,
                                                         SAS::TrailId trail)
 {
@@ -253,7 +257,7 @@ HTTPCode SubscriberManager::get_cached_subscriber_state(std::string public_id,
   return http_code;
 }
 
-HTTPCode SubscriberManager::get_subscriber_state(HSSConnection::irs_query irs_query,
+HTTPCode SubscriberManager::get_subscriber_state(const HSSConnection::irs_query& irs_query,
                                                  HSSConnection::irs_info& irs_info,
                                                  SAS::TrailId trail)
 {
@@ -263,8 +267,8 @@ HTTPCode SubscriberManager::get_subscriber_state(HSSConnection::irs_query irs_qu
   return http_code;
 }
 
-HTTPCode SubscriberManager::update_associated_uris(std::string aor_id,
-                                                   AssociatedURIs associated_uris,
+HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
+                                                   const AssociatedURIs& associated_uris,
                                                    SAS::TrailId trail)
 {
   // Sequence:
@@ -275,7 +279,7 @@ HTTPCode SubscriberManager::update_associated_uris(std::string aor_id,
   // - Send NOTIFYs
 
   // Get the current AoR from S4, if one exists.
-  AoR* aor = _s4->get(aor_id);
+  /*AoR* aor = _s4->get(aor_id);
   if (aor != NULL)
   {
     aor->_associated_uris = associated_uris;
@@ -283,17 +287,17 @@ HTTPCode SubscriberManager::update_associated_uris(std::string aor_id,
   else
   {
     // TODO error handling - there should be an AoR.
-  }
+  }*/
 
   // Write back to S4.
   // SDM-REFACTOR-TODO: We're going to write to memcached in sequence if we have
   // multiple bindings. Surely that's wrong?
-  bool success = _s4->send_patch(aor_id, aor);
+  /*bool success = _s4->send_patch(aor_id, aor);
   if (!success)
   {
     // We can't do anything if we fail to write to memcached, so break out.
     return HTTP_SERVER_ERROR;
-  }
+  }*/
 
   // Send NOTIFYs since associated URIs are changed.
 

@@ -28,6 +28,7 @@ extern "C" {
 #include "hssconnection.h"
 #include "ifchandler.h"
 #include "aor.h"
+#include "s4.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
 class SubscriberManager
@@ -83,7 +84,7 @@ public:
   /// @param[in]  event_trigger The reason for remiving bindings
   /// @param[out] bindings      All bindings currently stores for this public ID
   /// @param[in]  trail         The SAS trail ID
-  virtual HTTPCode remove_bindings_with_default_id(const std::string aor_id,
+  virtual HTTPCode remove_bindings_with_default_id(const std::string& aor_id,
                                                    const std::vector<std::string>& binding_ids,
                                                    const EventTrigger& event_trigger,
                                                    AoR::Bindings& bindings,

@@ -66,11 +66,11 @@ TEST_F(SubscriberManagerTest, TestUpdateBindings)
   //EXPECT_CALL(*_s4, get(_)); TODO this doesn't actually work yet, but it's
   //only worth bothering with when S4 is tied down.
 
-  std::vector<SubscriberManager::Binding> updated_bindings;
-  SubscriberManager::Binding binding = SubscriberManager::Binding();
-  updated_bindings.push_back(binding);
+  AoR::Bindings updated_bindings;
+  Binding binding = Binding("");
+  updated_bindings.insert(std::make_pair("id", &binding));
   std::vector<std::string> binding_ids_to_remove = std::vector<std::string>();
-  std::vector<SubscriberManager::Binding> all_bindings;
+  AoR::Bindings all_bindings;
   HSSConnection::irs_query irs_query;
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->update_bindings(irs_query,
@@ -95,7 +95,7 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
   //  - SM should get the bindings out of the returned data and return them.
   //  - Analytics logs?
 
-  std::vector<SubscriberManager::Binding> bindings;
+  AoR::Bindings bindings;
 
   // Expect call to S4 API, pass back dummy data.
 
@@ -118,7 +118,7 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscription)
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
 
-  SubscriberManager::Subscription subscription = SubscriberManager::Subscription();
+  Subscription subscription = Subscription();
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->update_subscription("",
                                                          subscription,
