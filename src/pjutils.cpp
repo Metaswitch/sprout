@@ -1207,7 +1207,16 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
             // the send - it will always call on_tsx_state on success or
             // failure, and that will recover.
             PJUtils::set_dest_info(tdata, sss->servers[sss->current_server]);
-            (void)pjsip_tsx_send_msg(retry_tsx, tdata);
+            pj_status_t tsx_status = pjsip_tsx_send_msg(retry_tsx, tdata);
+
+            if (tsx_status != PJ_SUCCESS)
+            {
+              TRC_DEBUG("Failed to to send retry: %s",
+                        PJUtils::pj_status_to_string(tsx_status).c_str());
+
+              // The same logic in send_request applies here too.
+              pjsip_tx_data_dec_ref(tdata);
+            }
           }
         }
       }
@@ -1339,12 +1348,39 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
 
     if (status != PJ_SUCCESS)
     {
-      // If pjsip_tsx_send_msg fails when the UAC transaction is in NULL
-      // state it will always call the on_tsx_state callback terminating
-      // the transaction, so no clean-up left to do, and must return
-      // PJ_SUCCESS to caller to avoid potential double-free errors.  It's
-      // also not safe to access the request here, and logging of the error
-      // will have happened in the callback.
+      TRC_DEBUG("Failed to to send retry: '%s' for %p",
+                PJUtils::pj_status_to_string(status).c_str());
+
+      // Note, on_tsx_state callback is called irrespective of whether
+      // tsx_send_msg fails. on_tsx_state will also be called if tsx_send_msg
+      // succeeds, but the message actually fails to be sent. Note also that
+      // on_tsx_state can not differentiate between these two cases.
+
+      // There are three different memory controls we need to worry about here
+      // - (1) The reference to the tx_data in Stateful Send State added above
+      //   and (2) the pjsip_transaction object, which contains a reference to the
+      //   tx_data.
+      //
+      //   These will be tidied up by the on_tsx_state callback, so we don't need
+      //   to remove those reference here. This will happen in success and
+      //   failure of tsx_send_msg
+      //
+      // - (3) The reference owned by the caller which was passed into this
+      //   function by the caller.
+      //
+      //   In the success case, tsx_send_msg will decrement this reference. In
+      //   the failure case, it won't. Thus, given on_tsx_state will handle
+      //   further processing, and to keep the interface to this function clean,
+      //   we should decrement the reference here.
+      pjsip_tx_data_dec_ref(tdata);
+
+      // Also, in order to keep the interface clean, we should return
+      // PJ_SUCCESS here. This is the lesser of the two evils - returning an
+      // error would indicate that the message failed, even though the
+      // on_tsx_state callback may actually succeed a retry in the future.
+      // We should only return an error if there is no chance of this function
+      // succeeding.
+
       status = PJ_SUCCESS;
     }
   }
