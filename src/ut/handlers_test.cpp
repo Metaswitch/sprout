@@ -118,7 +118,7 @@ class DeregistrationTaskTest : public SipTest
         
     EXPECT_CALL(*_subscriber_manager, 
                 remove_bindings_with_default_id(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
-          .WillRepeatedly(DoAll(SaveArg<1>(&binding_ids), Return(HTTP_OK)));
+          .WillOnce(DoAll(SaveArg<1>(&binding_ids), Return(HTTP_OK)));
   }
 
   void expect_impi_deletes(std::string private_id, MockImpiStore* impi_store)
@@ -287,38 +287,46 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 
   // Create an AoR with two bindings.
   std::string aor_id = "sip:6505550231@homedomain";
+
   Binding binding(aor_id);
+  binding._uri = "binding_id";
   binding._private_id = "impi1";
   Binding binding2(aor_id);
+  binding2._uri = "binding_id2";
   binding2._private_id = "impi2";
   AoR::Bindings bindings;
   bindings["binding_id"] = &binding; 
   bindings["binding_id2"] = &binding2; 
 
   std::vector<std::string> binding_ids; 
-
   expect_sdm_updates(aor_id, bindings, binding_ids);
-  //EXPECT_EQ(1u, binding_ids.size());
 
   // create another AoR with one binding.
   std::string aor_id2 = "sip:6505550232@homedomain";
   Binding binding3(aor_id2);
+  binding3._uri = "binding_id3";
   binding3._private_id = "impi3";
   AoR::Bindings bindings2;
   bindings2["binding_id3"] = &binding3; 
 
-  std::vector<std::string> binding_ids2; 
-
-  expect_sdm_updates(aor_id2, bindings2, binding_ids2);
+  std::vector<std::string> binding_ids_2; 
+  expect_sdm_updates(aor_id2, bindings2, binding_ids_2);
 
   // The corresponding IMPIs are also deleted.
   expect_gr_impi_deletes("impi1");
   expect_gr_impi_deletes("impi2");
   expect_gr_impi_deletes("impi3");
 
-  // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+
+  // Run the task
   _task->run();
+
+  ASSERT_EQ(2u, binding_ids.size());
+  ASSERT_EQ(1u, binding_ids_2.size());
+  EXPECT_EQ(binding_ids[0], "binding_id");
+  EXPECT_EQ(binding_ids[1], "binding_id2");
+  EXPECT_EQ(binding_ids_2[0], "binding_id3");
 }
 
 TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
