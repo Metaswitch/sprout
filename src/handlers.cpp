@@ -412,7 +412,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
   {
     return rc;
   }
-  
+
   std::vector<std::string> binding_ids;
 
   for (std::pair<std::string, Binding*> binding : bindings)
@@ -425,7 +425,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
         // this binding.
         impis_to_delete.insert(binding.second->_private_id);
       }
- 
+
       binding_ids.push_back(binding.second->get_id());
       printf("\n%s\n", binding.second->get_id().c_str());
     }
@@ -546,13 +546,17 @@ void GetBindingsTask::run()
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  AoR::Bindings bindings; 
+  std::map<std::string, Binding*> bindings;
   HTTPCode rc = _cfg->_sm->get_bindings(impu, bindings, trail());
-
   std::string content = serialize_data(bindings);
-  _req.add_content("");
+  _req.add_content(content);
 
   send_http_reply(rc);
+
+  for (std::pair<std::string, Binding*> b : bindings)
+  {
+    delete b.second; b.second = NULL;
+  }
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
@@ -584,14 +588,17 @@ void GetSubscriptionsTask::run()
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  AoR::Bindings bindings; 
-  AoR::Subscriptions subscriptions; 
-  HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, bindings, subscriptions, trail());
-
+  std::map<std::string, Subscription*> subscriptions;
+  HTTPCode rc = _cfg->_sm->get_subscriptions(impu, subscriptions, trail());
   std::string content = serialize_data(subscriptions);
-  _req.add_content("");
+  _req.add_content(content);
 
   send_http_reply(rc);
+
+  for (std::pair<std::string, Subscription*> s : subscriptions)
+  {
+    delete s.second; s.second = NULL;
+  }
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
@@ -600,7 +607,8 @@ void GetSubscriptionsTask::run()
   return;
 }
 
-std::string GetBindingsTask::serialize_data(const AoR::Bindings& bindings)
+std::string GetBindingsTask::serialize_data(
+                                const std::map<std::string, Binding*>& bindings)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -610,10 +618,10 @@ std::string GetBindingsTask::serialize_data(const AoR::Bindings& bindings)
     writer.String(JSON_BINDINGS);
     writer.StartObject();
     {
-      for (std::pair<std::string, Binding*> it : bindings)
+      for (std::pair<std::string, Binding*> b : bindings)
       {
-        writer.String(it.first.c_str());
-        it.second->to_json(writer);
+        writer.String(b.first.c_str());
+        b.second->to_json(writer);
       }
     }
     writer.EndObject();
@@ -623,7 +631,8 @@ std::string GetBindingsTask::serialize_data(const AoR::Bindings& bindings)
   return sb.GetString();
 }
 
-std::string GetSubscriptionsTask::serialize_data(const AoR::Subscriptions& subscriptions)
+std::string GetSubscriptionsTask::serialize_data(
+                      const std::map<std::string, Subscription*>& subscriptions)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -633,10 +642,10 @@ std::string GetSubscriptionsTask::serialize_data(const AoR::Subscriptions& subsc
     writer.String(JSON_SUBSCRIPTIONS);
     writer.StartObject();
     {
-      for (std::pair<std::string, Subscription*>it : subscriptions)
+      for (std::pair<std::string, Subscription*> s : subscriptions)
       {
-        writer.String(it.first.c_str());
-        it.second->to_json(writer);
+        writer.String(s.first.c_str());
+        s.second->to_json(writer);
       }
     }
     writer.EndObject();
@@ -667,7 +676,7 @@ void DeleteImpuTask::run()
   const std::string prefix = "/impu/";
   std::string impu = _req.full_path().substr(prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
-  
+
   HTTPCode sc = _cfg->_sm->deregister_subscriber(impu,
                                                  SubscriberManager::EventTrigger::ADMIN,
                                                  trail());

@@ -64,9 +64,9 @@ public:
   /// @param[out] irs_info      The IRS information stored about this public ID
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode update_bindings(const HSSConnection::irs_query& irs_query,
-                                   const AoR::Bindings& updated_bindings,
+                                   const std::map<std::string, Binding*>& updated_bindings,
                                    const std::vector<std::string>& binding_ids_to_remove,
-                                   AoR::Bindings& all_bindings,
+                                   std::map<std::string, Binding*>& all_bindings,
                                    HSSConnection::irs_info& irs_info,
                                    SAS::TrailId trail);
 
@@ -87,7 +87,7 @@ public:
   virtual HTTPCode remove_bindings_with_default_id(const std::string& aor_id,
                                                    const std::vector<std::string>& binding_ids,
                                                    const EventTrigger& event_trigger,
-                                                   AoR::Bindings& bindings,
+                                                   std::map<std::string, Binding*>& bindings,
                                                    SAS::TrailId trail);
 
   /// Updates a subscription stored in SM for a given public ID.
@@ -132,7 +132,7 @@ public:
   /// @param[out] bindings      All bindings stored for this AoR
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode get_bindings(const std::string& aor_id,
-                                AoR::Bindings& bindings,
+                                std::map<std::string, Binding*>& bindings,
                                 SAS::TrailId trail);
 
   /// Gets all bindings and subscriptions stored for a given AoR ID.
@@ -143,13 +143,11 @@ public:
   ///                           ID
   ///                           Providing a non-default IMPU from an IRS will
   ///                           NOT return all binidngs and subscriptions
-  /// @param[out] bindings      All bindings stored for this AoR
   /// @param[out] subscriptions All subscriptions stored for this AoR
   /// @param[in]  trail         The SAS trail ID
-  virtual HTTPCode get_bindings_and_subscriptions(const std::string& aor_id,
-                                                  AoR::Bindings& bindings,
-                                                  AoR::Subscriptions& subscriptions,
-                                                  SAS::TrailId trail);
+  virtual HTTPCode get_subscriptions(const std::string& aor_id,
+                                     std::map<std::string, Subscription*>& subscriptions,
+                                     SAS::TrailId trail);
 
   /// Gets the cached subscriber state for a given public ID.
   ///

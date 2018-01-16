@@ -25,9 +25,9 @@ SubscriberManager::~SubscriberManager()
 }
 
 HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_query,
-                                            const AoR::Bindings& updated_bindings,
+                                            const std::map<std::string, Binding*>& updated_bindings,
                                             const std::vector<std::string>& binding_ids_to_remove,
-                                            AoR::Bindings& all_bindings,
+                                            std::map<std::string, Binding*>& all_bindings,
                                             HSSConnection::irs_info& irs_info,
                                             SAS::TrailId trail)
 {
@@ -91,8 +91,8 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   }
 
   PatchObject* patch_object = new PatchObject();
-  patch_object->_update_bindings = updated_bindings;
-  patch_object->_remove_bindings = binding_ids_to_remove;
+  patch_object->set_update_bindings(updated_bindings);
+  patch_object->set_remove_bindings(binding_ids_to_remove);
 
   rc = _s4->handle_patch(aor_id,
                          patch_object,
@@ -119,7 +119,7 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 HTTPCode SubscriberManager::remove_bindings_with_default_id(const std::string& aor_id,
                                                             const std::vector<std::string>& binding_ids,
                                                             const EventTrigger& event_trigger,
-                                                            AoR::Bindings& bindings,
+                                                            std::map<std::string, Binding*>& bindings,
                                                             SAS::TrailId trail)
 {
   return HTTP_OK;
@@ -203,37 +203,58 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
 }
 
 HTTPCode SubscriberManager::get_bindings(const std::string& public_id,
-                                         AoR::Bindings& bindings,
+                                         std::map<std::string, Binding*>& bindings,
                                          SAS::TrailId trail)
-{
-  return HTTP_OK;
-}
-
-HTTPCode SubscriberManager::get_bindings_and_subscriptions(const std::string& aor_id,
-                                                           AoR::Bindings& bindings,
-                                                           AoR::Subscriptions& subscriptions,
-                                                           SAS::TrailId trail)
 {
   // Get the current AoR from S4.
   AoR* aor = NULL;
-  uint64_t version;
-  HTTPCode rc = _s4->handle_get(aor_id,
+  uint64_t unused_version;
+  HTTPCode rc = _s4->handle_get(public_id,
                                 &aor,
-                                version,
+                                unused_version,
                                 trail);
 
   if (rc != HTTP_OK)
   {
-    // TODO error handling.
     return rc;
   }
 
-  // Set the bindings and subscriptions to return to the caller.
-  bindings = aor->_bindings;
-  subscriptions = aor->_subscriptions;
+  // Set the bindings to return to the caller.
+  for (std::pair<std::string, Binding*> b : aor->bindings())
+  {
+    Binding* copy_b = new Binding(*(b.second));
+    bindings.insert(std::make_pair(b.first, copy_b));
+  }
 
   delete aor; aor = NULL;
+  return HTTP_OK;
+}
 
+HTTPCode SubscriberManager::get_subscriptions(const std::string& public_id,
+                                              std::map<std::string, Subscription*>& subscriptions,
+                                              SAS::TrailId trail)
+{
+  // Get the current AoR from S4.
+  AoR* aor = NULL;
+  uint64_t unused_version;
+  HTTPCode rc = _s4->handle_get(public_id,
+                                &aor,
+                                unused_version,
+                                trail);
+
+  if (rc != HTTP_OK)
+  {
+    return rc;
+  }
+
+  // Set the subscriptions to return to the caller.
+  for (std::pair<std::string, Subscription*> s : aor->subscriptions())
+  {
+    Subscription* copy_s = new Subscription(*(s.second));
+    subscriptions.insert(std::make_pair(s.first, copy_s));
+  }
+
+  delete aor; aor = NULL;
   return HTTP_OK;
 }
 
@@ -276,7 +297,7 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
   }
 
   PatchObject* patch_object = new PatchObject();
-  patch_object->_associated_uris = associated_uris;
+  patch_object->set_associated_uris(associated_uris);
 
   rc = _s4->handle_patch(aor_id,
                          patch_object,

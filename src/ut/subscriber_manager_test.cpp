@@ -112,13 +112,13 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
   //  - SM should get the bindings out of the returned data and return them.
   //  - Analytics logs?
 
-  AoR::Bindings bindings;
+  std::map<std::string, Binding*> bindings;
 
   // Expect call to S4 API, pass back dummy data.
 
-  EXPECT_EQ(_subscriber_manager->get_bindings("1",
-                                              bindings,
-                                              DUMMY_TRAIL_ID), HTTP_OK);
+  //EXPECT_EQ(_subscriber_manager->get_bindings("1",
+  //                                            bindings,
+  //                                            DUMMY_TRAIL_ID), HTTP_OK);
 
   // Check bindings are as expected.
 }
@@ -175,12 +175,12 @@ TEST_F(SubscriberManagerTest, TestGetSubscriberState)
                                                       DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
 }
 
-TEST_F(SubscriberManagerTest, TestGetBindingsAndSubscriptions)
+TEST_F(SubscriberManagerTest, TestGetSubscriptions)
 {
   // Set up a default ID.
   std::string default_id = "sip:example.com";
 
-  // Set up AoRs to be returned by S4.
+  // Set up AoRs to be returned by S4 - these are deleted by the handler
   AoR* get_aor = new AoR(default_id);
   get_aor->get_binding("binding_id");
   get_aor->get_subscription("subscription_id");
@@ -194,16 +194,13 @@ TEST_F(SubscriberManagerTest, TestGetBindingsAndSubscriptions)
   }
 
   // Call update associated URIs on SM.
-  AoR::Bindings bindings;
-  AoR::Subscriptions subscriptions;
-  HTTPCode rc = _subscriber_manager->get_bindings_and_subscriptions(default_id,
-                                                                    bindings,
-                                                                    subscriptions,
-                                                                    DUMMY_TRAIL_ID);
+  std::map<std::string, Subscription*> subscriptions;
+  HTTPCode rc = _subscriber_manager->get_subscriptions(default_id,
+                                                       subscriptions,
+                                                       DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_OK);
 
-  // Check that there is one binding and one subscription with the correct IDs.
-  EXPECT_TRUE(bindings.find("binding_id") != bindings.end());
+  // Check that there is one subscription with the correct IDs.
   EXPECT_TRUE(subscriptions.find("subscription_id") != subscriptions.end());
 }
 
