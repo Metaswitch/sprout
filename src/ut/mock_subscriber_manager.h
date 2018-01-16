@@ -28,11 +28,11 @@ public:
                                          HSSConnection::irs_info& irs_info,
                                          SAS::TrailId trail));
 
-  MOCK_METHOD5(remove_bindings_with_default_id, HTTPCode(const std::string aor_id,
-                                                        const std::vector<std::string>& binding_ids,
-                                                        const EventTrigger& event_trigger,
-                                                        AoR::Bindings& bindings,
-                                                        SAS::TrailId trail));
+  MOCK_METHOD5(remove_bindings_with_default_id, HTTPCode(const std::string& aor_id,
+                                                         const std::vector<std::string>& binding_ids,
+                                                         const EventTrigger& event_trigger,
+                                                         AoR::Bindings& bindings,
+                                                         SAS::TrailId trail));
 
   MOCK_METHOD4(update_subscription, HTTPCode(const std::string& public_id,
                                              const Subscription& subscription,
@@ -49,13 +49,12 @@ public:
                                                SAS::TrailId trail));
 
   MOCK_METHOD3(get_bindings, HTTPCode(const std::string& public_id,
-                                      AoR::Bindings& bindings,
+                                      std::map<std::string, Binding*>& bindings,
                                       SAS::TrailId trail));
 
-  MOCK_METHOD4(get_bindings_and_subscriptions, HTTPCode(const std::string& public_id,
-                                                        AoR::Bindings& bindings,
-                                                        AoR::Subscriptions& subscriptions,
-                                                        SAS::TrailId trail));
+  MOCK_METHOD3(get_subscriptions, HTTPCode(const std::string& public_id,
+                                           std::map<std::string, Subscription*>& subscriptions,
+                                           SAS::TrailId trail));
 
   MOCK_METHOD3(get_cached_subscriber_state, HTTPCode(const std::string& public_id,
                                                      HSSConnection::irs_info& irs_info,
