@@ -28,11 +28,11 @@ public:
                                          HSSConnection::irs_info& irs_info,
                                          SAS::TrailId trail));
 
-  MOCK_METHOD5(remove_bindings_with_public_id, HTTPCode(const std::string aor_id,
-                                                        const std::vector<std::string>& binding_ids,
-                                                        const EventTrigger& event_trigger,
-                                                        AoR::Bindings& bindings,
-                                                        SAS::TrailId trail));
+  MOCK_METHOD5(remove_bindings_with_default_id, HTTPCode(const std::string& aor_id,
+                                                         const std::vector<std::string>& binding_ids,
+                                                         const EventTrigger& event_trigger,
+                                                         AoR::Bindings& bindings,
+                                                         SAS::TrailId trail));
 
   MOCK_METHOD4(update_subscription, HTTPCode(const std::string& public_id,
                                              const Subscription& subscription,

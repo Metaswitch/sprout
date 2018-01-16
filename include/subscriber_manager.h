@@ -79,10 +79,10 @@ public:
   ///                           Providing a non-default IMPU from an IRS will
   ///                           NOT remove any binidngs
   /// @param[in]  binding_ids   The binding IDs to remove
-  /// @param[in]  event_trigger The reason for remiving bindings
+  /// @param[in]  event_trigger The reason for removing bindings
   /// @param[out] bindings      All bindings currently stores for this public ID
   /// @param[in]  trail         The SAS trail ID
-  virtual HTTPCode remove_bindings_with_default_id(const std::string aor_id,
+  virtual HTTPCode remove_bindings_with_default_id(const std::string& aor_id,
                                                    const std::vector<std::string>& binding_ids,
                                                    const EventTrigger& event_trigger,
                                                    AoR::Bindings& bindings,
