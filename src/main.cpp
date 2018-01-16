@@ -1651,8 +1651,6 @@ int main(int argc, char* argv[])
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
 
-  fprintf(stdout, "Starting up Sprout");
-
   opt.pcscf_enabled = false;
   opt.pcscf_trusted_port = 0;
   opt.pcscf_untrusted_port = 0;
