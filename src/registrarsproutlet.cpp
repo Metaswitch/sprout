@@ -194,6 +194,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   int num_emergency_bindings = 0;
   int num_emergency_deregisters = 0;
   bool reject_with_400 = false;
+  bool contains_instance_id = false;
+  bool contains_reg_id = false;
   pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
 
   while (contact_hdr != NULL)
@@ -201,6 +203,24 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     num_contacts++;
     pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
     expiry = RegistrationUtils::expiry_for_binding(contact_hdr, expires, _registrar->_max_expires);
+
+    // Check for the presence of sip-instance and reg-id parameters
+    pjsip_param* p = contact_hdr->other_param.next;
+    while ((p != NULL) && (p != &contact_hdr->other_param))
+    {
+      if (pj_stricmp(&p->name, &STR_SIP_INSTANCE) == 0)
+      {
+        contains_instance_id = true;
+      }
+      else if (pj_stricmp(&p->name, &STR_REG_ID) == 0)
+      {
+        contains_reg_id = true;
+      }
+      p = p->next;
+    }
+
+    // If the instance-id parameter is not present, we ignore the reg-id parameter
+    contains_reg_id = (contains_instance_id && contains_reg_id) ? true : false;
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -596,7 +616,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // LCOV_EXCL_STOP
   }
 
-  // Add supported and require headers for RFC5626.
+  // Add Supported and Require headers for RFC5626.
   pjsip_generic_string_hdr* gen_hdr;
   gen_hdr = pjsip_generic_string_hdr_create(get_pool(rsp),
                                             &STR_SUPPORTED,
@@ -729,17 +749,52 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     }
   }
 
+  // We check if the UE that sent this REGISTER supports "outbound" (RFC5626)
+  bool supported_outbound = false;
+  pjsip_supported_hdr* supported_hdr = (pjsip_supported_hdr*)
+                            pjsip_msg_find_hdr_by_name(req, &STR_SUPPORTED, NULL);
+
+  while ((supported_hdr != NULL) && (supported_outbound == false))
+  {
+    for (unsigned int i = 0; i < supported_hdr->count; i++)
+    {
+      if (pj_stricmp(&supported_hdr->values[i], &STR_OUTBOUND))
+      {
+        supported_outbound = true;
+      }
+    }
+    supported_hdr = (pjsip_supported_hdr*)
+                  pjsip_msg_find_hdr_by_name(req, &STR_SUPPORTED, supported_hdr->next);
+  }
+
   // Deal with path header related fields in the response.
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
                               pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
-  if ((path_hdr != NULL) &&
-      (!aor_pair->get_current()->bindings().empty()))
+  if (path_hdr != NULL)
   {
-    // We have bindings with path headers so we must require outbound.
-    pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(get_pool(rsp));
-    require_hdr->count = 1;
-    require_hdr->values[0] = STR_OUTBOUND;
-    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)require_hdr);
+    // Check for the presence of an "ob" parameter in the first URI of the Path header
+    bool contains_ob = false;
+    pjsip_sip_uri* uri = (path_hdr->name_addr.uri != NULL) ? 
+                       (pjsip_sip_uri*)pjsip_uri_get_uri(path_hdr->name_addr.uri) : NULL; 
+    if ((uri != NULL) && (pjsip_param_find(&uri->other_param, &STR_OB) != NULL))
+    {
+      contains_ob = true;
+    }
+
+    TRC_DEBUG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! supported_outbound=%d, contains_reg_id=%d, contains_ob=%d, bindings=%d" , supported_outbound, contains_reg_id, contains_ob, !aor_pair->get_current()->bindings().empty());
+    if (supported_outbound && contains_reg_id && contains_ob &&
+       !aor_pair->get_current()->bindings().empty())
+    {
+      // We include the outbound option tag in the Require header if and only if:
+      // 1. We have bindings with path headers
+      // 2. The first path header contains the "ob" parameter
+      // 3. Contact header contains the instance-id and reg-id header parameters
+      // 4. The UE supports "outbound" (RFC5626)
+      pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(get_pool(rsp));
+      require_hdr->count = 1;
+      require_hdr->values[0] = STR_OUTBOUND;
+      pjsip_msg_add_hdr(rsp, (pjsip_hdr*)require_hdr);   
+    }
   }
 
   // Echo back any Path headers as per RFC 3327, section 5.3.  We take these
