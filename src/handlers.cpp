@@ -427,6 +427,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
       }
  
       binding_ids.push_back(binding.second->get_id());
+      printf("\n%s\n", binding.second->get_id().c_str());
     }
   }
 
@@ -522,11 +523,8 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
-//
-// APIS for retrieving cached data.
-//
-
-void GetCachedDataTask::run()
+// Get cached bindings.
+void GetBindingsTask::run()
 {
   // This interface is read only so reject any non-GETs.
   if (_req.method() != htp_method_GET)
@@ -540,9 +538,7 @@ void GetCachedDataTask::run()
   SAS::report_marker(start_marker);
 
   // Extract the IMPU that has been requested. The URL is of the form
-  //
   //   /impu/<public ID>/<element>
-  //
   // When <element> is either "bindings" or "subscriptions"
   const std::string prefix = "/impu/";
   std::string full_path = _req.full_path();
@@ -550,16 +546,13 @@ void GetCachedDataTask::run()
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  AoR* aor = nullptr;
-  HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, aor->_bindings, aor->_subscriptions, trail());
+  AoR::Bindings bindings; 
+  HTTPCode rc = _cfg->_sm->get_bindings(impu, bindings, trail());
 
-  // Now we've got everything we need. Serialize the data that has been
-  // requested and return a 200 OK.
-  std::string content = serialize_data(aor);
+  std::string content = serialize_data(bindings);
   _req.add_content("");
 
   send_http_reply(rc);
-  delete aor; aor = NULL;
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
@@ -568,7 +561,46 @@ void GetCachedDataTask::run()
   return;
 }
 
-std::string GetBindingsTask::serialize_data(AoR* aor)
+// Get cached subscriptions.
+void GetSubscriptionsTask::run()
+{
+  // This interface is read only so reject any non-GETs.
+  if (_req.method() != htp_method_GET)
+  {
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 3u);
+  SAS::report_marker(start_marker);
+
+  // Extract the IMPU that has been requested. The URL is of the form
+  //   /impu/<public ID>/<element>
+  // When <element> is either "bindings" or "subscriptions"
+  const std::string prefix = "/impu/";
+  std::string full_path = _req.full_path();
+  size_t end_of_impu = full_path.find('/', prefix.length());
+  std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
+  TRC_DEBUG("Extracted impu %s", impu.c_str());
+
+  AoR::Bindings bindings; 
+  AoR::Subscriptions subscriptions; 
+  HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, bindings, subscriptions, trail());
+
+  std::string content = serialize_data(subscriptions);
+  _req.add_content("");
+
+  send_http_reply(rc);
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
+  SAS::report_marker(end_marker);
+
+  delete this;
+  return;
+}
+
+std::string GetBindingsTask::serialize_data(const AoR::Bindings& bindings)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -578,7 +610,7 @@ std::string GetBindingsTask::serialize_data(AoR* aor)
     writer.String(JSON_BINDINGS);
     writer.StartObject();
     {
-      for (std::pair<std::string, Binding*> it : aor->bindings())
+      for (std::pair<std::string, Binding*> it : bindings)
       {
         writer.String(it.first.c_str());
         it.second->to_json(writer);
@@ -591,7 +623,7 @@ std::string GetBindingsTask::serialize_data(AoR* aor)
   return sb.GetString();
 }
 
-std::string GetSubscriptionsTask::serialize_data(AoR* aor)
+std::string GetSubscriptionsTask::serialize_data(const AoR::Subscriptions& subscriptions)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -601,7 +633,7 @@ std::string GetSubscriptionsTask::serialize_data(AoR* aor)
     writer.String(JSON_SUBSCRIPTIONS);
     writer.StartObject();
     {
-      for (std::pair<std::string, Subscription*>it : aor->subscriptions())
+      for (std::pair<std::string, Subscription*>it : subscriptions)
       {
         writer.String(it.first.c_str());
         it.second->to_json(writer);

@@ -21,6 +21,7 @@
 #include "sipresolver.h"
 #include "impistore.h"
 #include "fifcservice.h"
+#include "aor.h"
 
 /// Common factory for all handlers that deal with timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
@@ -155,14 +156,8 @@ protected:
   std::string _notify;
 };
 
-
-/// Abstract class that contains most of the logic for retrieving stored
-/// bindings and subscriptions.
-///
-/// This class handles checking the request, extracting the requested IMPU and
-/// retrieving data from the store. It calls into the subclass to build a
-/// response, which it then sends.
-class GetCachedDataTask : public HttpStackUtils::Task
+/// For retrieving bindings from store.
+class GetBindingsTask : public HttpStackUtils::Task
 {
 public:
   struct Config
@@ -174,33 +169,39 @@ public:
     SubscriberManager* _sm;
   };
 
-  GetCachedDataTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
+  GetBindingsTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
     HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
   void run();
 
 protected:
-  virtual std::string serialize_data(AoR* aor) = 0;
+  std::string serialize_data(const AoR::Bindings& bindings);
   const Config* _cfg;
 };
 
-/// Concrete subclass for retrieving bindings.
-class GetBindingsTask : public GetCachedDataTask
+/// For retrieving subscriptions from store.
+class GetSubscriptionsTask : public HttpStackUtils::Task
 {
 public:
-  using GetCachedDataTask::GetCachedDataTask;
-protected:
-  std::string serialize_data(AoR* aor);
-};
+  struct Config
+  {
+    Config(SubscriberManager* sm) :
+      _sm(sm)
+    {}
 
-/// Concrete subclass for retrieving subscriptions.
-class GetSubscriptionsTask : public GetCachedDataTask
-{
-public:
-  using GetCachedDataTask::GetCachedDataTask;
+    SubscriberManager* _sm;
+  };
+
+  GetSubscriptionsTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  void run();
+
 protected:
-  std::string serialize_data(AoR* aor);
+  std::string serialize_data(const AoR::Subscriptions& subscriptions);
+  const Config* _cfg;
 };
 
 /// Task for performing an administrative deregistration at the S-CSCF. This

@@ -2354,7 +2354,6 @@ int main(int argc, char* argv[])
                                                    remote_impi_stores);
 
   PushProfileTask::Config push_profile_config(sm);
-  GetCachedDataTask::Config get_cached_data_config(sm);
   DeleteImpuTask::Config delete_impu_config(sm);
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm,
@@ -2369,13 +2368,18 @@ int main(int argc, char* argv[])
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
 
+  GetBindingsTask::Config get_bindings_config(sm);
+  GetSubscriptionsTask::Config get_subscriptions_config(sm);
+
   TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
   TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
   HttpStackUtils::PingHandler ping_handler;
-  HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
-  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
+
+  HttpStackUtils::SpawningHandler<GetBindingsTask, GetBindingsTask::Config> get_bindings_handler(&get_bindings_config);
+  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetSubscriptionsTask::Config> get_subscriptions_handler(&get_subscriptions_config);
+
   HttpStackUtils::SpawningHandler<DeleteImpuTask, DeleteImpuTask::Config> delete_impu_handler(&delete_impu_config);
 
   if (opt.enabled_scscf)
