@@ -1111,12 +1111,12 @@ TEST_F(SCSCFTest, TestSimpleMainline)
 
   HSSConnection::irs_info irs_info;
   set_subscriber_info(irs_info, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _, _))
-    .WillOnce(DoAll(SetArgReferee<1>(subscriber_info),
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
 
   // Need to somehow fill this in???
-  Aor::Bindings bindings;
+  AoR::Bindings bindings;
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));

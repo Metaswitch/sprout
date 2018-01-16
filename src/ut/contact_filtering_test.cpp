@@ -744,6 +744,7 @@ TEST_F(ContactFilteringFullStackTest, NoFiltering)
 {
   AoR* aor_data = new AoR(aor);
   Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR::Bindings bindings = aor_data->bindings();
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -751,7 +752,7 @@ TEST_F(ContactFilteringFullStackTest, NoFiltering)
   TargetList targets;
 
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -768,6 +769,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 {
   AoR* aor_data = new AoR(aor);
   Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR::Bindings bindings = aor_data->bindings();
   create_binding(*binding);
 
   // Pick a method the contact doesn't support
@@ -776,7 +778,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
   TargetList targets;
 
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -795,6 +797,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 {
   AoR* aor_data = new AoR(aor);
   Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR::Bindings bindings = aor_data->bindings();
   create_binding(*binding);
   binding->_params.erase("methods");
 
@@ -804,7 +807,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
   TargetList targets;
 
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -824,6 +827,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 {
   AoR* aor_data = new AoR(aor);
   Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR::Bindings bindings = aor_data->bindings();
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -845,7 +849,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
   TargetList targets;
 
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -863,6 +867,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 {
   AoR* aor_data = new AoR(aor);
   Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR::Bindings bindings = aor_data->bindings();
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -882,7 +887,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
   TargetList targets;
 
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -901,6 +906,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 {
   AoR* aor_data = new AoR(aor);
   Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR::Bindings bindings = aor_data->bindings();
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -920,7 +926,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
   TargetList targets;
 
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -938,6 +944,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 {
   AoR* aor_data = new AoR(aor);
   Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR::Bindings bindings = aor_data->bindings();
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -959,7 +966,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
   TargetList targets;
 
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -977,6 +984,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 {
   AoR* aor_data = new AoR(aor);
   Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  AoR::Bindings bindings = aor_data->bindings();
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -996,7 +1004,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
   TargetList targets;
 
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -1066,8 +1074,9 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
 
   TargetList targets;
 
+  AoR::Bindings bindings = aor_data->bindings();
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -1100,8 +1109,9 @@ TEST_F(ContactFilteringFullStackTest, GRUUNoMatch)
 
   TargetList targets;
 
+  AoR::Bindings bindings = aor_data->bindings();
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,
@@ -1143,8 +1153,9 @@ TEST_F(ContactFilteringFullStackTest, GRUUMatch)
 
   TargetList targets;
 
+  AoR::Bindings bindings = aor_data->bindings();
   filter_bindings_to_targets(aor,
-                             aor_data,
+                             bindings,
                              msg,
                              pool,
                              5,

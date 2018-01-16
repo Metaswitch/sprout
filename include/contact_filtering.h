@@ -15,7 +15,6 @@
 #include "subscriber_data_manager.h"
 #include "aschain.h"
 #include "custom_headers.h"
-#include "subscriber_manager.h"
 
 typedef std::map<std::string, std::string> FeatureSet;
 typedef std::pair<const std::string, std::string> Feature;
