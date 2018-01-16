@@ -1394,6 +1394,7 @@ Store* local_impi_data_store = NULL;
 std::vector<Store*> remote_impi_data_stores;
 AoRStore* local_aor_store = NULL;
 std::vector<AoRStore*> remote_aor_stores;
+SubscriberManager* sm = NULL;
 SubscriberDataManager* local_sdm = NULL;
 std::vector<SubscriberDataManager*> remote_sdms;
 ImpiStore* local_impi_store = NULL;

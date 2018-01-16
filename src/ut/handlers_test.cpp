@@ -436,7 +436,7 @@ TEST_F(GetBindingsTest, NoBindings)
 {
   // Build request
   MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
-  GetBindingsTask::Config* config = new GetBindingsTask::Config(sm);
+  GetBindingsTask::Config* config(*sm);
   GetBindingsTask* task = new GetBindingsTask(req, config, 0);
 
   // Set up subscriber_data_manager expectations
@@ -459,7 +459,7 @@ TEST_F(GetBindingsTest, BadMethod)
                              "",
                              "",
                              htp_method_PUT);
-  GetBindingsTask::Config* config = new GetBindingsTask::Config(sm);
+  GetBindingsTask::Config* config(*sm);
   GetBindingsTask* task = new GetBindingsTask(req, config, 0);
 
   EXPECT_CALL(*stack, send_reply(_, 405, _));
@@ -479,7 +479,7 @@ TEST_F(GetSubscriptionsTest, NoSubscriptions)
 {
   // Build request
   MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
-  GetSubscriptionsTask::Config* config = new GetSubscriptionsTask::Config(sm);
+  GetSubscriptionsTask::Config* config(sm);
   GetSubscriptionsTask* task = new GetSubscriptionsTask(req, config, 0);
 
   // Set up subscriber_data_manager expectations
@@ -505,7 +505,7 @@ TEST_F(GetSubscriptionsTest, BadMethod)
                              "",
                              "",
                              htp_method_PUT);
-  GetSubscriptionsTask::Config* config = new GetSubscriptionsTask::Config(sm);
+  GetSubscriptionsTask::Config* config(sm);
   GetSubscriptionsTask* task = new GetSubscriptionsTask(req, config, 0);
 
   EXPECT_CALL(*stack, send_reply(_, 405, _));

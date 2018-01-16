@@ -550,7 +550,7 @@ void GetBindingsTask::run()
   HTTPCode rc = _cfg->_sm->get_bindings(impu, bindings, trail());
 
   std::string content = serialize_data(bindings);
-  _req.add_content("");
+  _req.add_content(content);
 
   send_http_reply(rc);
 
@@ -589,7 +589,7 @@ void GetSubscriptionsTask::run()
   HTTPCode rc = _cfg->_sm->get_bindings_and_subscriptions(impu, bindings, subscriptions, trail());
 
   std::string content = serialize_data(subscriptions);
-  _req.add_content("");
+  _req.add_content(content);
 
   send_http_reply(rc);
 
