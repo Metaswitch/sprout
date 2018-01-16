@@ -26,7 +26,7 @@ class FeatureParseError {};
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
 void filter_bindings_to_targets(const std::string& aor,
-                                std::map<std::string, SubscriberManager::Binding*>& bindings,
+                                AoR::Bindings& bindings,
                                 pjsip_msg* msg,
                                 pj_pool_t* pool,
                                 int max_targets,
@@ -35,7 +35,7 @@ void filter_bindings_to_targets(const std::string& aor,
                                 SAS::TrailId trail);
 bool binding_to_target(const std::string& aor,
                        const std::string& binding_id,
-                       const SubscriberManager::Binding& binding,
+                       const Binding& binding,
                        bool deprioritized,
                        pj_pool_t* pool,
                        Target& target);

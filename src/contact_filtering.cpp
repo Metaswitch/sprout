@@ -21,7 +21,7 @@
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
 void filter_bindings_to_targets(const std::string& aor,
-                                std::map<std::string, SubscriberManager::Binding*>& bindings,
+                                AoR::Bindings& bindings,
                                 pjsip_msg* msg,
                                 pj_pool_t* pool,
                                 int max_targets,
@@ -83,7 +83,7 @@ void filter_bindings_to_targets(const std::string& aor,
   }
 
   // Loop over the bindings, trying to match each.
-  for (std::map<std::string, SubscriberManager::Binding*>::const_iterator binding = bindings.begin();
+  for (AoR::Bindings::const_iterator binding = bindings.begin();
        binding != bindings.end();
        ++binding)
   {
@@ -211,7 +211,7 @@ void filter_bindings_to_targets(const std::string& aor,
 // false and the target parameter should not be used.
 bool binding_to_target(const std::string& aor,
                        const std::string& binding_id,
-                       const SubscriberManager::Binding& binding,
+                       const Binding& binding,
                        bool deprioritized,
                        pj_pool_t* pool,
                        Target& target)

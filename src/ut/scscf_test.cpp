@@ -1116,8 +1116,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
                     Return(HTTP_OK)));
 
   // Need to somehow fill this in???
-  std::map<std::string, SubscriberManager::Binding*> bindings;
-  bindings.push_back(binding);
+  Aor::Bindings bindings;
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
