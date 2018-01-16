@@ -47,10 +47,10 @@ public:
   {
     IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
     req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
-    config = new AoRTimeoutTask::Config(store, 
-                                        {remote_store1, remote_store2}, 
-                                        mock_hss, 
-                                        NULL, 
+    config = new AoRTimeoutTask::Config(store,
+                                        {remote_store1, remote_store2},
+                                        mock_hss,
+                                        NULL,
                                         ifc_configuration);
     handler = new ChronosAoRTimeoutTask(*req, config, 0);
   }
@@ -69,9 +69,9 @@ TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  AoRPair* aor = build_aor(aor_id);
-  AoRPair* remote_aor1 = build_aor(aor_id);
-  AoRPair* remote_aor2 = build_aor(aor_id);
+  AoRPair* aor = build_aor_pair(aor_id);
+  AoRPair* remote_aor1 = build_aor_pair(aor_id);
+  AoRPair* remote_aor2 = build_aor_pair(aor_id);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call.
   // Add a bunch of random IMPUs to this list - they should all be passed to set_aor_data.
@@ -153,7 +153,7 @@ TEST_F(ChronosAoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  AoRPair* aor = build_aor(aor_id);
+  AoRPair* aor = build_aor_pair(aor_id);
 
   // Set up AoRs with no bindings for both remote stores.
   AoR* remote1_aor1 = new AoR(aor_id);
@@ -201,13 +201,13 @@ TEST_F(ChronosAoRTimeoutTasksTest, LocalAoRNoBindingsTest)
   AoR* aor2 = new AoR(*aor);
   AoRPair* aor_pair = new AoRPair(aor, aor2);
 
-  AoRPair* remote1_aor1 = build_aor(aor_id);
+  AoRPair* remote1_aor1 = build_aor_pair(aor_id);
 
   // Set up the remote AoR again, to avoid problem of test process deleting
   // the data of the first one. This is only a problem in the tests, as real
   // use would correctly set the data to the store before deleting the local copy
-  AoRPair* remote1_aor2 = build_aor(aor_id);
-  AoRPair* remote2_aor = build_aor(aor_id);
+  AoRPair* remote1_aor2 = build_aor_pair(aor_id);
+  AoRPair* remote2_aor = build_aor_pair(aor_id);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
   AssociatedURIs associated_uris = {};
