@@ -1173,6 +1173,7 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 
             // We no longer care about the old tdata.
             pjsip_tx_data_dec_ref(old_tdata);
+            sss->tdata = tdata;
           }
           // LCOV_EXCL_STOP
 
