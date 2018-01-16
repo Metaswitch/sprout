@@ -69,6 +69,8 @@ struct stack_data_struct
   bool record_route_on_completion_of_terminating;
   bool record_route_on_diversion;
 
+  bool sas_compress_logs;
+
   int default_session_expires;
   int max_session_expires;
   int sip_tcp_connect_timeout;
@@ -138,6 +140,7 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               int pcscf_untrusted_port,
                               int scscf_port,
                               bool sas_signaling_if,
+                              bool sas_compress_logs,
                               std::set<int> sproutlet_ports,
                               const std::string& local_host,
                               const std::string& public_host,
