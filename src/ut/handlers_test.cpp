@@ -178,7 +178,7 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -362,7 +362,7 @@ TEST_F(DeregistrationTaskTest, ImpiNotClearedWhenBindingNotDeregistered)
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
@@ -392,7 +392,7 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
@@ -447,12 +447,12 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
 
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  AoR::Binding* b2 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:2"));
+  Binding* b2 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:2"));
   b2->_expires = now + 300;
   b2->_emergency_registration = false;
   b2->_private_id = "impi2";
@@ -464,7 +464,7 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   std::string aor_id2 = "sip:6505550232@homedomain";
   AoR* aor2 = new AoR(aor_id2);
 
-  AoR::Binding* b3 = aor2->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:3"));
+  Binding* b3 = aor2->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:3"));
   b3->_expires = now + 300;
   b3->_emergency_registration = false;
   b3->_private_id = "impi3";
@@ -509,7 +509,7 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
@@ -541,7 +541,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
@@ -574,7 +574,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";

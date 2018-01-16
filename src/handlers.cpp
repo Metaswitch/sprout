@@ -492,7 +492,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
          ++i)
     {
       std::string b_id = *i;
-      AoR::Binding* b = aor_pair->get_current()->get_binding(b_id);
+      Binding* b = aor_pair->get_current()->get_binding(b_id);
 
       if (private_id.empty() || private_id == b->_private_id)
       {
