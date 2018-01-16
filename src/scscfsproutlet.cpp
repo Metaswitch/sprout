@@ -1264,8 +1264,6 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
                                                       ifcs,
                                                       _scscf->_sm,
                                                       trail());
-      printf("regustered is indeed %d, where 0 is false\n",
-             (_hss_cache_helper->_irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED));
       if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");
@@ -1835,7 +1833,6 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
     if (!bindings.empty())
     {
-      printf("bindings not empty at least.\n");
       // Retrieved bindings from the store so filter them to an ordered list
       // of targets.
       filter_bindings_to_targets(aor,

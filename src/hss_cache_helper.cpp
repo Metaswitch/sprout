@@ -123,7 +123,6 @@ HTTPCode HssCacheHelper::read_hss_data(std::string public_id,
     // We may want to route to bindings that are barred (in case of an
     // emergency), so get all the URIs.
     _registered = (_irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED);
-    printf("marked _registered as %d, where 0 is false\n", (_irs_info._regstate == RegDataXMLUtils::STATE_REGISTERED));
     _barred = _irs_info._associated_uris.is_impu_barred(irs_query._public_id);
   }
 

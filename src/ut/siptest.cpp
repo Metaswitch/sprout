@@ -596,13 +596,8 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
 
 void SipTest::set_subscriber_info(HSSConnection::irs_info& irs_info,
                                   std::string user,
-                                  const std::string& domain,
-                                  const std::string& contact,
-                                  int lifetime,
-                                  std::string instance_id,
-                                  bool emergency)
+                                  const std::string& domain)
 {
-  printf("actually went through set_subscriber_info function\n");
   std::string uri = "sip:";
   uri.append(user).append("@").append(domain);
 
@@ -621,6 +616,7 @@ void SipTest::set_subscriber_info(HSSConnection::irs_info& irs_info,
 
   // Don't want any aliases - enough just to not set any?
 
+  // Are these set in the right format??
   irs_info._ccfs = {"priority=\"1\">ccf1"};
   irs_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
 }

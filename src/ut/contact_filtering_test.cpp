@@ -677,23 +677,6 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
                                 pool,
                                 target));
 }
-TEST_F(ContactFilteringBindingToTargetTest, InvalidPathDownlevel)
-{
-  std::string aor = "sip:user@domain.com";
-  Binding binding(aor);
-  create_binding(binding);
-  binding._path_headers.clear();
-  std::string binding_id = "<sip:user@10.1.2.3>";
-  binding._path_uris.push_back("banana");
-  Target target;
-  EXPECT_FALSE(binding_to_target(aor,
-                                binding_id,
-                                binding,
-                                false,
-                                pool,
-                                target));
-}
-
 
 class ContactFilteringFullStackTest :
   public ContactFilteringCreateBindingFixture {};

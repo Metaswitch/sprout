@@ -162,11 +162,7 @@ protected:
   // Register the specified URI with the SM.
   void set_subscriber_info(HSSConnection::irs_info& irs_info,
                            std::string user,
-                           const std::string& domain,
-                           const std::string& contact,
-                           int lifetime = 3600,
-                           std::string instance_id="",
-                           bool emergency=false);
+                           const std::string& domain);
 
   /// Register the specified URI.
   void register_uri(SubscriberDataManager* sdm,

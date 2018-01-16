@@ -295,6 +295,7 @@ protected:
   void doFastFailureFlow(SCSCFMessage& msg, int st_code);
   void doSlowFailureFlow(SCSCFMessage& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(SCSCFMessage& msg);
+  void create_binding(Binding& binding, int lifetime = 3600, std::string instance_id = "");
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
@@ -979,11 +980,11 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
 /// Test a message results in a successful flow. The outgoing INVITE's
 /// URI is verified.
 void SCSCFTestBase::doSuccessfulFlow(SCSCFMessage& msg,
-                                 testing::Matcher<string> uri_matcher,
-                                 list<HeaderMatcher> headers,
-                                 bool include_ack_and_bye,
-                                 list<HeaderMatcher> rsp_headers,
-                                 string body_regex)
+                                     testing::Matcher<string> uri_matcher,
+                                     list<HeaderMatcher> headers,
+                                     bool include_ack_and_bye,
+                                     list<HeaderMatcher> rsp_headers,
+                                     string body_regex)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
@@ -1032,12 +1033,11 @@ void SCSCFTestBase::doSuccessfulFlow(SCSCFMessage& msg,
   msg._cseq++;
   free_txdata();
 
-  // If we're testing Sprout functionality, we want to exclude the ACK
-  // and BYE requests, as Sprout wouldn't see them in normal circumstances.
   if (include_ack_and_bye)
   {
     // Send ACK
     msg._method = "ACK";
+    msg._in_dialog = true;
     inject_msg(msg.get_request());
     poll();
     ASSERT_EQ(1, txdata_count());
@@ -1084,9 +1084,9 @@ void SCSCFTestBase::doFastFailureFlow(SCSCFMessage& msg, int st_code)
 
 /// Test a message results in a 100 then a failure.
 void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
-                                  int st_code,
-                                  std::string body,
-                                  std::string reason)
+                                      int st_code,
+                                      std::string body,
+                                      std::string reason)
 {
   SCOPED_TRACE("");
 
@@ -1105,18 +1105,40 @@ void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
   free_txdata();
 }
 
+// SDM-REFACTOR-TODO: move this to common code to be used by other sproutlets?
+// Create a binding to be returned by the mock subscriber manager.
+void SCSCFTestBase::create_binding(Binding& binding,
+                                   int lifetime,
+                                   std::string instance_id)
+{
+  binding._uri = "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob";
+  binding._cid = "1";
+  binding._cseq = 1;
+  binding._expires = time(NULL) + lifetime;
+  binding._priority = 1000;
+  binding._emergency_registration = false;
+  if (!instance_id.empty())
+  {
+    binding._params["+sip.instance"] = instance_id;
+  }
+}
+
 TEST_F(SCSCFTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
 
   HSSConnection::irs_info irs_info;
-  set_subscriber_info(irs_info, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  // contact was "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"
+  set_subscriber_info(irs_info, "6505551234", "homedomain");
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
 
-  // Need to somehow fill this in???
+  std::string uri = "sip:6505551234@homedomain";
   AoR::Bindings bindings;
+  Binding binding(uri);
+  create_binding(binding);
+  bindings.insert(std::make_pair(uri, &binding));
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
