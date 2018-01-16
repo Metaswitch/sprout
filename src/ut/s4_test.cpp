@@ -32,6 +32,7 @@ using ::testing::InSequence;
 using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::An;
 
 std::string empty_aor = "{\"bindings\": {}, \"subscriptions\": {}, \"notify_cseq\": 1}";
 std::string aor_with_binding = "{\"bindings\": {\"<urn:uuid:00000000-0000-0000-0000-777777777777>:1\":{\"uri\":\"sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob\",\"cid\":\"0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213\",\"cseq\":10000,\"expires\":1000000,\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-777777777777>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>\"],\"paths\":[\"sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob\"],\"private_id\":\"Alice\",\"emergency_reg\":false}}, \"subscriptions\": {}, \"notify_cseq\": 1}";
@@ -73,7 +74,7 @@ class BasicS4Test : public SipTest
                                     int cas,
                                     int times)
   {
-    EXPECT_CALL(*_mock_store, get_data(_, _, _, _, _))
+    EXPECT_CALL(*_mock_store, get_data(_, _, _, _, _, An<Store::Format>()))
       .Times(times)
       .WillRepeatedly(DoAll(SetArgReferee<2>(std::string(aor_data)),
                             SetArgReferee<3>(cas),
@@ -85,7 +86,7 @@ class BasicS4Test : public SipTest
   void set_data_expect_call(Store::Status rc,
                             int times)
   {
-    EXPECT_CALL(*_mock_store, set_data(_, _, _, _, _, _))
+    EXPECT_CALL(*_mock_store, set_data(_, _, _, _, _, _, An<Store::Format>()))
       .Times(times)
       .WillRepeatedly(Return(rc));
   }
@@ -95,7 +96,7 @@ class BasicS4Test : public SipTest
   void get_data_expect_call_failure(Store::Status rc,
                                     int times)
   {
-    EXPECT_CALL(*_mock_store, get_data(_, _, _, _, _))
+    EXPECT_CALL(*_mock_store, get_data(_, _, _, _, _, An<Store::Format>()))
       .Times(times)
       .WillOnce(Return(rc));
   }
