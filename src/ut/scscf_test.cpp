@@ -1109,14 +1109,14 @@ TEST_F(SCSCFTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
 
-  SubscriberManager::SubscriberInfo subscriber_info;
-  set_subscriber_info(subscriber_info, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  HSSConnection::irs_info irs_info;
+  set_subscriber_info(irs_info, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(subscriber_info),
                     Return(HTTP_OK)));
 
-  std::vector<SubscriberManager::Binding> bindings;
-  SubscriberManager::Binding binding;
+  // Need to somehow fill this in???
+  std::map<std::string, SubscriberManager::Binding*> bindings;
   bindings.push_back(binding);
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),

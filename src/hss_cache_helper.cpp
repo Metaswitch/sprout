@@ -107,26 +107,11 @@ HTTPCode HssCacheHelper::read_hss_data(std::string public_id,
                                        SubscriberManager* sm,
                                        SAS::TrailId trail)
 {
-  printf("attempting to read data from HSS\n");
-  SubscriberManager::SubscriberInfo subscriber_info;
-  HTTPCode http_code = sm->get_subscriber_state(public_id,
-                                                subscriber_info,
-                                                irs_query,
+  HTTPCode http_code = sm->get_subscriber_state(irs_query,
+                                                _irs_info,
                                                 trail);
-  printf("ok... went through get_subscriber_state here!\n");
   // Have I picked the right function here? (Previous was
   // HSSConnection::update_registration_state.)
-
-  // Take all of this out once can just pass in _irs_info, not subscriber_info,
-  // above.
-  _irs_info._regstate = subscriber_info._regstate;
-  printf("subscriber_info regstate is %d\n", (subscriber_info._regstate ==RegDataXMLUtils::STATE_REGISTERED));
-  _irs_info._prev_regstate = subscriber_info._prev_regstate;
-  _irs_info._service_profiles = subscriber_info._service_profiles;
-  _irs_info._associated_uris = subscriber_info._associated_uris;
-  _irs_info._aliases = subscriber_info._aliases;
-  _irs_info._ccfs = subscriber_info._ccfs;
-  _irs_info._ecfs = subscriber_info._ecfs;
 
   if (http_code == HTTP_OK)
   {

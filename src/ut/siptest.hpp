@@ -160,7 +160,7 @@ protected:
   static SipTest* _current_instance;
 
   // Register the specified URI with the SM.
-  void set_subscriber_info(SubscriberManager::SubscriberInfo& subscriber_info,
+  void set_subscriber_info(HSSConnection::irs_info& irs_info,
                            std::string user,
                            const std::string& domain,
                            const std::string& contact,

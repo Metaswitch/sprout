@@ -594,7 +594,7 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
-void SipTest::set_subscriber_info(SubscriberManager::SubscriberInfo& subscriber_info,
+void SipTest::set_subscriber_info(HSSConnection::irs_info& irs_info,
                                   std::string user,
                                   const std::string& domain,
                                   const std::string& contact,
@@ -609,20 +609,20 @@ void SipTest::set_subscriber_info(SubscriberManager::SubscriberInfo& subscriber_
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
 
-  subscriber_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
-  subscriber_info._prev_regstate = "";
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  irs_info._prev_regstate = "";
 
   std::map<std::string, Ifcs> service_profiles;
   Ifcs ifcs;
   service_profiles.insert(std::make_pair("first_key" , ifcs));
-  subscriber_info._service_profiles = service_profiles;
+  irs_info._service_profiles = service_profiles;
 
-  subscriber_info._associated_uris = associated_uris;
+  irs_info._associated_uris = associated_uris;
 
   // Don't want any aliases - enough just to not set any?
 
-  subscriber_info._ccfs = {"priority=\"1\">ccf1"};
-  subscriber_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
+  irs_info._ccfs = {"priority=\"1\">ccf1"};
+  irs_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
 }
 
 void SipTest::register_uri(SubscriberDataManager* sdm,
