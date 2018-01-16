@@ -48,7 +48,6 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   HTTPCode rc = get_subscriber_state(irs_query,
                                      irs_info,
                                      trail);
-
   if (rc != HTTP_OK)
   {
     return rc;
@@ -80,24 +79,25 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   }
 
   // Get the current AoR from S4, if one exists.
-  /*AoR* aor = _s4->get(aor_id);
-  if (aor == NULL)
+  AoR* aor = NULL;
+  uint64_t version;
+  rc = _s4->handle_get(aor_id,
+                       &aor,
+                       version,
+                       trail);
+  if ((rc != HTTP_OK) || (rc != HTTP_NOT_FOUND))
   {
-    // Create a brand new AoR.
-  }*/
+    // TODO error handling
+  }
 
-  //aor->add_binding(binding.get_id(), TODO add this method to the AoR.
-                   //binding);
+  PatchObject* patch_object = new PatchObject();
+  patch_object->_update_bindings = updated_bindings;
+  patch_object->_remove_bindings = binding_ids_to_remove;
 
-  // Write back to S4.
-  // SDM-REFACTOR-TODO: We're going to write to memcached in sequence if we have
-  // multiple bindings. Surely that's wrong?
-  /*success = _s4->send_patch(aor_id, aor);
-  if (!success)
-  {
-    // We can't do anything if we fail to write to memcached, so break out.
-    return HTTP_SERVER_ERROR;
-  }*/
+  rc = _s4->handle_patch(aor_id,
+                         patch_object,
+                         &aor,
+                         trail);
 
   // Send NOTIFYs
 
@@ -271,33 +271,30 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
                                                    const AssociatedURIs& associated_uris,
                                                    SAS::TrailId trail)
 {
-  // Sequence:
-  // - PPR from HSS will provide the default public_id
-  // - Lookup AoR from S4.
-  // - Update associated URIs in AoR
-  // - Write back to store.
-  // - Send NOTIFYs
+  // Get the current AoR from S4.
+  AoR* aor = NULL;
+  uint64_t version;
+  HTTPCode rc = _s4->handle_get(aor_id,
+                                &aor,
+                                version,
+                                trail);
 
-  // Get the current AoR from S4, if one exists.
-  /*AoR* aor = _s4->get(aor_id);
-  if (aor != NULL)
+  if (rc != HTTP_OK)
   {
-    aor->_associated_uris = associated_uris;
+    // TODO error handling.
+    return rc;
   }
-  else
-  {
-    // TODO error handling - there should be an AoR.
-  }*/
 
-  // Write back to S4.
-  // SDM-REFACTOR-TODO: We're going to write to memcached in sequence if we have
-  // multiple bindings. Surely that's wrong?
-  /*bool success = _s4->send_patch(aor_id, aor);
-  if (!success)
-  {
-    // We can't do anything if we fail to write to memcached, so break out.
-    return HTTP_SERVER_ERROR;
-  }*/
+  PatchObject* patch_object = new PatchObject();
+  patch_object->_associated_uris = associated_uris;
+
+  rc = _s4->handle_patch(aor_id,
+                         patch_object,
+                         &aor,
+                         trail);
+
+  delete patch_object; patch_object = NULL;
+  delete aor; aor = NULL;
 
   // Send NOTIFYs since associated URIs are changed.
 

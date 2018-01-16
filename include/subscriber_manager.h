@@ -43,8 +43,7 @@ public:
   /// SubscriberManager constructor.
   ///
   /// @param s4                 - Pointer to the underlying data store interface
-  ///                             SDM-REFACTOR-TODO: We don't know what this looks like yet. Add it in when we do.
-  /// @param hss_connection     -
+  /// @param hss_connection     - Sprout's HSS connection (via homestead)
   /// @param analytics_logger   - AnalyticsLogger for reporting registration events
   SubscriberManager(S4* s4,
                     HSSConnection* hss_connection,

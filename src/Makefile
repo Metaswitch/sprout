@@ -204,7 +204,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        thread_dispatcher_test.cpp \
                        rphservice_test.cpp \
                        mock_rph_service.cpp \
-                       s4_test.cpp
+                       s4_test.cpp \
+                       mock_s4.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include
@@ -220,6 +221,7 @@ SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
 
 sprout_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS}
 sprout_test_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS} \
+                        -I../modules/clearwater-s4/src/ut \
                         -I../modules/sipp \
                         -I../modules/app-servers/test \
                         -I../modules/gemini/include \
@@ -303,7 +305,7 @@ mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
 mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
 mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-VPATH = ../modules/cpp-common/src ../modules/clearwater-s4/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
+VPATH = ../modules/cpp-common/src ../modules/clearwater-s4/src ../modules/clearwater-s4/src/ut ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
 
 # Use valgrind suppression file for UT
 sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp
