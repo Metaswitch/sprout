@@ -652,7 +652,7 @@ TEST_F(GetBindingsTest, OneBinding)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  AoRPair* aor = build_aor(aor_id);
+  AoRPair* aor = build_aor_pair(aor_id);
   std::string id = aor->get_current()->bindings().begin()->first;
   std::string contact = aor->get_current()->bindings().begin()->second->_uri;
 
@@ -708,8 +708,8 @@ TEST_F(GetBindingsTest, TwoBindings)
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
-  build_binding(aor, now, "123");
-  build_binding(aor, now, "456");
+  AoRTestUtils::build_binding(aor, now, "123");
+  AoRTestUtils::build_binding(aor, now, "456");
   AoR* aor2 = new AoR(*aor);
   AoRPair* aor_pair = new AoRPair(aor, aor2);
 
@@ -812,7 +812,7 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  AoRPair* aor = build_aor(aor_id);
+  AoRPair* aor = build_aor_pair(aor_id);
   std::string id = aor->get_current()->subscriptions().begin()->first;
   std::string uri = aor->get_current()->subscriptions().begin()->second->_req_uri;
 
@@ -867,9 +867,9 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   AoR* aor = new AoR(aor_id);
-  build_binding(aor, now, "123");
-  build_subscription(aor, now, "456");
-  build_subscription(aor, now, "789");
+  AoRTestUtils::build_binding(aor, now, "123");
+  AoRTestUtils::build_subscription(aor, now, "456");
+  AoRTestUtils::build_subscription(aor, now, "789");
   AoR* aor2 = new AoR(*aor);
   AoRPair* aor_pair = new AoRPair(aor, aor2);
 
@@ -986,7 +986,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  AoRPair* aor = build_aor(impu, false);
+  AoRPair* aor = build_aor_pair(impu, false);
   build_task(impu_escaped);
 
   HSSConnection::irs_query irs_query;
@@ -1020,7 +1020,7 @@ TEST_F(DeleteImpuTaskTest, StoreFailure)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor_pair(impu, true);
   build_task(impu_escaped);
 
   {
@@ -1042,7 +1042,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor_pair(impu, true);
   build_task(impu_escaped);
 
   HSSConnection::irs_query irs_query;
@@ -1073,7 +1073,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor_pair(impu, true);
   build_task(impu_escaped);
 
   HSSConnection::irs_query irs_query;
@@ -1104,7 +1104,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor_pair(impu, true);
   build_task(impu_escaped);
 
   HSSConnection::irs_query irs_query;
@@ -1135,8 +1135,8 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  AoRPair* aor = build_aor(impu);
-  AoRPair* remote_aor = build_aor(impu);
+  AoRPair* aor = build_aor_pair(impu);
+  AoRPair* remote_aor = build_aor_pair(impu);
   build_task(impu_escaped, htp_method_DELETE, true);
 
   HSSConnection::irs_query irs_query;
