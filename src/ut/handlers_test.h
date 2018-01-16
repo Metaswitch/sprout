@@ -64,14 +64,7 @@ class TestWithMockSdms : public SipTest
   AoRPair* build_aor_pair(std::string aor_id,
                           bool include_subscription = true)
   {
-    AoR* aor = new AoR(aor_id);
-    int now = time(NULL);
-    AoRTestUtils::build_binding(aor, now);
-    if (include_subscription)
-    {
-      AoRTestUtils::build_subscription(aor, now);
-    }
-    aor->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+    AoR* aor = AoRTestUtils::build_aor(aor_id);
     AoR* aor2 = new AoR(*aor);
     AoRPair* aor_pair = new AoRPair(aor, aor2);
 
