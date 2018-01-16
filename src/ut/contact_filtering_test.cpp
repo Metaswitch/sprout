@@ -647,48 +647,6 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
   EXPECT_EQ(300, target.contact_expiry);
   EXPECT_EQ((unsigned)1234, target.contact_q1000_value);
 }
-TEST_F(ContactFilteringBindingToTargetTest, SimpleConversionPathUri)
-{
-  // This test test that the binding_to_target function will work for downlevel
-  // Sprout nodes where only the path URIs field will be filled in on the
-  // binding.
-
-  std::string aor = "sip:user@domain.com";
-  Binding binding(aor);
-  create_binding(binding);
-  binding._path_headers.clear();
-  std::string binding_id = "<sip:user@10.1.2.3>";
-  Target target;
-  EXPECT_TRUE(binding_to_target(aor,
-                                binding_id,
-                                binding,
-                                false,
-                                pool,
-                                target));
-  EXPECT_EQ(PJ_TRUE, target.from_store);
-  EXPECT_EQ(PJ_FALSE, target.upstream_route);
-  EXPECT_EQ(aor, target.aor);
-  EXPECT_EQ(binding_id, target.binding_id);
-  EXPECT_NE((pjsip_uri*)NULL, target.uri);
-  EXPECT_EQ((unsigned)2, target.paths.size());
-
-  // Check that the target paths are as expected. The paths should come from
-  // the _path_uris member on the binding.
-  std::list<std::string>::const_iterator j = binding._path_uris.begin();
-  for (std::list<pjsip_route_hdr*>::const_iterator i = target.paths.begin();
-       i != target.paths.end();
-       ++i)
-  {
-    std::string path = PJUtils::get_header_value((pjsip_hdr*)*i);
-    EXPECT_EQ(path, "<" + *j + ">");
-    ++j;
-  }
-
-  EXPECT_EQ((pjsip_transport*)NULL, target.transport);
-  EXPECT_EQ(0, target.liveness_timeout);
-  EXPECT_EQ(300, target.contact_expiry);
-  EXPECT_EQ((unsigned)1234, target.contact_q1000_value);
-}
 TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 {
   std::string aor = "sip:user@domain.com";
