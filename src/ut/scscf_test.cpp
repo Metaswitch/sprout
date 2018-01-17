@@ -1259,14 +1259,19 @@ TEST_F(SCSCFTest, TestMainlineHeadersSprout)
   doTestHeaders(_tp_default, false, _tp_default, false, msg, "", true, true, true, false, true);
 }
 
-/**
 TEST_F(SCSCFTest, TestNotRegisteredTo)
 {
   SCOPED_TRACE("");
+
+  // Expect a call to the SM to try to find info, but none is returned.
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(Return(HTTP_NOT_FOUND));
+
   SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
 
+/**
 TEST_F(SCSCFTest, TestBadScheme)
 {
   SCOPED_TRACE("");
