@@ -298,7 +298,8 @@ protected:
   void create_binding(Binding& binding, int lifetime = 3600, std::string instance_id = "");
   void set_irs_info(HSSConnection::irs_info& irs_info,
                     std::string user,
-                    const std::string& domain);
+                    const std::string& domain,
+                    bool barred = false);
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
@@ -1113,13 +1114,14 @@ void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
 // Create the irs info to be returned by the mock subscriber manager.
 void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
                                  std::string user,
-                                 const std::string& domain)
+                                 const std::string& domain,
+                                 bool barred)
 {
   std::string uri = "sip:";
   uri.append(user).append("@").append(domain);
 
   AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(uri, false);
+  associated_uris.add_uri(uri, barred);
 
   irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
   irs_info._prev_regstate = "";
@@ -1136,7 +1138,6 @@ void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
   // Are these set in the right format??
   irs_info._ccfs = {"priority=\"1\">ccf1"};
   irs_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
-
 }
 
 // SDM-REFACTOR-TODO: move this to common code to be used by other sproutlets?
@@ -1298,25 +1299,30 @@ TEST_F(SCSCFTest, TestBarredCaller)
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
 }
+**/
 
 TEST_F(SCSCFTest, TestBarredCallee)
 {
   // Tests that a call to a barred callee is rejected with a 404.
   SCOPED_TRACE("");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addBarringIndication("sip:6505551234@homedomain", "1")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
+
+  // Set up info to be returned about the callee, showing they are barred.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain", true);
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
+  // We look up the bindings before we reject the call due to the callee being
+  // barred, so expect a call to get_bindings (but no need to bother to return
+  // any useful info).
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce( Return(HTTP_OK));
+
   SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
-
+/**
 // Test that a call from an IMPU that belongs to a barred wildcarded public
 // identity is rejected with a 403 (forbidden). The IMPU isn't included as
 // a non-distinct IMPU in the HSS response.
