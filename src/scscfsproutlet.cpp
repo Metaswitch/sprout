@@ -1255,15 +1255,12 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
                                                              (pjsip_uri*)scscf_uri);
 
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
-
       Ifcs ifcs;
-      // Get the public user identity corresponding to the RequestURI.
-      pjsip_uri* req_uri = req->line.req.uri;
-      std::string public_id = PJUtils::public_id_from_uri(req_uri);
-      long http_code = _hss_cache_helper->lookup_ifcs(public_id,
+      long http_code = _hss_cache_helper->lookup_ifcs(served_user,
                                                       ifcs,
                                                       _scscf->_sm,
                                                       trail());
+
       if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");

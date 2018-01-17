@@ -1280,26 +1280,22 @@ TEST_F(SCSCFTest, TestBadScheme)
   doFastFailureFlow(msg, 416);  // bad scheme
 }
 
-/**
 TEST_F(SCSCFTest, TestBarredCaller)
 {
   // Tests that a call attempt from a barred caller is rejected with a 403.
   SCOPED_TRACE("");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addBarringIndication("sip:6505551000@homedomain", "1")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
+
+  // Set up info to be returned about the caller, showing they are barred.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain", true);
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
 }
-**/
 
 TEST_F(SCSCFTest, TestBarredCallee)
 {
