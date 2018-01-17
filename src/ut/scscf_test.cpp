@@ -197,7 +197,6 @@ public:
 
     delete _hss_connection; _hss_connection = NULL;
     delete _hss_connection_observer; _hss_connection_observer = NULL;
-    delete _mock_counter_table; _mock_counter_table = NULL;
     delete _proxy; _proxy = NULL;
     delete _mmtel_sproutlet; _mmtel_sproutlet = NULL;
     delete _mmtel; _mmtel = NULL;
@@ -264,7 +263,6 @@ protected:
   SproutletAppServerShim* _mmtel_sproutlet;
   static SCSCFSelector* _scscf_selector;
   ICSCFSproutlet* _icscf_sproutlet;
-  MockSnmpCounterTable* _mock_counter_table;
   SproutletProxy* _proxy;
   static MockAsCommunicationTracker* _sess_term_comm_tracker;
   static MockAsCommunicationTracker* _sess_cont_comm_tracker;
@@ -388,8 +386,6 @@ public:
     additional_home_domains.insert("sprout-site2.homedomain");
     additional_home_domains.insert("127.0.0.1");
 
-    _mock_counter_table = new MockSnmpCounterTable();
-
     // Create the SproutletProxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
@@ -398,7 +394,7 @@ public:
                                 std::unordered_set<std::string>(),
                                 sproutlets,
                                 std::set<std::string>(),
-                                _mock_counter_table);
+                                nullptr);
   }
 
   ~SCSCFTest()
@@ -10431,8 +10427,6 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
     additional_home_domains.insert("sprout-site2.homedomain");
     additional_home_domains.insert("127.0.0.1");
 
-    _mock_counter_table = new MockSnmpCounterTable();
-
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
@@ -10440,7 +10434,7 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                 std::unordered_set<std::string>(),
                                 sproutlets,
                                 std::set<std::string>(),
-                                _mock_counter_table);
+                                nullptr);
   }
 
   ~SCSCFTestWithoutICSCF()
@@ -10546,8 +10540,6 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
     additional_home_domains.insert("sprout-site2.homedomain");
     additional_home_domains.insert("127.0.0.1");
 
-    _mock_counter_table = new MockSnmpCounterTable();
-
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
@@ -10555,7 +10547,7 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
                                 std::unordered_set<std::string>(),
                                 sproutlets,
                                 std::set<std::string>(),
-                                _mock_counter_table);
+                                nullptr);
   }
 
   ~SCSCFTestWithRemoteSDM()
@@ -10682,8 +10674,6 @@ class SCSCFTestWithRalf : public SCSCFTestBase
     additional_home_domains.insert("sprout-site2.homedomain");
     additional_home_domains.insert("127.0.0.1");
 
-    _mock_counter_table = new MockSnmpCounterTable();
-
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
@@ -10691,7 +10681,7 @@ class SCSCFTestWithRalf : public SCSCFTestBase
                                 std::unordered_set<std::string>(),
                                 sproutlets,
                                 std::set<std::string>(),
-                                _mock_counter_table);
+                                nullptr);
   }
 
   ~SCSCFTestWithRalf()

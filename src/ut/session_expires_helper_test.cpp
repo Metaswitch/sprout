@@ -91,8 +91,6 @@ public:
     // Create the Test Sproutlets.
     _sproutlets.push_back(new SessionExpiresHelperSproutlet("se", 0, ""));
 
-    _mock_counter_table = new MockSnmpCounterTable();
-
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
@@ -101,7 +99,7 @@ public:
                                 std::unordered_set<std::string>(),
                                 _sproutlets,
                                 std::set<std::string>(),
-                                _mock_counter_table);
+                                nullptr);
 
     // Schedule timers.
     SipTest::poll();
@@ -114,7 +112,6 @@ public:
     pjsip_tsx_layer_destroy();
 
     delete _proxy;
-    delete _mock_counter_table;
 
     for (std::list<Sproutlet*>::iterator i = _sproutlets.begin();
          i != _sproutlets.end();
@@ -275,12 +272,10 @@ public:
 
 protected:
   TransportFlow* _tp;
-  static MockSnmpCounterTable* _mock_counter_table;
   static SproutletProxy* _proxy;
   static std::list<Sproutlet*> _sproutlets;
 };
 
-MockSnmpCounterTable* SessionExpiresHelperTest::_mock_counter_table;
 SproutletProxy* SessionExpiresHelperTest::_proxy;
 std::list<Sproutlet*> SessionExpiresHelperTest::_sproutlets;
 

@@ -78,15 +78,26 @@ protected:
   /// Pre-declaration
   class UASTsx;
 
-  enum ALIAS_MATCH_TYPE
+  // When a host is compared against the alias list, there are three different
+  // match possibilities.
+  enum AliasMatchType
   {
+    // The hostname matches neither any local alias nor any remote alias
     NO_MATCH,
+
+    // Either:
+    //   - The hostname matches a local alias
+    //   - The hostname matches a remote alias, and remote matches are allowed
     MATCH,
+    // TJW2 TODO: Distinguish between local and remote matches?
+
+    // The hostname matches a remote alias (not a local one), but remote
+    // matches are not allowed.
     REMOTE_MATCH_REJECTED
   };
 
-  typedef std::pair<bool, ALIAS_MATCH_TYPE> AliasMatch;
-  typedef std::pair<Sproutlet*, ALIAS_MATCH_TYPE> SproutletMatch;
+  typedef std::pair<bool, AliasMatchType> AliasMatch;
+  typedef std::pair<Sproutlet*, AliasMatchType> SproutletMatch;
 
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
@@ -102,8 +113,8 @@ protected:
                               bool allow_remote_aliases,
                               SAS::TrailId trail);
 
-  /// Return the sproutlet that matches the URI supplied.
-  // TJW2 TODO: Comments
+  /// Return the sproutlet that matches the URI supplied, along with the type of
+  /// match.
   SproutletMatch match_sproutlet_from_uri(
     const pjsip_uri* uri,
     std::string& alias,
@@ -134,8 +145,8 @@ protected:
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
-  std::pair<bool, ALIAS_MATCH_TYPE> is_host_alias(const pj_str_t* host,
-                                                  bool allow_remote_aliases) const;
+  AliasMatch is_host_alias(const pj_str_t* host,
+                           bool allow_remote_aliases) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,
                         const Sproutlet* sproutlet) const;

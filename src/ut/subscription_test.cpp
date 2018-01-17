@@ -98,8 +98,6 @@ public:
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_subscription_sproutlet);
 
-    _mock_counter_table = new MockSnmpCounterTable();
-
     _subscription_proxy = new SproutletProxy(stack_data.endpt,
                                              PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                              "homedomain",
@@ -107,7 +105,7 @@ public:
                                              std::unordered_set<std::string>(),
                                              sproutlets,
                                              std::set<std::string>(),
-                                             _mock_counter_table);
+                                             nullptr);
 
     std::string aor = "sip:6505550231@homedomain";
     // Get an initial empty AoR record and add a binding.
@@ -164,7 +162,6 @@ public:
     pjsip_tsx_layer_instance()->start();
 
     delete _subscription_proxy; _subscription_proxy = NULL;
-    delete _mock_counter_table; _mock_counter_table = NULL;
     delete _subscription_sproutlet; _subscription_sproutlet = NULL;
 
     ::testing::Mock::VerifyAndClearExpectations(_analytics);
@@ -216,7 +213,6 @@ protected:
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
   SubscriptionSproutlet* _subscription_sproutlet;
-  MockSnmpCounterTable* _mock_counter_table;
   SproutletProxy* _subscription_proxy;
   std::map<std::string, std::string> _contact_params;
 
@@ -1696,8 +1692,6 @@ public:
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_subscription_sproutlet);
 
-    _mock_counter_table = new MockSnmpCounterTable();
-
     _subscription_proxy = new SproutletProxy(stack_data.endpt,
                                              PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                              "homedomain",
@@ -1705,7 +1699,7 @@ public:
                                              std::unordered_set<std::string>(),
                                              sproutlets,
                                              std::set<std::string>(),
-                                             _mock_counter_table);
+                                             nullptr);
   }
 
   static void TearDownTestCase()
@@ -1753,7 +1747,6 @@ public:
     pjsip_tsx_layer_instance()->start();
 
     delete _subscription_proxy; _subscription_proxy = NULL;
-    delete _mock_counter_table; _mock_counter_table = NULL;
     delete _subscription_sproutlet; _subscription_sproutlet = NULL;
   }
 
@@ -1766,7 +1759,6 @@ protected:
   FakeHSSConnection* _hss_connection;
   FakeChronosConnection* _chronos_connection;
   SubscriptionSproutlet* _subscription_sproutlet;
-  MockSnmpCounterTable* _mock_counter_table;
   SproutletProxy* _subscription_proxy;
 };
 

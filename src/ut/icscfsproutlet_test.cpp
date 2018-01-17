@@ -87,8 +87,6 @@ public:
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_icscf_sproutlet);
 
-    _mock_counter_table = new MockSnmpCounterTable();
-
     _icscf_proxy = new SproutletProxy(stack_data.endpt,
                                       PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                       "homedomain",
@@ -96,7 +94,7 @@ public:
                                       std::unordered_set<std::string>(),
                                       sproutlets,
                                       std::set<std::string>(),
-                                      _mock_counter_table);
+                                      nullptr);
   }
 
   ~ICSCFSproutletTestBase()
@@ -125,7 +123,6 @@ public:
     pjsip_tsx_layer_instance()->start();
 
     delete _icscf_proxy; _icscf_proxy = NULL;
-    delete _mock_counter_table; _mock_counter_table = NULL;
     delete _icscf_sproutlet; _icscf_sproutlet = NULL;
   }
 
@@ -135,7 +132,6 @@ protected:
   static SCSCFSelector* _scscf_selector;
   static JSONEnumService* _enum_service;
   ICSCFSproutlet* _icscf_sproutlet;
-  MockSnmpCounterTable* _mock_counter_table;
   SproutletProxy* _icscf_proxy;
 };
 

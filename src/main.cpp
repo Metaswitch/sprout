@@ -716,7 +716,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_REMOTE_ALIASES:
       options->remote_alias_hosts = std::string(pj_optarg);
-      TRC_INFO("GR alias host names = %s", pj_optarg);
+      TRC_INFO("Remote alias host names = %s", pj_optarg);
       break;
 
     case 'r':
@@ -2379,7 +2379,7 @@ int main(int argc, char* argv[])
 
     std::unordered_set<std::string> host_remote_aliases;
     host_remote_aliases.insert(stack_data.remote_aliases.begin(),
-                           stack_data.remote_aliases.end());
+                               stack_data.remote_aliases.end());
 
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,

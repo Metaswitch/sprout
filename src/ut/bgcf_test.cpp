@@ -194,7 +194,6 @@ public:
     sproutlets.push_back(_bgcf_sproutlet);
     std::unordered_set<std::string> aliases;
     aliases.insert("127.0.0.1");
-    _mock_counter_table = new MockSnmpCounterTable();
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
@@ -202,7 +201,7 @@ public:
                                 std::unordered_set<std::string>(),
                                 sproutlets,
                                 std::set<std::string>(),
-                                _mock_counter_table);
+                                nullptr);
 
     // Schedule timers.
     SipTest::poll();
@@ -214,7 +213,6 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _proxy; _proxy = NULL;
-    delete _mock_counter_table; _mock_counter_table = NULL;
     delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
     delete _acr_factory; _acr_factory = NULL;
     delete _enum_service; _enum_service = NULL;
@@ -257,7 +255,6 @@ protected:
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
   static BGCFSproutlet* _bgcf_sproutlet;
-  static MockSnmpCounterTable* _mock_counter_table;
   static SproutletProxy* _proxy;
 
   void doSuccessfulFlow(SP::BGCFMessage& msg,
@@ -270,7 +267,6 @@ BgcfService* BGCFTest::_bgcf_service;
 EnumService* BGCFTest::_enum_service;
 ACRFactory* BGCFTest::_acr_factory;
 BGCFSproutlet* BGCFTest::_bgcf_sproutlet;
-MockSnmpCounterTable* BGCFTest::_mock_counter_table;
 SproutletProxy* BGCFTest::_proxy;
 
 using SP::BGCFMessage;
