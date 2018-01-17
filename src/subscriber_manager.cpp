@@ -33,17 +33,6 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 {
   bool success;
 
-  // Sequence of events:
-  //  - Lookup in HSS to get default public ID.
-  //  - Get current AoR.
-  //  - Write audit logs.
-  //  - Make changes to AoR object.
-  //  - Write back to store.
-  //  - Write audit logs. TODO
-  //  - Send NOTIFYs. TODO
-  //  - Update HSS if all bindings expired. TODO
-  //  - Send 3rd party registers. TODO
-
   // Get subscriber information from the HSS.
   HTTPCode rc = get_subscriber_state(irs_query,
                                      irs_info,
@@ -58,11 +47,9 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   bool emergency;
   // Can any of the deleted bindings be for emergencies - yes so need to pass
   // that information along with the binding IDs to delete. TODO
-  for (AoR::Bindings::const_iterator it = updated_bindings.begin();
-       it != updated_bindings.end();
-       ++it)
+  for (std::pair<std::string, Binding*> b : updated_bindings)
   {
-    if (it->second->_emergency_registration)
+    if (b.second->_emergency_registration)
     {
       emergency = true;
       break;
@@ -85,10 +72,15 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
                        &aor,
                        version,
                        trail);
-  if ((rc != HTTP_OK) || (rc != HTTP_NOT_FOUND))
+
+  // It is valid to return HTTP_NOT_FOUND since there will not be a stored AoR
+  // when an IRS is first registered.
+  if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
   {
-    // TODO error handling
+    return rc;
   }
+
+  delete aor; aor = NULL;
 
   PatchObject* patch_object = new PatchObject();
   patch_object->set_update_bindings(updated_bindings);
@@ -99,19 +91,29 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
                          &aor,
                          trail);
 
+  // Get all bindings to return to the caller
+  for (std::pair<std::string, Binding*> b : aor->bindings())
+  {
+    Binding* copy_b = new Binding(*(b.second));
+    all_bindings.insert(std::make_pair(b.first, copy_b));
+  }
+
   // Send NOTIFYs
 
   // Update HSS if all bindings expired.
   if (false)
   {
-    HSSConnection::irs_query irs_query_2 = irs_query;
-    irs_query_2._req_type = HSSConnection::DEREG_USER;
-    get_subscriber_state(irs_query,
+    HSSConnection::irs_query irs_dereg_query = irs_query;
+    irs_dereg_query._req_type = HSSConnection::DEREG_USER;
+    get_subscriber_state(irs_dereg_query,
                          irs_info,
                          trail); // Can't do anything with the return code here.
   }
 
   // Send 3rd party REGISTERs.
+
+  delete aor; aor = NULL;
+  delete patch_object; patch_object = NULL;
 
   return HTTP_OK;
 }
