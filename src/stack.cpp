@@ -237,10 +237,7 @@ static void pjsip_log_handler(int level,
   // Note that we mustn't pass data as the format string (with no parameters),
   // because it may contain % characters which we don't want to be accidentally
   // interpreted as format specifiers.
-  TRC_RAMTRACE("%s", data);
-
-  // Log::write(level, "pjsip", 0, "%s", data);
-  // REMOVED TO ALLOW QUICK PERF TESTING
+  Log::write(level, "pjsip", 0, "%s", data);
 }
 
 
@@ -251,8 +248,7 @@ void init_pjsip_logging(int log_level,
   pj_log_set_level(log_level);
   pj_log_set_decor(PJ_LOG_HAS_SENDER);
   pj_log_set_log_func(&pjsip_log_handler);
-//  pj_log_set_ram_trace_funcs(&Log::ramCacheTrcCall, &Log::ramTrace);
-// REMOVED TO ALLOW QUICK PERF TESTING
+  pj_log_set_ram_trace_funcs(&Log::ramCacheTrcCall, &Log::ramTrace);
 }
 
 
