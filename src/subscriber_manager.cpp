@@ -126,7 +126,7 @@ HTTPCode SubscriberManager::remove_bindings_with_default_id(const std::string& a
 }
 
 HTTPCode SubscriberManager::update_subscription(const std::string& public_id,
-                                                const Subscription& subscription,
+                                                Subscription* subscription,
                                                 HSSConnection::irs_info& irs_info,
                                                 SAS::TrailId trail)
 {

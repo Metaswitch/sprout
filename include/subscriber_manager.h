@@ -97,7 +97,7 @@ public:
   /// @param[out] irs_info      The IRS information stored about this public ID
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode update_subscription(const std::string& public_id,
-                                       const Subscription& subscription,
+                                       Subscription* subscription,
                                        HSSConnection::irs_info& irs_info,
                                        SAS::TrailId trail);
 

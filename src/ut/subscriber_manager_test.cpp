@@ -135,7 +135,7 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscription)
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
 
-  Subscription subscription = Subscription();
+  Subscription* subscription = new Subscription();
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->update_subscription("",
                                                          subscription,
@@ -143,6 +143,7 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscription)
                                                          DUMMY_TRAIL_ID);
 
   EXPECT_EQ(rc, HTTP_OK);
+  delete subscription; subscription = NULL;
 }
 
 TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)

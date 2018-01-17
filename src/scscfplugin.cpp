@@ -183,11 +183,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                         "",
                                                         opt.prefix_scscf,
                                                         PROXY_SERVICE_NAME,
-                                                        local_sdm,
-                                                        remote_sdms,
-                                                        hss_connection,
+                                                        subscriber_manager,
                                                         scscf_acr_factory,
-                                                        analytics_logger,
                                                         opt.sub_max_expires);
     ok = ok && _subscription_sproutlet->init();
     sproutlets.push_front(_subscription_sproutlet);
@@ -212,21 +209,12 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                   {},
                                                   opt.prefix_scscf,
                                                   SUBSCRIPTION_SERVICE_NAME,
-                                                  local_sdm,
-                                                  remote_sdms,
-                                                  hss_connection,
+                                                  subscriber_manager,
                                                   scscf_acr_factory,
                                                   opt.reg_max_expires,
                                                   opt.force_third_party_register_body,
                                                   &reg_stats_tbls,
-                                                  &third_party_reg_stats_tbls,
-                                                  fifc_service,
-                                                  IFCConfiguration(opt.apply_fallback_ifcs,
-                                                                   opt.reject_if_no_matching_ifcs,
-                                                                   opt.dummy_app_server,
-                                                                   _no_matching_ifcs_tbl,
-                                                                   _no_matching_fallback_ifcs_tbl));
-
+                                                  &third_party_reg_stats_tbls);
 
     ok = ok && _registrar_sproutlet->init();
     sproutlets.push_front(_registrar_sproutlet);
