@@ -1396,6 +1396,9 @@ AoRStore* local_aor_store = NULL;
 std::vector<AoRStore*> remote_aor_stores;
 SubscriberDataManager* local_sdm = NULL;
 std::vector<SubscriberDataManager*> remote_sdms;
+S4* s4 = NULL;
+std::vector<S4*> remote_s4s;
+SubscriberManager* subscriber_manager = NULL;
 ImpiStore* local_impi_store = NULL;
 std::vector<ImpiStore*> remote_impi_stores;
 RalfProcessor* ralf_processor = NULL;
@@ -2229,6 +2232,18 @@ int main(int argc, char* argv[])
     remote_sdms.push_back(remote_sdm);
   }
 
+  // Set up the SM and S4s
+  for (AoRStore* store : remote_aor_stores)
+  {
+    S4* remote_s4 = new S4("TODO SITE NAME", store, {});
+    remote_s4s.push_back(remote_s4);
+  }
+
+  s4 = new S4("TODO LOCAL SITE NAME", local_aor_store, remote_s4s);
+  subscriber_manager = new SubscriberManager(s4,
+                                             hss_connection,
+                                             analytics_logger);
+
   // Start the HTTP stack early as plugins might need to register handlers
   // with it.
   HttpStack* http_stack_sig = new HttpStack(opt.http_threads,
@@ -2345,18 +2360,13 @@ int main(int argc, char* argv[])
   // be invoked. We don't increment any statistics relating to the fallback
   // iFCs in these flows though (as they should only be used on initial
   // registration).
-  S4* s4 = new S4("2", local_aor_store, {});
-  SubscriberManager* sm = new SubscriberManager(s4,
-                                                hss_connection,
-                                                analytics_logger);
-
-  DeregistrationTask::Config deregistration_config(sm,
+  DeregistrationTask::Config deregistration_config(subscriber_manager,
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
 
-  PushProfileTask::Config push_profile_config(sm);
-  DeleteImpuTask::Config delete_impu_config(sm);
+  PushProfileTask::Config push_profile_config(subscriber_manager);
+  DeleteImpuTask::Config delete_impu_config(subscriber_manager);
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm,
                                             remote_sdms,
@@ -2370,8 +2380,8 @@ int main(int argc, char* argv[])
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
 
-  GetBindingsTask::Config get_bindings_config(sm);
-  GetSubscriptionsTask::Config get_subscriptions_config(sm);
+  GetBindingsTask::Config get_bindings_config(subscriber_manager);
+  GetSubscriptionsTask::Config get_subscriptions_config(subscriber_manager);
 
   TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
   TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
@@ -2514,6 +2524,8 @@ int main(int argc, char* argv[])
   delete exception_handler;
   delete load_monitor;
   delete local_sdm;
+  delete subscriber_manager;
+  delete s4;
   delete local_aor_store;
   delete local_data_store;
 
@@ -2524,6 +2536,12 @@ int main(int argc, char* argv[])
     delete *it;
   }
   remote_sdms.clear();
+
+  for (S4* remote_s4 : remote_s4s)
+  {
+    delete remote_s4;
+  }
+  remote_s4s.clear();
 
   for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
        it != remote_aor_stores.end();
