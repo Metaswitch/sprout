@@ -29,6 +29,7 @@ extern "C" {
 #include "subscriber_data_manager.h"
 #include "fakelogger.h"
 #include "fakehssconnection.hpp"
+#include "subscriber_manager.h"
 
 using std::string;
 using testing::MatchesRegex;
