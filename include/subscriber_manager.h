@@ -180,6 +180,17 @@ private:
   S4* _s4;
   HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;
+
+  HTTPCode get_cached_default_id(const std::string& public_id,
+                                 std::string& aor_id,
+                                 HSSConnection::irs_info& irs_info,
+                                 SAS::TrailId trail);
+
+  HTTPCode deregister_with_hss(const std::string& aor_id,
+                               const std::string& dereg_reason,
+                               const std::string& server_name,
+                               HSSConnection::irs_info& irs_info,
+                               SAS::TrailId trail);
 };
 
 #endif

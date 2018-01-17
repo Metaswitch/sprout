@@ -141,6 +141,8 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
       .WillOnce(DoAll(SaveArgPointee<1>(&patch_object),
                       SetArgPointee<2>(patch_aor),
                       Return(HTTP_OK)));
+    EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
   }
 
   std::vector<std::string> binding_ids = {"binding_id"};
@@ -273,6 +275,7 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
   get_aor->get_binding("binding_id");
   get_aor->get_binding("binding_id2");
   get_aor->get_subscription("subscription_id");
+  get_aor->_scscf_uri = "scscf.sprout.site1.example.com";
 
   // Set up expect calls to the HSS and S4.
   {
@@ -285,6 +288,8 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
                       Return(HTTP_OK)));
     EXPECT_CALL(*_s4, handle_local_delete(default_id, _, _))
       .WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
+      .WillOnce(Return(HTTP_OK));
   }
 
   HTTPCode rc = _subscriber_manager->deregister_subscriber(default_id,
@@ -295,55 +300,36 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
 
 TEST_F(SubscriberManagerTest, TestGetBindings)
 {
-  // What should happen here?
-  //  - The S-CSCF has asked for to return all bindings for a pub ID so that we
-  //    can route the request to the UE bindings.
-  //      - There is no implicit expiry of bindings, S4 handles returning
-  //        bindings that are active.
-  //  - The SM should receive this request and query S4 for the whole AoR with
-  //    the provided pub ID.
-  //  - SM should get the bindings out of the returned data and return them.
-  //  - Analytics logs?
+  // Set up a default ID.
+  std::string default_id = "sip:example.com";
 
+  // Set up AoRs to be returned by S4 - these are deleted by the handler
+  AoR* get_aor = new AoR(default_id);
+  get_aor->get_binding("binding_id");
+
+  // Set up expect calls to S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(default_id, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(get_aor),
+                      Return(HTTP_OK)));
+  }
+
+  // Call get subscriptions on SM.
   std::map<std::string, Binding*> bindings;
+  HTTPCode rc = _subscriber_manager->get_bindings(default_id,
+                                                  bindings,
+                                                  DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
 
-  // Expect call to S4 API, pass back dummy data.
+  // Check that there is one subscription with the correct IDs.
+  EXPECT_TRUE(bindings.find("binding_id") != bindings.end());
 
-  //EXPECT_EQ(_subscriber_manager->get_bindings("1",
-  //                                            bindings,
-  //                                            DUMMY_TRAIL_ID), HTTP_OK);
-
-  // Check bindings are as expected.
-}
-
-TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
-{
-  HSSConnection::irs_info irs_info;
-  HSSConnection::irs_query irs_query;
-  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
-  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
-                                                             irs_info,
-                                                             DUMMY_TRAIL_ID), HTTP_OK);
-
-  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
-  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
-                                                             irs_info,
-                                                             DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
-}
-
-TEST_F(SubscriberManagerTest, TestGetSubscriberState)
-{
-  HSSConnection::irs_info irs_info;
-  HSSConnection::irs_query irs_query;
-  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
-  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
-                                                      irs_info,
-                                                      DUMMY_TRAIL_ID), HTTP_OK);
-
-  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
-  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
-                                                      irs_info,
-                                                      DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
+  // Delete the subscriptions we've been passed.
+  for (std::pair<std::string, Binding*> b : bindings)
+  {
+    delete b.second;
+  }
 }
 
 TEST_F(SubscriberManagerTest, TestGetSubscriptions)
@@ -379,6 +365,36 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   {
     delete s.second;
   }
+}
+
+TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
+{
+  HSSConnection::irs_info irs_info;
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
+  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
+                                                             irs_info,
+                                                             DUMMY_TRAIL_ID), HTTP_OK);
+
+  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
+  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
+                                                             irs_info,
+                                                             DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
+}
+
+TEST_F(SubscriberManagerTest, TestGetSubscriberState)
+{
+  HSSConnection::irs_info irs_info;
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
+  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
+                                                      irs_info,
+                                                      DUMMY_TRAIL_ID), HTTP_OK);
+
+  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
+  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
+                                                      irs_info,
+                                                      DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
 }
 
 TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
