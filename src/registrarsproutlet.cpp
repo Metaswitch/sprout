@@ -758,7 +758,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     for (unsigned int i = 0; i < supported_hdr->count; i++)
     {
-      if (pj_stricmp(&supported_hdr->values[i], &STR_OUTBOUND))
+      if (!pj_stricmp(&supported_hdr->values[i], &STR_OUTBOUND))
       {
         supported_outbound = true;
       }
@@ -781,7 +781,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       contains_ob = true;
     }
 
-    TRC_DEBUG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! supported_outbound=%d, contains_reg_id=%d, contains_ob=%d, bindings=%d" , supported_outbound, contains_reg_id, contains_ob, !aor_pair->get_current()->bindings().empty());
     if (supported_outbound && contains_reg_id && contains_ob &&
        !aor_pair->get_current()->bindings().empty())
     {
