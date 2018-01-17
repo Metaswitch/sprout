@@ -1173,6 +1173,8 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 
             // We no longer care about the old tdata.
             pjsip_tx_data_dec_ref(old_tdata);
+            old_tdata = nullptr;
+
             sss->tdata = tdata;
           }
           // LCOV_EXCL_STOP
@@ -1216,6 +1218,7 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 
               // The same logic in send_request applies here too.
               pjsip_tx_data_dec_ref(tdata);
+              tdata = nullptr;
             }
           }
         }
@@ -1244,6 +1247,7 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
     // The transaction has completed, so decrement our reference to the tx_data
     // and free the state data.
     pjsip_tx_data_dec_ref(sss->tdata);
+    sss->tdata = nullptr;
     delete sss;
   }
 }
@@ -1373,6 +1377,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
       //   further processing, and to keep the interface to this function clean,
       //   we should decrement the reference here.
       pjsip_tx_data_dec_ref(tdata);
+      tdata = nullptr;
 
       // Also, in order to keep the interface clean, we should return
       // PJ_SUCCESS here. This is the lesser of the two evils - returning an
@@ -1380,7 +1385,6 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
       // on_tsx_state callback may actually succeed a retry in the future.
       // We should only return an error if there is no chance of this function
       // succeeding.
-
       status = PJ_SUCCESS;
     }
   }
@@ -1395,6 +1399,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     // Since the on_tsx_state callback will not have been called we must
     // clean up resources here.
     pjsip_tx_data_dec_ref(tdata);
+    tdata = nullptr;
     delete sss;
   }
 
@@ -1442,8 +1447,7 @@ static void stateless_send_cb(pjsip_send_state *st,
       // but just in case ...
       PJUtils::generate_new_branch_id(tdata);
 
-      // Add a reference to the tdata to stop PJSIP releasing it when we
-      // return the callback.
+      // Add a reference to the tdata to send a new request with
       pjsip_tx_data_add_ref(tdata);
 
       // Set up destination info for the new server and resend the request.
@@ -1455,11 +1459,14 @@ static void stateless_send_cb(pjsip_send_state *st,
 
       if (status == PJ_SUCCESS)
       {
+        // Reference has been taken by sending it
+        tdata = nullptr;
         retrying = true;
       }
       else
       {
         pjsip_tx_data_dec_ref(tdata);
+        tdata = nullptr;
       }
     }
   }
@@ -1519,6 +1526,7 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
     pjsip_tx_data_dec_ref(tdata);
+    tdata = nullptr;
     delete sss;
   }
 
@@ -1566,6 +1574,7 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
     if (tdata->msg->body == NULL)
     {
       pjsip_tx_data_dec_ref(tdata);
+      tdata = nullptr;
       return status;
     }
   }
@@ -1575,6 +1584,7 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
   if (status != PJ_SUCCESS)
   {
     pjsip_tx_data_dec_ref(tdata);
+    tdata = nullptr;
     return status;
   }
 
@@ -1586,9 +1596,15 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
 
   // Send!
   status = pjsip_endpt_send_response(endpt, &res_addr, tdata, NULL, NULL);
-  if (status != PJ_SUCCESS)
+  if (status == PJ_SUCCESS)
+  {
+    // Reference has been used by send_response
+    tdata = nullptr;
+  }
+  else
   {
     pjsip_tx_data_dec_ref(tdata);
+    tdata = nullptr;
     return status;
   }
 
@@ -1648,12 +1664,18 @@ pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
 
   status = pjsip_tsx_send_msg(uas_tsx, tdata);
 
-  if (status != PJ_SUCCESS)
+  if (status == PJ_SUCCESS)
+  {
+    // Reference has been taken by tsx_send_msg
+    tdata = nullptr;
+  }
+  else
   {
     // The message is owned by the transaction, which will get a on_tsx_state
     // callback. However, we still have a reference count if tsx_send_msg
     // fails, which we should decrement, to prevent a leak.
     pjsip_tx_data_dec_ref(tdata);
+    tdata = nullptr;
 
     // Even if we failed to send, we should treat it as a success, as the
     // message may be resent by the transaction owner.
