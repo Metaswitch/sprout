@@ -1188,7 +1188,6 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
-/**
 TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
 {
   SCOPED_TRACE("");
@@ -1213,11 +1212,9 @@ TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
-
-  // Make sure that the HTTP request sent to homestead contains the correct S-CSCF URI.
-  EXPECT_TRUE(_hss_connection->url_was_requested("/impu/sip%3A6505551234%40homedomain/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"sip:scscf.sprout-site2.homedomain:5058;transport=TCP\"}"));
 }
 
+/**
 // Send a request where the URI is for the same port as a Sproutlet,
 // but a different host. We should deal with this sensibly (as opposed
 // to e.g. looping forever until we crash).
