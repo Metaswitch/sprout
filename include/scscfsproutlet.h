@@ -116,7 +116,7 @@ private:
 
   /// Gets all bindings for the specified public id from the Subscriber Manager.
   void get_bindings(const std::string& public_id,
-                    AoR::Bindings& bindings,
+                    std::map<std::string, Binding*>& bindings,
                     SAS::TrailId trail);
 
   /// Removes the binding, specified by it's binding id, using the Subscriber

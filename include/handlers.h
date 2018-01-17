@@ -21,6 +21,7 @@
 #include "sipresolver.h"
 #include "impistore.h"
 #include "fifcservice.h"
+#include "aor.h"
 
 /// Common factory for all handlers that deal with timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
@@ -118,28 +119,16 @@ class DeregistrationTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(SubscriberDataManager* sdm,
-           std::vector<SubscriberDataManager*> remote_sdms,
-           HSSConnection* hss,
-           FIFCService* fifc_service,
-           IFCConfiguration ifc_configuration,
+    Config(SubscriberManager* sm,
            SIPResolver* sipresolver,
            ImpiStore* local_impi_store,
            std::vector<ImpiStore*> remote_impi_stores) :
-      _sdm(sdm),
-      _remote_sdms(remote_sdms),
-      _hss(hss),
-      _fifc_service(fifc_service),
-      _ifc_configuration(ifc_configuration),
+      _sm(sm),
       _sipresolver(sipresolver),
       _local_impi_store(local_impi_store),
       _remote_impi_stores(remote_impi_stores)
     {}
-    SubscriberDataManager* _sdm;
-    std::vector<SubscriberDataManager*> _remote_sdms;
-    HSSConnection* _hss;
-    FIFCService* _fifc_service;
-    IFCConfiguration _ifc_configuration;
+    SubscriberManager* _sm;
     SIPResolver* _sipresolver;
     ImpiStore* _local_impi_store;
     std::vector<ImpiStore*> _remote_impi_stores;
@@ -155,14 +144,8 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  AoRPair* deregister_bindings(SubscriberDataManager* current_sdm,
-                               HSSConnection* hss,
-                               FIFCService* fifc_service,
-                               IFCConfiguration ifc_configuration,
-                               std::string aor_id,
+  HTTPCode deregister_bindings(std::string aor_id,
                                std::string private_id,
-                               AoRPair* previous_aor_data,
-                               std::vector<SubscriberDataManager*> remote_sdms,
                                std::set<std::string>& impis_to_delete);
 
 protected:
@@ -173,55 +156,52 @@ protected:
   std::string _notify;
 };
 
-
-/// Abstract class that contains most of the logic for retrieving stored
-/// bindings and subscriptions.
-///
-/// This class handles checking the request, extracting the requested IMPU and
-/// retrieving data from the store. It calls into the subclass to build a
-/// response, which it then sends.
-class GetCachedDataTask : public HttpStackUtils::Task
+/// For retrieving bindings from store.
+class GetBindingsTask : public HttpStackUtils::Task
 {
 public:
   struct Config
   {
-    Config(SubscriberDataManager* sdm,
-           std::vector<SubscriberDataManager*> remote_sdms) :
-      _sdm(sdm),
-      _remote_sdms(remote_sdms)
+    Config(SubscriberManager* sm) :
+      _sm(sm)
     {}
 
-    SubscriberDataManager* _sdm;
-    std::vector<SubscriberDataManager*> _remote_sdms;
+    SubscriberManager* _sm;
   };
 
-  GetCachedDataTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
+  GetBindingsTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
     HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
   void run();
 
 protected:
-  virtual std::string serialize_data(AoR* aor) = 0;
+  std::string serialize_data(const std::map<std::string, Binding*>& bindings);
   const Config* _cfg;
 };
 
-/// Concrete subclass for retrieving bindings.
-class GetBindingsTask : public GetCachedDataTask
+/// For retrieving subscriptions from store.
+class GetSubscriptionsTask : public HttpStackUtils::Task
 {
 public:
-  using GetCachedDataTask::GetCachedDataTask;
-protected:
-  std::string serialize_data(AoR* aor);
-};
+  struct Config
+  {
+    Config(SubscriberManager* sm) :
+      _sm(sm)
+    {}
 
-/// Concrete subclass for retrieving subscriptions.
-class GetSubscriptionsTask : public GetCachedDataTask
-{
-public:
-  using GetCachedDataTask::GetCachedDataTask;
+    SubscriberManager* _sm;
+  };
+
+  GetSubscriptionsTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  void run();
+
 protected:
-  std::string serialize_data(AoR* aor);
+  std::string serialize_data(const std::map<std::string, Subscription*>& subscriptions);
+  const Config* _cfg;
 };
 
 /// Task for performing an administrative deregistration at the S-CSCF. This
@@ -236,23 +216,11 @@ class DeleteImpuTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(SubscriberDataManager* sdm,
-           std::vector<SubscriberDataManager*> remote_sdms,
-           HSSConnection* hss,
-           FIFCService* fifc_service,
-           IFCConfiguration ifc_configuration) :
-      _sdm(sdm),
-      _remote_sdms(remote_sdms),
-      _hss(hss),
-      _fifc_service(fifc_service),
-      _ifc_configuration(ifc_configuration)
+    Config(SubscriberManager* sm) :
+      _sm(sm)
     {}
 
-    SubscriberDataManager* _sdm;
-    std::vector<SubscriberDataManager*> _remote_sdms;
-    HSSConnection* _hss;
-    FIFCService* _fifc_service;
-    IFCConfiguration _ifc_configuration;
+    SubscriberManager* _sm;
   };
 
   DeleteImpuTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
@@ -274,7 +242,7 @@ class PushProfileTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(SubscriberManager* sm):
+    Config(SubscriberManager* sm) :
       _sm(sm)
     {}
 

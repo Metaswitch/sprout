@@ -239,13 +239,12 @@ IFCConfiguration SCSCFSproutlet::ifc_configuration() const
 
 /// Gets all bindings for the specified public id from the SM.
 void SCSCFSproutlet::get_bindings(const std::string& public_id,
-                                  AoR::Bindings& bindings,
+                                  std::map<std::string, Binding*>& bindings,
                                   SAS::TrailId trail)
 {
   // Look up the target in the subscriber manager.
   TRC_INFO("Look up bindings for %s in subscriber manager", public_id.c_str());
-  std::string aor_id; // NEED TO SET THIS - IS IT JUST THE PUBLIC ID???
-  bool rc = _sm->get_bindings(aor_id,
+  bool rc = _sm->get_bindings(public_id,
                               bindings,
                               trail);
 
@@ -365,7 +364,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
                                      const std::string& next_hop_service,
                                      pjsip_method_e req_type) :
   CompositeSproutletTsx(scscf, next_hop_service),
-  _hss_cache_helper(new HssCacheHelper),
+  _hss_cache_helper(new HssCacheHelper()),
   _scscf(scscf),
   _cancelled(false),
   _session_case(NULL),
@@ -533,7 +532,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // This empty bindings map will be returned by the get_bindings function
         // containing all non-expired bindings for the given public id.
         AoR::Bindings bindings;
-        _scscf->get_bindings(public_id, bindings, trail());
+        _scscf->get_bindings(aor, bindings, trail());
 
         if ((aor_pair != NULL) &&
             (aor_pair->get_current() != NULL))
@@ -1829,7 +1828,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     // The empty map of bindings will be filled by the get_bindings function to
     // contain all non-expired bindings for the given public id.
     AoR::Bindings bindings;
-    _scscf->get_bindings(public_id, bindings, trail());
+    _scscf->get_bindings(aor, bindings, trail());
 
     if (!bindings.empty())
     {
