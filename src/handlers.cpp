@@ -432,12 +432,11 @@ HTTPCode DeregistrationTask::deregister_bindings(
   }
 
   AoR::Bindings unused_bindings;
-  return _cfg->_sm->remove_bindings_with_default_id(
-                                         aor_id,
-                                         binding_ids,
-                                         SubscriberManager::EventTrigger::ADMIN,
-                                         unused_bindings,
-                                         trail());
+  return _cfg->_sm->remove_bindings(aor_id,
+                                    binding_ids,
+                                    SubscriberManager::EventTrigger::ADMIN,
+                                    unused_bindings,
+                                    trail());
 }
 
 HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,

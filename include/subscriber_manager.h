@@ -70,34 +70,28 @@ public:
                                    HSSConnection::irs_info& irs_info,
                                    SAS::TrailId trail);
 
-  /// Removes bindings stored in SM for a given AoR ID. This method assumes
-  /// that the client provides the defualt public ID for looking up in the store
-  /// so no initial HSS lookup is made.
+  /// Removes bindings stored in SM for a given public ID.
   ///
-  /// @param[in]  aor_id        The AoR ID to lookup in the store. It is the
-  ///                           client's responsibilty to provide an ID that
-  ///                           will be found in the store i.e. a default public
-  ///                           ID
-  ///                           Providing a non-default IMPU from an IRS will
-  ///                           NOT remove any binidngs
+  /// @param[in]  public_id     The public IDs to remove bindings for
   /// @param[in]  binding_ids   The binding IDs to remove
   /// @param[in]  event_trigger The reason for removing bindings
   /// @param[out] bindings      All bindings currently stores for this public ID
   /// @param[in]  trail         The SAS trail ID
-  virtual HTTPCode remove_bindings_with_default_id(const std::string& aor_id,
-                                                   const std::vector<std::string>& binding_ids,
-                                                   const EventTrigger& event_trigger,
-                                                   std::map<std::string, Binding*>& bindings,
-                                                   SAS::TrailId trail);
+  virtual HTTPCode remove_bindings(const std::string& public_id,
+                                   const std::vector<std::string>& binding_ids,
+                                   const EventTrigger& event_trigger,
+                                   std::map<std::string, Binding*>& bindings,
+                                   SAS::TrailId trail);
 
   /// Updates a subscription stored in SM for a given public ID.
   ///
   /// @param[in]  public_id     The public ID being subscribed to
-  /// @param[in]  subscription  The subscription to update
+  /// @param[in]  subscription  A pair containing the subscription ID and
+  ///                           subscription to update
   /// @param[out] irs_info      The IRS information stored about this public ID
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode update_subscription(const std::string& public_id,
-                                       const Subscription& subscription,
+                                       const std::pair<std::string, Subscription*>& subscription,
                                        HSSConnection::irs_info& irs_info,
                                        SAS::TrailId trail);
 
@@ -142,7 +136,7 @@ public:
   ///                           will be found in the store i.e. a default public
   ///                           ID
   ///                           Providing a non-default IMPU from an IRS will
-  ///                           NOT return all binidngs and subscriptions
+  ///                           NOT return all subscriptions
   /// @param[out] subscriptions All subscriptions stored for this AoR
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode get_subscriptions(const std::string& aor_id,
@@ -186,6 +180,17 @@ private:
   S4* _s4;
   HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;
+
+  HTTPCode get_cached_default_id(const std::string& public_id,
+                                 std::string& aor_id,
+                                 HSSConnection::irs_info& irs_info,
+                                 SAS::TrailId trail);
+
+  HTTPCode deregister_with_hss(const std::string& aor_id,
+                               const std::string& dereg_reason,
+                               const std::string& server_name,
+                               HSSConnection::irs_info& irs_info,
+                               SAS::TrailId trail);
 };
 
 #endif

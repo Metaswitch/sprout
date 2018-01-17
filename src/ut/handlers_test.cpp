@@ -118,7 +118,7 @@ class DeregistrationTaskTest : public SipTest
       .WillOnce(DoAll(SetArgReferee<1>(bindings), Return(HTTP_OK)));
 
     EXPECT_CALL(*_subscriber_manager,
-                remove_bindings_with_default_id(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
+                remove_bindings(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
           .WillOnce(DoAll(SaveArg<1>(&binding_ids), Return(HTTP_OK)));
   }
 
@@ -248,7 +248,7 @@ TEST_F(DeregistrationTaskTest, SubscriberManagerWritesFail)
                     Return(HTTP_OK)));
 
   EXPECT_CALL(*_subscriber_manager,
-              remove_bindings_with_default_id(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
+              remove_bindings(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
 
   // Run the task
@@ -311,7 +311,7 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   std::map<std::string, Binding*> bindings2;
   bindings2["binding_id3"] = &binding3;
 
-  std::vector<std::string> binding_ids_2; 
+  std::vector<std::string> binding_ids_2;
   expect_sdm_updates(aor_id2, bindings2, binding_ids_2);
 
   // The corresponding IMPIs are also deleted.

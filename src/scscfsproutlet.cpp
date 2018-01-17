@@ -276,11 +276,11 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
   // SDM-REFACTOR-TODO
   // HSSConnection::DEREG_TIMEOUT was dereg_type, should make it
   // HSSConnection::DEREG_USER if need to pass it through in future.
-  long http_code = _sm->remove_bindings_with_default_id(aor_id,
-                                                        binding_ids,
-                                                        SubscriberManager::EventTrigger::USER,
-                                                        bindings,
-                                                        trail);
+  long http_code = _sm->remove_bindings(aor_id,
+                                        binding_ids,
+                                        SubscriberManager::EventTrigger::USER,
+                                        bindings,
+                                        trail);
 
  if (http_code != HTTP_OK)
  {
