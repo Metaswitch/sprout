@@ -658,16 +658,16 @@ void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app
 // Check the transport each message is on, and the headers.
 // Test a call from Alice to Bob.
 void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
-                              bool tpAset,         //< Expect all requests to Alice on same transport?
-                              TransportFlow* tpB,  //< Bob's transport.
-                              bool tpBset,         //< Expect all requests to Bob on same transport?
-                              SCSCFMessage& msg,    //< Message to use for testing.
-                              string route,        //< Route header to be used on INVITE
-                              bool expect_100,     //< Will we get a 100 Trying?
-                              bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?
-                              bool expect_trusted_headers_on_responses, //< Should P-A-N-I/P-V-N-I be passed on responses?
-                              bool expect_orig,    //< Should we expect the INVITE to be marked originating?
-                              bool pcpi)           //< Should we expect a P-Called-Party-ID?
+                                  bool tpAset,         //< Expect all requests to Alice on same transport?
+                                  TransportFlow* tpB,  //< Bob's transport.
+                                  bool tpBset,         //< Expect all requests to Bob on same transport?
+                                  SCSCFMessage& msg,    //< Message to use for testing.
+                                  string route,        //< Route header to be used on INVITE
+                                  bool expect_100,     //< Will we get a 100 Trying?
+                                  bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?
+                                  bool expect_trusted_headers_on_responses, //< Should P-A-N-I/P-V-N-I be passed on responses?
+                                  bool expect_orig,    //< Should we expect the INVITE to be marked originating?
+                                  bool pcpi)           //< Should we expect a P-Called-Party-ID?
 {
   SCOPED_TRACE("doTestHeaders");
   pjsip_msg* out;
@@ -764,6 +764,7 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   // Send PRACK C->X
   SCOPED_TRACE("PRACK");
   msg._method = "PRACK";
+  msg._in_dialog = true;
   inject_msg(msg.get_request(), tpA);
   poll();
   ASSERT_EQ(1, txdata_count());
@@ -863,8 +864,6 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
 
   free_txdata();
 
-  // ---------- Send a reINVITE in the reverse direction. X<-S
-
   // ---------- Send a subsequent request. C->X
   SCOPED_TRACE("BYE");
   msg._method = "BYE";
@@ -905,6 +904,7 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   // ---------- Send INVITE C->X (this is an attempt to establish a second dialog)
   SCOPED_TRACE("INVITE (#2)");
   msg._method = "INVITE";
+  msg._in_dialog = false;
 
   if (route != "")
   {
@@ -973,6 +973,7 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   // ---------- Send ACK C->X
   SCOPED_TRACE("ACK (#2)");
   msg._method = "ACK";
+  msg._in_dialog = true;
   inject_msg(msg.get_request(), tpA);
   poll();
   ASSERT_EQ(0, txdata_count());
@@ -1227,12 +1228,29 @@ TEST_F(SCSCFTest, ReqURIMatchesSproutletPort)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:254.253.252.251:5058"), hdrs, false);
 }
 
-/**
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 TEST_F(SCSCFTest, TestMainlineHeadersSprout)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Two INVITES are sent in "doTestHeaders", so we expect to call into the mock
+  // subscriber manager twice.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .Times(2)
+    .WillRepeatedly(DoAll(SetArgReferee<1>(irs_info),
+                          Return(HTTP_OK)));
+
+  std::string uri = "sip:6505551234@homedomain";
+  AoR::Bindings bindings;
+  Binding binding(uri);
+  create_binding(binding);
+  bindings.insert(std::make_pair(uri, &binding));
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .Times(2)
+    .WillRepeatedly(DoAll(SetArgReferee<1>(bindings),
+                          Return(HTTP_OK)));
 
   // INVITE from anywhere to anywhere.
   // We're within the trust boundary, so no stripping should occur.
@@ -1241,6 +1259,7 @@ TEST_F(SCSCFTest, TestMainlineHeadersSprout)
   doTestHeaders(_tp_default, false, _tp_default, false, msg, "", true, true, true, false, true);
 }
 
+/**
 TEST_F(SCSCFTest, TestNotRegisteredTo)
 {
   SCOPED_TRACE("");
