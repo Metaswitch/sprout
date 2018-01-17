@@ -128,26 +128,14 @@ HTTPCode SubscriberManager::remove_bindings_with_default_id(const std::string& a
 }
 
 HTTPCode SubscriberManager::update_subscription(const std::string& public_id,
-                                                const Subscription& subscription,
+                                                const std::pair<std::string, Subscription*>& subscription,
                                                 HSSConnection::irs_info& irs_info,
                                                 SAS::TrailId trail)
 {
-  // Steps:
-  //  - Get cached HSS data from public_id
-  //  - Get data from S4
-  //  - Update AoR with new subscription.
-  //    - Maybe this should take into account whether the SUBSCRIBE event
-  //      is acutally removing a subscription and not add it but delete it.
-  //    - Or the Client could be responsible for this by looking at the expiry time.
-  //  - Write back to S4.
-  //  - Analytics.
-  //  - Send NOTIFYs
-
   // Get HSS cached data
   HTTPCode rc = get_cached_subscriber_state(public_id,
                                             irs_info,
                                             trail);
-
   if (rc != HTTP_OK)
   {
     return rc;
@@ -160,27 +148,36 @@ HTTPCode SubscriberManager::update_subscription(const std::string& public_id,
     return HTTP_BAD_REQUEST; // TODO - what should the return code be here?
   }
 
-  // Get the current AoR from S4, if one exists.
-  /*AoR* aor = _s4->get(aor_id);
-  if (aor == NULL)
-  {
-    // Create a brand new AoR.
-  }*/
+  // Get the current AoR from S4.
+  AoR* aor = NULL;
+  uint64_t version;
+  rc = _s4->handle_get(aor_id,
+                       &aor,
+                       version,
+                       trail);
 
-  //aor->add_subscription(subscription.get_id(), TODO add this method to the AoR.
-                        //subscription);
-
-  // Write back to S4.
-  // SDM-REFACTOR-TODO: We're going to write to memcached in sequence if we have
-  // multiple bindings. Surely that's wrong?
-  /*bool success = _s4->send_patch(aor_id, aor);
-  if (!success)
+  // There must be an existing AoR since there must be bindings to subscribe to.
+  if (rc != HTTP_OK)
   {
-    // We can't do anything if we fail to write to memcached, so break out.
-    return HTTP_SERVER_ERROR;
-  }*/
+    return rc;
+  }
+
+  delete aor; aor = NULL;
+
+  PatchObject* patch_object = new PatchObject();
+  std::map<std::string, Subscription*> s_map;
+  s_map.insert(subscription);
+  patch_object->set_update_subscriptions(s_map);
+
+  rc = _s4->handle_patch(aor_id,
+                         patch_object,
+                         &aor,
+                         trail);
 
   // Send NOTIFYs
+
+  delete aor; aor = NULL;
+  delete patch_object; patch_object = NULL;
 
   return HTTP_OK;
 }

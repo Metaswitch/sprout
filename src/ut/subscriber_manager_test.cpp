@@ -49,12 +49,6 @@ class SubscriberManagerTest : public ::testing::Test
   MockHSSConnection* _hss_connection;
 };
 
-TEST_F(SubscriberManagerTest, TestTest)
-{
-  HSSConnection::irs_info irs_info;
-  EXPECT_EQ(_subscriber_manager->remove_subscription("", "", irs_info, DUMMY_TRAIL_ID), HTTP_OK);
-}
-
 TEST_F(SubscriberManagerTest, TestAddNewBinding)
 {
   // Set up an IRS to be returned by the mocked update_registration_state()
@@ -65,7 +59,7 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
 
   // Set up AoRs to be returned by S4.
   AoR* get_aor = new AoR(default_id);
-  AoR* patch_aor = new AoR(default_id);
+  AoR* patch_aor = new AoR(*get_aor);
   patch_aor->get_binding("binding_id");
 
   // Create an empty patch object to save off the one provided by handle patch.
@@ -104,7 +98,7 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
   // Check that the patch object contains the expected binding.
   EXPECT_TRUE(patch_object._update_bindings.find("binding_id") != patch_object._update_bindings.end());
 
-  // Reset the bindings in the patch object so that we don't try to delete them twice.
+  // Reset the bindings in the patch object so that we don't double free them.
   patch_object._update_bindings = std::map<std::string, Binding*>();
 
   // Check that the binding we set is returned in all bindings.
@@ -116,6 +110,59 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
     delete b.second;
   }
 }
+
+
+TEST_F(SubscriberManagerTest, TestAddNewSubscription)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  std::string default_id = "sip:example.com";
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris.add_uri(default_id, false);
+
+  // Set up AoRs to be returned by S4.
+  AoR* get_aor = new AoR(default_id);
+  get_aor->get_binding("binding_id");
+  AoR* patch_aor = new AoR(*get_aor);
+  patch_aor->get_subscription("subscription_id");
+
+  // Create an empty patch object to save off the one provided by handle patch.
+  PatchObject patch_object;
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(default_id, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(default_id, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(default_id, _, _, _))
+      .WillOnce(DoAll(SaveArgPointee<1>(&patch_object),
+                      SetArgPointee<2>(patch_aor),
+                      Return(HTTP_OK)));
+  }
+
+  std::pair<std::string, Subscription*> updated_subscription;
+  Subscription* subscription = new Subscription();
+  updated_subscription = std::make_pair("subscription_id", subscription);
+  HSSConnection::irs_info irs_info_out;
+  HTTPCode rc = _subscriber_manager->update_subscription(default_id,
+                                                         updated_subscription,
+                                                         irs_info_out,
+                                                         DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+
+  // Check that the patch object contains the expected subscription.
+  EXPECT_TRUE(patch_object._update_subscriptions.find("subscription_id") != patch_object._update_subscriptions.end());
+
+  // Reset the subscriptions in the patch object so that we don't double free them.
+  patch_object._update_subscriptions = std::map<std::string, Subscription*>();
+}
+
+
+
 
 TEST_F(SubscriberManagerTest, TestGetBindings)
 {
@@ -138,28 +185,6 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
   //                                            DUMMY_TRAIL_ID), HTTP_OK);
 
   // Check bindings are as expected.
-}
-
-TEST_F(SubscriberManagerTest, TestUpdateSubscription)
-{
-  // Set up an IRS to be returned by the mocked update_registration_state()
-  // call.
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri("sip:example.com", false);
-  HSSConnection::irs_info irs_info;
-  irs_info._associated_uris = associated_uris;
-  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, _))
-    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
-                    Return(HTTP_OK)));
-
-  Subscription subscription = Subscription();
-  HSSConnection::irs_info irs_info_out;
-  HTTPCode rc = _subscriber_manager->update_subscription("",
-                                                         subscription,
-                                                         irs_info_out,
-                                                         DUMMY_TRAIL_ID);
-
-  EXPECT_EQ(rc, HTTP_OK);
 }
 
 TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
