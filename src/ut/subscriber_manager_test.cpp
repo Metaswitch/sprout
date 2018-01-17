@@ -111,6 +111,60 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
   }
 }
 
+TEST_F(SubscriberManagerTest, TestRemoveBinding)
+{
+  // Set up an IRS to be returned by the mocked update_registration_state()
+  // call.
+  std::string default_id = "sip:example.com";
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris.add_uri(default_id, false);
+
+  // Set up AoRs to be returned by S4.
+  AoR* get_aor = new AoR(default_id);
+  get_aor->get_binding("binding_id");
+  AoR* patch_aor = new AoR(*get_aor);
+  patch_aor->remove_binding("binding_id");
+
+  // Create an empty patch object to save off the one provided by handle patch.
+  PatchObject patch_object;
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(default_id, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(default_id, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(default_id, _, _, _))
+      .WillOnce(DoAll(SaveArgPointee<1>(&patch_object),
+                      SetArgPointee<2>(patch_aor),
+                      Return(HTTP_OK)));
+  }
+
+  std::vector<std::string> binding_ids = {"binding_id"};
+  AoR::Bindings all_bindings;
+  HTTPCode rc = _subscriber_manager->remove_bindings(default_id,
+                                                     binding_ids,
+                                                     SubscriberManager::EventTrigger::USER,
+                                                     all_bindings,
+                                                     DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+
+  // Check that the patch object contains the expected binding.
+  std::vector<std::string> rb = patch_object._remove_bindings;
+  EXPECT_TRUE(std::find(rb.begin(), rb.end(), "binding_id") != rb.end());
+
+  // Check that the binding we removed is not returned in all_bindings.
+  EXPECT_FALSE(all_bindings.find("binding_id") != all_bindings.end());
+
+  // Delete the bindings we've been passed.
+  for (std::pair<std::string, Binding*> b : all_bindings)
+  {
+    delete b.second;
+  }
+}
 
 TEST_F(SubscriberManagerTest, TestAddNewSubscription)
 {
@@ -161,8 +215,83 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
   patch_object._update_subscriptions = std::map<std::string, Subscription*>();
 }
 
+TEST_F(SubscriberManagerTest, TestRemoveSubscription)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  std::string default_id = "sip:example.com";
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris.add_uri(default_id, false);
 
+  // Set up AoRs to be returned by S4.
+  AoR* get_aor = new AoR(default_id);
+  get_aor->get_binding("binding_id");
+  get_aor->get_subscription("subscription_id");
+  AoR* patch_aor = new AoR(*get_aor);
+  patch_aor->remove_subscription("subscription_id");
 
+  // Create an empty patch object to save off the one provided by handle patch.
+  PatchObject patch_object;
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(default_id, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(default_id, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(default_id, _, _, _))
+      .WillOnce(DoAll(SaveArgPointee<1>(&patch_object),
+                      SetArgPointee<2>(patch_aor),
+                      Return(HTTP_OK)));
+  }
+
+  HSSConnection::irs_info irs_info_out;
+  HTTPCode rc = _subscriber_manager->remove_subscription(default_id,
+                                                         "subscription_id",
+                                                         irs_info_out,
+                                                         DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+
+  // Check that the patch object contains the expected subscription.
+  std::vector<std::string> rs = patch_object._remove_subscriptions;
+  EXPECT_TRUE(std::find(rs.begin(), rs.end(), "subscription_id") != rs.end());
+}
+
+TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
+{
+  // Set up an IRS to be returned by the mocked update_registration_state()
+  // call.
+  std::string default_id = "sip:example.com";
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris.add_uri(default_id, false);
+
+  // Set up AoRs to be returned by S4.
+  AoR* get_aor = new AoR(default_id);
+  get_aor->get_binding("binding_id");
+  get_aor->get_binding("binding_id2");
+  get_aor->get_subscription("subscription_id");
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(default_id, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(default_id, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_local_delete(default_id, _, _))
+      .WillOnce(Return(HTTP_OK));
+  }
+
+  HTTPCode rc = _subscriber_manager->deregister_subscriber(default_id,
+                                                           SubscriberManager::EventTrigger::ADMIN,
+                                                           DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+}
 
 TEST_F(SubscriberManagerTest, TestGetBindings)
 {

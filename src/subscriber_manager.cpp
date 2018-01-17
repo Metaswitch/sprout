@@ -91,6 +91,12 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
                          &aor,
                          trail);
 
+  delete patch_object; patch_object = NULL;
+  if (rc != HTTP_OK)
+  {
+    return rc;
+  }
+
   // Get all bindings to return to the caller
   for (std::pair<std::string, Binding*> b : aor->bindings())
   {
@@ -113,17 +119,87 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   // Send 3rd party REGISTERs.
 
   delete aor; aor = NULL;
-  delete patch_object; patch_object = NULL;
 
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::remove_bindings_with_default_id(const std::string& aor_id,
-                                                            const std::vector<std::string>& binding_ids,
-                                                            const EventTrigger& event_trigger,
-                                                            std::map<std::string, Binding*>& bindings,
-                                                            SAS::TrailId trail)
+HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
+                                            const std::vector<std::string>& binding_ids,
+                                            const EventTrigger& event_trigger,
+                                            std::map<std::string, Binding*>& bindings,
+                                            SAS::TrailId trail)
 {
+  bool success;
+
+  // Get cached subscriber information from the HSS.
+  HSSConnection::irs_info irs_info;
+  HTTPCode rc = get_cached_subscriber_state(public_id,
+                                            irs_info,
+                                            trail);
+  if (rc != HTTP_OK)
+  {
+    return rc;
+  }
+
+  // Get the aor_id from the associated URIs.
+  std::string aor_id;
+  success = irs_info._associated_uris.get_default_impu(aor_id, false);
+  if (!success)
+  {
+    // TODO No default IMPU - what should we do here? Probably bail out.
+    return HTTP_BAD_REQUEST;
+  }
+
+  // Get the current AoR from S4.
+  AoR* aor = NULL;
+  uint64_t version;
+  rc = _s4->handle_get(aor_id,
+                       &aor,
+                       version,
+                       trail);
+
+  // If there is no AoR, we still count that as a success.
+  if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
+  {
+    return rc;
+  }
+
+  delete aor; aor = NULL;
+
+  PatchObject* patch_object = new PatchObject();
+  patch_object->set_remove_bindings(binding_ids);
+
+  rc = _s4->handle_patch(aor_id,
+                         patch_object,
+                         &aor,
+                         trail);
+
+  // Get all bindings to return to the caller
+  for (std::pair<std::string, Binding*> b : aor->bindings())
+  {
+    Binding* copy_b = new Binding(*(b.second));
+    bindings.insert(std::make_pair(b.first, copy_b));
+  }
+
+  // Send NOTIFYs for removed binding.
+
+  // Update HSS if all bindings expired.
+  if (false)
+  {
+    // TODO fill in query from binding
+    HSSConnection::irs_query irs_dereg_query;
+    irs_dereg_query._req_type = HSSConnection::DEREG_USER;
+    HSSConnection::irs_info irs_info;
+    get_subscriber_state(irs_dereg_query,
+                         irs_info,
+                         trail); // Can't do anything with the return code here.
+  }
+
+  // Send 3rd party REGISTERs.
+
+  delete aor; aor = NULL;
+  delete patch_object; patch_object = NULL;
+
   return HTTP_OK;
 }
 
@@ -174,6 +250,11 @@ HTTPCode SubscriberManager::update_subscription(const std::string& public_id,
                          &aor,
                          trail);
 
+  if (rc != HTTP_OK)
+  {
+    return rc;
+  }
+
   // Send NOTIFYs
 
   delete aor; aor = NULL;
@@ -191,6 +272,61 @@ HTTPCode SubscriberManager::remove_subscription(const std::string& public_id,
   //  - Subscription is removed from AoR by subscription_id index before
   //    writing back.
 
+
+  // Get HSS cached data
+  HTTPCode rc = get_cached_subscriber_state(public_id,
+                                            irs_info,
+                                            trail);
+  if (rc != HTTP_OK)
+  {
+    return rc;
+  }
+
+  std::string aor_id;
+  if (!irs_info._associated_uris.get_default_impu(aor_id, false))
+  {
+    // No default IMPU so send an error response.
+    return HTTP_BAD_REQUEST; // TODO - what should the return code be here?
+  }
+
+  // Get the current AoR from S4.
+  AoR* aor = NULL;
+  uint64_t version;
+  rc = _s4->handle_get(aor_id,
+                       &aor,
+                       version,
+                       trail);
+
+  // There must be an existing AoR since there must be bindings to subscribe to.
+  if (rc != HTTP_OK)
+  {
+    return rc;
+  }
+
+  delete aor; aor = NULL;
+
+  PatchObject* patch_object = new PatchObject();
+  std::vector<std::string> subscription_ids = {subscription_id};
+  patch_object->set_remove_subscriptions(subscription_ids);
+
+  rc = _s4->handle_patch(aor_id,
+                         patch_object,
+                         &aor,
+                         trail);
+
+  if (rc != HTTP_OK)
+  {
+    return rc;
+  }
+
+  // Send NOTIFYs
+
+  delete aor; aor = NULL;
+  delete patch_object; patch_object = NULL;
+
+  return HTTP_OK;
+
+
   return HTTP_OK;
 }
 
@@ -198,6 +334,63 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
                                                   const EventTrigger& event_trigger,
                                                   SAS::TrailId trail)
 {
+  bool success;
+
+  // Get cached subscriber information from the HSS.
+  HSSConnection::irs_info irs_info;
+  HTTPCode rc = get_cached_subscriber_state(public_id,
+                                            irs_info,
+                                            trail);
+  if (rc != HTTP_OK)
+  {
+    return rc;
+  }
+
+  // Get the aor_id from the associated URIs.
+  std::string aor_id;
+  success = irs_info._associated_uris.get_default_impu(aor_id, false);
+  if (!success)
+  {
+    // TODO No default IMPU - what should we do here? Probably bail out.
+    return HTTP_BAD_REQUEST;
+  }
+
+  // Get the current AoR from S4.
+  AoR* aor = NULL;
+  uint64_t version;
+  rc = _s4->handle_get(aor_id,
+                       &aor,
+                       version,
+                       trail);
+
+  // If there is no AoR, we still count that as a success.
+  if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
+  {
+    return rc;
+  }
+
+  delete aor; aor = NULL;
+
+  rc = _s4->handle_local_delete(aor_id,
+                                version,
+                                trail);
+
+  // Send NOTIFYs for removed binding.
+
+  // Update HSS if all bindings expired.
+  if (false)
+  {
+    // TODO fill in query from binding
+    HSSConnection::irs_query irs_dereg_query;
+    irs_dereg_query._req_type = HSSConnection::DEREG_USER;
+    HSSConnection::irs_info irs_info;
+    get_subscriber_state(irs_dereg_query,
+                         irs_info,
+                         trail); // Can't do anything with the return code here.
+  }
+
+  // Send 3rd party REGISTERs.
+
   return HTTP_OK;
 }
 
