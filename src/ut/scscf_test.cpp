@@ -1271,16 +1271,15 @@ TEST_F(SCSCFTest, TestNotRegisteredTo)
   doSlowFailureFlow(msg, 404);
 }
 
-/**
 TEST_F(SCSCFTest, TestBadScheme)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   SCSCFMessage msg;
   msg._toscheme = "sips";
   doFastFailureFlow(msg, 416);  // bad scheme
 }
 
+/**
 TEST_F(SCSCFTest, TestBarredCaller)
 {
   // Tests that a call attempt from a barred caller is rejected with a 403.
