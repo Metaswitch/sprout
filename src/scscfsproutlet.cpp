@@ -238,13 +238,13 @@ IFCConfiguration SCSCFSproutlet::ifc_configuration() const
 }
 
 /// Gets all bindings for the specified public id from the SM.
-void SCSCFSproutlet::get_bindings(const std::string& public_id,
+void SCSCFSproutlet::get_bindings(const std::string& aor,
                                   std::map<std::string, Binding*>& bindings,
                                   SAS::TrailId trail)
 {
   // Look up the target in the subscriber manager.
-  TRC_INFO("Look up bindings for %s in subscriber manager", public_id.c_str());
-  bool rc = _sm->get_bindings(public_id,
+  TRC_INFO("Look up bindings for %s in subscriber manager", aor.c_str());
+  bool rc = _sm->get_bindings(aor,
                               bindings,
                               trail);
 
@@ -256,7 +256,7 @@ void SCSCFSproutlet::get_bindings(const std::string& public_id,
     bindings.clear();
     // Do I need this log? Presumably already logged where error occurred?
     TRC_INFO("Error looking up bindings for %s in subscriber manager",
-             public_id.c_str());
+             aor.c_str());
   }
 
   // TODO - Log bindings to SAS
@@ -266,15 +266,16 @@ void SCSCFSproutlet::get_bindings(const std::string& public_id,
 /// Removes the specified binding for the provided binding id by requesting the
 /// SM does this.
 void SCSCFSproutlet::remove_binding(const std::string& binding_id,
+                                    const std::string& aor_id,
                                     AoR::Bindings& bindings,
                                     SAS::TrailId trail)
 {
   std::vector<std::string> binding_ids;
   binding_ids.push_back(binding_id);
 
+  // SDM-REFACTOR-TODO
   // HSSConnection::DEREG_TIMEOUT was dereg_type, should make it
   // HSSConnection::DEREG_USER if need to pass it through in future.
-  std::string aor_id; //NEED TO SET - JUST SAME AS PUBLIC ID??
   long http_code = _sm->remove_bindings_with_default_id(aor_id,
                                                         binding_ids,
                                                         SubscriberManager::EventTrigger::USER,
@@ -283,6 +284,7 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
 
  if (http_code != HTTP_OK)
  {
+   // SDM-REFACTOR-TODO
    // What to do here?? Just log? (surely that was done already?)
    TRC_INFO("Error removing binding with id %s in subscriber manager",
             binding_id.c_str());
@@ -527,10 +529,8 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // The bindings are keyed off the default IMPU.
         std::string aor = _hss_cache_helper->_default_uri;
         AoRPair* aor_pair = NULL;
-        pjsip_uri* req_uri = req->line.req.uri;
-        std::string public_id = PJUtils::public_id_from_uri(req_uri);
         // This empty bindings map will be returned by the get_bindings function
-        // containing all non-expired bindings for the given public id.
+        // containing all non-expired bindings for the given aor.
         AoR::Bindings bindings;
         _scscf->get_bindings(aor, bindings, trail());
 
@@ -743,7 +743,8 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // This empty bindings map will be returned containing the complete set
       // of binding objects.
       AoR::Bindings bindings;
-      _scscf->remove_binding(i->second, bindings, trail());
+      std::string aor_id; //SDM-REFACTOR-TODO - NEED TO SET THIS
+      _scscf->remove_binding(i->second, aor_id, bindings, trail());
     }
   }
 
@@ -1826,7 +1827,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     }
 
     // The empty map of bindings will be filled by the get_bindings function to
-    // contain all non-expired bindings for the given public id.
+    // contain all non-expired bindings for the given aor.
     AoR::Bindings bindings;
     _scscf->get_bindings(aor, bindings, trail());
 

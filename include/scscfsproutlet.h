@@ -122,6 +122,7 @@ private:
   /// Removes the binding, specified by it's binding id, using the Subscriber
   /// Manager.
   void remove_binding(const std::string& binding_id,
+                      const std::string& aor_id,
                       AoR::Bindings& bindings,
                       SAS::TrailId trail);
 

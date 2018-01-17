@@ -2214,6 +2214,7 @@ int main(int argc, char* argv[])
     return rc;
   }
 
+  // SDM-REFACTOR-TODO - remove these and all other refs to local and remote sdms
   // Use the AOR stores we've create to create the local (and optionally remote)
   // SDMs.
   local_sdm = new SubscriberDataManager(local_aor_store,
