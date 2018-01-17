@@ -296,6 +296,9 @@ protected:
   void doSlowFailureFlow(SCSCFMessage& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(SCSCFMessage& msg);
   void create_binding(Binding& binding, int lifetime = 3600, std::string instance_id = "");
+  void set_irs_info(HSSConnection::irs_info& irs_info,
+                    std::string user,
+                    const std::string& domain);
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
@@ -1106,6 +1109,36 @@ void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
 }
 
 // SDM-REFACTOR-TODO: move this to common code to be used by other sproutlets?
+// Create the irs info to be returned by the mock subscriber manager.
+void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
+                                 std::string user,
+                                 const std::string& domain)
+{
+  std::string uri = "sip:";
+  uri.append(user).append("@").append(domain);
+
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(uri, false);
+
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  irs_info._prev_regstate = "";
+
+  std::map<std::string, Ifcs> service_profiles;
+  Ifcs ifcs;
+  service_profiles.insert(std::make_pair("first_key" , ifcs));
+  irs_info._service_profiles = service_profiles;
+
+  irs_info._associated_uris = associated_uris;
+
+  // Don't want any aliases - enough just to not set any?
+
+  // Are these set in the right format??
+  irs_info._ccfs = {"priority=\"1\">ccf1"};
+  irs_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
+
+}
+
+// SDM-REFACTOR-TODO: move this to common code to be used by other sproutlets?
 // Create a binding to be returned by the mock subscriber manager.
 void SCSCFTestBase::create_binding(Binding& binding,
                                    int lifetime,
@@ -1128,8 +1161,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   SCOPED_TRACE("");
 
   HSSConnection::irs_info irs_info;
-  // contact was "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"
-  set_subscriber_info(irs_info, "6505551234", "homedomain");
+  set_irs_info(irs_info, "6505551234", "homedomain");
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
@@ -1156,24 +1188,26 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
-
 /**
-
-// Test route request to Maddr
-TEST_F(SCSCFTest, TestSimpleMainlineMaddr)
-{
-  SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  SCSCFMessage msg;
-  msg._requri = "sip:6505551234@homedomain;maddr=1.2.3.4";
-  list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*maddr.*"), hdrs);
-}
-
 TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
+  std::string uri = "sip:6505551234@homedomain";
+  AoR::Bindings bindings;
+  Binding binding(uri);
+  create_binding(binding);
+  bindings.insert(std::make_pair(uri, &binding));
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(bindings),
+                    Return(HTTP_OK)));
+
   SCSCFMessage msg;
   msg._route = "Route: <sip:scscf.sprout-site2.homedomain;transport=tcp;lr>";
   list<HeaderMatcher> hdrs;
