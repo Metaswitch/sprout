@@ -125,6 +125,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        subscriptionsproutlet.cpp \
                        registrarsproutlet.cpp \
                        sproutletappserver.cpp \
+                       hss_cache_helper.cpp \
                        mmtel.cpp \
                        test_main.cpp \
                        fakecurl.cpp \
