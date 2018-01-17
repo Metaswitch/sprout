@@ -93,11 +93,12 @@ public:
   /// Updates a subscription stored in SM for a given public ID.
   ///
   /// @param[in]  public_id     The public ID being subscribed to
-  /// @param[in]  subscription  The subscription to update
+  /// @param[in]  subscription  A pair containing the subscription ID and
+  ///                           subscription to update
   /// @param[out] irs_info      The IRS information stored about this public ID
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode update_subscription(const std::string& public_id,
-                                       Subscription* subscription,
+                                       const std::pair<std::string, Subscription*>& subscription,
                                        HSSConnection::irs_info& irs_info,
                                        SAS::TrailId trail);
 

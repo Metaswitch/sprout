@@ -49,26 +49,21 @@ class SubscriberManagerTest : public ::testing::Test
   MockHSSConnection* _hss_connection;
 };
 
-TEST_F(SubscriberManagerTest, TestTest)
-{
-  HSSConnection::irs_info irs_info;
-  EXPECT_EQ(_subscriber_manager->remove_subscription("", "", irs_info, DUMMY_TRAIL_ID), HTTP_OK);
-}
-
 TEST_F(SubscriberManagerTest, TestAddNewBinding)
 {
   // Set up an IRS to be returned by the mocked update_registration_state()
   // call.
   std::string default_id = "sip:example.com";
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(default_id, false);
   HSSConnection::irs_info irs_info;
-  irs_info._associated_uris = associated_uris;
+  irs_info._associated_uris.add_uri(default_id, false);
 
   // Set up AoRs to be returned by S4.
   AoR* get_aor = new AoR(default_id);
-  AoR* patch_aor = new AoR(default_id);
+  AoR* patch_aor = new AoR(*get_aor);
+  patch_aor->get_binding("binding_id");
 
+  // Create an empty patch object to save off the one provided by handle patch.
+  PatchObject patch_object;
 
   // Set up expect calls to the HSS and S4.
   {
@@ -80,15 +75,17 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
       .WillOnce(DoAll(SetArgPointee<1>(get_aor),
                       Return(HTTP_NOT_FOUND)));
     EXPECT_CALL(*_s4, handle_patch(default_id, _, _, _))
-      .WillOnce(DoAll(SetArgPointee<2>(patch_aor),
+      .WillOnce(DoAll(SaveArgPointee<1>(&patch_object),
+                      SetArgPointee<2>(patch_aor),
                       Return(HTTP_OK)));
   }
 
-  AoR::Bindings updated_bindings;
-  Binding binding = Binding("");
-  updated_bindings.insert(std::make_pair("id", &binding));
-  AoR::Bindings all_bindings;
   HSSConnection::irs_query irs_query;
+  AoR::Bindings updated_bindings;
+  Binding* binding = new Binding("");
+  binding->_emergency_registration = false;
+  updated_bindings.insert(std::make_pair("binding_id", binding));
+  AoR::Bindings all_bindings;
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->update_bindings(irs_query,
                                                      updated_bindings,
@@ -96,9 +93,76 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
                                                      all_bindings,
                                                      irs_info_out,
                                                      DUMMY_TRAIL_ID);
-
   EXPECT_EQ(rc, HTTP_OK);
+
+  // Check that the patch object contains the expected binding.
+  EXPECT_TRUE(patch_object._update_bindings.find("binding_id") != patch_object._update_bindings.end());
+
+  // Reset the bindings in the patch object so that we don't double free them.
+  patch_object._update_bindings = std::map<std::string, Binding*>();
+
+  // Check that the binding we set is returned in all bindings.
+  EXPECT_TRUE(all_bindings.find("binding_id") != all_bindings.end());
+
+  // Delete the bindings we've been passed.
+  for (std::pair<std::string, Binding*> b : all_bindings)
+  {
+    delete b.second;
+  }
 }
+
+
+TEST_F(SubscriberManagerTest, TestAddNewSubscription)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  std::string default_id = "sip:example.com";
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris.add_uri(default_id, false);
+
+  // Set up AoRs to be returned by S4.
+  AoR* get_aor = new AoR(default_id);
+  get_aor->get_binding("binding_id");
+  AoR* patch_aor = new AoR(*get_aor);
+  patch_aor->get_subscription("subscription_id");
+
+  // Create an empty patch object to save off the one provided by handle patch.
+  PatchObject patch_object;
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(default_id, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(default_id, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(default_id, _, _, _))
+      .WillOnce(DoAll(SaveArgPointee<1>(&patch_object),
+                      SetArgPointee<2>(patch_aor),
+                      Return(HTTP_OK)));
+  }
+
+  std::pair<std::string, Subscription*> updated_subscription;
+  Subscription* subscription = new Subscription();
+  updated_subscription = std::make_pair("subscription_id", subscription);
+  HSSConnection::irs_info irs_info_out;
+  HTTPCode rc = _subscriber_manager->update_subscription(default_id,
+                                                         updated_subscription,
+                                                         irs_info_out,
+                                                         DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+
+  // Check that the patch object contains the expected subscription.
+  EXPECT_TRUE(patch_object._update_subscriptions.find("subscription_id") != patch_object._update_subscriptions.end());
+
+  // Reset the subscriptions in the patch object so that we don't double free them.
+  patch_object._update_subscriptions = std::map<std::string, Subscription*>();
+}
+
+
+
 
 TEST_F(SubscriberManagerTest, TestGetBindings)
 {
@@ -194,7 +258,7 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
                       Return(HTTP_OK)));
   }
 
-  // Call update associated URIs on SM.
+  // Call get subscriptions on SM.
   std::map<std::string, Subscription*> subscriptions;
   HTTPCode rc = _subscriber_manager->get_subscriptions(default_id,
                                                        subscriptions,
@@ -203,6 +267,12 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
 
   // Check that there is one subscription with the correct IDs.
   EXPECT_TRUE(subscriptions.find("subscription_id") != subscriptions.end());
+
+  // Delete the subscriptions we've been passed.
+  for (std::pair<std::string, Subscription*> s : subscriptions)
+  {
+    delete s.second;
+  }
 }
 
 TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
@@ -215,13 +285,8 @@ TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
   AoR* get_aor = new AoR(default_id);
   get_aor->_associated_uris.add_uri(default_id, false);
 
-  // Set up new associated URIs.
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(default_id, false);
-  associated_uris.add_uri(other_id, false);
-
   // Create an empty patch object to save off the one provided by handle patch.
-  PatchObject patch_object = {};
+  PatchObject patch_object;
 
   // Set up expect calls to S4.
   {
@@ -233,6 +298,11 @@ TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
       .WillOnce(DoAll(SaveArgPointee<1>(&patch_object),
                       Return(HTTP_OK)));
   }
+
+  // Set up new associated URIs.
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(default_id, false);
+  associated_uris.add_uri(other_id, false);
 
   // Call update associated URIs on SM.
   HTTPCode rc = _subscriber_manager->update_associated_uris(default_id,

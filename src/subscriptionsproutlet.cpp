@@ -314,7 +314,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   if (expiry != 0)
   {
     rc = _subscription->_sm->update_subscription(public_id,
-                                                 new_subscription,
+                                                 std::make_pair(new_subscription->get_id(), new_subscription),
                                                  irs_info,
                                                  trail_id);
   }

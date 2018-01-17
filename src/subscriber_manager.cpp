@@ -33,17 +33,6 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 {
   bool success;
 
-  // Sequence of events:
-  //  - Lookup in HSS to get default public ID.
-  //  - Get current AoR.
-  //  - Write audit logs.
-  //  - Make changes to AoR object.
-  //  - Write back to store.
-  //  - Write audit logs. TODO
-  //  - Send NOTIFYs. TODO
-  //  - Update HSS if all bindings expired. TODO
-  //  - Send 3rd party registers. TODO
-
   // Get subscriber information from the HSS.
   HTTPCode rc = get_subscriber_state(irs_query,
                                      irs_info,
@@ -58,11 +47,9 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   bool emergency;
   // Can any of the deleted bindings be for emergencies - yes so need to pass
   // that information along with the binding IDs to delete. TODO
-  for (AoR::Bindings::const_iterator it = updated_bindings.begin();
-       it != updated_bindings.end();
-       ++it)
+  for (std::pair<std::string, Binding*> b : updated_bindings)
   {
-    if (it->second->_emergency_registration)
+    if (b.second->_emergency_registration)
     {
       emergency = true;
       break;
@@ -85,10 +72,15 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
                        &aor,
                        version,
                        trail);
-  if ((rc != HTTP_OK) || (rc != HTTP_NOT_FOUND))
+
+  // It is valid to return HTTP_NOT_FOUND since there will not be a stored AoR
+  // when an IRS is first registered.
+  if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
   {
-    // TODO error handling
+    return rc;
   }
+
+  delete aor; aor = NULL;
 
   PatchObject* patch_object = new PatchObject();
   patch_object->set_update_bindings(updated_bindings);
@@ -99,19 +91,29 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
                          &aor,
                          trail);
 
+  // Get all bindings to return to the caller
+  for (std::pair<std::string, Binding*> b : aor->bindings())
+  {
+    Binding* copy_b = new Binding(*(b.second));
+    all_bindings.insert(std::make_pair(b.first, copy_b));
+  }
+
   // Send NOTIFYs
 
   // Update HSS if all bindings expired.
   if (false)
   {
-    HSSConnection::irs_query irs_query_2 = irs_query;
-    irs_query_2._req_type = HSSConnection::DEREG_USER;
-    get_subscriber_state(irs_query,
+    HSSConnection::irs_query irs_dereg_query = irs_query;
+    irs_dereg_query._req_type = HSSConnection::DEREG_USER;
+    get_subscriber_state(irs_dereg_query,
                          irs_info,
                          trail); // Can't do anything with the return code here.
   }
 
   // Send 3rd party REGISTERs.
+
+  delete aor; aor = NULL;
+  delete patch_object; patch_object = NULL;
 
   return HTTP_OK;
 }
@@ -126,26 +128,14 @@ HTTPCode SubscriberManager::remove_bindings_with_default_id(const std::string& a
 }
 
 HTTPCode SubscriberManager::update_subscription(const std::string& public_id,
-                                                Subscription* subscription,
+                                                const std::pair<std::string, Subscription*>& subscription,
                                                 HSSConnection::irs_info& irs_info,
                                                 SAS::TrailId trail)
 {
-  // Steps:
-  //  - Get cached HSS data from public_id
-  //  - Get data from S4
-  //  - Update AoR with new subscription.
-  //    - Maybe this should take into account whether the SUBSCRIBE event
-  //      is acutally removing a subscription and not add it but delete it.
-  //    - Or the Client could be responsible for this by looking at the expiry time.
-  //  - Write back to S4.
-  //  - Analytics.
-  //  - Send NOTIFYs
-
   // Get HSS cached data
   HTTPCode rc = get_cached_subscriber_state(public_id,
                                             irs_info,
                                             trail);
-
   if (rc != HTTP_OK)
   {
     return rc;
@@ -158,27 +148,36 @@ HTTPCode SubscriberManager::update_subscription(const std::string& public_id,
     return HTTP_BAD_REQUEST; // TODO - what should the return code be here?
   }
 
-  // Get the current AoR from S4, if one exists.
-  /*AoR* aor = _s4->get(aor_id);
-  if (aor == NULL)
-  {
-    // Create a brand new AoR.
-  }*/
+  // Get the current AoR from S4.
+  AoR* aor = NULL;
+  uint64_t version;
+  rc = _s4->handle_get(aor_id,
+                       &aor,
+                       version,
+                       trail);
 
-  //aor->add_subscription(subscription.get_id(), TODO add this method to the AoR.
-                        //subscription);
-
-  // Write back to S4.
-  // SDM-REFACTOR-TODO: We're going to write to memcached in sequence if we have
-  // multiple bindings. Surely that's wrong?
-  /*bool success = _s4->send_patch(aor_id, aor);
-  if (!success)
+  // There must be an existing AoR since there must be bindings to subscribe to.
+  if (rc != HTTP_OK)
   {
-    // We can't do anything if we fail to write to memcached, so break out.
-    return HTTP_SERVER_ERROR;
-  }*/
+    return rc;
+  }
+
+  delete aor; aor = NULL;
+
+  PatchObject* patch_object = new PatchObject();
+  std::map<std::string, Subscription*> s_map;
+  s_map.insert(subscription);
+  patch_object->set_update_subscriptions(s_map);
+
+  rc = _s4->handle_patch(aor_id,
+                         patch_object,
+                         &aor,
+                         trail);
 
   // Send NOTIFYs
+
+  delete aor; aor = NULL;
+  delete patch_object; patch_object = NULL;
 
   return HTTP_OK;
 }
