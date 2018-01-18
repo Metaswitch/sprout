@@ -1318,7 +1318,7 @@ TEST_F(SCSCFTest, TestBarredCallee)
   SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
-/**
+
 // Test that a call from an IMPU that belongs to a barred wildcarded public
 // identity is rejected with a 403 (forbidden). The IMPU isn't included as
 // a non-distinct IMPU in the HSS response.
@@ -1326,18 +1326,16 @@ TEST_F(SCSCFTest, TestBarredWildcardCaller)
 {
   SCOPED_TRACE("");
 
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:610@homedomain")
-    .addIdentity("sip:65!.*!@homedomain")
-    .addBarringIndication("sip:65!.*!@homedomain", "1")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
+  // Set up the info to be returned about the callee, which includes a barred
+  // wildcarded public identity.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "610", "homedomain", false);
+  irs_info._associated_uris._distinct_to_wildcard.insert(std::make_pair("sip:6505551000@homedomain", "sip:65!.*!@homedomain"));
+  irs_info._associated_uris._barred_map["sip:65!.*!@homedomain"] = true;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1350,22 +1348,27 @@ TEST_F(SCSCFTest, TestBarredWildcardCallee)
 {
   SCOPED_TRACE("");
 
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:610@homedomain")
-    .addIdentity("sip:65!.*!@homedomain")
-    .addBarringIndication("sip:65!.*!@homedomain", "1")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
+  // Set up the info to be returned about the callee, which includes a barred
+  // wildcarded public identity.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "610", "homedomain", false);
+  irs_info._associated_uris._distinct_to_wildcard.insert(std::make_pair("sip:6505551234@homedomain", "sip:65!.*!@homedomain"));
+  irs_info._associated_uris._barred_map["sip:65!.*!@homedomain"] = true;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
+  // We look up the bindings before we reject the call due to the callee being
+  // barred, so expect a call to get_bindings (but no need to bother to return
+  // any useful info).
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce( Return(HTTP_OK));
+
   SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
 
+/**
 // Test that a call from a barred IMPU that belongs to a non-barred wildcarded
 // public identity is rejected with a 403 (forbidden). The IMPU is included as
 // a non-distinct IMPU in the HSS response.
