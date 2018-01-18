@@ -54,7 +54,6 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
 
 class DeregistrationTaskTest : public SipTest
 {
-  MockSubscriberDataManager* _subscriber_data_manager;
   MockSubscriberManager* _subscriber_manager;
   MockImpiStore* _local_impi_store;
   MockImpiStore* _remote_impi_store;
@@ -75,7 +74,6 @@ class DeregistrationTaskTest : public SipTest
     _local_impi_store = new MockImpiStore();
     _remote_impi_store = new MockImpiStore();
     _httpstack = new MockHttpStack();
-    _subscriber_data_manager = new MockSubscriberDataManager();
     _subscriber_manager = new MockSubscriberManager();
     _hss = new FakeHSSConnection();
   }
@@ -85,7 +83,6 @@ class DeregistrationTaskTest : public SipTest
     delete _req;
     delete _cfg;
     delete _hss;
-    delete _subscriber_data_manager;
     delete _subscriber_manager;
     delete _httpstack;
     delete _local_impi_store; _local_impi_store = NULL;
@@ -709,8 +706,7 @@ class DeleteImpuTaskTest : public TestWithMockSdms
 
   // Build the deregistration request
   void build_task(const std::string& impu,
-                  htp_method method = htp_method_DELETE,
-                  bool configure_remote_store = false)
+                  htp_method method = htp_method_DELETE)
   {
     req = new MockHttpStack::Request(stack,
                                      "/impu/" + impu,
@@ -718,11 +714,6 @@ class DeleteImpuTaskTest : public TestWithMockSdms
                                      "",
                                      "",
                                      method);
-    std::vector<SubscriberDataManager*> remote_stores;
-    if (configure_remote_store)
-    {
-      remote_stores.push_back(remote_store1);
-    }
 
     cfg = new DeleteImpuTask::Config(sm);
     task = new DeleteImpuTask(*req, cfg, 0);
@@ -789,8 +780,7 @@ class PushProfileTaskTest : public TestWithMockSdms
   // Build the push profile request
   void build_pushprofile_request(std::string body,
                                  std::string default_uri,
-                                 htp_method method = htp_method_PUT,
-                                 bool configure_remote_store = false)
+                                 htp_method method = htp_method_PUT)
   {
     req = new MockHttpStack::Request(stack,
                                      "/registrations/" + default_uri,
@@ -798,11 +788,6 @@ class PushProfileTaskTest : public TestWithMockSdms
                                      "",
                                      body,
                                      method);
-    std::vector<SubscriberDataManager*> remote_stores;
-    if (configure_remote_store)
-    {
-      remote_stores.push_back(remote_store1);
-    }
 
     cfg = new PushProfileTask::Config(sm);
     task = new PushProfileTask(*req, cfg, 0);

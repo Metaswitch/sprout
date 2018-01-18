@@ -153,7 +153,6 @@ protected:
 
   const Config* _cfg;
   std::map<std::string, std::string> _bindings;
-  std::string _notify;
 };
 
 /// For retrieving bindings from store.

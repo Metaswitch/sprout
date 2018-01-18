@@ -194,17 +194,6 @@ void DeregistrationTask::run()
     return;
   }
 
-  // Mandatory query parameter 'send-notifications' that must be true or false
-  _notify = _req.param("send-notifications");
-
-  if (_notify != "true" && _notify != "false")
-  {
-    TRC_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
-    send_http_reply(HTTP_BAD_REQUEST);
-    delete this;
-    return;
-  }
-
   // Parse the JSON body
   HTTPCode rc = parse_request(_req.get_rx_body());
 
@@ -403,7 +392,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
                                          std::string private_id,
                                          std::set<std::string>& impis_to_delete)
 {
-  AoR::Bindings bindings;
+  std::map<std::string, Binding*> bindings;
 
   HTTPCode rc = _cfg->_sm->get_bindings(aor_id,
                                         bindings,
@@ -427,11 +416,10 @@ HTTPCode DeregistrationTask::deregister_bindings(
       }
 
       binding_ids.push_back(binding.second->get_id());
-      printf("\n%s\n", binding.second->get_id().c_str());
     }
   }
 
-  AoR::Bindings unused_bindings;
+  std::map<std::string, Binding*> unused_bindings;
   return _cfg->_sm->remove_bindings_with_default_id(
                                          aor_id,
                                          binding_ids,
