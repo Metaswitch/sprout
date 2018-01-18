@@ -85,19 +85,29 @@ protected:
     // The hostname matches neither any local alias nor any remote alias
     NO_MATCH,
 
-    // Either:
-    //   - The hostname matches a local alias
-    //   - The hostname matches a remote alias, and remote matches are allowed
-    MATCH,
-    // TJW2 TODO: Distinguish between local and remote matches?
+    // The hostname matches a remote alias, but not a local one
+    REMOTE,
 
-    // The hostname matches a remote alias (not a local one), but remote
-    // matches are not allowed.
-    REMOTE_MATCH_REJECTED
+    // The hostname matches a local alias
+    LOCAL
   };
 
-  typedef std::pair<bool, AliasMatchType> AliasMatch;
+  static bool is_alias_match(AliasMatchType match)
+  {
+    switch (match)
+    {
+      case REMOTE:
+      case LOCAL:
+        return true;
+      case NO_MATCH:
+        return false;
+      default:
+        return false;
+    }
+  }
+
   typedef std::pair<Sproutlet*, AliasMatchType> SproutletMatch;
+  typedef std::pair<SproutletTsx*, AliasMatchType> SproutletTsxMatch;
 
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
@@ -110,7 +120,6 @@ protected:
   SproutletMatch target_sproutlet(pjsip_msg* req,
                               int port,
                               std::string& alias,
-                              bool allow_remote_aliases,
                               SAS::TrailId trail);
 
   /// Return the sproutlet that matches the URI supplied, along with the type of
@@ -119,8 +128,7 @@ protected:
     const pjsip_uri* uri,
     std::string& alias,
     std::string& local_hostname,
-    SPROUTLET_SELECTION_TYPES& selection_type,
-    bool allow_remote_aliases) const;
+    SPROUTLET_SELECTION_TYPES& selection_type) const;
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -140,13 +148,14 @@ protected:
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
+  // TJW2 TODO signature?
   bool is_uri_local(const pjsip_uri* uri, bool allow_remote_aliases);
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
-  AliasMatch is_host_alias(const pj_str_t* host,
-                           bool allow_remote_aliases) const;
+  // TJW2 TODO naming
+  AliasMatchType is_host_alias(const pj_str_t* host) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,
                         const Sproutlet* sproutlet) const;
@@ -239,12 +248,13 @@ protected:
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
 
+    // TJW2 TODO: Alignment
     /// Finds a SproutletTsx willing to handle a request
     SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
-                                    int port,
-                                    std::string& alias,
-                                    bool allow_remote_aliases,
-                                    bool& remote_match_rejected);
+                                        int port,
+                                        std::string& alias,
+                                        bool allow_remote_aliases,
+                                        bool& remote_match_rejected);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;

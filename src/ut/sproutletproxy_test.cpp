@@ -841,8 +841,7 @@ public:
     add_host_mapping("proxy2.awaydomain", "10.10.20.2");
     add_host_mapping("node1.awaydomain", "10.10.28.1");
     add_host_mapping("node2.awaydomain", "10.10.28.2");
-    add_host_mapping("proxy1.homedomain-remote", "10.10.30.1");
-    add_host_mapping("scscf.proxy1.homedomain-remote", "10.10.30.2");
+    add_host_mapping("mockforwarder.proxy1.homedomain-remote", "10.10.30.1");
 
     // Create the Test Sproutlets.
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, "sip:fwd.homedomain;transport=tcp", ""));
@@ -961,8 +960,7 @@ public:
     Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
                                                             unused_alias,
                                                             unused_local_hostname,
-                                                            unused_selection_type,
-                                                            true).first;
+                                                            unused_selection_type).first;
     if (sproutlet != NULL)
     {
       service_name = sproutlet->service_name();
@@ -3528,7 +3526,7 @@ TEST_F(SproutletProxyTest, ForwardRemoteAliasInternal)
 
   mock_route_setter = new MockRouteSetter();
   EXPECT_CALL(*mock_route_setter, get_uri())
-    .WillOnce(Return("sip:proxy1.homedomain-remote;transport=TCP;lr"));
+    .WillOnce(Return("sip:mockforwarder.proxy1.homedomain-remote;transport=TCP;lr"));
   EXPECT_CALL(*_mock_route_to_remote_alias_counter, increment());
 
   // Inject a request with a Route header referencing a remote alias of this node.
@@ -3559,7 +3557,7 @@ TEST_F(SproutletProxyTest, ForwardRemoteAliasInternal)
   ReqMatcher("INVITE").matches(tdata->msg);
 
   // Check that the Route header has been removed.
-  EXPECT_EQ("Route: <sip:proxy1.homedomain-remote;transport=TCP;lr>",
+  EXPECT_EQ("Route: <sip:mockforwarder.proxy1.homedomain-remote;transport=TCP;lr>",
             get_headers(tdata->msg, "Route"));
 
   // Send a 200 OK response.
@@ -3577,144 +3575,3 @@ TEST_F(SproutletProxyTest, ForwardRemoteAliasInternal)
   delete tp;
   delete mock_route_setter;
 }
-
-// TJW2 TODO: Tidy and recomment
-TEST_F(SproutletProxyTest, ForwardRemoteAliasInternal2)
-{
-  // Tests that requests recieved from sproutlets with a Route header
-  // corresponsing to a remote (but not local)  alias of this node are
-  // forwarded, and the relevant statistic incremented.
-
-  pjsip_tx_data* tdata;
-
-  // Create a TCP connection to the listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.scscf_port,
-                                        "1.2.3.4",
-                                        49152);
-
-  mock_route_setter = new MockRouteSetter();
-  EXPECT_CALL(*mock_route_setter, get_uri())
-    .WillOnce(Return("sip:scscf.proxy1.homedomain-remote;transport=TCP;lr"));
-  EXPECT_CALL(*_mock_route_to_remote_alias_counter, increment());
-
-  // Inject a request with a Route header referencing a remote alias of this node.
-  Message msg1;
-  msg1._method = "INVITE";
-  msg1._requri = "sip:bob@awaydomain";
-  msg1._from = "sip:alice@awaydomain";
-  msg1._to = "sip:bob@awaydomain";
-  msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:mockforwarder.proxy1.homedomain;transport=TCP;lr>";
-  inject_msg(msg1.get_request(), tp);
-
-
-  // Expecting a 100 Trying and forwarded INVITE
-  ASSERT_EQ(2, txdata_count());
-
-  // Check the 100 Trying
-  tdata = current_txdata();
-  RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
-  free_txdata();
-
-  // Check the INVITE
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.30.2", 5060, tdata);
-  ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Check that the Route header has been removed.
-  EXPECT_EQ("Route: <sip:scscf.proxy1.homedomain-remote;transport=TCP;lr>",
-            get_headers(tdata->msg, "Route"));
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
-
-  // Check the response is forwarded back to the source.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  tp->expect_target(tdata);
-  RespMatcher(200).matches(tdata->msg);
-  free_txdata();
-
-  ASSERT_EQ(0, txdata_count());
-
-  delete tp;
-  delete mock_route_setter;
-}
-
-// TJW2 TODO: Tidy and recomment
-TEST_F(SproutletProxyTest, ForwardRemoteAliasInternal3)
-{
-  // Tests that requests recieved from sproutlets with a Route header
-  // corresponsing to a remote (but not local)  alias of this node are
-  // forwarded, and the relevant statistic incremented.
-
-  pjsip_tx_data* tdata;
-
-  // Create a TCP connection to the listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.scscf_port,
-                                        "1.2.3.4",
-                                        49152);
-
-  mock_route_setter = new MockRouteSetter();
-  EXPECT_CALL(*mock_route_setter, get_uri())
-    .WillOnce(Return("sip:uninterestedaliastest.proxy1.homedomain;transport=TCP;lr"));
-  EXPECT_CALL(*_mock_route_to_remote_alias_counter, increment());
-
-  // Inject a request with a Route header referencing a remote alias of this node.
-  Message msg1;
-  msg1._method = "INVITE";
-  msg1._requri = "sip:bob@awaydomain";
-  msg1._from = "sip:alice@awaydomain";
-  msg1._to = "sip:bob@awaydomain";
-  msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:mockforwarder.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:scscf.proxy1.homedomain-remote;transport=TCP;lr>";
-  inject_msg(msg1.get_request(), tp);
-
-
-  // Expecting a 100 Trying and forwarded INVITE
-  ASSERT_EQ(2, txdata_count());
-
-  // Check the 100 Trying
-  tdata = current_txdata();
-  RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
-  free_txdata();
-
-  // Check the INVITE
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.30.2", 5060, tdata);
-  ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Check that the Route header has been removed.
-  EXPECT_EQ("Route: <sip:scscf.proxy1.homedomain-remote;transport=TCP;lr>",
-            get_headers(tdata->msg, "Route"));
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
-
-  // Check the response is forwarded back to the source.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  tp->expect_target(tdata);
-  RespMatcher(200).matches(tdata->msg);
-  free_txdata();
-
-  ASSERT_EQ(0, txdata_count());
-
-  delete tp;
-  delete mock_route_setter;
-}
-// TJW2 TODO: Uninterested sproutlet
-
-// TJW2 TODO: User part match
-
-// TJW2 TODO: Route header URI corresponds to our hostname + port match
-
-// TJW2 TODO: Services param match
