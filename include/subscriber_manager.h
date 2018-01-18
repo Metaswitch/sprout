@@ -181,9 +181,32 @@ private:
   HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;
 
+  HTTPCode modify_subscription(const std::string& public_id,
+                               const std::pair<std::string, Subscription*>& update_subscription,
+                               const std::string& remove_subscription,
+                               HSSConnection::irs_info& irs_info,
+                               SAS::TrailId trail);
+
   HTTPCode get_cached_default_id(const std::string& public_id,
                                  std::string& aor_id,
                                  HSSConnection::irs_info& irs_info,
+                                 SAS::TrailId trail);
+
+  HTTPCode patch_bindings(const std::string& aor_id,
+                          const std::map<std::string, Binding*>& update_bindings,
+                          const std::vector<std::string>& remove_bindings,
+                          AoR*& aor,
+                          SAS::TrailId trail);
+
+  HTTPCode patch_subscription(const std::string& aor_id,
+                              const std::pair<std::string, Subscription*>& update_subscription,
+                              const std::string& remove_subscription,
+                              AoR*& aor,
+                              SAS::TrailId trail);
+
+  HTTPCode patch_associated_uris(const std::string& aor_id,
+                                 const AssociatedURIs& associated_uris,
+                                 AoR*& aor,
                                  SAS::TrailId trail);
 
   HTTPCode deregister_with_hss(const std::string& aor_id,
@@ -191,6 +214,12 @@ private:
                                const std::string& server_name,
                                HSSConnection::irs_info& irs_info,
                                SAS::TrailId trail);
+
+  void populate_bindings(AoR* aor,
+                         std::map<std::string, Binding*>& bindings);
+
+  void populate_subscriptions(AoR* aor,
+                              std::map<std::string, Subscription*>& subscriptions);
 };
 
 #endif

@@ -367,36 +367,6 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   }
 }
 
-TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
-{
-  HSSConnection::irs_info irs_info;
-  HSSConnection::irs_query irs_query;
-  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
-  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
-                                                             irs_info,
-                                                             DUMMY_TRAIL_ID), HTTP_OK);
-
-  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
-  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
-                                                             irs_info,
-                                                             DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
-}
-
-TEST_F(SubscriberManagerTest, TestGetSubscriberState)
-{
-  HSSConnection::irs_info irs_info;
-  HSSConnection::irs_query irs_query;
-  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
-  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
-                                                      irs_info,
-                                                      DUMMY_TRAIL_ID), HTTP_OK);
-
-  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
-  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
-                                                      irs_info,
-                                                      DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
-}
-
 TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
 {
   // Set up a default ID and a second ID in the IRS.
@@ -436,4 +406,34 @@ TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
   EXPECT_TRUE(patch_object._associated_uris.contains_uri(other_id));
 
   EXPECT_EQ(rc, HTTP_OK);
+}
+
+TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
+{
+  HSSConnection::irs_info irs_info;
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
+  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
+                                                             irs_info,
+                                                             DUMMY_TRAIL_ID), HTTP_OK);
+
+  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
+  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
+                                                             irs_info,
+                                                             DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
+}
+
+TEST_F(SubscriberManagerTest, TestGetSubscriberState)
+{
+  HSSConnection::irs_info irs_info;
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
+  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
+                                                      irs_info,
+                                                      DUMMY_TRAIL_ID), HTTP_OK);
+
+  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
+  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
+                                                      irs_info,
+                                                      DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
 }
