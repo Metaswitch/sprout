@@ -1434,7 +1434,6 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   SCOPED_TRACE("");
 
-  // Set up the info to be returned about the callee.
   HSSConnection::irs_info irs_info_1;
   set_irs_info(irs_info_1, "6505551000", "homedomain");
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
@@ -1455,20 +1454,23 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
-/**
 // Test that a successful originating video call results in the correct stats
 // being tracked.
 TEST_F(SCSCFTest, TestSimpleTelURIVideo)
 {
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
+                    Return(HTTP_OK)));
   SCSCFMessage msg;
   msg._toscheme = "tel";
   msg._to = "16505551234";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._body = "\r\nv=0\r\no=Andrew 2890844526 2890844526 IN IP4 10.120.42.3\r\nc=IN IP4 10.120.42.3\r\nt=0 0\r\nm=audio 49170 RTP/AVP 0 8 97\r\na=rtpmap:0 PCMU/8000\r\nm=video 51372 RTP/AVP 31 32\r\na=rtpmap:31 H261/90000\r\n";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
@@ -1479,7 +1481,7 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
-
+/**
 TEST_F(SCSCFTest, TestTerminatingTelURI)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
