@@ -752,7 +752,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // We check if the UE that sent this REGISTER supports "outbound" (RFC5626)
   bool supported_outbound = false;
   pjsip_supported_hdr* supported_hdr = (pjsip_supported_hdr*)
-                            pjsip_msg_find_hdr_by_name(req, &STR_SUPPORTED, NULL);
+                            pjsip_msg_find_hdr(req, PJSIP_H_SUPPORTED, NULL);
 
   while ((supported_hdr != NULL) && (supported_outbound == false))
   {
@@ -764,7 +764,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       }
     }
     supported_hdr = (pjsip_supported_hdr*)
-                  pjsip_msg_find_hdr_by_name(req, &STR_SUPPORTED, supported_hdr->next);
+                  pjsip_msg_find_hdr(req, PJSIP_H_SUPPORTED, supported_hdr->next);
   }
 
   // Deal with path header related fields in the response.
@@ -789,6 +789,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       // 2. The first path header contains the "ob" parameter
       // 3. Contact header contains the instance-id and reg-id header parameters
       // 4. The UE supports "outbound" (RFC5626)
+      //
+      // The above behaviour is described in RFC5626 section 6. See also 
+      // TS24.229, 5.4.1.2.2F, step h).
       pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(get_pool(rsp));
       require_hdr->count = 1;
       require_hdr->values[0] = STR_OUTBOUND;
