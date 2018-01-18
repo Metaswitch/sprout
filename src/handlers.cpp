@@ -277,8 +277,13 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   report_sip_all_register_marker(trail(), aor_id);
 }
 
-
-// Retrieve the aors and any private IDs from the request body
+/**
+ * @brief Retrieve the aors and any private IDs from the request body
+ *
+ * @param body[in]     HTTP request body
+ *
+ * @return HTTPCode    success code
+ */
 HTTPCode DeregistrationTask::parse_request(std::string body)
 {
   rapidjson::Document doc;
@@ -333,6 +338,11 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
   return HTTP_OK;
 }
 
+/**
+ * @brief Handles a RTR request based on parsed infomation
+ *
+ * @return HTTPCode        success code
+ */
 HTTPCode DeregistrationTask::handle_request()
 {
   HTTPCode rc = HTTP_OK;
@@ -363,6 +373,12 @@ HTTPCode DeregistrationTask::handle_request()
   return rc;
 }
 
+/**
+ * @brief Delete IMPI from ImpiStore based on RTR request
+ *
+ * @param store[in,out]    ImpiStore where IMPIs are to be deleted
+ * @param impi[in]         IMPI to be deleted
+ */
 void DeregistrationTask::delete_impi_from_store(ImpiStore* store,
                                                 const std::string& impi)
 {
@@ -387,6 +403,15 @@ void DeregistrationTask::delete_impi_from_store(ImpiStore* store,
 }
 
 
+/**
+ * @brief Deregister binding in response to RTR request
+ *
+ * @param aor_id[in]              address of record for the bindings
+ * @param private_id[in]          IMPI of the bindings to be deregistered
+ * @param impis_to_delete[in,out] IMPI of the bindings to be deregistered
+ *
+ * @return 
+ */
 HTTPCode DeregistrationTask::deregister_bindings(
                                          std::string aor_id,
                                          std::string private_id,
