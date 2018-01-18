@@ -1481,39 +1481,43 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
-/**
 TEST_F(SCSCFTest, TestTerminatingTelURI)
 {
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addIdentity("tel:6505551235")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("tel:6505551235",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
+
+  // Set the info for the callee, to include the associated tel uri.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain");
+  irs_info._associated_uris.add_uri("tel:6505551235", false);
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
+  std::string uri = "sip:6505551234@homedomain";
+  AoR::Bindings bindings;
+  Binding binding(uri);
+  create_binding(binding);
+  bindings.insert(std::make_pair(uri, &binding));
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(bindings),
+                    Return(HTTP_OK)));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   // Send a terminating INVITE for a subscriber with a tel: URI
   SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
-  msg._todomain = "";
   msg._requri = "tel:6505551235";
 
-  msg._method = "INVITE";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
 
+/**
 // Registered subscriber failed to get associated URI and has no bindings in the store.
 TEST_F(SCSCFTest, TestEmptyBinding)
 {
+
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:1234567@homedomain");
   SubscriptionBuilder subscription = SubscriptionBuilder()
