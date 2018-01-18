@@ -1513,20 +1513,20 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
 
-/**
 // Registered subscriber failed to get associated URI and has no bindings in the store.
 TEST_F(SCSCFTest, TestEmptyBinding)
 {
 
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:1234567@homedomain");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
+  // Set the info for the callee, to include the associated tel uri.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "1234567", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
-  _hss_connection->set_impu_result("tel:6505551235",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
+  std::string uri = "sip:6505551234@homedomain";
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce(Return(HTTP_OK));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -1537,6 +1537,7 @@ TEST_F(SCSCFTest, TestEmptyBinding)
   doSlowFailureFlow(msg, 480);
 }
 
+/**
 TEST_F(SCSCFTest, TestTelURIWildcard)
 {
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
