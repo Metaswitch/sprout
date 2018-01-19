@@ -241,7 +241,8 @@ static void pjsip_log_handler(int level,
 }
 
 
-void init_pjsip_logging(int log_level,
+void init_pjsip_logging(pj_bool_t ramrecorder,
+                        int log_level,
                         pj_bool_t log_to_file,
                         const std::string& directory)
 {

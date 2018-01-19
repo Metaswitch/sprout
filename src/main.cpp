@@ -1757,7 +1757,10 @@ int main(int argc, char* argv[])
     access_logger = new AccessLogger(opt.log_directory);
   }
 
-  init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
+  init_pjsip_logging(opt.ramrecorder,
+                     opt.log_level,
+                     opt.log_to_file,
+                     opt.log_directory);
 
   std::stringstream options_ss;
   for (int ii = 0; ii < argc; ii++)
