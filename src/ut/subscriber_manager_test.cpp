@@ -73,7 +73,7 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
                       Return(HTTP_OK)));
     EXPECT_CALL(*_s4, handle_get(default_id, _, _, _))
       .WillOnce(DoAll(SetArgPointee<1>(get_aor),
-                      Return(HTTP_NOT_FOUND)));
+                      Return(HTTP_OK)));
     EXPECT_CALL(*_s4, handle_patch(default_id, _, _, _))
       .WillOnce(DoAll(SaveArgPointee<1>(&patch_object),
                       SetArgPointee<2>(patch_aor),
@@ -262,7 +262,31 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
   EXPECT_TRUE(std::find(rs.begin(), rs.end(), "subscription_id") != rs.end());
 }
 
-TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
+<<<<<<< HEAD
+/*TEST_F(SubscriberManagerTest, TestUpdateSubscription)
+{
+  // Set up an IRS to be returned by the mocked update_registration_state()
+  // call.
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri("sip:example.com", false);
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris = associated_uris;
+  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
+  Subscription* subscription = new Subscription();
+  HSSConnection::irs_info irs_info_out;
+  HTTPCode rc = _subscriber_manager->update_subscription("",
+                                                         std::make_pair(subscription->get_id(), subscription),
+                                                         irs_info_out,
+                                                         DUMMY_TRAIL_ID);
+
+  EXPECT_EQ(rc, HTTP_OK);
+  delete subscription; subscription = NULL;
+}*/
+
+TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
 {
   // Set up an IRS to be returned by the mocked update_registration_state()
   // call.

@@ -67,6 +67,7 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 
   // Get the current AoR from S4, if one exists.
   AoR* aor = NULL;
+  PatchObject* patch_object = NULL;
   uint64_t version;
   rc = _s4->handle_get(aor_id,
                        &aor,
@@ -82,14 +83,27 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 
   delete aor; aor = NULL;
 
-  PatchObject* patch_object = new PatchObject();
+  patch_object = new PatchObject();
   patch_object->set_update_bindings(updated_bindings);
   patch_object->set_remove_bindings(binding_ids_to_remove);
-
-  rc = _s4->handle_patch(aor_id,
-                         patch_object,
-                         &aor,
+  // TODO add in asso_uris
+  if (rc == HTTP_NOT_FOUND)
+  {
+    aor = new AoR(aor_id);
+    aor->patch_aor(patch_object);
+    // TODO set scscf_uri
+    rc = _s4->handle_put(aor_id,
+                         aor,
                          trail);
+    // Set up AoR?
+  }
+  else
+  {
+    rc = _s4->handle_patch(aor_id,
+                           patch_object,
+                           &aor,
+                           trail);
+  }
   delete patch_object; patch_object = NULL;
 
   if (rc != HTTP_OK)
