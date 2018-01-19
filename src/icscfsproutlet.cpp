@@ -754,6 +754,11 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
 
     PJUtils::add_route_header(req, scscf_sip_uri, get_pool(req));
+
+    // We might be invoking a directly attached AS here, so we should log the
+    // ICID if it exists
+    PJUtils::mark_icid(trail(), req);
+
     send_request(req);
   }
   else if ((uri_class == OFFNET_SIP_URI) ||
