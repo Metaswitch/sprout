@@ -262,7 +262,6 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
   EXPECT_TRUE(std::find(rs.begin(), rs.end(), "subscription_id") != rs.end());
 }
 
-<<<<<<< HEAD
 /*TEST_F(SubscriberManagerTest, TestUpdateSubscription)
 {
   // Set up an IRS to be returned by the mocked update_registration_state()
@@ -286,7 +285,7 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
   delete subscription; subscription = NULL;
 }*/
 
-TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
+TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
 {
   // Set up an IRS to be returned by the mocked update_registration_state()
   // call.
