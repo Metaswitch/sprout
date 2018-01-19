@@ -250,7 +250,7 @@ void init_pjsip_logging(pj_bool_t ramrecorder,
   pj_log_set_decor(PJ_LOG_HAS_SENDER);
   pj_log_set_log_func(&pjsip_log_handler);
 
-  if (opt.ramrecorder)
+  if (ramrecorder)
   {
     pj_log_set_ram_trace_funcs(&Log::ramCacheTrcCall, &Log::ramTrace);
   }
