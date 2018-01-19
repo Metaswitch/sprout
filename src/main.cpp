@@ -2361,12 +2361,7 @@ int main(int argc, char* argv[])
   // be invoked. We don't increment any statistics relating to the fallback
   // iFCs in these flows though (as they should only be used on initial
   // registration).
-  S4* s4 = new S4("2", local_aor_store, {});
-  SubscriberManager* sm = new SubscriberManager(s4,
-                                               hss_connection,
-                                               analytics_logger);
-
-  DeregistrationTask::Config deregistration_config(sm,
+  DeregistrationTask::Config deregistration_config(subscriber_manager,
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);

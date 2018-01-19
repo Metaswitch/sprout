@@ -21,7 +21,7 @@
 #include "aschain.h"
 #include "acr.h"
 #include "hssconnection.h"
-#include "subscriber_data_manager.h"
+#include "subscriber_manager.h"
 #include "sproutlet.h"
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
@@ -38,11 +38,8 @@ public:
                         const std::string& uri,
                         const std::string& network_function,
                         const std::string& next_hop_service,
-                        SubscriberDataManager* sdm,
-                        std::vector<SubscriberDataManager*> remote_sdms,
-                        HSSConnection* hss_connection,
+                        SubscriberManager* sm,
                         ACRFactory* acr_factory,
-                        AnalyticsLogger* analytics_logger,
                         int cfg_max_expires);
   ~SubscriptionSproutlet();
 
@@ -61,16 +58,10 @@ private:
 
   friend class SubscriptionSproutletTsx;
 
-  SubscriberDataManager* _sdm;
-  std::vector<SubscriberDataManager*> _remote_sdms;
-
-  // Connection to the HSS service for retrieving associated public URIs.
-  HSSConnection* _hss;
+  SubscriberManager* _sm;
 
   /// Factory for generating ACR messages for Rf billing.
   ACRFactory* _acr_factory;
-
-  AnalyticsLogger* _analytics;
 
   /// The maximum time (in seconds) that a device can subscribe for.
   int _max_expires;
@@ -97,31 +88,8 @@ public:
 protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
-
-  Subscription create_subscription(pjsip_msg* req, int expiry);
-
-  Store::Status update_subscription_in_stores(SubscriptionSproutlet* _subscription,
-                                              Subscription& new_subscription,
-                                              std::string aor,
-                                              AssociatedURIs* associated_uris,
-                                              pjsip_msg* req,
-                                              std::string public_id,
-                                              ACR* acr,
-                                              std::deque<std::string> ccfs,
-                                              std::deque<std::string> ecfs);
-
-  AoRPair* read_and_cache_from_store(SubscriberDataManager* sdm,
-                                     std::string aor,
-                                     std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
-
-  void update_subscription(SubscriptionSproutlet* _subscription,
-                           Subscription& new_subscription,
-                           std::string aor,
-                           AoRPair* aor_pair,
-                           std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
-
-  void log_subscriptions(const std::string& aor_name,
-                         AoR* aor_data);
+  Subscription* create_subscription(pjsip_msg* req, int expiry);
+  pjsip_status_code subscribe_convert_to_sip(HTTPCode rc);
 
   SubscriptionSproutlet* _subscription;
 };

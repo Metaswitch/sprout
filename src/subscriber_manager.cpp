@@ -70,6 +70,7 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 
   // Get the current AoR from S4, if one exists.
   AoR* orig_aor = NULL;
+  //PatchObject* patch_object = NULL; //TODO remove?
   uint64_t version;
   rc = _s4->handle_get(aor_id,
                        &orig_aor,
@@ -83,12 +84,35 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
     return rc;
   }
 
+  // TODO think about when to send increment cseq
+
   AoR* updated_aor = NULL;
-  rc = patch_bindings(aor_id,
-                      updated_bindings,
-                      binding_ids_to_remove,
-                      updated_aor,
-                      trail);
+  // TODO add in asso_uris
+  if (rc == HTTP_NOT_FOUND)
+  {
+    orig_aor = new AoR(aor_id);
+    PatchObject* patch_object = new PatchObject();
+    patch_object->set_update_bindings(updated_bindings);
+    patch_object->set_remove_bindings(binding_ids_to_remove);
+
+    updated_aor = new AoR(aor_id);
+    updated_aor->patch_aor(patch_object);
+    // TODO set scscf_uri
+    rc = _s4->handle_put(aor_id,
+                         updated_aor,
+                         trail);
+    // Set up AoR?
+    delete patch_object; patch_object = NULL;
+  }
+  else
+  {
+    rc = patch_bindings(aor_id,
+                        updated_bindings,
+                        binding_ids_to_remove,
+                        updated_aor,
+                        trail);
+  }
+
   if (rc != HTTP_OK)
   {
     return rc;
@@ -126,7 +150,6 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   }
 
   // Send 3rd party REGISTERs.
-
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
 
