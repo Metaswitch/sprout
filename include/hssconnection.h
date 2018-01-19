@@ -144,6 +144,7 @@ private:
                              std::shared_ptr<rapidxml::xml_document<>>& root,
                              SAS::TrailId trail);
 
+  HttpClient* _client;
   HttpConnection* _http;
   SNMP::EventAccumulatorTable* _latency_tbl;
   SNMP::EventAccumulatorTable* _mar_latency_tbl;

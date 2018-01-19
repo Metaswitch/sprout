@@ -43,13 +43,13 @@ void RalfProcessor::send_request_to_ralf(RalfRequest* rr)
 // Send the ACR to Ralf
 void RalfProcessor::Pool::process_work(RalfProcessor::RalfRequest*& rr)
 {
-  // Send the request using HTTPConnection, which adds penalties via
-  // the load monitor if the request fails
-  std::map<std::string, std::string> headers;
-  _ralf_connection->send_post(rr->path,
-                              headers,
-                              rr->message,
-                              rr->trail);
+  // Send the request. Penalties are set via the the load monitor if the
+  // request fails in the HttpClient
+  std::unique_ptr<HttpRequest> req = _ralf_connection->create_request(HttpClient::RequestType::POST, rr->path);
+  req->set_sas_trail(rr->trail);
+  req->set_req_body(rr->message);
+  req->send();
+
   delete rr; rr = NULL;
 }
 

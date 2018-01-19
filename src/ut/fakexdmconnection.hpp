@@ -13,7 +13,7 @@
 #include <string>
 #include <map>
 #include "log.h"
-#include "fakehttpconnection.hpp"
+//#include "fakehttpconnection.hpp"
 #include "snmp_event_accumulator_table.h"
 #include "xdmconnection.h"
 
@@ -28,5 +28,5 @@ public:
   void flush_all();
 
 private:
-  FakeHttpConnection* _fakehttp;  //< alias for _http, with more specific type.
+//  FakeHttpConnection* _fakehttp;  //< alias for _http, with more specific type.
 };
