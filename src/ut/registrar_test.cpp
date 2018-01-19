@@ -23,6 +23,7 @@
 #include "test_interposer.hpp"
 #include "mock_subscriber_manager.h"
 #include "fakesnmp.hpp"
+#include "aor_test_utils.h"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
@@ -30,6 +31,7 @@ using ::testing::Return;
 using ::testing::SaveArg;
 using ::testing::InSequence;
 using ::testing::SetArgReferee;
+using ::testing::SetArgPointee;
 using ::testing::HasSubstr;
 using ::testing::An;
 
@@ -3257,16 +3259,14 @@ TEST_F(RegistrarTestMockStore, SubscriberDataManagerWritesFail)
   EXPECT_EQ(500, out->line.status.code);
   free_txdata();
 }
-
-TEST_F(RegistrarTestMockStore, SubscriberDataManagerGetsFail)
+*/
+TEST_F(RegistrarTest, SubscriberDataManagerGetsFail)
 {
-  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _, An<Store::Format>()))
-    .WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*_sm, update_bindings(_, _, _, _, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
 
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=Alice");
-
   Message msg;
   msg._expires = "Expires: 300";
   msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
@@ -3274,23 +3274,38 @@ TEST_F(RegistrarTestMockStore, SubscriberDataManagerGetsFail)
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(500, out->line.status.code);
+  EXPECT_EQ(400, out->line.status.code);
   free_txdata();
 }
 
-// Test that if Homestead tells us that the subscriber was not previously
-// registered that we simply try to ADD it to the store instead of querying for
-// existing records first.
-TEST_F(RegistrarTestMockStore, DontReadOnInitialRegister)
+TEST_F(RegistrarTest, SubscriberDataManagerGetsSuccess)
 {
-  // Homestead returns a PreviousRegisterState indicating that this is an
-  // initial register.
-  _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "", "?private_id=Alice");
+  Binding* b = new Binding("sip:1234@domain");
+  b->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b->_cseq = 17038;
+  b->_expires = 1000005;
+  b->_priority = 0;
+  b->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b->_params["reg-id"] = "1";
+  b->_params["+sip.ice"] = "";
+  b->_emergency_registration = false;
+  b->_private_id = "6505550231";
+  std::map<std::string, Binding*> bs;
+  bs.insert(std::make_pair("sip:1234@domain", b));
 
-  // Expect the data to be set with a CAS of 0.
-  EXPECT_CALL(*_local_data_store, set_data(_, _, _, 0, _, _, An<Store::Format>()))
-    .WillOnce(Return(Store::OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris.add_uri("sip:id", false);
+  irs_info._associated_uris.add_uri("sip:id2", true);
+  irs_info._associated_uris.add_uri("sipid2", true);
+  EXPECT_CALL(*_sm, update_bindings(_, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<3>(bs),
+                    SetArgReferee<4>(irs_info),
+                    Return(HTTP_OK)));
 
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
   Message msg;
   msg._expires = "Expires: 300";
   msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
@@ -3298,71 +3313,59 @@ TEST_F(RegistrarTestMockStore, DontReadOnInitialRegister)
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(200, out->line.status.code); // TODO add checks!
   free_txdata();
 }
 
-// Test that if Homestead tells us that the subscriber was not previously
-// registered that we simply try to ADD it to the store instead of querying for
-// existing records first, but that when that ADD fails (because there actually
-// was already data in the store) we fall back to querying the existing data and
-// correctly updating it instead.
-TEST_F(RegistrarTestMockStore, InitialRegisterAddFailure)
+TEST_F(RegistrarTest, SubscriberDataManagerGetsSuccess3)
 {
-  // Homestead returns a PreviousRegisterState indicating that this is an
-  // initial register.
-  _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "", "?private_id=Alice");
+  Binding* b = new Binding("sip:1234@domain");
+  std::map<std::string, Binding*> bs;
+  bs.insert(std::make_pair("id", b));
 
-  InSequence s;
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris.add_uri("sip:id", false);
+  EXPECT_CALL(*_sm, update_bindings(_, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<3>(bs),
+                    SetArgReferee<4>(irs_info),
+                    Return(HTTP_OK)));
 
-  // Check that the registrar initially tries to ADD the data (set_data with cas=0). Simulate
-  // this ADD failing with a DATA_CONTENTION error.
-  EXPECT_CALL(*_local_data_store, set_data("reg", "sip:6505550231@homedomain", _, 0, _, _, An<Store::Format>()))
-    .WillOnce(Return(Store::DATA_CONTENTION));
-
-  // The ADD failed because there was data and so the Registrar should now try
-  // to get the existing data. Return example data with a cas value of 1 that might be present if
-  // there was a single binding for sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061.
-  std::string expiry_time = std::to_string(time(NULL) + 300);
-  std::string initial_data = (
-      "{\"bindings\":{"
-          "\"<urn:uuid:00000000-0000-0000-0000-777777777777>:1\":{\"uri\":\"sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob\",\"cid\":\"0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213\",\"cseq\":10000,\"expires\":" + expiry_time + ",\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-777777777777>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>\"],\"paths\":[\"sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob\"],\"private_id\":\"Alice\",\"emergency_reg\":false}"
-       "},"
-       "\"subscriptions\":{},"
-       "\"associated-uris\":{\"uris\":[{\"uri\":\"sip:6505550231@homedomain\",\"barring\":false}],\"wildcard-mapping\":{}},\"notify_cseq\":2,\"timer_id\":\"post_identity\",\"scscf-uri\":\"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  EXPECT_CALL(*_local_data_store, get_data("reg", "sip:6505550231@homedomain", _, _, _, An<Store::Format>()))
-    .WillOnce(DoAll(SetArgReferee<2>(initial_data), // Returned data
-                    SetArgReferee<3>(1), // Returned CAS value
-                    Return(Store::OK)));
-
-  // Now the registrar should try and write back updated data including both
-  // the binding we returned on the get above (10.114.61.214) + the new binding
-  // we've just registered (10.114.61.213). Don't bother trying to work out
-  // exactly what data will be present -- just check for the 2 bindings.
-  EXPECT_CALL(*_local_data_store, set_data("reg",
-                                           "sip:6505550231@homedomain",
-                                           AllOf(HasSubstr("10.114.61.214"),
-                                                 HasSubstr("10.114.61.213")), // Updated data should contain both contacts
-                                           1, // CAS Value
-                                           _, _, An<Store::Format>()))
-    .WillOnce(Return(Store::OK));
-
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
   Message msg;
   msg._expires = "Expires: 300";
   msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
-  msg._contact_params = ";+sip.ice;reg-id=1";
-  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(200, out->line.status.code); // TODO add checks!
   free_txdata();
 }
 
-// Test multiple registrations with a local and first remote SDM that are not
-// returning bindings (so that the bindings are returned by the second remote
-// SDM)
-TEST_F(RegistrarTestRemoteSDM, MultipleRegistrations)
+TEST_F(RegistrarTest, SubscriberDataManagerGetsSuccess2)
 {
-  MultipleRegistrationTest();
-}*/
+  Binding* b = new Binding("sip:1234@domain");
+  std::map<std::string, Binding*> bs;
+  bs.insert(std::make_pair("id", b));
+
+  HSSConnection::irs_info irs_info;
+  irs_info._associated_uris.add_uri("sip:id", false);
+  EXPECT_CALL(*_sm, update_bindings(_, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<3>(bs),
+                    SetArgReferee<4>(irs_info),
+                    Return(HTTP_OK)));
+
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact = "";
+  //msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code); // TODO add checks!
+  free_txdata();
+}

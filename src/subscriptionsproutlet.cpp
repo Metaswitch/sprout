@@ -370,6 +370,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   acr->send();
   delete acr;
 
+  delete new_subscription;
+
   free_msg(req);
 }
 

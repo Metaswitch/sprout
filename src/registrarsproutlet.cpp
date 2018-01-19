@@ -178,8 +178,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // If there are valid registration updates to make then attempt to write to
   // store, which also stops emergency registrations from being deregistered.
   int num_contacts = 0;
-  int num_emergency_bindings = 0;
-  int num_emergency_deregisters = 0;
+  //int num_emergency_bindings = 0;
+  //int num_emergency_deregisters = 0;
   // TODO bool reject_with_400 = false;
   pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
 
@@ -189,22 +189,22 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
     expiry = RegistrationUtils::expiry_for_binding(contact_hdr, expires, _registrar->_max_expires);
 
-    if ((contact_hdr->star) && (expiry != 0))
-    {
-      // Wildcard contact, which can only be used if the expiry is 0
-      TRC_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
-      // TODO reject_with_400 = true;
-      break;
-    }
+    // TODO if ((contact_hdr->star) && (expiry != 0))
+    //{
+    //  // Wildcard contact, which can only be used if the expiry is 0
+    //  TRC_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
+    //  // TODO reject_with_400 = true;
+    //  break;
+   // }
 
-    if (PJUtils::is_emergency_registration(contact_hdr))
-    {
-      num_emergency_bindings++;
-      if (expiry == 0)
-      {
-        num_emergency_deregisters++;
-      }
-    }
+    // TODO if (PJUtils::is_emergency_registration(contact_hdr))
+    //{
+    //  num_emergency_bindings++;
+    //  if (expiry == 0)
+    //  {
+    //    num_emergency_deregisters++;
+    //  }
+   // }
 
     contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(req,
                                                           PJSIP_H_CONTACT,
@@ -321,9 +321,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   irs_query._req_type = HSSConnection::REG;
   irs_query._server_name = _scscf_uri;
 
-  std::map<std::string, Binding*> updated_bindings;
-  std::vector<std::string> binding_ids_to_remove;
-  get_bindings_from_req(req, private_id, updated_bindings, binding_ids_to_remove);
+  std::map<std::string, Binding*> updated_bindings = {};
+  std::vector<std::string> binding_ids_to_remove = {};
+  get_bindings_from_req(req, private_id, now, updated_bindings, binding_ids_to_remove);
 
   std::map<std::string, Binding*> all_bindings;
   HSSConnection::irs_info irs_info;
@@ -336,7 +336,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   }
   else
   {
-    st_code = PJSIP_SC_OK;
+    st_code = PJSIP_SC_BAD_REQUEST;
   }
 
   // Build and send the reply.
@@ -357,6 +357,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     acr->send();
     delete acr;
+
+  for (std::pair<std::string, Binding*> bindings : updated_bindings)
+  {
+    delete bindings.second;
+  }
 
 /*    if (num_contacts > 0)
     {
@@ -469,6 +474,16 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   acr->send();
   delete acr;
 
+  for (std::pair<std::string, Binding*> bindings : all_bindings)
+  {
+    delete bindings.second;
+  }
+
+  for (std::pair<std::string, Binding*> bindings : updated_bindings)
+  {
+    delete bindings.second;
+  }
+
   // Now we can free the messages.
   free_msg(req);
   }
@@ -478,8 +493,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 /// AoR store), with updated binding information from a REGISTER request.
 void RegistrarSproutletTsx::get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
                              std::string private_id, ///<private ID that the request refers to
-                             std::map<std::string, Binding*> updated_bindings,
-                             std::vector<std::string> binding_ids_to_remove)
+                             const int& now,
+                             std::map<std::string, Binding*>& updated_bindings,
+                             std::vector<std::string>& binding_ids_to_remove)
 {
   // Find the expire headers in the message.
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
@@ -594,19 +610,11 @@ void RegistrarSproutletTsx::get_bindings_from_req(pjsip_msg* req,         ///<RE
 
         // If the new expiry is less than the current expiry, and it's an emergency registration,
         // don't update the expiry time
-        /*int new_expiry = now + expiry;
+        int new_expiry = now + expiry;
 
-        if ((binding->_expires >= new_expiry) && (binding->_emergency_registration))
-        {
-          TRC_DEBUG("Don't reduce expiry time for an emergency registration");
-        }
-        else
-        {
-          TRC_DEBUG("Setting new expiry for %s to %d", binding_id.c_str(), new_expiry);
           binding->_expires = new_expiry;
-        }*/ // TODO pass in current time
 
-//        updated_bindings.insert(std::make_pair(binding_id, binding));
+        updated_bindings.insert(std::make_pair(binding_id, binding));
       }
       //else
       //{

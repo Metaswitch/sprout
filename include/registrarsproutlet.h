@@ -98,8 +98,9 @@ protected:
   void process_register_request(pjsip_msg* req);
   void get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
                              std::string private_id, ///<private ID that the request refers to
-                             std::map<std::string, Binding*> updated_bindings,
-                             std::vector<std::string> binding_ids_to_remove);
+                             const int& now,
+                             std::map<std::string, Binding*>& updated_bindings,
+                             std::vector<std::string>& binding_ids_to_remove);
 
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);
