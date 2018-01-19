@@ -128,7 +128,8 @@ extern void set_quiescing_true();
 
 extern void set_quiescing_false();
 
-extern void init_pjsip_logging(int log_level,
+extern void init_pjsip_logging(pj_bool_t ramrecorder,
+                               int log_level,
                                pj_bool_t log_to_file,
                                const std::string& directory);
 

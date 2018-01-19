@@ -241,14 +241,19 @@ static void pjsip_log_handler(int level,
 }
 
 
-void init_pjsip_logging(int log_level,
+void init_pjsip_logging(pj_bool_t ramrecorder,
+                        int log_level,
                         pj_bool_t log_to_file,
                         const std::string& directory)
 {
   pj_log_set_level(log_level);
   pj_log_set_decor(PJ_LOG_HAS_SENDER);
   pj_log_set_log_func(&pjsip_log_handler);
-  pj_log_set_ram_trace_funcs(&Log::ramCacheTrcCall, &Log::ramTrace);
+
+  if (ramrecorder)
+  {
+    pj_log_set_ram_trace_funcs(&Log::ramCacheTrcCall, &Log::ramTrace);
+  }
 }
 
 
