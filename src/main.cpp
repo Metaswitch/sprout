@@ -139,7 +139,8 @@ enum OptionTypes
   OPT_HOMESTEAD_TIMEOUT,
   OPT_ORIG_SIP_TO_TEL_COERCE,
   OPT_REQUEST_ON_QUEUE_TIMEOUT,
-  OPT_BLACKLISTED_SCSCFS
+  OPT_BLACKLISTED_SCSCFS,
+  OPT_RAMRECORDER
 };
 
 
@@ -228,6 +229,7 @@ const static struct pj_getopt_option long_opt[] =
   { "request-on-queue-timeout",     required_argument, 0, OPT_REQUEST_ON_QUEUE_TIMEOUT},
   { "blacklisted-scscfs",           required_argument, 0, OPT_BLACKLISTED_SCSCFS},
   { "enable-orig-sip-to-tel-coerce",no_argument,       0, OPT_ORIG_SIP_TO_TEL_COERCE},
+  { "ramrecorder",                  required_argument, 0, OPT_RAMRECORDER},
   { NULL,                           0,                 0, 0}
 };
 
@@ -990,6 +992,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_RAMRECORDER:
+      options->ramrecorder = PJ_TRUE;
+      TRC_INFO("RAMRecorder enabled");
+      break;
+
     case OPT_DNS_SERVER:
       options->dns_servers.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->dns_servers, 0, false);
@@ -1718,6 +1725,7 @@ int main(int argc, char* argv[])
   opt.homestead_timeout = 750;
   opt.enable_orig_sip_to_tel_coerce = false;
   opt.request_on_queue_timeout = 4000;
+  opt.ramrecorder = PJ_FALSE;
 
   status = init_logging_options(argc, argv, &opt);
 
