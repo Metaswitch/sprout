@@ -13,6 +13,7 @@
 #include "gtest/gtest.h"
 
 #include "subscriber_manager.h"
+#include "siptest.hpp"
 #include "mock_s4.h"
 #include "mock_hss_connection.h"
 
@@ -26,7 +27,7 @@ using ::testing::InSequence;
 static const int DUMMY_TRAIL_ID = 0;
 
 /// Fixture for SubscriberManagerTest.
-class SubscriberManagerTest : public ::testing::Test
+class SubscriberManagerTest : public SipTest
 {
   SubscriberManagerTest()
   {
@@ -179,8 +180,10 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
   // Set up AoRs to be returned by S4.
   AoR* get_aor = new AoR(default_id);
   get_aor->get_binding("binding_id");
+  get_aor->_notify_cseq = 1234;
   AoR* patch_aor = new AoR(*get_aor);
   patch_aor->get_subscription("subscription_id");
+  patch_aor->_associated_uris.add_uri(default_id, false);
 
   // Create an empty patch object to save off the one provided by handle patch.
   PatchObject patch_object;

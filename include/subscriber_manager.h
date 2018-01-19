@@ -30,6 +30,7 @@ extern "C" {
 #include "ifchandler.h"
 #include "aor.h"
 #include "s4.h"
+#include "notify_utils.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
 class SubscriberManager
@@ -39,6 +40,61 @@ public:
   {
     USER,
     ADMIN
+  };
+
+  enum SubscriptionEvent
+  {
+    CREATED,
+    REFRESHED,
+    UNCHANGED,
+    SHORTENED,
+    EXPIRED,
+    TERMINATED
+  };
+
+  struct ClassifiedSubscription {
+    ClassifiedSubscription(std::string id,
+                           Subscription* subscription,
+                           SubscriptionEvent event) :
+      _id(id),
+      _subscription(subscription),
+      _subscription_event(event),
+      _notify_required(false),
+      _reasons()
+    {}
+
+    std::string _id;
+    Subscription* _subscription;
+    SubscriptionEvent _subscription_event;
+    bool _notify_required;
+    std::string _reasons; // Stores reasons for requiring a notify (for logging)
+  };
+
+  typedef std::vector<ClassifiedSubscription*> ClassifiedSubscriptions;
+
+  class NotifySender
+  {
+  public:
+    NotifySender();
+
+    virtual ~NotifySender();
+
+    /// Create and send any appropriate NOTIFYs
+    ///
+    /// @param aor_id       The AoR ID
+    /// @param associated_uris
+    ///                     The IMPUs associated with this IRS
+    /// @param aor_pair     The AoR pair to send NOTIFYs for
+    /// @param now          The current time
+    /// @param trail        SAS trail
+    void send_notifys(const std::string& aor_id,
+                      const EventTrigger& event_trigger,
+                      const ClassifiedBindings& classified_bindings,
+                      const ClassifiedSubscriptions& classified_subscriptions,
+                      AssociatedURIs& associated_uris, // TODO make const again.
+                      int cseq,
+                      int now,
+                      SAS::TrailId trail);
   };
 
   /// SubscriberManager constructor.
@@ -180,6 +236,7 @@ private:
   S4* _s4;
   HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;
+  NotifySender* _notify_sender;
 
   HTTPCode modify_subscription(const std::string& public_id,
                                const std::pair<std::string, Subscription*>& update_subscription,
@@ -220,6 +277,33 @@ private:
 
   void populate_subscriptions(AoR* aor,
                               std::map<std::string, Subscription*>& subscriptions);
+
+  // Iterate over all original and current bindings in an AoR pair and
+  // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),
+  // shortened ("SHORTENED") or unchanged ("REGISTERED").
+  //
+  // @param aor_id                The AoR ID
+  // @param aor_pair              The AoR pair to compare and classify bindings for
+  // @param classified_bindings   Output vector of classified bindings
+  void classify_bindings(const std::string& aor_id,
+                         const EventTrigger& event_trigger,
+                         const std::map<std::string, Binding*>& orig_bindings,
+                         const std::map<std::string, Binding*>& updated_bindings,
+                         ClassifiedBindings& classified_bindings);
+
+  void classify_subscriptions(const std::string& aor_id,
+                              const EventTrigger& event_trigger,
+                              const std::map<std::string, Subscription*>& orig_subscriptions,
+                              const std::map<std::string, Subscription*>& updated_subscriptions,
+                              const ClassifiedBindings& classified_bindings,
+                              const bool& associated_uris_changed,
+                              ClassifiedSubscriptions& classified_subscriptions);
+
+  void delete_bindings(ClassifiedBindings& classified_bindings);
+  void delete_subscriptions(ClassifiedSubscriptions& classified_subscriptions);
+
+  NotifyUtils::ContactEvent determine_contact_event(const EventTrigger& event_trigger);
+
 };
 
 #endif

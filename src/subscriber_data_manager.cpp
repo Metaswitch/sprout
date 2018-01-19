@@ -798,7 +798,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                 reasons.c_str());
 
       pjsip_tx_data* tdata_notify = NULL;
-      pj_status_t status = NotifyUtils::create_subscription_notify(
+      pj_status_t status = PJ_SUCCESS;/*NotifyUtils::create_subscription_notify(
                                             &tdata_notify,
                                             subscription,
                                             aor_id,
@@ -807,7 +807,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                             binding_info_to_notify,
                                             NotifyUtils::RegistrationState::ACTIVE,
                                             now,
-                                            trail);
+                                            trail);*/
 
       if (status == PJ_SUCCESS)
       {
@@ -864,9 +864,9 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 {
   // The registration state to send is ACTIVE if we have at least one active binding,
   // otherwise TERMINATED.
-  NotifyUtils::RegistrationState reg_state = (!aor_pair->get_current()->bindings().empty()) ?
+  /*NotifyUtils::RegistrationState reg_state = (!aor_pair->get_current()->bindings().empty()) ?
     NotifyUtils::RegistrationState::ACTIVE :
-    NotifyUtils::RegistrationState::TERMINATED;
+    NotifyUtils::RegistrationState::TERMINATED;*/
 
   // missing_binding_uris lists bindings which no longer exist in AoR.
   // They may have been removed by administrative deregistration, and
@@ -919,7 +919,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 
       // This is a terminated subscription - set the expiry time to now
       s->_expires = now;
-      pj_status_t status = NotifyUtils::create_subscription_notify(
+      pj_status_t status = PJ_SUCCESS;/*NotifyUtils::create_subscription_notify(
                                           &tdata_notify,
                                           s,
                                           aor_id,
@@ -928,7 +928,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                           binding_info_to_notify,
                                           reg_state,
                                           now,
-                                          trail);
+                                          trail);*/
 
       if (status == PJ_SUCCESS)
       {
