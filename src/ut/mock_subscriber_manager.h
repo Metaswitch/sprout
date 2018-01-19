@@ -22,17 +22,17 @@ public:
   virtual ~MockSubscriberManager();
 
   MOCK_METHOD6(update_bindings, HTTPCode(const HSSConnection::irs_query& irs_query,
-                                         const AoR::Bindings& updated_bindings,
+                                         const std::map<std::string, Binding*>& updated_bindings,
                                          const std::vector<std::string>& binding_ids_to_remove,
-                                         AoR::Bindings& all_bindings,
+                                         std::map<std::string, Binding*>& all_bindings,
                                          HSSConnection::irs_info& irs_info,
                                          SAS::TrailId trail));
 
-  MOCK_METHOD5(remove_bindings_with_default_id, HTTPCode(const std::string& aor_id,
-                                                         const std::vector<std::string>& binding_ids,
-                                                         const EventTrigger& event_trigger,
-                                                         AoR::Bindings& bindings,
-                                                         SAS::TrailId trail));
+  MOCK_METHOD5(remove_bindings, HTTPCode(const std::string& public_id,
+                                         const std::vector<std::string>& binding_ids,
+                                         const EventTrigger& event_trigger,
+                                         std::map<std::string, Binding*>& bindings,
+                                         SAS::TrailId trail));
 
   MOCK_METHOD4(update_subscription, HTTPCode(const std::string& public_id,
                                              const std::pair<std::string, Subscription*>& subscription,

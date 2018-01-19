@@ -276,11 +276,11 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
   // SDM-REFACTOR-TODO
   // HSSConnection::DEREG_TIMEOUT was dereg_type, should make it
   // HSSConnection::DEREG_USER if need to pass it through in future.
-  long http_code = _sm->remove_bindings_with_default_id(aor_id,
-                                                        binding_ids,
-                                                        SubscriberManager::EventTrigger::USER,
-                                                        bindings,
-                                                        trail);
+  long http_code = _sm->remove_bindings(aor_id,
+                                        binding_ids,
+                                        SubscriberManager::EventTrigger::USER,
+                                        bindings,
+                                        trail);
 
  if (http_code != HTTP_OK)
  {
@@ -1255,15 +1255,12 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
                                                              (pjsip_uri*)scscf_uri);
 
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
-
       Ifcs ifcs;
-      // Get the public user identity corresponding to the RequestURI.
-      pjsip_uri* req_uri = req->line.req.uri;
-      std::string public_id = PJUtils::public_id_from_uri(req_uri);
-      long http_code = _hss_cache_helper->lookup_ifcs(public_id,
+      long http_code = _hss_cache_helper->lookup_ifcs(served_user,
                                                       ifcs,
                                                       _scscf->_sm,
                                                       trail());
+
       if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");

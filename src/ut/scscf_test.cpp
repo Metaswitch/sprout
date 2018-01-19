@@ -298,7 +298,9 @@ protected:
   void create_binding(Binding& binding, int lifetime = 3600, std::string instance_id = "");
   void set_irs_info(HSSConnection::irs_info& irs_info,
                     std::string user,
-                    const std::string& domain);
+                    const std::string& domain,
+                    bool barred = false,
+                    std::vector<std::string> uris_associated_with_user = {});
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
@@ -1113,13 +1115,27 @@ void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
 // Create the irs info to be returned by the mock subscriber manager.
 void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
                                  std::string user,
-                                 const std::string& domain)
+                                 const std::string& domain,
+                                 bool barred,
+                                 std::vector<std::string> uris_associated_with_user)
 {
   std::string uri = "sip:";
   uri.append(user).append("@").append(domain);
 
   AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(uri, false);
+  associated_uris.add_uri(uri, barred);
+
+  if (!uris_associated_with_user.empty())
+  {
+    for (std::vector<std::string>::iterator ii = uris_associated_with_user.begin();
+         ii != uris_associated_with_user.end();
+         ii++)
+    {
+      std::string additional_uri = "sip:";
+      additional_uri.append(*ii).append("@").append(domain);
+      associated_uris.add_uri(additional_uri, false);
+    }
+  }
 
   irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
   irs_info._prev_regstate = "";
@@ -1136,7 +1152,6 @@ void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
   // Are these set in the right format??
   irs_info._ccfs = {"priority=\"1\">ccf1"};
   irs_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
-
 }
 
 // SDM-REFACTOR-TODO: move this to common code to be used by other sproutlets?
@@ -1271,11 +1286,9 @@ TEST_F(SCSCFTest, TestNotRegisteredTo)
   doSlowFailureFlow(msg, 404);
 }
 
-/**
 TEST_F(SCSCFTest, TestBadScheme)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   SCSCFMessage msg;
   msg._toscheme = "sips";
   doFastFailureFlow(msg, 416);  // bad scheme
@@ -1285,16 +1298,14 @@ TEST_F(SCSCFTest, TestBarredCaller)
 {
   // Tests that a call attempt from a barred caller is rejected with a 403.
   SCOPED_TRACE("");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addBarringIndication("sip:6505551000@homedomain", "1")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
+
+  // Set up info to be returned about the caller, showing they are barred.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain", true);
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1304,16 +1315,20 @@ TEST_F(SCSCFTest, TestBarredCallee)
 {
   // Tests that a call to a barred callee is rejected with a 404.
   SCOPED_TRACE("");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addBarringIndication("sip:6505551234@homedomain", "1")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
+
+  // Set up info to be returned about the callee, showing they are barred.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain", true);
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
+  // We look up the bindings before we reject the call due to the callee being
+  // barred, so expect a call to get_bindings (but no need to bother to return
+  // any useful info).
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce( Return(HTTP_OK));
+
   SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
@@ -1325,18 +1340,16 @@ TEST_F(SCSCFTest, TestBarredWildcardCaller)
 {
   SCOPED_TRACE("");
 
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:610@homedomain")
-    .addIdentity("sip:65!.*!@homedomain")
-    .addBarringIndication("sip:65!.*!@homedomain", "1")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
+  // Set up the info to be returned about the callee, which includes a barred
+  // wildcarded public identity.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "610", "homedomain", false, {"65!.*!"});
+  irs_info._associated_uris._distinct_to_wildcard.insert(std::make_pair("sip:6505551000@homedomain", "sip:65!.*!@homedomain"));
+  irs_info._associated_uris._barred_map["sip:65!.*!@homedomain"] = true;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1349,18 +1362,22 @@ TEST_F(SCSCFTest, TestBarredWildcardCallee)
 {
   SCOPED_TRACE("");
 
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:610@homedomain")
-    .addIdentity("sip:65!.*!@homedomain")
-    .addBarringIndication("sip:65!.*!@homedomain", "1")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
+  // Set up the info to be returned about the callee, which includes a barred
+  // wildcarded public identity.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "610", "homedomain", false, {"65!.*!"});
+  irs_info._associated_uris._distinct_to_wildcard.insert(std::make_pair("sip:6505551234@homedomain", "sip:65!.*!@homedomain"));
+  irs_info._associated_uris._barred_map["sip:65!.*!@homedomain"] = true;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
+  // We look up the bindings before we reject the call due to the callee being
+  // barred, so expect a call to get_bindings (but no need to bother to return
+  // any useful info).
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce( Return(HTTP_OK));
+
   SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
@@ -1372,20 +1389,15 @@ TEST_F(SCSCFTest, TestWildcardBarredCaller)
 {
   SCOPED_TRACE("");
 
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:610@homedomain")
-    .addIdentity("sip:65!.*!@homedomain")
-    .addIdentity("sip:6505551000@homedomain")
-    .addBarringIndication("sip:6505551000@homedomain", "1")
-    .addWildcard("sip:6505551000@homedomain", 3, "sip:65!.*!@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
+  // Set up the info to be returned about the callee, which includes an unbarred
+  // wildcard, unbarred public identity, and barred public identity.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "610", "homedomain", false, {"65!.*!", "6505551000"});
+  irs_info._associated_uris._barred_map["sip:6505551000@homedomain"] = true;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1398,95 +1410,21 @@ TEST_F(SCSCFTest, TestWildcardBarredCallee)
 {
   SCOPED_TRACE("");
 
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:610@homedomain")
-    .addIdentity("sip:65!.*!@homedomain")
-    .addIdentity("sip:6505551000@homedomain")
-    .addBarringIndication("sip:6505551000@homedomain", "1")
-    .addWildcard("sip:6505551000@homedomain", 3, "sip:65!.*!@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
+  // Set up the info to be returned about the callee, which includes an unbarred
+  // wildcard, unbarred public identity, and barred public identity.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "610", "homedomain", false, {"65!.*!", "6505551234"});
+  irs_info._associated_uris._barred_map["sip:6505551234@homedomain"] = true;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
-  SCSCFMessage msg;
-  doSlowFailureFlow(msg, 404);
-}
+  // We look up the bindings before we reject the call due to the callee being
+  // barred, so expect a call to get_bindings (but no need to bother to return
+  // any useful info).
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce( Return(HTTP_OK));
 
-// Test that a call from a barred IMPU that belongs to a non-barred wildcarded
-// public identity is rejected with a 403. The HSS response includes multiple
-// wildcard identities that could match the IMPU, so this checks that the
-// correct identity is selected.
-TEST_F(SCSCFTest, TestBarredMultipleWildcardCaller)
-{
-  SCOPED_TRACE("");
-
-  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
-    .addIdentity("sip:610@homedomain")
-    .addIdentity("sip:6!.*!@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
-    .addIdentity("sip:611@homedomain")
-    .addIdentity("sip:65!.*!@homedomain")
-    .addIdentity("650!.*!@homedomain")
-    .addIdentity("sip:6505551000@homedomain")
-    .addBarringIndication("sip:6505551000@homedomain", "1")
-    .addWildcard("sip:6505551000@homedomain", 3, "sip:65!.*!@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  ServiceProfileBuilder service_profile_3 = ServiceProfileBuilder()
-    .addIdentity("sip:612@homedomain")
-    .addIdentity("sip:!.*!@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile_1)
-    .addServiceProfile(service_profile_2)
-    .addServiceProfile(service_profile_3);
-
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
-  SCSCFMessage msg;
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
-  doSlowFailureFlow(msg, 403);
-}
-
-// Test that a call to a barred IMPU that belongs to a non-barred wildcarded
-// public identity is rejected with a 404. The HSS response includes multiple
-// wildcard identities that could match the IMPU, so this checks that the
-// correct identity is selected.
-TEST_F(SCSCFTest, TestBarredMultipleWildcardCallee)
-{
-  SCOPED_TRACE("");
-
-  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
-    .addIdentity("sip:610@homedomain")
-    .addIdentity("sip:6!.*!@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
-    .addIdentity("sip:611@homedomain")
-    .addIdentity("sip:65!.*!@homedomain")
-    .addIdentity("650!.*!@homedomain")
-    .addIdentity("sip:6505551000@homedomain")
-    .addBarringIndication("sip:6505551000@homedomain", "1")
-    .addWildcard("sip:6505551000@homedomain", 3, "sip:65!.*!@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  ServiceProfileBuilder service_profile_3 = ServiceProfileBuilder()
-    .addIdentity("sip:612@homedomain")
-    .addIdentity("sip:!.*!@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile_1)
-    .addServiceProfile(service_profile_2)
-    .addServiceProfile(service_profile_3);
-
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   subscription.return_sub());
   SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
@@ -1495,13 +1433,18 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
 {
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
+                    Return(HTTP_OK)));
+
   SCSCFMessage msg;
   msg._toscheme = "tel";
   msg._to = "16505551234";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
 
@@ -1517,13 +1460,17 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
 {
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
+                    Return(HTTP_OK)));
   SCSCFMessage msg;
   msg._toscheme = "tel";
   msg._to = "16505551234";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._body = "\r\nv=0\r\no=Andrew 2890844526 2890844526 IN IP4 10.120.42.3\r\nc=IN IP4 10.120.42.3\r\nt=0 0\r\nm=audio 49170 RTP/AVP 0 8 97\r\na=rtpmap:0 PCMU/8000\r\nm=video 51372 RTP/AVP 31 32\r\na=rtpmap:31 H261/90000\r\n";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
@@ -1534,7 +1481,7 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
-
+/**
 TEST_F(SCSCFTest, TestTerminatingTelURI)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
