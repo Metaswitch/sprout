@@ -10,6 +10,7 @@
  */
 
 #include "subscriber_manager.h"
+#include "aor_utils.h"
 #include "pjutils.h"
 
 SubscriberManager::SubscriberManager(S4* s4,
@@ -28,9 +29,9 @@ SubscriberManager::~SubscriberManager()
 }
 
 HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_query,
-                                            const std::map<std::string, Binding*>& updated_bindings,
+                                            const Bindings& updated_bindings,
                                             const std::vector<std::string>& binding_ids_to_remove,
-                                            std::map<std::string, Binding*>& all_bindings,
+                                            Bindings& all_bindings,
                                             HSSConnection::irs_info& irs_info,
                                             SAS::TrailId trail)
 {
@@ -50,7 +51,7 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   bool emergency;
   // Can any of the deleted bindings be for emergencies - yes so need to pass
   // that information along with the binding IDs to delete. TODO
-  for (std::pair<std::string, Binding*> b : updated_bindings)
+  for (BindingPair b : updated_bindings)
   {
     if (b.second->_emergency_registration)
     {
@@ -90,9 +91,8 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   // TODO add in asso_uris
   if (rc == HTTP_NOT_FOUND)
   {
-    orig_aor = new AoR(aor_id);
     PatchObject* patch_object = new PatchObject();
-    patch_object->set_update_bindings(updated_bindings);
+    patch_object->set_update_bindings(AoRUtils::copy_bindings(updated_bindings));
     patch_object->set_remove_bindings(binding_ids_to_remove);
 
     updated_aor = new AoR(aor_id);
@@ -118,26 +118,35 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
     return rc;
   }
 
+  // Get all bindings to return to the caller
+  all_bindings = AoRUtils::copy_bindings(updated_aor->bindings());
+
   ClassifiedBindings classified_bindings;
   classify_bindings(aor_id,
                     EventTrigger::USER,
-                    orig_aor->bindings(),
+                    (orig_aor != NULL) ? orig_aor->bindings() : Bindings(),
                     updated_aor->bindings(),
                     classified_bindings);
 
   ClassifiedSubscriptions classified_subscriptions;
   classify_subscriptions(aor_id,
                          EventTrigger::USER,
-                         orig_aor->subscriptions(),
+                         (orig_aor != NULL) ? orig_aor->subscriptions() : Subscriptions(),
                          updated_aor->subscriptions(),
                          classified_bindings,
                          false,
                          classified_subscriptions);
 
-  // Get all bindings to return to the caller
-  populate_bindings(updated_aor, all_bindings);
-
   // Send NOTIFYs
+  int now = time(NULL);
+  _notify_sender->send_notifys(aor_id,
+                               EventTrigger::USER,
+                               classified_bindings,
+                               classified_subscriptions,
+                               updated_aor->_associated_uris,
+                               updated_aor->_notify_cseq,
+                               now,
+                               trail);
 
   // Update HSS if all bindings expired.
   if (all_bindings.empty())
@@ -159,7 +168,7 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
                                             const std::vector<std::string>& binding_ids,
                                             const EventTrigger& event_trigger,
-                                            std::map<std::string, Binding*>& bindings,
+                                            Bindings& bindings,
                                             SAS::TrailId trail)
 {
   // Get cached subscriber information from the HSS.
@@ -191,7 +200,7 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
   delete aor; aor = NULL;
 
   rc = patch_bindings(aor_id,
-                      {},
+                      Bindings(),
                       binding_ids,
                       aor,
                       trail);
@@ -201,7 +210,7 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
   }
 
   // Get all bindings to return to the caller
-  populate_bindings(aor, bindings);
+  bindings = AoRUtils::copy_bindings(aor->bindings());
 
   // Send NOTIFYs for removed bindings.
 
@@ -229,7 +238,7 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
 }
 
 HTTPCode SubscriberManager::update_subscription(const std::string& public_id,
-                                                const std::pair<std::string, Subscription*>& subscription,
+                                                const SubscriptionPair& subscription,
                                                 HSSConnection::irs_info& irs_info,
                                                 SAS::TrailId trail)
 {
@@ -246,7 +255,7 @@ HTTPCode SubscriberManager::remove_subscription(const std::string& public_id,
                                                 SAS::TrailId trail)
 {
   return modify_subscription(public_id,
-                             {},
+                             SubscriptionPair(),
                              subscription_id,
                              irs_info,
                              trail);
@@ -309,7 +318,7 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
 }
 
 HTTPCode SubscriberManager::get_bindings(const std::string& public_id,
-                                         std::map<std::string, Binding*>& bindings,
+                                         Bindings& bindings,
                                          SAS::TrailId trail)
 {
   // Get the current AoR from S4.
@@ -325,14 +334,14 @@ HTTPCode SubscriberManager::get_bindings(const std::string& public_id,
   }
 
   // Set the bindings to return to the caller.
-  populate_bindings(aor, bindings);
+  bindings = AoRUtils::copy_bindings(aor->bindings());
 
   delete aor; aor = NULL;
   return HTTP_OK;
 }
 
 HTTPCode SubscriberManager::get_subscriptions(const std::string& public_id,
-                                              std::map<std::string, Subscription*>& subscriptions,
+                                              Subscriptions& subscriptions,
                                               SAS::TrailId trail)
 {
   // Get the current AoR from S4.
@@ -348,7 +357,7 @@ HTTPCode SubscriberManager::get_subscriptions(const std::string& public_id,
   }
 
   // Set the subscriptions to return to the caller.
-  populate_subscriptions(aor, subscriptions);
+  subscriptions = AoRUtils::copy_subscriptions(aor->subscriptions());
 
   delete aor; aor = NULL;
   return HTTP_OK;
@@ -409,7 +418,7 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
 }
 
 HTTPCode SubscriberManager::modify_subscription(const std::string& public_id,
-                                                const std::pair<std::string, Subscription*>& update_subscription,
+                                                const SubscriptionPair& update_subscription,
                                                 const std::string& remove_subscription,
                                                 HSSConnection::irs_info& irs_info,
                                                 SAS::TrailId trail)
@@ -466,15 +475,15 @@ HTTPCode SubscriberManager::modify_subscription(const std::string& public_id,
                          false,
                          classified_subscriptions);
 
-  int now = time(NULL);
 
   // Send NOTIFYs
+  int now = time(NULL);
   _notify_sender->send_notifys(aor_id,
                                EventTrigger::USER,
                                classified_bindings,
                                classified_subscriptions,
                                updated_aor->_associated_uris,
-                               orig_aor->_notify_cseq,
+                               updated_aor->_notify_cseq,
                                now,
                                trail);
 
@@ -508,13 +517,13 @@ HTTPCode SubscriberManager::get_cached_default_id(const std::string& public_id,
 }
 
 HTTPCode SubscriberManager::patch_bindings(const std::string& aor_id,
-                                           const std::map<std::string, Binding*>& update_bindings,
+                                           const Bindings& update_bindings,
                                            const std::vector<std::string>& remove_bindings,
                                            AoR*& aor,
                                            SAS::TrailId trail)
 {
   PatchObject* patch_object = new PatchObject();
-  patch_object->set_update_bindings(update_bindings);
+  patch_object->set_update_bindings(AoRUtils::copy_bindings(update_bindings));
   patch_object->set_remove_bindings(remove_bindings);
   HTTPCode rc = _s4->handle_patch(aor_id,
                                   patch_object,
@@ -526,13 +535,13 @@ HTTPCode SubscriberManager::patch_bindings(const std::string& aor_id,
 }
 
 HTTPCode SubscriberManager::patch_subscription(const std::string& aor_id,
-                                               const std::pair<std::string, Subscription*>& update_subscription,
+                                               const SubscriptionPair& update_subscription,
                                                const std::string& remove_subscription,
                                                AoR*& aor,
                                                SAS::TrailId trail)
 {
   PatchObject* patch_object = new PatchObject();
-  patch_object->set_update_subscriptions({update_subscription});
+  patch_object->set_update_subscriptions(AoRUtils::copy_subscriptions({update_subscription}));
   patch_object->set_remove_subscriptions({remove_subscription});
   HTTPCode rc = _s4->handle_patch(aor_id,
                                   patch_object,
@@ -573,20 +582,22 @@ HTTPCode SubscriberManager::deregister_with_hss(const std::string& aor_id,
   return get_subscriber_state(irs_query, irs_info, trail);
 }
 
+// TODO delete method
 void SubscriberManager::populate_bindings(AoR* aor,
-                                          std::map<std::string, Binding*>& bindings)
+                                          Bindings& bindings)
 {
-   for (std::pair<std::string, Binding*> b : aor->bindings())
+   for (BindingPair b : aor->bindings())
   {
     Binding* copy_b = new Binding(*(b.second));
     bindings.insert(std::make_pair(b.first, copy_b));
   }
 }
 
+// TODO delete method
 void SubscriberManager::populate_subscriptions(AoR* aor,
-                                               std::map<std::string, Subscription*>& subscriptions)
+                                               Subscriptions& subscriptions)
 {
-  for (std::pair<std::string, Subscription*> s : aor->subscriptions())
+  for (SubscriptionPair s : aor->subscriptions())
   {
     Subscription* copy_s = new Subscription(*(s.second));
     subscriptions.insert(std::make_pair(s.first, copy_s));
@@ -595,8 +606,8 @@ void SubscriberManager::populate_subscriptions(AoR* aor,
 
 void SubscriberManager::classify_bindings(const std::string& aor_id,
                                           const EventTrigger& event_trigger,
-                                          const std::map<std::string, Binding*>& orig_bindings,
-                                          const std::map<std::string, Binding*>& updated_bindings,
+                                          const Bindings& orig_bindings,
+                                          const Bindings& updated_bindings,
                                           ClassifiedBindings& classified_bindings)
 {
   // We should have been given an empty classified_bindings vector, but clear
@@ -605,7 +616,7 @@ void SubscriberManager::classify_bindings(const std::string& aor_id,
 
   // 1/2: Iterate over the original bindings and record those not in the updated
   // bindings.
-  for (std::pair<std::string, Binding*> orig_b : orig_bindings)
+  for (BindingPair orig_b : orig_bindings)
   {
     if (updated_bindings.find(orig_b.first) == updated_bindings.end())
     {
@@ -621,10 +632,10 @@ void SubscriberManager::classify_bindings(const std::string& aor_id,
   }
 
   // 2/2: Iterate over the updated bindings.
-  for (std::pair<std::string, Binding*> updated_b : updated_bindings)
+  for (BindingPair updated_b : updated_bindings)
   {
     NotifyUtils::ContactEvent event;
-    AoR::Bindings::const_iterator orig_b_match = orig_bindings.find(updated_b.first);
+    Bindings::const_iterator orig_b_match = orig_bindings.find(updated_b.first);
 
     std::string binding_id = updated_b.first;
     Binding* binding = updated_b.second;
@@ -688,8 +699,8 @@ void SubscriberManager::classify_bindings(const std::string& aor_id,
 
 void SubscriberManager::classify_subscriptions(const std::string& aor_id,
                                                const EventTrigger& event_trigger,
-                                               const std::map<std::string, Subscription*>& orig_subscriptions,
-                                               const std::map<std::string, Subscription*>& updated_subscriptions,
+                                               const Subscriptions& orig_subscriptions,
+                                               const Subscriptions& updated_subscriptions,
                                                const ClassifiedBindings& classified_bindings,
                                                const bool& associated_uris_changed,
                                                ClassifiedSubscriptions& classified_subscriptions)
@@ -739,7 +750,7 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
   // 1/2: Iterate over the original subscriptions and classify those that aren't
   // in the updated subscriptions.
   // TODO work out what reasons and notify_required should be here.
-  for (std::pair<std::string, Subscription*> orig_s : orig_subscriptions)
+  for (SubscriptionPair orig_s : orig_subscriptions)
   {
     std::string subscription_id = orig_s.first;
     Subscription* subscription = orig_s.second;
@@ -792,7 +803,7 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
   }
 
   // 2/2: Iterate over the updated subscriptions and classify them.
-  for (std::pair<std::string, Subscription*> updated_s : updated_subscriptions)
+  for (SubscriptionPair updated_s : updated_subscriptions)
   {
 
     std::string subscription_id = updated_s.first;
@@ -800,7 +811,7 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
 
     // Find the subscription in the original AoR to determine if the current
     // subscription has been created.
-    AoR::Subscriptions::const_iterator orig_s_match = orig_subscriptions.find(subscription_id);
+    Subscriptions::const_iterator orig_s_match = orig_subscriptions.find(subscription_id);
 
     SubscriptionEvent event;
     bool notify_required = base_notify_required;

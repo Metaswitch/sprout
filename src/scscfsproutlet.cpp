@@ -239,7 +239,7 @@ IFCConfiguration SCSCFSproutlet::ifc_configuration() const
 
 /// Gets all bindings for the specified public id from the SM.
 void SCSCFSproutlet::get_bindings(const std::string& aor,
-                                  std::map<std::string, Binding*>& bindings,
+                                  Bindings& bindings,
                                   SAS::TrailId trail)
 {
   // Look up the target in the subscriber manager.
@@ -267,7 +267,7 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
 /// SM does this.
 void SCSCFSproutlet::remove_binding(const std::string& binding_id,
                                     const std::string& aor_id,
-                                    AoR::Bindings& bindings,
+                                    Bindings& bindings,
                                     SAS::TrailId trail)
 {
   std::vector<std::string> binding_ids;
@@ -531,7 +531,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         AoRPair* aor_pair = NULL;
         // This empty bindings map will be returned by the get_bindings function
         // containing all non-expired bindings for the given aor.
-        AoR::Bindings bindings;
+        Bindings bindings;
         _scscf->get_bindings(aor, bindings, trail());
 
         if ((aor_pair != NULL) &&
@@ -539,12 +539,12 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         {
           if (!aor_pair->get_current()->bindings().empty())
           {
-            const AoR::Bindings bindings = aor_pair->get_current()->bindings();
+            const Bindings bindings = aor_pair->get_current()->bindings();
 
             // Loop over the bindings. If any binding has an emergency registration,
             // let the request through. When routing to UEs, we will make sure we
             // only route the request to the bindings that have an emergency registration.
-            for (AoR::Bindings::const_iterator binding = bindings.begin();
+            for (Bindings::const_iterator binding = bindings.begin();
                  binding != bindings.end();
                  ++binding)
             {
@@ -742,7 +742,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // corresponding to this flow.
       // This empty bindings map will be returned containing the complete set
       // of binding objects.
-      AoR::Bindings bindings;
+      Bindings bindings;
       std::string aor_id; //SDM-REFACTOR-TODO - NEED TO SET THIS
       _scscf->remove_binding(i->second, aor_id, bindings, trail());
     }
@@ -1825,7 +1825,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
     // The empty map of bindings will be filled by the get_bindings function to
     // contain all non-expired bindings for the given aor.
-    AoR::Bindings bindings;
+    Bindings bindings;
     _scscf->get_bindings(aor, bindings, trail());
 
     if (!bindings.empty())

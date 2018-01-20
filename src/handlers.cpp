@@ -403,7 +403,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
                                          std::string private_id,
                                          std::set<std::string>& impis_to_delete)
 {
-  AoR::Bindings bindings;
+  Bindings bindings;
 
   HTTPCode rc = _cfg->_sm->get_bindings(aor_id,
                                         bindings,
@@ -415,7 +415,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
 
   std::vector<std::string> binding_ids;
 
-  for (std::pair<std::string, Binding*> binding : bindings)
+  for (BindingPair binding : bindings)
   {
     if (private_id.empty() || private_id == binding.second->_private_id)
     {
@@ -431,7 +431,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
     }
   }
 
-  AoR::Bindings unused_bindings;
+  Bindings unused_bindings;
   return _cfg->_sm->remove_bindings(aor_id,
                                     binding_ids,
                                     SubscriberManager::EventTrigger::ADMIN,
@@ -545,14 +545,14 @@ void GetBindingsTask::run()
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   HTTPCode rc = _cfg->_sm->get_bindings(impu, bindings, trail());
   std::string content = serialize_data(bindings);
   _req.add_content(content);
 
   send_http_reply(rc);
 
-  for (std::pair<std::string, Binding*> b : bindings)
+  for (BindingPair b : bindings)
   {
     delete b.second; b.second = NULL;
   }
@@ -587,14 +587,14 @@ void GetSubscriptionsTask::run()
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
-  std::map<std::string, Subscription*> subscriptions;
+  Subscriptions subscriptions;
   HTTPCode rc = _cfg->_sm->get_subscriptions(impu, subscriptions, trail());
   std::string content = serialize_data(subscriptions);
   _req.add_content(content);
 
   send_http_reply(rc);
 
-  for (std::pair<std::string, Subscription*> s : subscriptions)
+  for (SubscriptionPair s : subscriptions)
   {
     delete s.second; s.second = NULL;
   }
@@ -607,7 +607,7 @@ void GetSubscriptionsTask::run()
 }
 
 std::string GetBindingsTask::serialize_data(
-                                const std::map<std::string, Binding*>& bindings)
+                                const Bindings& bindings)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -617,7 +617,7 @@ std::string GetBindingsTask::serialize_data(
     writer.String(JSON_BINDINGS);
     writer.StartObject();
     {
-      for (std::pair<std::string, Binding*> b : bindings)
+      for (BindingPair b : bindings)
       {
         writer.String(b.first.c_str());
         b.second->to_json(writer);
@@ -631,7 +631,7 @@ std::string GetBindingsTask::serialize_data(
 }
 
 std::string GetSubscriptionsTask::serialize_data(
-                      const std::map<std::string, Subscription*>& subscriptions)
+                      const Subscriptions& subscriptions)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -641,7 +641,7 @@ std::string GetSubscriptionsTask::serialize_data(
     writer.String(JSON_SUBSCRIPTIONS);
     writer.StartObject();
     {
-      for (std::pair<std::string, Subscription*> s : subscriptions)
+      for (SubscriptionPair s : subscriptions)
       {
         writer.String(s.first.c_str());
         s.second->to_json(writer);

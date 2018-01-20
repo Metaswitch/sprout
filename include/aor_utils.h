@@ -24,6 +24,7 @@ extern "C" {
 
 namespace AoRUtils {
 
+
 // Generates the public GRUU for this binding from the address of record and
 // instance-id. Returns NULL if this binding has no valid GRUU.
 pjsip_sip_uri* pub_gruu(const Binding* binding, pj_pool_t* pool);
@@ -35,6 +36,12 @@ std::string pub_gruu_str(const Binding* binding, pj_pool_t* pool);
 // Utility method to return the public GRUU surrounded by quotes.  Returns "" if
 // this binding has no GRUU.
 std::string pub_gruu_quoted_string(const Binding* binding, pj_pool_t* pool);
+
+// Copies a Bindings object to return to the caller.
+Bindings copy_bindings(Bindings bindings);
+
+// Copies a Subscriptions object to return to the caller.
+Subscriptions copy_subscriptions(Subscriptions subscriptions);
 
 };
 

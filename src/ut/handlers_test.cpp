@@ -111,7 +111,7 @@ class DeregistrationTaskTest : public SipTest
   }
 
   void expect_sdm_updates(const std::string& aor_id,
-                          std::map<std::string, Binding*> bindings,
+                          Bindings bindings,
                           std::vector<std::string>& binding_ids)
   {
     EXPECT_CALL(*_subscriber_manager, get_bindings(aor_id, _, _))
@@ -150,7 +150,7 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   Binding binding(aor_id);
   binding._uri = binding_id;
   binding._private_id = private_id;
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   bindings[binding_id] = &binding;
   std::vector<std::string> binding_ids;
 
@@ -240,7 +240,7 @@ TEST_F(DeregistrationTaskTest, SubscriberManagerWritesFail)
   Binding binding(aor_id);
   binding._private_id = private_id;
 
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   bindings[""] = &binding;
   EXPECT_CALL(*_subscriber_manager,
               get_bindings(aor_id, _, _))
@@ -266,7 +266,7 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   std::string aor_id = "sip:6505550231@homedomain";
   Binding binding(aor_id);
   binding._private_id = "impi1";
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   bindings[""] = &binding;
   std::vector<std::string> binding_ids;
 
@@ -295,7 +295,7 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   Binding binding2(aor_id);
   binding2._uri = "binding_id2";
   binding2._private_id = "impi2";
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   bindings["binding_id"] = &binding;
   bindings["binding_id2"] = &binding2;
 
@@ -308,7 +308,7 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   Binding binding3(aor_id2);
   binding3._uri = "binding_id3";
   binding3._private_id = "impi3";
-  std::map<std::string, Binding*> bindings2;
+  Bindings bindings2;
   bindings2["binding_id3"] = &binding3;
 
   std::vector<std::string> binding_ids_2;
@@ -341,7 +341,7 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
   std::string aor_id = "sip:6505550231@homedomain";
   Binding binding(aor_id);
   binding._private_id = "impi1";
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   bindings[""] = &binding;
 
   std::vector<std::string> binding_ids;
@@ -369,7 +369,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
   std::string aor_id = "sip:6505550231@homedomain";
   Binding binding(aor_id);
   binding._private_id = "impi1";
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   bindings[""] = &binding;
 
   std::vector<std::string> binding_ids;
@@ -398,7 +398,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
   std::string aor_id = "sip:6505550231@homedomain";
   Binding binding(aor_id);
   binding._private_id = "impi1";
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   bindings[""] = &binding;
 
   std::vector<std::string> binding_ids;
@@ -466,7 +466,7 @@ TEST_F(GetBindingsTest, OneBinding)
   Binding* actual_binding = AoRTestUtils::build_binding(aor_id, time(NULL));
   std::string uri = actual_binding->_uri;
 
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   bindings[binding_id] = actual_binding;
 
   EXPECT_CALL(*sm, get_bindings(aor_id, _, _))
@@ -583,7 +583,7 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
   std::string to_tag = actual_subscription->_to_tag;
   std::string uri = actual_subscription->_req_uri;
 
-  std::map<std::string, Subscription*> subscriptions;
+  Subscriptions subscriptions;
   subscriptions[to_tag] = actual_subscription;
 
   {
@@ -641,7 +641,7 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
   std::string to_tag_1 = subscription_1->_to_tag;
   std::string to_tag_2 = subscription_2->_to_tag;
 
-  std::map<std::string, Subscription*> subscriptions;
+  Subscriptions subscriptions;
   subscriptions[to_tag_1] = subscription_1;
   subscriptions[to_tag_2] = subscription_2;
 

@@ -1375,7 +1375,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedBinding)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check the 'get_updated_<bindings/subscriptions>' function returns the binding
-  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  Bindings updated_bindings = aor_pair->get_updated_bindings();
   ASSERT_TRUE(updated_bindings.find( b_id ) != updated_bindings.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1424,7 +1424,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedBinding)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_bindings` returns the updated binding
-  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  Bindings updated_bindings = aor_pair->get_updated_bindings();
   ASSERT_TRUE(updated_bindings.find( b_id ) != updated_bindings.end());
   EXPECT_EQ((now + 600), updated_bindings[b_id]->_expires);
 
@@ -1458,7 +1458,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedBinding)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_removed_bindings` returns the 'deleted' binding
-  AoR::Bindings removed_bindings = aor_pair->get_removed_bindings();
+  Bindings removed_bindings = aor_pair->get_removed_bindings();
   ASSERT_TRUE(removed_bindings.find( b_id ) != removed_bindings.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1506,9 +1506,9 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedBinding)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_bindings` and `get_removed_bindings` return nothing
-  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  Bindings updated_bindings = aor_pair->get_updated_bindings();
   ASSERT_TRUE(updated_bindings.find( b_id ) == updated_bindings.end());
-  AoR::Bindings removed_bindings = aor_pair->get_removed_bindings();
+  Bindings removed_bindings = aor_pair->get_removed_bindings();
   ASSERT_TRUE(removed_bindings.find( b_id ) == removed_bindings.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1552,7 +1552,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedSubscription)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_subscriptions` returns the new subscription
-  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
   ASSERT_TRUE(updated_subscriptions.find( s_id ) != updated_subscriptions.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1622,7 +1622,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedSubscription)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_subscriptions` returns the updated subscription
-  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
   ASSERT_TRUE(updated_subscriptions.find( s_id ) != updated_subscriptions.end());
   EXPECT_EQ((now + 600), updated_subscriptions[s_id]->_expires);
 
@@ -1682,7 +1682,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedSubscription)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_removed_subscriptions` returns the 'deleted' subscription
-  AoR::Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
+  Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
   ASSERT_TRUE(removed_subscriptions.find( s_id ) != removed_subscriptions.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1751,9 +1751,9 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedSubscription)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_subscriptions` and `get_removed_subscriptions` returns nothing
-  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
   ASSERT_TRUE(updated_subscriptions.find( s_id ) == updated_subscriptions.end());
-  AoR::Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
+  Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
   ASSERT_TRUE(removed_subscriptions.find( s_id ) == removed_subscriptions.end());
 
   delete aor_pair; aor_pair = NULL;

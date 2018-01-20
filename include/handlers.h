@@ -176,7 +176,7 @@ public:
   void run();
 
 protected:
-  std::string serialize_data(const std::map<std::string, Binding*>& bindings);
+  std::string serialize_data(const Bindings& bindings);
   const Config* _cfg;
 };
 
@@ -200,7 +200,7 @@ public:
   void run();
 
 protected:
-  std::string serialize_data(const std::map<std::string, Subscription*>& subscriptions);
+  std::string serialize_data(const Subscriptions& subscriptions);
   const Config* _cfg;
 };
 

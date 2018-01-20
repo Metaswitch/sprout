@@ -82,11 +82,11 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
   }
 
   HSSConnection::irs_query irs_query;
-  AoR::Bindings updated_bindings;
+  Bindings updated_bindings;
   Binding* binding = new Binding("");
   binding->_emergency_registration = false;
   updated_bindings.insert(std::make_pair("binding_id", binding));
-  AoR::Bindings all_bindings;
+  Bindings all_bindings;
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->update_bindings(irs_query,
                                                      updated_bindings,
@@ -100,13 +100,13 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
   EXPECT_TRUE(patch_object._update_bindings.find("binding_id") != patch_object._update_bindings.end());
 
   // Reset the bindings in the patch object so that we don't double free them.
-  patch_object._update_bindings = std::map<std::string, Binding*>();
+  patch_object._update_bindings = Bindings();
 
   // Check that the binding we set is returned in all bindings.
   EXPECT_TRUE(all_bindings.find("binding_id") != all_bindings.end());
 
   // Delete the bindings we've been passed.
-  for (std::pair<std::string, Binding*> b : all_bindings)
+  for (BindingPair b : all_bindings)
   {
     delete b.second;
   }
@@ -147,7 +147,7 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
   }
 
   std::vector<std::string> binding_ids = {"binding_id"};
-  AoR::Bindings all_bindings;
+  Bindings all_bindings;
   HTTPCode rc = _subscriber_manager->remove_bindings(default_id,
                                                      binding_ids,
                                                      SubscriberManager::EventTrigger::USER,
@@ -163,7 +163,7 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
   EXPECT_FALSE(all_bindings.find("binding_id") != all_bindings.end());
 
   // Delete the bindings we've been passed.
-  for (std::pair<std::string, Binding*> b : all_bindings)
+  for (BindingPair b : all_bindings)
   {
     delete b.second;
   }
@@ -203,7 +203,7 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
                       Return(HTTP_OK)));
   }
 
-  std::pair<std::string, Subscription*> updated_subscription;
+  SubscriptionPair updated_subscription;
   Subscription* subscription = new Subscription();
   updated_subscription = std::make_pair("subscription_id", subscription);
   HSSConnection::irs_info irs_info_out;
@@ -217,7 +217,7 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
   EXPECT_TRUE(patch_object._update_subscriptions.find("subscription_id") != patch_object._update_subscriptions.end());
 
   // Reset the subscriptions in the patch object so that we don't double free them.
-  patch_object._update_subscriptions = std::map<std::string, Subscription*>();
+  patch_object._update_subscriptions = Subscriptions();
 }
 
 TEST_F(SubscriberManagerTest, TestRemoveSubscription)
@@ -342,7 +342,7 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
   }
 
   // Call get subscriptions on SM.
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   HTTPCode rc = _subscriber_manager->get_bindings(default_id,
                                                   bindings,
                                                   DUMMY_TRAIL_ID);
@@ -352,7 +352,7 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
   EXPECT_TRUE(bindings.find("binding_id") != bindings.end());
 
   // Delete the subscriptions we've been passed.
-  for (std::pair<std::string, Binding*> b : bindings)
+  for (BindingPair b : bindings)
   {
     delete b.second;
   }
@@ -377,7 +377,7 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   }
 
   // Call get subscriptions on SM.
-  std::map<std::string, Subscription*> subscriptions;
+  Subscriptions subscriptions;
   HTTPCode rc = _subscriber_manager->get_subscriptions(default_id,
                                                        subscriptions,
                                                        DUMMY_TRAIL_ID);
@@ -387,7 +387,7 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   EXPECT_TRUE(subscriptions.find("subscription_id") != subscriptions.end());
 
   // Delete the subscriptions we've been passed.
-  for (std::pair<std::string, Subscription*> s : subscriptions)
+  for (SubscriptionPair s : subscriptions)
   {
     delete s.second;
   }
