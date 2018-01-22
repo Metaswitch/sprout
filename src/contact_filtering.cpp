@@ -21,7 +21,7 @@
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
 void filter_bindings_to_targets(const std::string& aor,
-                                AoR::Bindings& bindings,
+                                Bindings& bindings,
                                 pjsip_msg* msg,
                                 pj_pool_t* pool,
                                 int max_targets,
@@ -83,7 +83,7 @@ void filter_bindings_to_targets(const std::string& aor,
   }
 
   // Loop over the bindings, trying to match each.
-  for (AoR::Bindings::const_iterator binding = bindings.begin();
+  for (Bindings::const_iterator binding = bindings.begin();
        binding != bindings.end();
        ++binding)
   {

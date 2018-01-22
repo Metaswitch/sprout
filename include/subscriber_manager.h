@@ -30,6 +30,7 @@ extern "C" {
 #include "ifchandler.h"
 #include "aor.h"
 #include "s4.h"
+#include "notify_utils.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
 class SubscriberManager
@@ -39,6 +40,62 @@ public:
   {
     USER,
     ADMIN
+  };
+
+  enum SubscriptionEvent
+  {
+    CREATED,
+    REFRESHED,
+    UNCHANGED,
+    SHORTENED,
+    EXPIRED,
+    TERMINATED
+  };
+
+  struct ClassifiedSubscription
+  {
+    ClassifiedSubscription(std::string id,
+                           Subscription* subscription,
+                           SubscriptionEvent event) :
+      _id(id),
+      _subscription(subscription),
+      _subscription_event(event),
+      _notify_required(false),
+      _reasons()
+    {}
+
+    std::string _id;
+    Subscription* _subscription;
+    SubscriptionEvent _subscription_event;
+    bool _notify_required;
+    std::string _reasons; // Stores reasons for requiring a notify (for logging)
+  };
+
+  typedef std::vector<ClassifiedSubscription*> ClassifiedSubscriptions;
+
+  class NotifySender
+  {
+  public:
+    NotifySender();
+
+    virtual ~NotifySender();
+
+    /// Create and send any appropriate NOTIFYs
+    ///
+    /// @param aor_id       The AoR ID
+    /// @param associated_uris
+    ///                     The IMPUs associated with this IRS
+    /// @param aor_pair     The AoR pair to send NOTIFYs for
+    /// @param now          The current time
+    /// @param trail        SAS trail
+    void send_notifys(const std::string& aor_id,
+                      const EventTrigger& event_trigger,
+                      const ClassifiedBindings& classified_bindings,
+                      const ClassifiedSubscriptions& classified_subscriptions,
+                      AssociatedURIs& associated_uris, // TODO make const again.
+                      int cseq,
+                      int now,
+                      SAS::TrailId trail);
   };
 
   /// SubscriberManager constructor.
@@ -64,9 +121,9 @@ public:
   /// @param[out] irs_info      The IRS information stored about this public ID
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode update_bindings(const HSSConnection::irs_query& irs_query,
-                                   const std::map<std::string, Binding*>& updated_bindings,
+                                   const Bindings& updated_bindings,
                                    const std::vector<std::string>& binding_ids_to_remove,
-                                   std::map<std::string, Binding*>& all_bindings,
+                                   Bindings& all_bindings,
                                    HSSConnection::irs_info& irs_info,
                                    SAS::TrailId trail);
 
@@ -80,7 +137,7 @@ public:
   virtual HTTPCode remove_bindings(const std::string& public_id,
                                    const std::vector<std::string>& binding_ids,
                                    const EventTrigger& event_trigger,
-                                   std::map<std::string, Binding*>& bindings,
+                                   Bindings& bindings,
                                    SAS::TrailId trail);
 
   /// Updates a subscription stored in SM for a given public ID.
@@ -91,7 +148,7 @@ public:
   /// @param[out] irs_info      The IRS information stored about this public ID
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode update_subscription(const std::string& public_id,
-                                       const std::pair<std::string, Subscription*>& subscription,
+                                       const SubscriptionPair& subscription,
                                        HSSConnection::irs_info& irs_info,
                                        SAS::TrailId trail);
 
@@ -126,7 +183,7 @@ public:
   /// @param[out] bindings      All bindings stored for this AoR
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode get_bindings(const std::string& aor_id,
-                                std::map<std::string, Binding*>& bindings,
+                                Bindings& bindings,
                                 SAS::TrailId trail);
 
   /// Gets all bindings and subscriptions stored for a given AoR ID.
@@ -140,7 +197,7 @@ public:
   /// @param[out] subscriptions All subscriptions stored for this AoR
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode get_subscriptions(const std::string& aor_id,
-                                     std::map<std::string, Subscription*>& subscriptions,
+                                     Subscriptions& subscriptions,
                                      SAS::TrailId trail);
 
   /// Gets the cached subscriber state for a given public ID.
@@ -180,10 +237,34 @@ private:
   S4* _s4;
   HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;
+  NotifySender* _notify_sender;
+
+  HTTPCode modify_subscription(const std::string& public_id,
+                               const SubscriptionPair& update_subscription,
+                               const std::string& remove_subscription,
+                               HSSConnection::irs_info& irs_info,
+                               SAS::TrailId trail);
 
   HTTPCode get_cached_default_id(const std::string& public_id,
                                  std::string& aor_id,
                                  HSSConnection::irs_info& irs_info,
+                                 SAS::TrailId trail);
+
+  HTTPCode patch_bindings(const std::string& aor_id,
+                          const Bindings& update_bindings,
+                          const std::vector<std::string>& remove_bindings,
+                          AoR*& aor,
+                          SAS::TrailId trail);
+
+  HTTPCode patch_subscription(const std::string& aor_id,
+                              const SubscriptionPair& update_subscription,
+                              const std::string& remove_subscription,
+                              AoR*& aor,
+                              SAS::TrailId trail);
+
+  HTTPCode patch_associated_uris(const std::string& aor_id,
+                                 const AssociatedURIs& associated_uris,
+                                 AoR*& aor,
                                  SAS::TrailId trail);
 
   HTTPCode deregister_with_hss(const std::string& aor_id,
@@ -191,6 +272,33 @@ private:
                                const std::string& server_name,
                                HSSConnection::irs_info& irs_info,
                                SAS::TrailId trail);
+
+  // Iterate over all original and current bindings in an AoR pair and
+  // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),
+  // shortened ("SHORTENED") or unchanged ("REGISTERED").
+  //
+  // @param aor_id                The AoR ID
+  // @param aor_pair              The AoR pair to compare and classify bindings for
+  // @param classified_bindings   Output vector of classified bindings
+  void classify_bindings(const std::string& aor_id,
+                         const EventTrigger& event_trigger,
+                         const Bindings& orig_bindings,
+                         const Bindings& updated_bindings,
+                         ClassifiedBindings& classified_bindings);
+
+  void classify_subscriptions(const std::string& aor_id,
+                              const EventTrigger& event_trigger,
+                              const Subscriptions& orig_subscriptions,
+                              const Subscriptions& updated_subscriptions,
+                              const ClassifiedBindings& classified_bindings,
+                              const bool& associated_uris_changed,
+                              ClassifiedSubscriptions& classified_subscriptions);
+
+  void delete_bindings(ClassifiedBindings& classified_bindings);
+  void delete_subscriptions(ClassifiedSubscriptions& classified_subscriptions);
+
+  NotifyUtils::ContactEvent determine_contact_event(const EventTrigger& event_trigger);
+
 };
 
 #endif

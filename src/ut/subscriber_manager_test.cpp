@@ -13,6 +13,9 @@
 #include "gtest/gtest.h"
 
 #include "subscriber_manager.h"
+#include "aor_test_utils.h"
+#include "siptest.hpp"
+#include "test_interposer.hpp"
 #include "mock_s4.h"
 #include "mock_hss_connection.h"
 
@@ -24,9 +27,11 @@ using ::testing::SetArgPointee;
 using ::testing::InSequence;
 
 static const int DUMMY_TRAIL_ID = 0;
+const std::string BINDING_ID = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
+const std::string SUBSCRIPTION_ID = "1234";
 
 /// Fixture for SubscriberManagerTest.
-class SubscriberManagerTest : public ::testing::Test
+class SubscriberManagerTest : public SipTest
 {
   SubscriberManagerTest()
   {
@@ -35,14 +40,51 @@ class SubscriberManagerTest : public ::testing::Test
     _subscriber_manager = new SubscriberManager(_s4,
                                                 _hss_connection,
                                                 NULL);
+
+    // TODO Why is the baseresolver looking at the user part of the Route header
+    // in DNS??
+    add_host_mapping("abcdefgh", "1.2.3.4");
+
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
   };
 
   virtual ~SubscriberManagerTest()
   {
+    pjsip_tsx_layer_dump(true);
+
+    // Terminate all transactions
+    terminate_all_tsxs(PJSIP_SC_SERVICE_UNAVAILABLE);
+
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+
     delete _subscriber_manager; _subscriber_manager = NULL;
     delete _s4; _s4 = NULL;
     delete _hss_connection; _hss_connection = NULL;
   };
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+
+    // Schedule timers.
+    SipTest::poll();
+  }
+
+  static void TearDownTestCase()
+  {
+    // Shut down the transaction module first, before we destroy the
+    // objects that might handle any callbacks!
+    pjsip_tsx_layer_destroy();
+
+    SipTest::TearDownTestCase();
+  }
 
   SubscriberManager* _subscriber_manager;
   MockS4* _s4;
@@ -59,8 +101,7 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
 
   // Set up AoRs to be returned by S4.
   AoR* get_aor = new AoR(default_id);
-  AoR* patch_aor = new AoR(*get_aor);
-  patch_aor->get_binding("binding_id");
+  AoR* patch_aor = AoRTestUtils::build_aor(default_id, false);
 
   // Create an empty patch object to save off the one provided by handle patch.
   PatchObject patch_object;
@@ -81,11 +122,10 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
   }
 
   HSSConnection::irs_query irs_query;
-  AoR::Bindings updated_bindings;
-  Binding* binding = new Binding("");
-  binding->_emergency_registration = false;
-  updated_bindings.insert(std::make_pair("binding_id", binding));
-  AoR::Bindings all_bindings;
+  Bindings updated_bindings;
+  Binding* binding = AoRTestUtils::build_binding(default_id, time(NULL));
+  updated_bindings.insert(std::make_pair(BINDING_ID, binding));
+  Bindings all_bindings;
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->update_bindings(irs_query,
                                                      updated_bindings,
@@ -96,16 +136,22 @@ TEST_F(SubscriberManagerTest, TestAddNewBinding)
   EXPECT_EQ(rc, HTTP_OK);
 
   // Check that the patch object contains the expected binding.
-  EXPECT_TRUE(patch_object._update_bindings.find("binding_id") != patch_object._update_bindings.end());
+  EXPECT_TRUE(patch_object._update_bindings.find(BINDING_ID) != patch_object._update_bindings.end());
 
   // Reset the bindings in the patch object so that we don't double free them.
-  patch_object._update_bindings = std::map<std::string, Binding*>();
+  patch_object._update_bindings = Bindings();
 
   // Check that the binding we set is returned in all bindings.
-  EXPECT_TRUE(all_bindings.find("binding_id") != all_bindings.end());
+  EXPECT_TRUE(all_bindings.find(BINDING_ID) != all_bindings.end());
 
   // Delete the bindings we've been passed.
-  for (std::pair<std::string, Binding*> b : all_bindings)
+  for (BindingPair b : all_bindings)
+  {
+    delete b.second;
+  }
+
+  // Delete the bindings we put in.
+  for (BindingPair b : updated_bindings)
   {
     delete b.second;
   }
@@ -120,10 +166,9 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
   irs_info._associated_uris.add_uri(default_id, false);
 
   // Set up AoRs to be returned by S4.
-  AoR* get_aor = new AoR(default_id);
-  get_aor->get_binding("binding_id");
+  AoR* get_aor = AoRTestUtils::build_aor(default_id, false);
   AoR* patch_aor = new AoR(*get_aor);
-  patch_aor->remove_binding("binding_id");
+  patch_aor->remove_binding(BINDING_ID);
 
   // Create an empty patch object to save off the one provided by handle patch.
   PatchObject patch_object;
@@ -145,8 +190,8 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
       .WillOnce(Return(HTTP_OK));
   }
 
-  std::vector<std::string> binding_ids = {"binding_id"};
-  AoR::Bindings all_bindings;
+  std::vector<std::string> binding_ids = {BINDING_ID};
+  Bindings all_bindings;
   HTTPCode rc = _subscriber_manager->remove_bindings(default_id,
                                                      binding_ids,
                                                      SubscriberManager::EventTrigger::USER,
@@ -156,13 +201,13 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
 
   // Check that the patch object contains the expected binding.
   std::vector<std::string> rb = patch_object._remove_bindings;
-  EXPECT_TRUE(std::find(rb.begin(), rb.end(), "binding_id") != rb.end());
+  EXPECT_TRUE(std::find(rb.begin(), rb.end(), BINDING_ID) != rb.end());
 
   // Check that the binding we removed is not returned in all_bindings.
-  EXPECT_FALSE(all_bindings.find("binding_id") != all_bindings.end());
+  EXPECT_FALSE(all_bindings.find(BINDING_ID) != all_bindings.end());
 
   // Delete the bindings we've been passed.
-  for (std::pair<std::string, Binding*> b : all_bindings)
+  for (BindingPair b : all_bindings)
   {
     delete b.second;
   }
@@ -177,10 +222,8 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
   irs_info._associated_uris.add_uri(default_id, false);
 
   // Set up AoRs to be returned by S4.
-  AoR* get_aor = new AoR(default_id);
-  get_aor->get_binding("binding_id");
-  AoR* patch_aor = new AoR(*get_aor);
-  patch_aor->get_subscription("subscription_id");
+  AoR* get_aor = AoRTestUtils::build_aor(default_id, false);
+  AoR* patch_aor = AoRTestUtils::build_aor(default_id);
 
   // Create an empty patch object to save off the one provided by handle patch.
   PatchObject patch_object;
@@ -200,9 +243,9 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
                       Return(HTTP_OK)));
   }
 
-  std::pair<std::string, Subscription*> updated_subscription;
-  Subscription* subscription = new Subscription();
-  updated_subscription = std::make_pair("subscription_id", subscription);
+  SubscriptionPair updated_subscription;
+  Subscription* subscription = AoRTestUtils::build_subscription(SUBSCRIPTION_ID, time(NULL));
+  updated_subscription = std::make_pair(SUBSCRIPTION_ID, subscription);
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->update_subscription(default_id,
                                                          updated_subscription,
@@ -210,11 +253,21 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_OK);
 
+  ASSERT_EQ(1, txdata_count());
+
+  // Check tdata for correct fields on NOTIFY.
+  //pjsip_tx_data* tdata = pop_txdata();
+
+  free_txdata();
+
   // Check that the patch object contains the expected subscription.
-  EXPECT_TRUE(patch_object._update_subscriptions.find("subscription_id") != patch_object._update_subscriptions.end());
+  EXPECT_TRUE(patch_object._update_subscriptions.find(SUBSCRIPTION_ID) != patch_object._update_subscriptions.end());
 
   // Reset the subscriptions in the patch object so that we don't double free them.
-  patch_object._update_subscriptions = std::map<std::string, Subscription*>();
+  patch_object._update_subscriptions = Subscriptions();
+
+  // Delete the subscription we put in.
+  delete subscription; subscription = NULL;
 }
 
 TEST_F(SubscriberManagerTest, TestRemoveSubscription)
@@ -226,11 +279,8 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
   irs_info._associated_uris.add_uri(default_id, false);
 
   // Set up AoRs to be returned by S4.
-  AoR* get_aor = new AoR(default_id);
-  get_aor->get_binding("binding_id");
-  get_aor->get_subscription("subscription_id");
-  AoR* patch_aor = new AoR(*get_aor);
-  patch_aor->remove_subscription("subscription_id");
+  AoR* get_aor = AoRTestUtils::build_aor(default_id);
+  AoR* patch_aor = AoRTestUtils::build_aor(default_id, false);
 
   // Create an empty patch object to save off the one provided by handle patch.
   PatchObject patch_object;
@@ -252,14 +302,14 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
 
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->remove_subscription(default_id,
-                                                         "subscription_id",
+                                                         SUBSCRIPTION_ID,
                                                          irs_info_out,
                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_OK);
 
   // Check that the patch object contains the expected subscription.
   std::vector<std::string> rs = patch_object._remove_subscriptions;
-  EXPECT_TRUE(std::find(rs.begin(), rs.end(), "subscription_id") != rs.end());
+  EXPECT_TRUE(std::find(rs.begin(), rs.end(), SUBSCRIPTION_ID) != rs.end());
 }
 
 /*TEST_F(SubscriberManagerTest, TestUpdateSubscription)
@@ -339,7 +389,7 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
   }
 
   // Call get subscriptions on SM.
-  std::map<std::string, Binding*> bindings;
+  Bindings bindings;
   HTTPCode rc = _subscriber_manager->get_bindings(default_id,
                                                   bindings,
                                                   DUMMY_TRAIL_ID);
@@ -349,7 +399,7 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
   EXPECT_TRUE(bindings.find("binding_id") != bindings.end());
 
   // Delete the subscriptions we've been passed.
-  for (std::pair<std::string, Binding*> b : bindings)
+  for (BindingPair b : bindings)
   {
     delete b.second;
   }
@@ -374,7 +424,7 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   }
 
   // Call get subscriptions on SM.
-  std::map<std::string, Subscription*> subscriptions;
+  Subscriptions subscriptions;
   HTTPCode rc = _subscriber_manager->get_subscriptions(default_id,
                                                        subscriptions,
                                                        DUMMY_TRAIL_ID);
@@ -384,40 +434,10 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   EXPECT_TRUE(subscriptions.find("subscription_id") != subscriptions.end());
 
   // Delete the subscriptions we've been passed.
-  for (std::pair<std::string, Subscription*> s : subscriptions)
+  for (SubscriptionPair s : subscriptions)
   {
     delete s.second;
   }
-}
-
-TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
-{
-  HSSConnection::irs_info irs_info;
-  HSSConnection::irs_query irs_query;
-  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
-  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
-                                                             irs_info,
-                                                             DUMMY_TRAIL_ID), HTTP_OK);
-
-  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
-  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
-                                                             irs_info,
-                                                             DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
-}
-
-TEST_F(SubscriberManagerTest, TestGetSubscriberState)
-{
-  HSSConnection::irs_info irs_info;
-  HSSConnection::irs_query irs_query;
-  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
-  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
-                                                      irs_info,
-                                                      DUMMY_TRAIL_ID), HTTP_OK);
-
-  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
-  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
-                                                      irs_info,
-                                                      DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
 }
 
 TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
@@ -459,4 +479,34 @@ TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
   EXPECT_TRUE(patch_object._associated_uris.contains_uri(other_id));
 
   EXPECT_EQ(rc, HTTP_OK);
+}
+
+TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
+{
+  HSSConnection::irs_info irs_info;
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
+  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
+                                                             irs_info,
+                                                             DUMMY_TRAIL_ID), HTTP_OK);
+
+  EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
+  EXPECT_EQ(_subscriber_manager->get_cached_subscriber_state("",
+                                                             irs_info,
+                                                             DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
+}
+
+TEST_F(SubscriberManagerTest, TestGetSubscriberState)
+{
+  HSSConnection::irs_info irs_info;
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));
+  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
+                                                      irs_info,
+                                                      DUMMY_TRAIL_ID), HTTP_OK);
+
+  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_NOT_FOUND));
+  EXPECT_EQ(_subscriber_manager->get_subscriber_state(irs_query,
+                                                      irs_info,
+                                                      DUMMY_TRAIL_ID), HTTP_NOT_FOUND);
 }

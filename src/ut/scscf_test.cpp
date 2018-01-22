@@ -1183,7 +1183,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
                     Return(HTTP_OK)));
 
   std::string uri = "sip:6505551234@homedomain";
-  AoR::Bindings bindings;
+  Bindings bindings;
   Binding binding(uri);
   create_binding(binding);
   bindings.insert(std::make_pair(uri, &binding));
@@ -1215,7 +1215,7 @@ TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
                     Return(HTTP_OK)));
 
   std::string uri = "sip:6505551234@homedomain";
-  AoR::Bindings bindings;
+  Bindings bindings;
   Binding binding(uri);
   create_binding(binding);
   bindings.insert(std::make_pair(uri, &binding));
@@ -1258,7 +1258,7 @@ TEST_F(SCSCFTest, TestMainlineHeadersSprout)
                           Return(HTTP_OK)));
 
   std::string uri = "sip:6505551234@homedomain";
-  AoR::Bindings bindings;
+  Bindings bindings;
   Binding binding(uri);
   create_binding(binding);
   bindings.insert(std::make_pair(uri, &binding));

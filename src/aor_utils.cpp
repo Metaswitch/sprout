@@ -87,4 +87,28 @@ std::string pub_gruu_quoted_string(const Binding* binding, pj_pool_t* pool)
   return ret;
 }
 
+Bindings copy_bindings(Bindings bindings)
+{
+  Bindings copy_bindings;
+  for (BindingPair b : bindings)
+  {
+    Binding* copy_b = new Binding(*(b.second));
+    copy_bindings.insert(std::make_pair(b.first, copy_b));
+  }
+
+  return copy_bindings;
+}
+
+Subscriptions copy_subscriptions(Subscriptions subscriptions)
+{
+  Subscriptions copy_subscriptions;
+  for (SubscriptionPair s :subscriptions)
+  {
+    Subscription* copy_s = new Subscription(*(s.second));
+    copy_subscriptions.insert(std::make_pair(s.first, copy_s));
+  }
+
+  return copy_subscriptions;
+}
+
 }; // namespace AoRUtils

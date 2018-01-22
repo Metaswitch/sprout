@@ -116,14 +116,14 @@ private:
 
   /// Gets all bindings for the specified public id from the Subscriber Manager.
   void get_bindings(const std::string& public_id,
-                    std::map<std::string, Binding*>& bindings,
+                    Bindings& bindings,
                     SAS::TrailId trail);
 
   /// Removes the binding, specified by it's binding id, using the Subscriber
   /// Manager.
   void remove_binding(const std::string& binding_id,
                       const std::string& aor_id,
-                      AoR::Bindings& bindings,
+                      Bindings& bindings,
                       SAS::TrailId trail);
 
   /// Record that communication with an AS failed.

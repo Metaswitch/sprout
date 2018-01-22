@@ -321,11 +321,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   irs_query._req_type = HSSConnection::REG;
   irs_query._server_name = _scscf_uri;
 
-  std::map<std::string, Binding*> updated_bindings = {};
+  Bindings updated_bindings = {};
   std::vector<std::string> binding_ids_to_remove = {};
   get_bindings_from_req(req, private_id, now, updated_bindings, binding_ids_to_remove);
 
-  std::map<std::string, Binding*> all_bindings;
+  Bindings all_bindings;
   HSSConnection::irs_info irs_info;
 
   HTTPCode rc = _registrar->_sm->update_bindings(irs_query, updated_bindings, binding_ids_to_remove, all_bindings, irs_info, trail());
@@ -358,7 +358,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     acr->send();
     delete acr;
 
-  for (std::pair<std::string, Binding*> bindings : updated_bindings)
+  for (BindingPair bindings : updated_bindings)
   {
     delete bindings.second;
   }
@@ -474,12 +474,12 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   acr->send();
   delete acr;
 
-  for (std::pair<std::string, Binding*> bindings : all_bindings)
+  for (BindingPair bindings : all_bindings)
   {
     delete bindings.second;
   }
 
-  for (std::pair<std::string, Binding*> bindings : updated_bindings)
+  for (BindingPair bindings : updated_bindings)
   {
     delete bindings.second;
   }
@@ -494,7 +494,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 void RegistrarSproutletTsx::get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
                              std::string private_id, ///<private ID that the request refers to
                              const int& now,
-                             std::map<std::string, Binding*>& updated_bindings,
+                             Bindings& updated_bindings,
                              std::vector<std::string>& binding_ids_to_remove)
 {
   // Find the expire headers in the message.
@@ -707,13 +707,13 @@ std::string RegistrarSproutletTsx::get_binding_id(pjsip_contact_hdr *contact)
 void RegistrarSproutletTsx::add_contact_headers(
                                    pjsip_msg* rsp,
                                    pjsip_msg* req,
-                                   std::map<std::string, Binding*> all_bindings,
+                                   Bindings all_bindings,
                                    int now,
                                    std::string public_id,
                                    SAS::TrailId trail)
 {
   // Add contact headers for all active bindings.
-  for (std::pair<std::string, Binding*> b : all_bindings)
+  for (BindingPair b : all_bindings)
   {
     Binding* binding = b.second;
     // TODO if (binding->_expires > now) - sm should strip out expired bindings
@@ -781,7 +781,7 @@ void RegistrarSproutletTsx::add_contact_headers(
 void RegistrarSproutletTsx::handle_path_headers(
                                        pjsip_msg* rsp,
                                        pjsip_msg* req,
-                                       std::map<std::string, Binding*> bindings)
+                                       Bindings bindings)
 {
   // Deal with path header related fields in the response.
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
