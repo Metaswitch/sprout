@@ -52,7 +52,8 @@ public:
     TERMINATED
   };
 
-  struct ClassifiedSubscription {
+  struct ClassifiedSubscription
+  {
     ClassifiedSubscription(std::string id,
                            Subscription* subscription,
                            SubscriptionEvent event) :
@@ -271,12 +272,6 @@ private:
                                const std::string& server_name,
                                HSSConnection::irs_info& irs_info,
                                SAS::TrailId trail);
-
-  void populate_bindings(AoR* aor,
-                         Bindings& bindings);
-
-  void populate_subscriptions(AoR* aor,
-                              Subscriptions& subscriptions);
 
   // Iterate over all original and current bindings in an AoR pair and
   // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),

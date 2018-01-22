@@ -94,6 +94,7 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
     PatchObject* patch_object = new PatchObject();
     patch_object->set_update_bindings(AoRUtils::copy_bindings(updated_bindings));
     patch_object->set_remove_bindings(binding_ids_to_remove);
+    patch_object->set_increment_cseq(true);
 
     updated_aor = new AoR(aor_id);
     updated_aor->patch_aor(patch_object);
@@ -159,6 +160,10 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   }
 
   // Send 3rd party REGISTERs.
+
+  delete_bindings(classified_bindings);
+  delete_subscriptions(classified_subscriptions);
+
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
 
@@ -487,6 +492,9 @@ HTTPCode SubscriberManager::modify_subscription(const std::string& public_id,
                                now,
                                trail);
 
+  delete_bindings(classified_bindings);
+  delete_subscriptions(classified_subscriptions);
+
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
 
@@ -525,6 +533,7 @@ HTTPCode SubscriberManager::patch_bindings(const std::string& aor_id,
   PatchObject* patch_object = new PatchObject();
   patch_object->set_update_bindings(AoRUtils::copy_bindings(update_bindings));
   patch_object->set_remove_bindings(remove_bindings);
+  patch_object->set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
                                   patch_object,
                                   &aor,
@@ -541,8 +550,14 @@ HTTPCode SubscriberManager::patch_subscription(const std::string& aor_id,
                                                SAS::TrailId trail)
 {
   PatchObject* patch_object = new PatchObject();
-  patch_object->set_update_subscriptions(AoRUtils::copy_subscriptions({update_subscription}));
+  Subscriptions subscriptions;
+  if (update_subscription.second != NULL)
+  {
+    subscriptions.insert(update_subscription);
+  }
+  patch_object->set_update_subscriptions(AoRUtils::copy_subscriptions(subscriptions));
   patch_object->set_remove_subscriptions({remove_subscription});
+  patch_object->set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
                                   patch_object,
                                   &aor,
@@ -559,6 +574,7 @@ HTTPCode SubscriberManager::patch_associated_uris(const std::string& aor_id,
 {
   PatchObject* patch_object = new PatchObject();
   patch_object->set_associated_uris(associated_uris);
+  patch_object->set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
                                   patch_object,
                                   &aor,
@@ -580,28 +596,6 @@ HTTPCode SubscriberManager::deregister_with_hss(const std::string& aor_id,
   irs_query._server_name = server_name;
 
   return get_subscriber_state(irs_query, irs_info, trail);
-}
-
-// TODO delete method
-void SubscriberManager::populate_bindings(AoR* aor,
-                                          Bindings& bindings)
-{
-   for (BindingPair b : aor->bindings())
-  {
-    Binding* copy_b = new Binding(*(b.second));
-    bindings.insert(std::make_pair(b.first, copy_b));
-  }
-}
-
-// TODO delete method
-void SubscriberManager::populate_subscriptions(AoR* aor,
-                                               Subscriptions& subscriptions)
-{
-  for (SubscriptionPair s : aor->subscriptions())
-  {
-    Subscription* copy_s = new Subscription(*(s.second));
-    subscriptions.insert(std::make_pair(s.first, copy_s));
-  }
 }
 
 void SubscriberManager::classify_bindings(const std::string& aor_id,
@@ -755,6 +749,9 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
     std::string subscription_id = orig_s.first;
     Subscription* subscription = orig_s.second;
 
+    bool notify_required = base_notify_required;
+    std::string reasons = base_reasons;
+
     if ((missing_binding_uris.find(subscription->_req_uri) !=
          missing_binding_uris.end()) &&
         (event_trigger != EventTrigger::ADMIN))
@@ -793,11 +790,16 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
                 subscription_id.c_str(),
                 aor_id.c_str());
 
+      notify_required = true;
+      reasons += "Subscription created - ";
+
       ClassifiedSubscription* classified_subscription =
         new ClassifiedSubscription(subscription_id,
                                    subscription,
                                    SubscriptionEvent::TERMINATED);
 
+      classified_subscription->_notify_required = notify_required;
+      classified_subscription->_reasons = reasons;
       classified_subscriptions.push_back(classified_subscription);
     }
   }
