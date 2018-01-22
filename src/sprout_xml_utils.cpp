@@ -263,8 +263,8 @@ bool parse_ims_subscription(const std::string public_user_identity,
           {
             current_sp_contains_public_id = true;
           }
-          else if (WildcardUtils::check_users_equivalent(
-                                                     identity_uri, public_user_identity))
+          else if (WildcardUtils::check_users_equivalent(identity_uri,
+                                                         public_user_identity))
           {
             found_multiple_matches = maybe_found_aliases;
             current_sp_maybe_contains_public_id = true;
