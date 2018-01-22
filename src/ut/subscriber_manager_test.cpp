@@ -27,8 +27,8 @@ using ::testing::SetArgPointee;
 using ::testing::InSequence;
 
 static const int DUMMY_TRAIL_ID = 0;
-const std::string BINDING_ID = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
-const std::string SUBSCRIPTION_ID = "1234";
+static const std::string BINDING_ID = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
+static const std::string SUBSCRIPTION_ID = "1234";
 
 /// Fixture for SubscriberManagerTest.
 class SubscriberManagerTest : public SipTest
@@ -41,11 +41,8 @@ class SubscriberManagerTest : public SipTest
                                                 _hss_connection,
                                                 NULL);
 
-    // TODO Why is the baseresolver looking at the user part of the Route header
-    // in DNS??
-    add_host_mapping("abcdefgh", "1.2.3.4");
-
-    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
+    // Log all traffic
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   };
 
   virtual ~SubscriberManagerTest()
