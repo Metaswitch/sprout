@@ -194,17 +194,6 @@ void DeregistrationTask::run()
     return;
   }
 
-  // Mandatory query parameter 'send-notifications' that must be true or false
-  _notify = _req.param("send-notifications");
-
-  if (_notify != "true" && _notify != "false")
-  {
-    TRC_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
-    send_http_reply(HTTP_BAD_REQUEST);
-    delete this;
-    return;
-  }
-
   // Parse the JSON body
   HTTPCode rc = parse_request(_req.get_rx_body());
 
@@ -288,8 +277,6 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   report_sip_all_register_marker(trail(), aor_id);
 }
 
-
-// Retrieve the aors and any private IDs from the request body
 HTTPCode DeregistrationTask::parse_request(std::string body)
 {
   rapidjson::Document doc;
@@ -427,7 +414,6 @@ HTTPCode DeregistrationTask::deregister_bindings(
       }
 
       binding_ids.push_back(binding.second->get_id());
-      printf("\n%s\n", binding.second->get_id().c_str());
     }
   }
 

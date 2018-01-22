@@ -54,7 +54,6 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
 
 class DeregistrationTaskTest : public SipTest
 {
-  MockSubscriberDataManager* _subscriber_data_manager;
   MockSubscriberManager* _subscriber_manager;
   MockImpiStore* _local_impi_store;
   MockImpiStore* _remote_impi_store;
@@ -75,7 +74,6 @@ class DeregistrationTaskTest : public SipTest
     _local_impi_store = new MockImpiStore();
     _remote_impi_store = new MockImpiStore();
     _httpstack = new MockHttpStack();
-    _subscriber_data_manager = new MockSubscriberDataManager();
     _subscriber_manager = new MockSubscriberManager();
     _hss = new FakeHSSConnection();
   }
@@ -85,7 +83,6 @@ class DeregistrationTaskTest : public SipTest
     delete _req;
     delete _cfg;
     delete _hss;
-    delete _subscriber_data_manager;
     delete _subscriber_manager;
     delete _httpstack;
     delete _local_impi_store; _local_impi_store = NULL;
@@ -110,9 +107,9 @@ class DeregistrationTaskTest : public SipTest
     _task = new DeregistrationTask(*_req, _cfg, 0);
   }
 
-  void expect_sdm_updates(const std::string& aor_id,
-                          Bindings bindings,
-                          std::vector<std::string>& binding_ids)
+  void expect_sm_updates(const std::string& aor_id,
+                         Bindings bindings,
+                         std::vector<std::string>& binding_ids)
   {
     EXPECT_CALL(*_subscriber_manager, get_bindings(aor_id, _, _))
       .WillOnce(DoAll(SetArgReferee<1>(bindings), Return(HTTP_OK)));
@@ -143,6 +140,7 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
   build_dereg_request(body);
 
+  // Set up the subscriber_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   std::string binding_id = "sip:6505550231@homedomain;tcp";
   std::string private_id = "6505550231";
@@ -154,7 +152,7 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   bindings[binding_id] = &binding;
   std::vector<std::string> binding_ids;
 
-  expect_sdm_updates(aor_id, bindings, binding_ids);
+  expect_sm_updates(aor_id, bindings, binding_ids);
 
   // The IMPI is also deleted from the local and remote stores.
   expect_gr_impi_deletes(private_id);
@@ -163,23 +161,16 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
 
+  // Check the right binding was being deregistered
   ASSERT_EQ(1u, binding_ids.size());
   EXPECT_EQ(binding_ids[0], binding_id);
 }
 
-// Test that a dereg request that isn't a delete gets rejected.
+// Test that a dereg request that isn't an HTTP delete gets rejected.
 TEST_F(DeregistrationTaskTest, InvalidMethodTest)
 {
   build_dereg_request("", "", htp_method_GET);
   EXPECT_CALL(*_httpstack, send_reply(_, 405, _));
-  _task->run();
-}
-
-// Test that a dereg request that doesn't have a valid send-notifications param gets rejected.
-TEST_F(DeregistrationTaskTest, InvalidParametersTest)
-{
-  build_dereg_request("", "nottrueorfalse");
-  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
   _task->run();
 }
 
@@ -211,6 +202,7 @@ TEST_F(DeregistrationTaskTest, MissingPrimaryIMPUJSONTest)
   EXPECT_TRUE(log.contains("Invalid JSON - registration doesn't contain primary-impu"));
 }
 
+// Error case for failing to get bindings from subscriber manager.
 TEST_F(DeregistrationTaskTest, SubscriberManagerAccessFail)
 {
   // Build the request
@@ -228,13 +220,14 @@ TEST_F(DeregistrationTaskTest, SubscriberManagerAccessFail)
   _task->run();
 }
 
+// Error case for failing to write updated bindings back to subscriber manager.
 TEST_F(DeregistrationTaskTest, SubscriberManagerWritesFail)
 {
   // Build the request
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
   build_dereg_request(body);
 
-  // Set up the subscriber_data_manager expectations
+  // Set up the subscriber_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   std::string private_id = "sip:6505550231";
   Binding binding(aor_id);
@@ -256,13 +249,14 @@ TEST_F(DeregistrationTaskTest, SubscriberManagerWritesFail)
   _task->run();
 }
 
+// Test deregistering all bindings for an IMPU regardless of IMPI.
 TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered)
 {
-  // Build a request that deregisters all bindings for an IMPU regardless of
-  // IMPI.
+  // Build a request
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\"}]}";
   build_dereg_request(body);
 
+  // Set up the subscriber_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   Binding binding(aor_id);
   binding._private_id = "impi1";
@@ -270,7 +264,7 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   bindings[""] = &binding;
   std::vector<std::string> binding_ids;
 
-  expect_sdm_updates(aor_id, bindings, binding_ids);
+  expect_sm_updates(aor_id, bindings, binding_ids);
 
   // The corresponding IMPI is also deleted.
   expect_gr_impi_deletes("impi1");
@@ -280,6 +274,7 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   _task->run();
 }
 
+// Test deregistering several IMPIs from different AoR in one request.
 TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 {
   // Build the request
@@ -299,9 +294,9 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   bindings["binding_id"] = &binding;
   bindings["binding_id2"] = &binding2;
 
+  // Set up corresponding subscriber_manager expectations
   std::vector<std::string> binding_ids;
-
-  expect_sdm_updates(aor_id, bindings, binding_ids);
+  expect_sm_updates(aor_id, bindings, binding_ids);
 
   // create another AoR with one binding.
   std::string aor_id2 = "sip:6505550232@homedomain";
@@ -311,8 +306,9 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   Bindings bindings2;
   bindings2["binding_id3"] = &binding3;
 
+  // Set up corresponding subscriber_manager expectations
   std::vector<std::string> binding_ids_2;
-  expect_sdm_updates(aor_id2, bindings2, binding_ids_2);
+  expect_sm_updates(aor_id2, bindings2, binding_ids_2);
 
   // The corresponding IMPIs are also deleted.
   expect_gr_impi_deletes("impi1");
@@ -324,6 +320,7 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   // Run the task
   _task->run();
 
+  // Check the right binding was being deregistered
   ASSERT_EQ(2u, binding_ids.size());
   ASSERT_EQ(1u, binding_ids_2.size());
   EXPECT_EQ(binding_ids[0], "binding_id");
@@ -331,6 +328,7 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   EXPECT_EQ(binding_ids_2[0], "binding_id3");
 }
 
+// Test where IMPI has been removed from AoR but is not found in store.
 TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
 {
   // Build the request
@@ -346,7 +344,7 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
 
   std::vector<std::string> binding_ids;
 
-  expect_sdm_updates(aor_id, bindings, binding_ids);
+  expect_sm_updates(aor_id, bindings, binding_ids);
 
   // Simulate the IMPI not being found in the store. The handler does not go on
   // to try and delete the IMPI.
@@ -359,6 +357,7 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
   _task->run();
 }
 
+// Error case for IMPI store failure when deleting IMPI.
 TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
 {
   // Build the request
@@ -374,7 +373,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
 
   std::vector<std::string> binding_ids;
 
-  expect_sdm_updates(aor_id, bindings, binding_ids);
+  expect_sm_updates(aor_id, bindings, binding_ids);
 
   // Simulate the IMPI store failing when deleting the IMPI. The handler does
   // not retry the delete.
@@ -388,6 +387,8 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
   _task->run();
 }
 
+// Test that handlers will retry when IMPI store returns data contention on
+// first delete.
 TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 {
   // Build the request
@@ -403,7 +404,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 
   std::vector<std::string> binding_ids;
 
-  expect_sdm_updates(aor_id, bindings, binding_ids);
+  expect_sm_updates(aor_id, bindings, binding_ids);
 
   // We need to create two IMPIs when we return one on a call to get_impi we
   // lose ownership of it.
@@ -525,6 +526,7 @@ TEST_F(GetBindingsTest, LocalStoreDown)
   task->run();
 }
 
+// Test that a get binding request with PUT method gets rejected.
 TEST_F(GetBindingsTest, BadMethod)
 {
   // Build request
@@ -549,7 +551,7 @@ class GetSubscriptionsTest : public TestWithMockSdms
 {
 };
 
-// Get an IMPU that does not have any subscription.
+// Test getting an IMPU that does not have any subscription.
 TEST_F(GetSubscriptionsTest, NoSubscriptions)
 {
   // Build request
@@ -569,7 +571,7 @@ TEST_F(GetSubscriptionsTest, NoSubscriptions)
   task->run();
 }
 
-// Get an IMPU that has one subscription
+// Test getting an IMPU that has one subscription
 TEST_F(GetSubscriptionsTest, OneSubscription)
 {
   // Build request
@@ -626,7 +628,7 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
   EXPECT_EQ(uri, subscription["req_uri"].GetString());
 }
 
-// Get an IMPU with two subscriptions.
+// Test getting an IMPU with two subscriptions.
 TEST_F(GetSubscriptionsTest, TwoSubscriptions)
 {
   // Build request
@@ -663,6 +665,7 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
   EXPECT_TRUE(document["subscriptions"].HasMember("789"));
 }
 
+// Test that a get subscription request with PUT method gets rejected.
 TEST_F(GetSubscriptionsTest, BadMethod)
 {
   // Build request
@@ -709,8 +712,7 @@ class DeleteImpuTaskTest : public TestWithMockSdms
 
   // Build the deregistration request
   void build_task(const std::string& impu,
-                  htp_method method = htp_method_DELETE,
-                  bool configure_remote_store = false)
+                  htp_method method = htp_method_DELETE)
   {
     req = new MockHttpStack::Request(stack,
                                      "/impu/" + impu,
@@ -718,11 +720,6 @@ class DeleteImpuTaskTest : public TestWithMockSdms
                                      "",
                                      "",
                                      method);
-    std::vector<SubscriberDataManager*> remote_stores;
-    if (configure_remote_store)
-    {
-      remote_stores.push_back(remote_store1);
-    }
 
     cfg = new DeleteImpuTask::Config(sm);
     task = new DeleteImpuTask(*req, cfg, 0);
@@ -734,6 +731,7 @@ MATCHER(EmptyAoR, "")
   return !arg->current_contains_bindings();
 }
 
+// Mainline test
 TEST_F(DeleteImpuTaskTest, Mainline)
 {
   std::string impu = "sip:6505550231@homedomain";
@@ -750,6 +748,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
   task->run();
 }
 
+// Test that a Delete IMPU request with PUT method gets rejected.
 TEST_F(DeleteImpuTaskTest, BadMethod)
 {
   std::string impu = "sip:6505550231@homedomain";
@@ -789,8 +788,7 @@ class PushProfileTaskTest : public TestWithMockSdms
   // Build the push profile request
   void build_pushprofile_request(std::string body,
                                  std::string default_uri,
-                                 htp_method method = htp_method_PUT,
-                                 bool configure_remote_store = false)
+                                 htp_method method = htp_method_PUT)
   {
     req = new MockHttpStack::Request(stack,
                                      "/registrations/" + default_uri,
@@ -798,11 +796,6 @@ class PushProfileTaskTest : public TestWithMockSdms
                                      "",
                                      body,
                                      method);
-    std::vector<SubscriberDataManager*> remote_stores;
-    if (configure_remote_store)
-    {
-      remote_stores.push_back(remote_store1);
-    }
 
     cfg = new PushProfileTask::Config(sm);
     task = new PushProfileTask(*req, cfg, 0);
