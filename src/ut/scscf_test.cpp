@@ -38,6 +38,7 @@
 #include "acr.h"
 #include "testingcommon.h"
 #include "mock_subscriber_manager.h"
+#include "aor_test_utils.h"
 
 using namespace std;
 using namespace TestingCommon;
@@ -295,12 +296,12 @@ protected:
   void doFastFailureFlow(SCSCFMessage& msg, int st_code);
   void doSlowFailureFlow(SCSCFMessage& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(SCSCFMessage& msg);
-  void create_binding(Binding& binding, int lifetime = 3600, std::string instance_id = "");
   void set_irs_info(HSSConnection::irs_info& irs_info,
                     std::string user,
                     const std::string& domain,
                     bool barred = false,
                     std::vector<std::string> uris_associated_with_user = {});
+  void setup_basic_test_info(HSSConnection::irs_info& irs_info, AoR::Bindings& bindings);
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
@@ -1154,39 +1155,30 @@ void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
   irs_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
 }
 
-// SDM-REFACTOR-TODO: move this to common code to be used by other sproutlets?
-// Create a binding to be returned by the mock subscriber manager.
-void SCSCFTestBase::create_binding(Binding& binding,
-                                   int lifetime,
-                                   std::string instance_id)
+// Set up the irs info that is used in most tests.
+void SCSCFTestBase::setup_basic_test_info(HSSConnection::irs_info& irs_info,
+                                          AoR::Bindings& bindings)
 {
-  binding._uri = "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob";
-  binding._cid = "1";
-  binding._cseq = 1;
-  binding._expires = time(NULL) + lifetime;
-  binding._priority = 1000;
-  binding._emergency_registration = false;
-  if (!instance_id.empty())
-  {
-    binding._params["+sip.instance"] = instance_id;
-  }
+  set_irs_info(irs_info, "6505551234", "homedomain");
+
+  std::string uri = "sip:6505551234@homedomain";
+  Binding* binding = AoRTestUtils::build_binding(uri,
+                                                 time(NULL),
+                                                 "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  bindings.insert(std::make_pair(uri, binding));
 }
+
 
 TEST_F(SCSCFTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
 
   HSSConnection::irs_info irs_info;
-  set_irs_info(irs_info, "6505551234", "homedomain");
+  AoR::Bindings bindings;
+  setup_basic_test_info(irs_info, bindings);
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
-
-  std::string uri = "sip:6505551234@homedomain";
-  AoR::Bindings bindings;
-  Binding binding(uri);
-  create_binding(binding);
-  bindings.insert(std::make_pair(uri, &binding));
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
@@ -1200,7 +1192,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 
-  // It also shouldn't result in any forked INVITEs
+  // It also shouldn't result in any forked INVITEs.
   EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
@@ -1209,16 +1201,11 @@ TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
   SCOPED_TRACE("");
 
   HSSConnection::irs_info irs_info;
-  set_irs_info(irs_info, "6505551234", "homedomain");
+  AoR::Bindings bindings;
+  setup_basic_test_info(irs_info, bindings);
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
-
-  std::string uri = "sip:6505551234@homedomain";
-  AoR::Bindings bindings;
-  Binding binding(uri);
-  create_binding(binding);
-  bindings.insert(std::make_pair(uri, &binding));
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
@@ -1251,17 +1238,12 @@ TEST_F(SCSCFTest, TestMainlineHeadersSprout)
   // Two INVITES are sent in "doTestHeaders", so we expect to call into the mock
   // subscriber manager twice.
   HSSConnection::irs_info irs_info;
-  set_irs_info(irs_info, "6505551234", "homedomain");
+  AoR::Bindings bindings;
+  setup_basic_test_info(irs_info, bindings);
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
     .Times(2)
     .WillRepeatedly(DoAll(SetArgReferee<1>(irs_info),
                           Return(HTTP_OK)));
-
-  std::string uri = "sip:6505551234@homedomain";
-  AoR::Bindings bindings;
-  Binding binding(uri);
-  create_binding(binding);
-  bindings.insert(std::make_pair(uri, &binding));
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .Times(2)
     .WillRepeatedly(DoAll(SetArgReferee<1>(bindings),
@@ -1486,17 +1468,12 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
 
   // Set the info for the callee, to include the associated tel uri.
   HSSConnection::irs_info irs_info;
-  set_irs_info(irs_info, "6505551234", "homedomain");
+  AoR::Bindings bindings;
+  setup_basic_test_info(irs_info, bindings);
   irs_info._associated_uris.add_uri("tel:6505551235", false);
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
-
-  std::string uri = "sip:6505551234@homedomain";
-  AoR::Bindings bindings;
-  Binding binding(uri);
-  create_binding(binding);
-  bindings.insert(std::make_pair(uri, &binding));
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
