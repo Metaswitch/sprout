@@ -23,6 +23,8 @@
 #include "test_interposer.hpp"
 #include "mock_store.h"
 #include "aor_test_utils.h"
+#include "fakechronosconnection.hpp"
+#include "mock_chronos_connection.h"
 
 // SDM-REFACTOR-TODO:
 // Full UTs
@@ -56,9 +58,10 @@ class BasicS4Test : public SipTest
   {
     _mock_store = new MockStore();
     _aor_store = new AstaireAoRStore(_mock_store);
-    _remote_s4_1 = new S4("site2", _aor_store, {});
-    _remote_s4_2 = new S4("site3", _aor_store, {});
-    _s4 = new S4("site1", _aor_store, {_remote_s4_1, _remote_s4_2});
+    _chronos_connection = new FakeChronosConnection();
+    _remote_s4_1 = new S4("site2", _chronos_connection, _aor_store, {});
+    _remote_s4_2 = new S4("site3", _chronos_connection, _aor_store, {});
+    _s4 = new S4("site1", _chronos_connection, _aor_store, {_remote_s4_1, _remote_s4_2});
   }
 
   virtual ~BasicS4Test()
@@ -66,6 +69,7 @@ class BasicS4Test : public SipTest
     delete _s4; _s4 = NULL;
     delete _remote_s4_1, _remote_s4_1 = NULL;
     delete _remote_s4_2, _remote_s4_2 = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
     delete _aor_store; _aor_store = NULL;
     delete _mock_store; _mock_store = NULL;
   }
@@ -108,6 +112,7 @@ class BasicS4Test : public SipTest
   // `this->store` rather than `_store`).
   MockStore* _mock_store;
   AstaireAoRStore* _aor_store;
+  FakeChronosConnection* _chronos_connection;
   S4* _remote_s4_1;
   S4* _remote_s4_2;
   S4* _s4;
