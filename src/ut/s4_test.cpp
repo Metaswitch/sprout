@@ -162,6 +162,8 @@ TEST_F(BasicS4Test, GETNotFoundInAllStores)
 // This test covers a GET where the AoR doesn't exist in any store.
 TEST_F(BasicS4Test, GETFoundInRemoteStore)
 {
+  //int now = time(NULL);
+
   {
     InSequence s;
     get_data_expect_call_success(empty_aor,
@@ -170,7 +172,7 @@ TEST_F(BasicS4Test, GETFoundInRemoteStore)
     get_data_expect_call_success(aor_with_binding,
                                  1,
                                  1);
-    EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 1000000, _, An<Store::Format>()))
+    EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 1000000 + 10, _, An<Store::Format>()))
       .WillOnce(Return(Store::Status::OK));
   }
 
