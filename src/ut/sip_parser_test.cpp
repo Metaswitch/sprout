@@ -955,7 +955,7 @@ TEST_F(SipParserTest, RejectContactMultiple)
              "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
              "Call-ID: 1-13919@10.151.20.48\n"
              "CSeq: 1 INVITE\n"
-             "Reject-Contact: *;+sip.instance=\"<i:am:a:robot>\";+xyz,*;+abcd\n"
+             "Reject-Contact: *;+sip.instance=\"<i:am:a:robot>\";explicit;+xyz,*;require;+abcd\n"
              "Content-Length: 0\n\n");
 
   pjsip_rx_data* rdata = build_rxdata(str, _tp_default, main_pool);
@@ -967,13 +967,13 @@ TEST_F(SipParserTest, RejectContactMultiple)
                                                             &header_name,
                                                             NULL);
   EXPECT_NE(hdr, (pjsip_reject_contact_hdr*)NULL);
-  EXPECT_EQ(2u, pj_list_size(&hdr->feature_set));
+  EXPECT_EQ(3u, pj_list_size(&hdr->feature_set));
 
   hdr = (pjsip_reject_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
                                                               &header_name,
                                                               hdr->next);
   EXPECT_NE(hdr, (pjsip_reject_contact_hdr*)NULL);
-  EXPECT_EQ(1u, pj_list_size(&hdr->feature_set));
+  EXPECT_EQ(2u, pj_list_size(&hdr->feature_set));
 
   pj_pool_release(main_pool);
 }
