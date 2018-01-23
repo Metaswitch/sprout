@@ -158,9 +158,9 @@ public:
    *
    * @param body[in]     HTTP request body
    *
-   * @return HTTPCode    
+   * @return HTTPCode
    *   HTTP_OK          - request body successfully parsed
-   *   HTTP_BAD_REQUEST - json in request body is missing or wrong format 
+   *   HTTP_BAD_REQUEST - json in request body is missing or wrong format
    */
   HTTPCode parse_request(std::string body);
 
@@ -171,12 +171,12 @@ public:
    * @param private_id[in]          IMPI of the bindings to be deregistered
    * @param impis_to_delete[in,out] IMPI of the bindings to be deregistered
    *
-   * @return 
+   * @return
    *   HTTP_OK          - binding successfully deregistered
    *
    *   HTTP_SERVER_ERROR
    *   HTTP_NOT_FOUND
-   *   HTTP_PRECONDITION_FAILED 
+   *   HTTP_PRECONDITION_FAILED
    *                    - error occurred during s4 handle_get, handle_patch, or
    *                    deregister with hss
    */
@@ -221,13 +221,13 @@ public:
 
 protected:
   /**
-   * @brief Write information about all bindings in an AoR to a JSON string 
+   * @brief Write information about all bindings in an AoR to a JSON string
    *
-   * @param bindings[in]   map of binding_id and Binding object in an AoR  
+   * @param bindings[in]   map of binding_id and Binding object in an AoR
    *
    * @return JSON string containing all bindings information
    */
-  std::string serialize_data(const std::map<std::string, Binding*>& bindings);
+  std::string serialize_data(const Bindings& bindings);
   const Config* _cfg;
 };
 
@@ -252,13 +252,13 @@ public:
 
 protected:
   /**
-   * @brief Write information about all subscriptions in an AoR to a JSON string 
+   * @brief Write information about all subscriptions in an AoR to a JSON string
    *
-   * @param subscription[in]   map of to_tag and Subscription object in an AoR  
+   * @param subscription[in]   map of to_tag and Subscription object in an AoR
    *
    * @return JSON string containing all subscription information
    */
-  std::string serialize_data(const std::map<std::string, Subscription*>& subscriptions);
+  std::string serialize_data(const Subscriptions& subscriptions);
   const Config* _cfg;
 };
 
@@ -322,7 +322,7 @@ public:
    * @param body[in]   request body of Push Profile
    * @param trail      SAS logging
    *
-   * @return 
+   * @return
    *   HTTP_OK          - Associated URIS successfully populated
    *   HTTP_BAD_REQUEST - failed to parse request body as JSON/XML
    */
@@ -330,7 +330,7 @@ public:
 
   /**
    * @brief Get subscriber manager to update associated uris based on
-   * _associated_uris that is populated in get_associated_uris 
+   * _associated_uris that is populated in get_associated_uris
    *
    * @param trail      SAS logging
    *
@@ -339,7 +339,7 @@ public:
    *
    *   HTTP_SERVER_ERROR
    *   HTTP_NOT_FOUND
-   *   HTTP_PRECONDITION_FAILED 
+   *   HTTP_PRECONDITION_FAILED
    *                    - error occurred during s4 handle_get or handle_patch
    */
   HTTPCode update_associated_uris(SAS::TrailId trail);

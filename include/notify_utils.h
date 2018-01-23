@@ -63,7 +63,7 @@ namespace NotifyUtils
                                          Subscription* s,
                                          std::string aor,
                                          AssociatedURIs* associated_uris,
-                                         AoR* aor_data,
+                                         int cseq,
                                          std::vector<BindingNotifyInformation*> bnis,
                                          NotifyUtils::RegistrationState reg_state,
                                          int now,

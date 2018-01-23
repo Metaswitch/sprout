@@ -257,7 +257,7 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   delete_bindings(classified_bindings);
 
   // 1/2: Iterate over original bindings and record those not in current AoR
-  for (std::pair<std::string, Binding*> aor_orig_b :
+  for (BindingPair aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
     if (aor_pair->get_current()->bindings().find(aor_orig_b.first) ==
@@ -276,10 +276,10 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   }
 
   // 2/2: Iterate over the bindings in the current AoR.
-  for (std::pair<std::string, Binding*> aor_current_b :
+  for (BindingPair aor_current_b :
          aor_pair->get_current()->bindings())
   {
-    AoR::Bindings::const_iterator aor_orig_b_match =
+    Bindings::const_iterator aor_orig_b_match =
       aor_pair->get_orig()->bindings().find(aor_current_b.first);
 
     NotifyUtils::ContactEvent event;
@@ -403,7 +403,7 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
                                                  bool force_expire,
                                                  SAS::TrailId trail)
 {
-  for (AoR::Subscriptions::iterator i =
+  for (Subscriptions::iterator i =
          aor_pair->get_current()->_subscriptions.begin();
        i != aor_pair->get_current()->_subscriptions.end();
       )
@@ -425,7 +425,7 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
       // The subscription has expired, so remove it. This could be
       // a single one shot subscription though - if so pretend it was
       // part of the original AoR
-      AoR::Subscriptions::const_iterator aor_orig_s =
+      Subscriptions::const_iterator aor_orig_s =
         aor_pair->get_orig()->subscriptions().find(i->first);
 
       if (aor_orig_s == aor_pair->get_orig()->subscriptions().end())
@@ -456,7 +456,7 @@ int SubscriberDataManager::expire_bindings(AoR* aor_data,
                                            SAS::TrailId trail)
 {
   int max_expires = now;
-  for (AoR::Bindings::iterator i = aor_data->_bindings.begin();
+  for (Bindings::iterator i = aor_data->_bindings.begin();
        i != aor_data->_bindings.end();
       )
   {
@@ -634,7 +634,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
   // missing from the current AoR to build up a list.
   // The reason they are missing is determined from EventTrigger. Add
   // corresponding ContactEvent to the NOTIFY message.
-  for (std::pair<std::string, Binding*> aor_orig_b :
+  for (BindingPair aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
     Binding* binding = aor_orig_b.second;
@@ -658,7 +658,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
 
   // Iterate over the bindings in the current AoR. Figure out if the bindings
   // have been CREATED, REFRESHED, REGISTERED or SHORTENED.
-  for (std::pair<std::string, Binding*> aor_current_b :
+  for (BindingPair aor_current_b :
          aor_pair->get_current()->bindings())
   {
     Binding* binding = aor_current_b.second;
@@ -667,7 +667,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
     if (!binding->_emergency_registration)
     {
       // If the binding is only in the current AoR, mark it as created
-      AoR::Bindings::const_iterator aor_orig_b_match =
+      Bindings::const_iterator aor_orig_b_match =
         aor_pair->get_orig()->bindings().find(b_id);
 
       if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
@@ -753,7 +753,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
   // If the bindings have changed, or the Associated URIs has changed,
   // then send NOTIFYs to all subscribers; otherwise, only send them
   // when the subscription has been created or updated.
-  for (const AoR::Subscriptions::value_type& current_sub :
+  for (const Subscriptions::value_type& current_sub :
         aor_pair->get_current()->subscriptions())
   {
     Subscription* subscription = current_sub.second;
@@ -761,7 +761,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
 
     // Find the subscription in the original AoR to determine if the current subscription
     // has been created.
-    AoR::Subscriptions::const_iterator orig_sub =
+    Subscriptions::const_iterator orig_sub =
       aor_pair->get_orig()->subscriptions().find(s_id);
     bool sub_created = (orig_sub == aor_pair->get_orig()->subscriptions().end());
 
@@ -798,7 +798,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                 reasons.c_str());
 
       pjsip_tx_data* tdata_notify = NULL;
-      pj_status_t status = NotifyUtils::create_subscription_notify(
+      pj_status_t status = PJ_SUCCESS;/*NotifyUtils::create_subscription_notify(
                                             &tdata_notify,
                                             subscription,
                                             aor_id,
@@ -807,7 +807,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                             binding_info_to_notify,
                                             NotifyUtils::RegistrationState::ACTIVE,
                                             now,
-                                            trail);
+                                            trail);*/
 
       if (status == PJ_SUCCESS)
       {
@@ -864,9 +864,9 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 {
   // The registration state to send is ACTIVE if we have at least one active binding,
   // otherwise TERMINATED.
-  NotifyUtils::RegistrationState reg_state = (!aor_pair->get_current()->bindings().empty()) ?
+  /*NotifyUtils::RegistrationState reg_state = (!aor_pair->get_current()->bindings().empty()) ?
     NotifyUtils::RegistrationState::ACTIVE :
-    NotifyUtils::RegistrationState::TERMINATED;
+    NotifyUtils::RegistrationState::TERMINATED;*/
 
   // missing_binding_uris lists bindings which no longer exist in AoR.
   // They may have been removed by administrative deregistration, and
@@ -880,7 +880,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR.
-  for (AoR::Subscriptions::const_iterator aor_orig_s =
+  for (Subscriptions::const_iterator aor_orig_s =
          aor_pair->get_orig()->subscriptions().begin();
        aor_orig_s != aor_pair->get_orig()->subscriptions().end();
        ++aor_orig_s)
@@ -906,7 +906,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     }
 
     // Is this subscription present in the new AoR?
-    AoR::Subscriptions::const_iterator aor_current =
+    Subscriptions::const_iterator aor_current =
       aor_pair->get_current()->subscriptions().find(s_id);
 
     // The subscription has been deleted. We should send a final NOTIFY
@@ -919,7 +919,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 
       // This is a terminated subscription - set the expiry time to now
       s->_expires = now;
-      pj_status_t status = NotifyUtils::create_subscription_notify(
+      pj_status_t status = PJ_SUCCESS;/*NotifyUtils::create_subscription_notify(
                                           &tdata_notify,
                                           s,
                                           aor_id,
@@ -928,7 +928,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                           binding_info_to_notify,
                                           reg_state,
                                           now,
-                                          trail);
+                                          trail);*/
 
       if (status == PJ_SUCCESS)
       {

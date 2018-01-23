@@ -3292,7 +3292,7 @@ TEST_F(RegistrarTest, SubscriberDataManagerGetsSuccess)
   b->_params["+sip.ice"] = "";
   b->_emergency_registration = false;
   b->_private_id = "6505550231";
-  std::map<std::string, Binding*> bs;
+  Bindings bs;
   bs.insert(std::make_pair("sip:1234@domain", b));
 
   HSSConnection::irs_info irs_info;
@@ -3320,7 +3320,7 @@ TEST_F(RegistrarTest, SubscriberDataManagerGetsSuccess)
 TEST_F(RegistrarTest, SubscriberDataManagerGetsSuccess3)
 {
   Binding* b = new Binding("sip:1234@domain");
-  std::map<std::string, Binding*> bs;
+  Bindings bs;
   bs.insert(std::make_pair("id", b));
 
   HSSConnection::irs_info irs_info;
@@ -3346,7 +3346,7 @@ TEST_F(RegistrarTest, SubscriberDataManagerGetsSuccess3)
 TEST_F(RegistrarTest, SubscriberDataManagerGetsSuccess2)
 {
   Binding* b = new Binding("sip:1234@domain");
-  std::map<std::string, Binding*> bs;
+  Bindings bs;
   bs.insert(std::make_pair("id", b));
 
   HSSConnection::irs_info irs_info;

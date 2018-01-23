@@ -99,20 +99,20 @@ protected:
   void get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
                              std::string private_id, ///<private ID that the request refers to
                              const int& now,
-                             std::map<std::string, Binding*>& updated_bindings,
+                             Bindings& updated_bindings,
                              std::vector<std::string>& binding_ids_to_remove);
 
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);
   void add_contact_headers(pjsip_msg* rsp,
                            pjsip_msg* req,
-                           std::map<std::string, Binding*> all_bindings,
+                           Bindings all_bindings,
                            int now,
                            std::string public_id,
                            SAS::TrailId trail);
   void handle_path_headers(pjsip_msg* rsp,
                            pjsip_msg* req,
-                           std::map<std::string, Binding*> bindings);
+                           Bindings bindings);
   void add_service_route_header(pjsip_msg* rsp,
                                 pjsip_msg* req);
   void add_p_associated_uri_headers(pjsip_msg* rsp,

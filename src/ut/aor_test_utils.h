@@ -16,16 +16,17 @@ namespace AoRTestUtils
 {
   inline Binding*
     build_binding(std::string aor_id,
-                  int now)
+                  int now,
+                  std::string uri = "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>")
   {
     Binding* b = new Binding(aor_id);
 
-    b->_uri = "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>";
+    b->_uri = uri;
     b->_cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
     b->_cseq = 17038;
     b->_expires = now + 5;
     b->_priority = 0;
-    b->_path_headers.push_back("<sip:abcdefgh@bono-1.cw-ngv.com;lr>");
+    b->_path_headers.push_back("<sip:abcdefgh@bono1.homedomain;lr>");
     b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
     b->_params["reg-id"] = "1";
     b->_params["+sip.ice"] = "";
@@ -47,7 +48,7 @@ namespace AoRTestUtils
     s->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
     s->_to_tag = to_tag;
     s->_cid = std::string("xyzabc@192.91.191.29");
-    s->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+    s->_route_uris.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
     s->_expires = now + 300;
 
     return s;
@@ -59,7 +60,7 @@ namespace AoRTestUtils
     AoR* aor = new AoR(aor_id);
     int now = time(NULL);
 
-    std::string binding_id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"; 
+    std::string binding_id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
     Binding* b = build_binding(aor_id, now);
     aor->_bindings.insert(std::make_pair(binding_id, b));
 
