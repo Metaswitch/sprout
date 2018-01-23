@@ -2241,9 +2241,11 @@ int main(int argc, char* argv[])
   }
 
   s4 = new S4("TODO LOCAL SITE NAME",
-              "TODO CHRONOS CALLBACK URI",
+              chronos_connection,
+              "",
               local_aor_store,
               remote_s4s);
+
   subscriber_manager = new SubscriberManager(s4,
                                              hss_connection,
                                              analytics_logger);
