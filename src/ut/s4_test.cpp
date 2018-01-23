@@ -298,7 +298,7 @@ TEST_F(BasicS4Test, DELETEFoundOnGetValidVersion)
 
   uint64_t version = 1;
 
-  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 204);
 }
@@ -546,8 +546,6 @@ TEST_F(BasicS4Test, PATCHContentionOnLocalSet)
   {
     InSequence s;
     get_data_expect_call_success(aor_with_binding, 1, 1);
-    //EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-      //.WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
@@ -621,7 +619,7 @@ TEST_F(BasicS4Test, PATCHSuccess)
 }
 
 // This test covers a DELETE where the AoR doesn't exist in any store.
-/*TEST_F(BasicS4Test, PUTFlipToPatch)
+TEST_F(BasicS4Test, PUTFlipToPatch)
 {
   {
     InSequence s;
@@ -651,7 +649,7 @@ TEST_F(BasicS4Test, PATCHFlipToPut)
   {
     InSequence s;
     get_data_expect_call_success(aor_with_binding, 1, 1);
-    //EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, _));
+    EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, _));
     set_data_expect_call(Store::Status::OK, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
@@ -670,4 +668,4 @@ TEST_F(BasicS4Test, PATCHFlipToPut)
 
   delete po; po = NULL;
   delete aor; aor = NULL;
-}*/
+}
