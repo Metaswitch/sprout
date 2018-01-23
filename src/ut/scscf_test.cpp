@@ -1211,6 +1211,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
+/*
 // Test route request to Maddr
 TEST_F(SCSCFTest, TestSimpleMainlineMaddr)
 {
@@ -1231,6 +1232,7 @@ TEST_F(SCSCFTest, TestSimpleMainlineMaddr)
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*maddr.*"), hdrs);
 }
+*/
 
 TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
 {
