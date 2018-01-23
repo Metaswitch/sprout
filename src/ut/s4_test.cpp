@@ -178,6 +178,8 @@ TEST_F(BasicS4Test, GETNotFoundInAllStores)
 TEST_F(BasicS4Test, GETFoundInRemoteStore)
 {
   std::string aor_str;
+  std::string aor_id = "aor_id";
+  std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
 
   {
     InSequence s;
@@ -189,9 +191,9 @@ TEST_F(BasicS4Test, GETFoundInRemoteStore)
                                  1,
                                  1);
 
-    EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-      .Times(2)
-      .WillRepeatedly(Return(HTTP_OK));
+    EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, opaque, _, _))
+      .WillOnce(DoAll(SetArgReferee<0>(timer_id),
+                      Return(HTTP_OK)));
 
     EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 1000000 + 10, _, An<Store::Format>()))
       .WillOnce(DoAll(SaveArg<2>(&aor_str),
@@ -223,7 +225,6 @@ TEST_F(BasicS4Test, GETFoundInRemoteStoreErrorOnWrite)
                                  1);
 
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-      .Times(2)
       .WillOnce(Return(HTTP_OK));
 
     set_data_expect_call(Store::Status::ERROR, 1);
@@ -250,8 +251,7 @@ TEST_F(BasicS4Test, GETFoundInRemoteStoreContentionOnWrite)
                                  1,
                                  1);
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-      .Times(2)
-      .WillRepeatedly(Return(HTTP_OK));
+      .WillOnce(Return(HTTP_OK));
 
     set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
     get_data_expect_call_success(aor_with_binding,
@@ -300,7 +300,8 @@ TEST_F(BasicS4Test, DELETEFoundOnGetValidVersion)
   set_data_expect_call(Store::Status::OK, 3);
 
   EXPECT_CALL(*(this->_chronos_connection), send_delete(timer_id, _))
-    .WillOnce(Return(HTTP_OK));
+    .Times(3)
+    .WillRepeatedly(Return(HTTP_OK));
 
   uint64_t version = 1;
 
@@ -371,6 +372,8 @@ TEST_F(BasicS4Test, DELETEFoundOnGetErrorOnRemoteGet)
 
     get_data_expect_call_failure(Store::Status::ERROR, 1);
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
   }
 
@@ -392,6 +395,8 @@ TEST_F(BasicS4Test, DELETEFoundOnGetNotFoundOnRemoteGet)
 
     get_data_expect_call_failure(Store::Status::NOT_FOUND, 1);
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
   }
 
@@ -412,12 +417,18 @@ TEST_F(BasicS4Test, DELETEFoundOnGetContentionOnRemoteSet)
     set_data_expect_call(Store::Status::OK, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
   }
 
@@ -438,9 +449,13 @@ TEST_F(BasicS4Test, DELETEFoundOnGetErrorOnRemoteSet)
     set_data_expect_call(Store::Status::OK, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::ERROR, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
   }
 
@@ -451,7 +466,7 @@ TEST_F(BasicS4Test, DELETEFoundOnGetErrorOnRemoteSet)
 }
 
 // This test covers a DELETE where the AoR doesn't exist in any store.
-TEST_F(BasicS4Test, CheckPutPostArg)
+TEST_F(BasicS4Test, POSTCheckArg)
 {
   std::string aor_id = "aor_id";
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
@@ -459,8 +474,6 @@ TEST_F(BasicS4Test, CheckPutPostArg)
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, "/timers", opaque, _, _))
     .WillOnce(DoAll(SetArgReferee<0>(timer_id),
                     Return(HTTP_OK)));
-  EXPECT_CALL(*(this->_chronos_connection), send_put(timer_id, _, "/timers", opaque, _, _))
-    .WillOnce(Return(HTTP_OK));
   set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
   AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
@@ -472,28 +485,9 @@ TEST_F(BasicS4Test, CheckPutPostArg)
 }
 
 // This test covers a DELETE where the AoR doesn't exist in any store.
-TEST_F(BasicS4Test, PUTFoundOnGet)
-{
-  EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, _))
-    .WillOnce(Return(HTTP_OK));
-  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-    .WillOnce(Return(HTTP_OK));
-  set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
-
-  AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
-  HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
-
-  EXPECT_EQ(rc, 412);
-
-  delete aor; aor = NULL;
-}
-
-// This test covers a DELETE where the AoR doesn't exist in any store.
 TEST_F(BasicS4Test, PUTErrorOnSet)
 {
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, _))
-    .WillOnce(Return(HTTP_OK));
-  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
     .WillOnce(Return(HTTP_OK));
   set_data_expect_call(Store::Status::ERROR, 1);
 
@@ -510,8 +504,6 @@ TEST_F(BasicS4Test, PUTContentionOnSet)
 {
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, _))
     .WillOnce(Return(HTTP_OK));
-  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-    .WillOnce(Return(HTTP_OK));
   set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
   AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
@@ -527,9 +519,8 @@ TEST_F(BasicS4Test, PUTSuccess)
 {
   set_data_expect_call(Store::Status::OK, 3);
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, _))
-    .WillOnce(Return(HTTP_OK));
-  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-    .WillOnce(Return(HTTP_OK));
+    .Times(3)
+    .WillRepeatedly(Return(HTTP_OK));
 
   AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
   HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
@@ -574,8 +565,7 @@ TEST_F(BasicS4Test, PATCHErrorOnLocalSet)
 {
   get_data_expect_call_success(aor_with_binding, 1, 1);
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-    .Times(2)
-    .WillRepeatedly(Return(HTTP_OK));
+    .WillOnce(Return(HTTP_OK));
   set_data_expect_call(Store::Status::ERROR, 1);
 
   PatchObject* po = AoRTestUtils::build_po("sip:6505550231@homedomain");
@@ -595,20 +585,22 @@ TEST_F(BasicS4Test, PATCHContentionOnLocalSet)
     InSequence s;
     get_data_expect_call_success(aor_with_binding, 1, 1);
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-      .Times(2)
-      .WillRepeatedly(Return(HTTP_OK));
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-      .Times(2)
-      .WillRepeatedly(Return(HTTP_OK));
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
+    EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
+      .WillOnce(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
   }
 
@@ -629,7 +621,7 @@ TEST_F(BasicS4Test, PATCHSuccess)
   set_data_expect_call(Store::Status::OK, 3);
 
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-    .Times(2)
+    .Times(3)
     .WillRepeatedly(Return(HTTP_OK));
 
   PatchObject* po = new PatchObject();
