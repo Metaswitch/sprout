@@ -16,11 +16,12 @@ namespace AoRTestUtils
 {
   inline Binding*
     build_binding(std::string aor_id,
-                  int now)
+                  int now,
+                  std::string uri = "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>")
   {
     Binding* b = new Binding(aor_id);
 
-    b->_uri = "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>";
+    b->_uri = uri;
     b->_cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
     b->_cseq = 17038;
     b->_expires = now + 5;
