@@ -57,8 +57,8 @@ class BasicS4Test : public ::testing::Test
   {
     _mock_store = new MockStore();
     _aor_store = new AstaireAoRStore(_mock_store);
-    _remote_s4_1 = new S4("site2", "", _aor_store, {});
-    _remote_s4_2 = new S4("site3", "", _aor_store, {});
+    _remote_s4_1 = new S4("site2", _aor_store);
+    _remote_s4_2 = new S4("site3", _aor_store);
     _s4 = new S4("site1", "chronos_callback", _aor_store, {_remote_s4_1, _remote_s4_2});
   }
 
@@ -558,15 +558,13 @@ TEST_F(BasicS4Test, PATCHSuccess)
 }
 
 // This test covers a DELETE where the AoR doesn't exist in any store.
-/*TEST_F(BasicS4Test, PUTFlipToPatch)
+TEST_F(BasicS4Test, PUTFlipToPatch)
 {
   {
     InSequence s;
-    get_data_expect_call_success(empty_aor, 1, 1);
     set_data_expect_call(Store::Status::OK, 1);
-    get_data_expect_call_success(empty_aor, 1, 1);
     set_data_expect_call(Store::Status::OK, 1);
-    get_data_expect_call_success(aor_with_binding, 1, 1);
+    set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
     get_data_expect_call_success(aor_with_binding, 1, 1);
     set_data_expect_call(Store::Status::OK, 1);
   }
@@ -589,16 +587,42 @@ TEST_F(BasicS4Test, PATCHFlipToPut)
     get_data_expect_call_success(aor_with_binding, 1, 1);
     set_data_expect_call(Store::Status::OK, 1);
     get_data_expect_call_success(empty_aor, 1, 1);
-    get_data_expect_call_success(empty_aor, 1, 1);
     set_data_expect_call(Store::Status::OK, 1);
   }
 
-  PatchObject* po = AoRTestUtils::build_po("sip:6505550231@homedomain");
+  PatchObject po;
+
+  Binding* b1 = new Binding("aor_id");
+  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = 1000005;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_emergency_registration = false;
+  b1->_private_id = "6505550231";
+
+  Subscription* s1 = new Subscription();
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = 1000300;
+
+  po._update_bindings.insert(std::make_pair("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1", b1));
+  po._update_subscriptions.insert(std::make_pair("1234", s1));
+  po._increment_cseq = true;
+
   AoR* aor = NULL;
-  HTTPCode rc = this->_s4->handle_patch("aor_id", *po, &aor, 0);
+  HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
 
   EXPECT_EQ(rc, 200);
 
-  delete po; po = NULL;
   delete aor; aor = NULL;
-}*/
+}

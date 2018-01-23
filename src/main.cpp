@@ -2236,7 +2236,7 @@ int main(int argc, char* argv[])
   // Set up the SM and S4s
   for (AoRStore* store : remote_aor_stores)
   {
-    S4* remote_s4 = new S4("TODO SITE NAME", "", store, {});
+    S4* remote_s4 = new S4("TODO SITE NAME", store);
     remote_s4s.push_back(remote_s4);
   }
 
