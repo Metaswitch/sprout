@@ -92,7 +92,7 @@ public:
                       const EventTrigger& event_trigger,
                       const ClassifiedBindings& classified_bindings,
                       const ClassifiedSubscriptions& classified_subscriptions,
-                      AssociatedURIs& associated_uris, // TODO make const again.
+                      AssociatedURIs& associated_uris, // TODO make this const
                       int cseq,
                       int now,
                       SAS::TrailId trail);
@@ -250,9 +250,18 @@ private:
                                  HSSConnection::irs_info& irs_info,
                                  SAS::TrailId trail);
 
+  HTTPCode put_bindings(const std::string& aor_id,
+                        const Bindings& update_bindings,
+                        const std::vector<std::string>& remove_bindings,
+                        const AssociatedURIs& associated_uris,
+                        const std::string& scscf_uri,
+                        AoR*& aor,
+                        SAS::TrailId trail);
+
   HTTPCode patch_bindings(const std::string& aor_id,
                           const Bindings& update_bindings,
                           const std::vector<std::string>& remove_bindings,
+                          const AssociatedURIs& associated_uris,
                           AoR*& aor,
                           SAS::TrailId trail);
 
@@ -266,6 +275,12 @@ private:
                                  const AssociatedURIs& associated_uris,
                                  AoR*& aor,
                                  SAS::TrailId trail);
+
+  void send_notifys_and_write_audit_logs(const std::string& aor_id,
+                                         const EventTrigger& event_trigger,
+                                         AoR* orig_aor,
+                                         AoR* updated_aor,
+                                         SAS::TrailId trail);
 
   HTTPCode deregister_with_hss(const std::string& aor_id,
                                const std::string& dereg_reason,
