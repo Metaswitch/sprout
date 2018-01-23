@@ -1265,6 +1265,9 @@ TEST_F(SCSCFTest, TestSimpleMainline)
 
   // It also shouldn't result in any forked INVITEs.
   EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
+
+  delete bindings["sip:6505551234@homedomain"];
+  bindings["sip:6505551234@homedomain"] = NULL;
 }
 
 // Test route request to Maddr.
@@ -1307,6 +1310,9 @@ TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+
+  delete bindings["sip:6505551234@homedomain"];
+  bindings["sip:6505551234@homedomain"] = NULL;
 }
 
 // Send a request where the URI is for the same port as a Sproutlet,
@@ -1346,6 +1352,9 @@ TEST_F(SCSCFTest, TestMainlineHeadersSprout)
   SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   doTestHeaders(_tp_default, false, _tp_default, false, msg, "", true, true, true, false, true);
+
+  delete bindings["sip:6505551234@homedomain"];
+  bindings["sip:6505551234@homedomain"] = NULL;
 }
 
 TEST_F(SCSCFTest, TestNotRegisteredTo)
@@ -1481,6 +1490,9 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
 
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
+
+  delete bindings["sip:6505551234@homedomain"];
+  bindings["sip:6505551234@homedomain"] = NULL;
 }
 
 // Registered subscriber failed to get associated URI and has no bindings in the store.
@@ -1625,6 +1637,9 @@ TEST_F(SCSCFTest, TestTerminatingPCV)
   msg._requri = "sip:6505551234@homedomain";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
+
+  delete bindings["sip:6505551234@homedomain"];
+  bindings["sip:6505551234@homedomain"] = NULL;
 }
 
 TEST_F(SCSCFTest, DISABLED_TestLooseRoute)  // @@@KSW not quite - how does this work again?
@@ -2392,6 +2407,7 @@ TEST_F(SCSCFTest, TestForkedFlow4)
   // Ensure we count the forked INVITEs
   EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
+*/
 
 // Test SIP Message flows
 TEST_F(SCSCFTest, TestSIPMessageSupport)
@@ -2438,6 +2454,8 @@ TEST_F(SCSCFTest, TestSIPMessageSupport)
   _tp_default->expect_target(current_txdata(), true);
 
   free_txdata();
+  delete bindings["sip:6505551234@homedomain"];
+  bindings["sip:6505551234@homedomain"] = NULL;
 }
 
 // Test that a multipart message can be parsed successfully
@@ -2474,8 +2492,12 @@ TEST_F(SCSCFTest, TestSimpleMultipart)
                    true,
                    list<HeaderMatcher>(),
                    ".*--\\S+\r\nContent-Length: 343\r\nContent-Type: application/sdp\r\n\r\n.*");
+
+  delete bindings["sip:6505551234@homedomain"];
+  bindings["sip:6505551234@homedomain"] = NULL;
 }
 
+/*
 // Test emergency registrations receive calls.
 TEST_F(SCSCFTest, TestReceiveCallToEmergencyBinding)
 {
