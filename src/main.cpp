@@ -2236,12 +2236,13 @@ int main(int argc, char* argv[])
   // Set up the SM and S4s
   for (AoRStore* store : remote_aor_stores)
   {
-    S4* remote_s4 = new S4("TODO SITE NAME", chronos_connection, store, {});
+    S4* remote_s4 = new S4("TODO SITE NAME", chronos_connection, "", store, {});
     remote_s4s.push_back(remote_s4);
   }
 
   s4 = new S4("TODO LOCAL SITE NAME", 
               chronos_connection, 
+              "",
               local_aor_store, 
               remote_s4s);
 

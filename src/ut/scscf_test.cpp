@@ -1813,6 +1813,7 @@ TEST_F(SCSCFTest, TestNonLocal)
   doSuccessfulFlow(msg2, testing::MatchesRegex(".*lasthop@destination.*"), hdrs2);
 }
 
+/**
 TEST_F(SCSCFTest, TestTerminatingPCV)
 {
   SCOPED_TRACE("");
@@ -1838,7 +1839,7 @@ TEST_F(SCSCFTest, TestTerminatingPCV)
   hdrs.push_back(HeaderMatcher("Route"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
-
+**/ 
 /**
 TEST_F(SCSCFTest, DISABLED_TestLooseRoute)  // @@@KSW not quite - how does this work again?
 {
