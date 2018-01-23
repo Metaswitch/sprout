@@ -1183,6 +1183,62 @@ void SCSCFTestBase::setup_basic_test_info(HSSConnection::irs_info& irs_info,
   bindings.insert(std::make_pair(uri, binding));
 }
 
+void SCSCFTestBase::add_ifc(HSSConnection::irs_info& irs_info,
+                            std::string uri,
+                            int priority,
+                            std::vector<std::string> triggers,
+                            std::string app_serv_name,
+                            int cond_neg,
+                            int default_handling)
+{
+  string triggers_in_xml;
+  for (std::vector<std::string>::iterator trigger = triggers.begin();
+       trigger != triggers.end();
+       ++trigger)
+  {
+    string trigger_in_xml = "<SPT>\n"
+                              "<ConditionNegated>" + std::to_string(cond_neg) + "</ConditionNegated>\n"
+                              "<Group>0</Group>\n"
+                              + *trigger +
+                              "<Extension></Extension>\n"
+                            "</SPT>";
+    triggers_in_xml.append(trigger_in_xml);
+  }
+
+  string ifc = "<ServiceProfile>\n"
+                 "<InitialFilterCriteria>\n"
+                   "<Priority>" + std::to_string(priority) + "</Priority>\n"
+                   "<TriggerPoint>\n"
+                     "<ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                     + triggers_in_xml +
+                   "</TriggerPoint>\n"
+                   "<ApplicationServer>\n"
+                     "<ServerName>" + app_serv_name + "</ServerName>\n"
+                     "<DefaultHandling>" + std::to_string(default_handling) + "</DefaultHandling>\n"
+                   "</ApplicationServer>\n"
+                 "</InitialFilterCriteria>\n"
+               "</ServiceProfile>";
+
+  std::shared_ptr<rapidxml::xml_document<>> root (new rapidxml::xml_document<>);
+  char* cstr_ifc = strdup(ifc.c_str());
+  root->parse<0>(cstr_ifc);
+    // NULL is SIFCService*
+  Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
+  irs_info._service_profiles.insert(std::make_pair(uri, *ifcs));
+
+  // If blank iFC used as filler is present, remove it.
+  std::map<std::string, Ifcs>::iterator searching = irs_info._service_profiles.find("first_key");
+  if (searching != irs_info._service_profiles.end())
+  {
+    irs_info._service_profiles.erase("first_key");
+  }
+}
+
+// Example of adding an ifc ...
+/*  add_ifc(irs_info, uri, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+    add_ifc(irs_info, "tel:65055522!.*!", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+    add_ifc(irs_info, "tel:65055512!.*!", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+    add_ifc(irs_info, "tel:6505551235", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP"); */
 
 TEST_F(SCSCFTest, TestSimpleMainline)
 {
@@ -1211,28 +1267,26 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
-/*
-// Test route request to Maddr
+// Test route request to Maddr.
 TEST_F(SCSCFTest, TestSimpleMainlineMaddr)
 {
   SCOPED_TRACE("");
 
   HSSConnection::irs_info irs_info;
-  Bindings bindings;
-  setup_basic_test_info(irs_info, bindings);
+  set_irs_info(irs_info, "6505551234", "homedomain");
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
-  EXPECT_CALL(*_sm, get_bindings(_, _, _))
-    .WillOnce(DoAll(SetArgReferee<1>(bindings),
-                    Return(HTTP_OK)));
+
+  // No call to find the bindings is expected, as the maddr specifies where to
+  // route the request to.
+  // SDM-REFACTOR-TODO - confirm this is correct.
 
   SCSCFMessage msg;
   msg._requri = "sip:6505551234@homedomain;maddr=1.2.3.4";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*maddr.*"), hdrs);
 }
-*/
 
 TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
 {
@@ -1449,63 +1503,6 @@ TEST_F(SCSCFTest, TestEmptyBinding)
   doSlowFailureFlow(msg, 480);
 }
 
-void SCSCFTestBase::add_ifc(HSSConnection::irs_info& irs_info,
-                            std::string uri,
-                            int priority,
-                            std::vector<std::string> triggers,
-                            std::string app_serv_name,
-                            int cond_neg,
-                            int default_handling)
-{
-  string triggers_in_xml;
-  for (std::vector<std::string>::iterator trigger = triggers.begin();
-       trigger != triggers.end();
-       ++trigger)
-  {
-    string trigger_in_xml = "<SPT>\n"
-                              "<ConditionNegated>" + std::to_string(cond_neg) + "</ConditionNegated>\n"
-                              "<Group>0</Group>\n"
-                              + *trigger +
-                              "<Extension></Extension>\n"
-                            "</SPT>";
-    triggers_in_xml.append(trigger_in_xml);
-  }
-
-  string ifc = "<ServiceProfile>\n"
-                 "<InitialFilterCriteria>\n"
-                   "<Priority>" + std::to_string(priority) + "</Priority>\n"
-                   "<TriggerPoint>\n"
-                     "<ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                     + triggers_in_xml +
-                   "</TriggerPoint>\n"
-                   "<ApplicationServer>\n"
-                     "<ServerName>" + app_serv_name + "</ServerName>\n"
-                     "<DefaultHandling>" + std::to_string(default_handling) + "</DefaultHandling>\n"
-                   "</ApplicationServer>\n"
-                 "</InitialFilterCriteria>\n"
-               "</ServiceProfile>";
-
-  std::shared_ptr<rapidxml::xml_document<>> root (new rapidxml::xml_document<>);
-  char* cstr_ifc = strdup(ifc.c_str());
-  root->parse<0>(cstr_ifc);
-    // NULL is SIFCService*
-  Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
-  irs_info._service_profiles.insert(std::make_pair(uri, *ifcs));
-
-  // If blank iFC used as filler is present, remove it.
-  std::map<std::string, Ifcs>::iterator searching = irs_info._service_profiles.find("first_key");
-  if (searching != irs_info._service_profiles.end())
-  {
-    irs_info._service_profiles.erase("first_key");
-  }
-}
-
-// Example of adding an ifc ...
-/*  add_ifc(irs_info, uri, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-    add_ifc(irs_info, "tel:65055522!.*!", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-    add_ifc(irs_info, "tel:65055512!.*!", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-    add_ifc(irs_info, "tel:6505551235", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP"); */
-
 TEST_F(SCSCFTest, TestNoMoreForwards)
 {
   SCOPED_TRACE("");
@@ -1605,7 +1602,6 @@ TEST_F(SCSCFTest, TestNonLocal)
   doSuccessfulFlow(msg2, testing::MatchesRegex(".*lasthop@destination.*"), hdrs2);
 }
 
-/*
 TEST_F(SCSCFTest, TestTerminatingPCV)
 {
   SCOPED_TRACE("");
@@ -1628,10 +1624,8 @@ TEST_F(SCSCFTest, TestTerminatingPCV)
   msg._todomain = "destination.com";
   msg._requri = "sip:6505551234@homedomain";
   list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Route"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
-*/
 
 TEST_F(SCSCFTest, DISABLED_TestLooseRoute)  // @@@KSW not quite - how does this work again?
 {
@@ -1672,11 +1666,15 @@ TEST_F(SCSCFTest, DISABLED_TestExternalRecordRoute)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
 
-/**
 TEST_F(SCSCFTest, TestEnumExternalSuccess)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   SCSCFMessage msg;
   msg._to = "+15108580271";
@@ -1685,11 +1683,10 @@ TEST_F(SCSCFTest, TestEnumExternalSuccess)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
+/*
 TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
 {
   SCOPED_TRACE("");
@@ -1763,12 +1760,18 @@ TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
   // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
+*/
 
 TEST_F(SCSCFTest, TestEnumExternalOffNetDialingAllowed)
 {
   SCOPED_TRACE("");
   SCSCFMessage msg;
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
@@ -1776,15 +1779,18 @@ TEST_F(SCSCFTest, TestEnumExternalOffNetDialingAllowed)
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
 TEST_F(SCSCFTest, TestEnumUserPhone)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
@@ -1795,15 +1801,18 @@ TEST_F(SCSCFTest, TestEnumUserPhone)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
 TEST_F(SCSCFTest, TestEnumNoUserPhone)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
@@ -1818,7 +1827,12 @@ TEST_F(SCSCFTest, TestEnumNoUserPhone)
 TEST_F(SCSCFTest, TestEnumLocalNumber)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   URIClassifier::enforce_global = true;
   SCSCFMessage msg;
@@ -1834,7 +1848,12 @@ TEST_F(SCSCFTest, TestEnumLocalNumber)
 TEST_F(SCSCFTest, TestEnumLocalTelURI)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   URIClassifier::enforce_global = true;
   SCSCFMessage msg;
@@ -1854,7 +1873,12 @@ TEST_F(SCSCFTest, TestEnumLocalTelURI)
 TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   URIClassifier::enforce_global = true;
   SCSCFMessage msg;
@@ -1875,7 +1899,12 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
 TEST_F(SCSCFTest, TestEnumNPData)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   SCSCFMessage msg;
   msg._to = "+15108580401";
@@ -1891,7 +1920,12 @@ TEST_F(SCSCFTest, TestEnumNPData)
 TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   SCSCFMessage msg;
   msg._to = "+15108580401;npdi;rn=+16";
@@ -1908,9 +1942,14 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
 TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
-
   _scscf_sproutlet->set_override_npdi(true);
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
   SCSCFMessage msg;
   msg._to = "+15108580401;npdi;rn=+16";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -1926,7 +1965,12 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
 TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
@@ -1945,7 +1989,12 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
 TEST_F(SCSCFTest, DISABLED_TestEnumToCIC)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
@@ -1958,14 +2007,18 @@ TEST_F(SCSCFTest, DISABLED_TestEnumToCIC)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580501;cic=12345@homedomain.*"), hdrs, false);
 }
 
-
 // Test where the BGCF receives a SIP request URI represents a number and has NP data.
 // The ENUM lookup returns a rn which the BGCF routes on.
 TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _scscf_sproutlet->set_override_npdi(true);
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   SCSCFMessage msg;
   msg._to = "+15108580401";
@@ -1982,8 +2035,13 @@ TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
 TEST_F(SCSCFTest, TestEnumNPBGCFTel)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _scscf_sproutlet->set_override_npdi(true);
+
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "+16505551000", "homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   SCSCFMessage msg;
   msg._to = "+15108580401";
@@ -1997,6 +2055,7 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
 }
 
+/*
 // We can run with no ENUM service - in this case we expect the Request-URI to
 // be unchanged (as there's no lookup which can change it) and for it to just
 // be routed normally to the I-CSCF.
