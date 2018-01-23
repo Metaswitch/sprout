@@ -1668,6 +1668,7 @@ TEST_F(SCSCFTest, DISABLED_TestExternalRecordRoute)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
 
+/**
 TEST_F(SCSCFTest, TestEnumExternalSuccess)
 {
   SCOPED_TRACE("");
@@ -10658,4 +10659,4 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
 
 }
 
-
+*/
