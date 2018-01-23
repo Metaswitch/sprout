@@ -499,7 +499,6 @@ TEST_F(GetBindingsTest, OneBinding)
   EXPECT_TRUE(binding.HasMember("expires"));
   EXPECT_TRUE(binding.HasMember("priority"));
   EXPECT_TRUE(binding.HasMember("params"));
-  EXPECT_TRUE(binding.HasMember("paths"));
   EXPECT_TRUE(binding.HasMember("private_id"));
   EXPECT_TRUE(binding.HasMember("emergency_reg"));
 

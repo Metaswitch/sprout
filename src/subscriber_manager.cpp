@@ -408,6 +408,7 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
                              associated_uris,
                              aor,
                              trail);
+
   if (rc != HTTP_OK)
   {
     return rc;

@@ -469,9 +469,9 @@ TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
                                                             DUMMY_TRAIL_ID);
 
   // Check that the patch object contains the expected associated URIs.
-  // EXPECT_TRUE(patch_object._associated_uris.contains_uri(default_id));
-  //EXPECT_TRUE(patch_object._associated_uris.contains_uri(other_id));
-  // EM: TODO temp commented out while fix AU bug
+  ASSERT_TRUE(patch_object.get_associated_uris());
+  EXPECT_TRUE(((AssociatedURIs)(patch_object.get_associated_uris().get())).contains_uri(default_id));
+  EXPECT_TRUE(((AssociatedURIs)(patch_object.get_associated_uris().get())).contains_uri(other_id));
 
   EXPECT_EQ(rc, HTTP_OK);
 }
