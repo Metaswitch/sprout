@@ -33,6 +33,7 @@ using ::testing::InSequence;
 using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::SaveArg;
 using ::testing::An;
 
 std::string empty_aor = "{\"bindings\": {}, \"subscriptions\": {}, \"notify_cseq\": 1}";
@@ -40,7 +41,7 @@ std::string aor_with_binding = "{\"bindings\": {\"<urn:uuid:00000000-0000-0000-0
 std::string aor_with_binding_subscription_associated_uris = "{\"bindings\": {\"<urn:uuid:00000000-0000-0000-0000-777777777777>:1\":{\"uri\":\"sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob\",\"cid\":\"0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213\",\"cseq\":10000,\"expires\":1000000,\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-777777777777>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>\"],\"paths\":[\"sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob\"],\"private_id\":\"Alice\",\"emergency_reg\":false}}, \"subscriptions\": {}, \"notify_cseq\": 5}";
 
 /// Fixture for BasicS4Test.
-class BasicS4Test : public SipTest
+class BasicS4Test : public ::testing::Test
 {
   static void SetUpTestCase()
   {
@@ -56,9 +57,9 @@ class BasicS4Test : public SipTest
   {
     _mock_store = new MockStore();
     _aor_store = new AstaireAoRStore(_mock_store);
-    _remote_s4_1 = new S4("site2", _aor_store, {});
-    _remote_s4_2 = new S4("site3", _aor_store, {});
-    _s4 = new S4("site1", _aor_store, {_remote_s4_1, _remote_s4_2});
+    _remote_s4_1 = new S4("site2", "", _aor_store, {});
+    _remote_s4_2 = new S4("site3", "", _aor_store, {});
+    _s4 = new S4("site1", "chronos_callback", _aor_store, {_remote_s4_1, _remote_s4_2});
   }
 
   virtual ~BasicS4Test()
@@ -83,16 +84,6 @@ class BasicS4Test : public SipTest
                             Return(Store::OK)));
   }
 
-  // Set up a single expectation for getting data from a store where the store
-  // responds successfully
-  void set_data_expect_call(Store::Status rc,
-                            int times)
-  {
-    EXPECT_CALL(*_mock_store, set_data(_, _, _, _, _, _, An<Store::Format>()))
-      .Times(times)
-      .WillRepeatedly(Return(rc));
-  }
-
   // Set up a single expectation for getting data from a store where there's a
   // store error
   void get_data_expect_call_failure(Store::Status rc,
@@ -101,6 +92,25 @@ class BasicS4Test : public SipTest
     EXPECT_CALL(*_mock_store, get_data(_, _, _, _, _, An<Store::Format>()))
       .Times(times)
       .WillOnce(Return(rc));
+  }
+
+  // Set up a single expectation for writing data to the store.
+  void set_data_expect_call(Store::Status rc,
+                            int times)
+  {
+    EXPECT_CALL(*_mock_store, set_data(_, _, _, _, _, _, An<Store::Format>()))
+      .Times(times)
+      .WillRepeatedly(Return(rc));
+  }
+
+  // Set up a single expectation for getting data from a store where the store
+  // responds successfully
+  void set_data_expect_call_save_data(Store::Status rc,
+                                      std::string& aor_str)
+  {
+    EXPECT_CALL(*_mock_store, set_data(_, _, _, _, _, _, An<Store::Format>()))
+      .WillOnce(DoAll(SaveArg<2>(&aor_str),
+                      Return(rc)));
   }
 
   // Fixture variables.  Note that as the fixture is a C++ template, these must
@@ -162,7 +172,7 @@ TEST_F(BasicS4Test, GETNotFoundInAllStores)
 // This test covers a GET where the AoR doesn't exist in any store.
 TEST_F(BasicS4Test, GETFoundInRemoteStore)
 {
-  //int now = time(NULL);
+  std::string aor_str;
 
   {
     InSequence s;
@@ -173,7 +183,8 @@ TEST_F(BasicS4Test, GETFoundInRemoteStore)
                                  1,
                                  1);
     EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 1000000 + 10, _, An<Store::Format>()))
-      .WillOnce(Return(Store::Status::OK));
+      .WillOnce(DoAll(SaveArg<2>(&aor_str),
+                      Return(Store::Status::OK)));
   }
 
   AoR* get_aor = NULL;
@@ -183,6 +194,7 @@ TEST_F(BasicS4Test, GETFoundInRemoteStore)
   EXPECT_EQ(rc, 200);
   ASSERT_FALSE(get_aor == NULL);
   EXPECT_FALSE(get_aor->bindings().empty());
+  // EM-TODO! EXPECT_EQ(aor_str, aor_with_binding);
 
   delete get_aor; get_aor = NULL;
 }
@@ -244,7 +256,7 @@ TEST_F(BasicS4Test, DELETENotFoundOnGet)
                                1,
                                1);
   uint64_t version = 0;
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 412);
 }
@@ -254,7 +266,7 @@ TEST_F(BasicS4Test, DELETENErrorOnGet)
 {
   get_data_expect_call_failure(Store::Status::ERROR, 1);
   uint64_t version = 0;
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
   EXPECT_EQ(rc, 500);
 }
 
@@ -266,7 +278,7 @@ TEST_F(BasicS4Test, DELETEFoundOnGetValidVersion)
                                3);
   set_data_expect_call(Store::Status::OK, 3);
   uint64_t version = 1;
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 204);
 }
@@ -280,7 +292,7 @@ TEST_F(BasicS4Test, DELETEContentionOnLocalSet)
   set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
   uint64_t version = 1;
 
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 412);
 }
@@ -294,7 +306,7 @@ TEST_F(BasicS4Test, DELETEErrorOnLocalSet)
   set_data_expect_call(Store::Status::ERROR, 1);
   uint64_t version = 1;
 
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 500);
 }
@@ -307,7 +319,7 @@ TEST_F(BasicS4Test, DELETEContentionOnGet)
                                1);
   uint64_t version = 1;
 
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 412);
 }
@@ -325,7 +337,7 @@ TEST_F(BasicS4Test, DELETEFoundOnGetErrorOnRemoteGet)
   }
 
   uint64_t version = 1;
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 204);
 }
@@ -343,7 +355,7 @@ TEST_F(BasicS4Test, DELETEFoundOnGetNotFoundOnRemoteGet)
   }
 
   uint64_t version = 1;
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 204);
 }
@@ -364,7 +376,7 @@ TEST_F(BasicS4Test, DELETEFoundOnGetContentionOnRemoteSet)
   }
 
   uint64_t version = 1;
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 204);
 }
@@ -383,7 +395,7 @@ TEST_F(BasicS4Test, DELETEFoundOnGetErrorOnRemoteSet)
   }
 
   uint64_t version = 1;
-  HTTPCode rc = this->_s4->handle_local_delete("aor_id", version, 0);
+  HTTPCode rc = this->_s4->handle_delete("aor_id", version, 0);
 
   EXPECT_EQ(rc, 204);
 }
@@ -391,25 +403,12 @@ TEST_F(BasicS4Test, DELETEFoundOnGetErrorOnRemoteSet)
 // This test covers a DELETE where the AoR doesn't exist in any store.
 TEST_F(BasicS4Test, PUTFoundOnGet)
 {
-  get_data_expect_call_success(aor_with_binding, 1, 1);
+  set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
   AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
-  HTTPCode rc = this->_s4->handle_put("aor_id", aor, 0);
+  HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
 
   EXPECT_EQ(rc, 412);
-
-  delete aor; aor = NULL;
-}
-
-// This test covers a DELETE where the AoR doesn't exist in any store.
-TEST_F(BasicS4Test, PUTErrorOnGet)
-{
-  get_data_expect_call_failure(Store::Status::ERROR, 1);
-
-  AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
-  HTTPCode rc = this->_s4->handle_put("aor_id", aor, 0);
-
-  EXPECT_EQ(rc, 500);
 
   delete aor; aor = NULL;
 }
@@ -417,11 +416,10 @@ TEST_F(BasicS4Test, PUTErrorOnGet)
 // This test covers a DELETE where the AoR doesn't exist in any store.
 TEST_F(BasicS4Test, PUTErrorOnSet)
 {
-  get_data_expect_call_success(empty_aor, 1, 1);
   set_data_expect_call(Store::Status::ERROR, 1);
 
   AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
-  HTTPCode rc = this->_s4->handle_put("aor_id", aor, 0);
+  HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
 
   EXPECT_EQ(rc, 500);
 
@@ -429,27 +427,12 @@ TEST_F(BasicS4Test, PUTErrorOnSet)
 }
 
 // This test covers a DELETE where the AoR doesn't exist in any store.
-TEST_F(BasicS4Test, PUTContentionOnSet)
-{
-  get_data_expect_call_success(empty_aor, 1, 1);
-  set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
-
-  AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
-  HTTPCode rc = this->_s4->handle_put("aor_id", aor, 0);
-
-  EXPECT_EQ(rc, 412);
-
-  delete aor; aor = NULL;
-}
-
-// This test covers a DELETE where the AoR doesn't exist in any store.
 TEST_F(BasicS4Test, PUTSuccess)
 {
-  get_data_expect_call_success(empty_aor, 1, 3);
   set_data_expect_call(Store::Status::OK, 3);
 
   AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
-  HTTPCode rc = this->_s4->handle_put("aor_id", aor, 0);
+  HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
 
   EXPECT_EQ(rc, 200);
 
@@ -463,7 +446,7 @@ TEST_F(BasicS4Test, PATCHNotFoundOnGet)
 
   PatchObject* po = AoRTestUtils::build_po("sip:6505550231@homedomain");
   AoR* aor = NULL;
-  HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
+  HTTPCode rc = this->_s4->handle_patch("aor_id", *po, &aor, 0);
 
   EXPECT_EQ(rc, 412);
 
@@ -478,7 +461,7 @@ TEST_F(BasicS4Test, PATCHErrorOnGet)
 
   PatchObject* po = AoRTestUtils::build_po("sip:6505550231@homedomain");
   AoR* aor = NULL;
-  HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
+  HTTPCode rc = this->_s4->handle_patch("aor_id", *po, &aor, 0);
 
   EXPECT_EQ(rc, 500);
 
@@ -494,7 +477,7 @@ TEST_F(BasicS4Test, PATCHErrorOnLocalSet)
 
   PatchObject* po = AoRTestUtils::build_po("sip:6505550231@homedomain");
   AoR* aor = NULL;
-  HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
+  HTTPCode rc = this->_s4->handle_patch("aor_id", *po, &aor, 0);
 
   EXPECT_EQ(rc, 500);
 
@@ -519,7 +502,7 @@ TEST_F(BasicS4Test, PATCHContentionOnLocalSet)
 
   PatchObject* po = AoRTestUtils::build_po("sip:6505550231@homedomain");
   AoR* aor = NULL;
-  HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
+  HTTPCode rc = this->_s4->handle_patch("aor_id", *po, &aor, 0);
 
   EXPECT_EQ(rc, 200);
 
@@ -562,7 +545,7 @@ TEST_F(BasicS4Test, PATCHSuccess)
   po->_update_subscriptions.insert(std::make_pair("1234", s1));
   po->_increment_cseq = true;
   AoR* aor = NULL;
-  HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
+  HTTPCode rc = this->_s4->handle_patch("aor_id", *po, &aor, 0);
 
   EXPECT_EQ(rc, 200);
   ASSERT_TRUE(aor != NULL);
@@ -575,7 +558,7 @@ TEST_F(BasicS4Test, PATCHSuccess)
 }
 
 // This test covers a DELETE where the AoR doesn't exist in any store.
-TEST_F(BasicS4Test, PUTFlipToPatch)
+/*TEST_F(BasicS4Test, PUTFlipToPatch)
 {
   {
     InSequence s;
@@ -589,7 +572,7 @@ TEST_F(BasicS4Test, PUTFlipToPatch)
   }
 
   AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
-  HTTPCode rc = this->_s4->handle_put("aor_id", aor, 0);
+  HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
 
   EXPECT_EQ(rc, 200);
 
@@ -612,10 +595,10 @@ TEST_F(BasicS4Test, PATCHFlipToPut)
 
   PatchObject* po = AoRTestUtils::build_po("sip:6505550231@homedomain");
   AoR* aor = NULL;
-  HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
+  HTTPCode rc = this->_s4->handle_patch("aor_id", *po, &aor, 0);
 
   EXPECT_EQ(rc, 200);
 
   delete po; po = NULL;
   delete aor; aor = NULL;
-}
+}*/

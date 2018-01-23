@@ -91,19 +91,17 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   // TODO add in asso_uris
   if (rc == HTTP_NOT_FOUND)
   {
-    PatchObject* patch_object = new PatchObject();
-    patch_object->set_update_bindings(AoRUtils::copy_bindings(updated_bindings));
-    patch_object->set_remove_bindings(binding_ids_to_remove);
-    patch_object->set_increment_cseq(true);
+    PatchObject patch_object;
+    patch_object.set_update_bindings(updated_bindings);
+    patch_object.set_remove_bindings(binding_ids_to_remove);
 
     updated_aor = new AoR(aor_id);
     updated_aor->patch_aor(patch_object);
     // TODO set scscf_uri
     rc = _s4->handle_put(aor_id,
-                         updated_aor,
+                         *updated_aor,
                          trail);
     // Set up AoR?
-    delete patch_object; patch_object = NULL;
   }
   else
   {
@@ -301,9 +299,9 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
     return rc;
   }
 
-  rc = _s4->handle_local_delete(aor_id,
-                                version,
-                                trail);
+  rc = _s4->handle_delete(aor_id,
+                          version,
+                          trail);
 
   // Send NOTIFYs for removed binding.
 
@@ -530,15 +528,14 @@ HTTPCode SubscriberManager::patch_bindings(const std::string& aor_id,
                                            AoR*& aor,
                                            SAS::TrailId trail)
 {
-  PatchObject* patch_object = new PatchObject();
-  patch_object->set_update_bindings(AoRUtils::copy_bindings(update_bindings));
-  patch_object->set_remove_bindings(remove_bindings);
-  patch_object->set_increment_cseq(true);
+  PatchObject patch_object;
+  patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
+  patch_object.set_remove_bindings(remove_bindings);
+  patch_object.set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
                                   patch_object,
                                   &aor,
                                   trail);
-  delete patch_object; patch_object = NULL;
 
   return rc;
 }
@@ -549,20 +546,19 @@ HTTPCode SubscriberManager::patch_subscription(const std::string& aor_id,
                                                AoR*& aor,
                                                SAS::TrailId trail)
 {
-  PatchObject* patch_object = new PatchObject();
+  PatchObject patch_object;
   Subscriptions subscriptions;
   if (update_subscription.second != NULL)
   {
     subscriptions.insert(update_subscription);
   }
-  patch_object->set_update_subscriptions(AoRUtils::copy_subscriptions(subscriptions));
-  patch_object->set_remove_subscriptions({remove_subscription});
-  patch_object->set_increment_cseq(true);
+  patch_object.set_update_subscriptions(AoRUtils::copy_subscriptions(subscriptions));
+  patch_object.set_remove_subscriptions({remove_subscription});
+  patch_object.set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
                                   patch_object,
                                   &aor,
                                   trail);
-  delete patch_object; patch_object = NULL;
 
   return rc;
 }
@@ -572,14 +568,13 @@ HTTPCode SubscriberManager::patch_associated_uris(const std::string& aor_id,
                                                   AoR*& aor,
                                                   SAS::TrailId trail)
 {
-  PatchObject* patch_object = new PatchObject();
-  patch_object->set_associated_uris(associated_uris);
-  patch_object->set_increment_cseq(true);
+  PatchObject patch_object;
+  patch_object.set_associated_uris(associated_uris);
+  patch_object.set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
                                   patch_object,
                                   &aor,
                                   trail);
-  delete patch_object; patch_object = NULL;
 
   return rc;
 }
