@@ -1814,6 +1814,27 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
   return std::string(buf2, len);
 }
 
+// Add SAS marker for the specified message's P-Charging-Vector IMS Charging ID
+// for B2BUA AS correlation.
+void PJUtils::mark_icid(const SAS::TrailId trail, pjsip_msg* msg)
+{
+  pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)pjsip_msg_find_hdr_by_name(msg,
+                                                                      &STR_P_C_V,
+                                                                      NULL);
+
+  if (pcv)
+  {
+    TRC_DEBUG("Logging ICID marker %.*s for B2BUA AS correlation", pcv->icid.slen, pcv->icid.ptr);
+    SAS::Marker icid_marker(trail, MARKER_ID_IMS_CHARGING_ID, 1u);
+    icid_marker.add_var_param(pcv->icid.slen, pcv->icid.ptr);
+    SAS::report_marker(icid_marker, SAS::Marker::Scope::Trace);
+  }
+  else
+  {
+    TRC_DEBUG("No P-Charging-Vector header (so can't log ICID for B2BUA correlation)");
+  }
+}
+
 /// Add SAS markers for the specified call IDs and branch IDs on the message
 // (msg must not be NULL).
 void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_msg* msg, const std::vector<std::string>& cids)
