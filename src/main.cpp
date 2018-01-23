@@ -87,6 +87,7 @@ extern "C" {
 #include "sprout_alarmdefinition.h"
 #include "sproutlet_options.h"
 #include "astaire_impistore.h"
+#include "updater.h"
 
 enum OptionTypes
 {
@@ -2003,7 +2004,15 @@ int main(int argc, char* argv[])
                                            hc);
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
+  dns_resolver = new DnsCachedResolver(opt.dns_servers,
+                                       opt.dns_timeout,
+                                       "/etc/clearwater/dns.json");
+
+  // Reload dns.json on SIGHUP
+  Updater<void, DnsCachedResolver>* dns_updater =
+         new Updater<void, DnsCachedResolver>(dns_resolver,
+                                              std::mem_fun(&DnsCachedResolver::reload_static_records));
+
   if (opt.pcscf_enabled)
   {
     sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration, 0);
@@ -2562,6 +2571,7 @@ int main(int argc, char* argv[])
   delete enum_service;
   delete scscf_acr_factory;
 
+  delete dns_updater;
   delete sip_resolver;
   delete http_resolver;
   delete astaire_resolver;
