@@ -37,6 +37,7 @@ using ::testing::SetArgReferee;
 using ::testing::SaveArg;
 using ::testing::An;
 
+std::string timer_id = "123";
 std::string empty_aor = "{\"bindings\": {}, \"subscriptions\": {}, \"notify_cseq\": 1}";
 std::string aor_with_binding = "{\"timer_id\": \"123\", \"bindings\": {\"<urn:uuid:00000000-0000-0000-0000-777777777777>:1\":{\"uri\":\"sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob\",\"cid\":\"0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213\",\"cseq\":10000,\"expires\":1000000,\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-777777777777>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>\"],\"paths\":[\"sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob\"],\"private_id\":\"Alice\",\"emergency_reg\":false}}, \"subscriptions\": {}, \"notify_cseq\": 1}";
 std::string aor_with_binding_subscription_associated_uris = "{\"timer_id\": \"123\", \"bindings\": {\"<urn:uuid:00000000-0000-0000-0000-777777777777>:1\":{\"uri\":\"sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.214:5061;transport=tcp;ob\",\"cid\":\"0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213\",\"cseq\":10000,\"expires\":1000000,\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-777777777777>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>\"],\"paths\":[\"sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob\"],\"private_id\":\"Alice\",\"emergency_reg\":false}}, \"subscriptions\": {}, \"notify_cseq\": 5}";
@@ -189,7 +190,8 @@ TEST_F(BasicS4Test, GETFoundInRemoteStore)
                                  1);
 
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-      .WillOnce(Return(0));
+      .Times(2)
+      .WillRepeatedly(Return(HTTP_OK));
 
     EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 1000000 + 10, _, An<Store::Format>()))
       .WillOnce(DoAll(SaveArg<2>(&aor_str),
@@ -219,8 +221,10 @@ TEST_F(BasicS4Test, GETFoundInRemoteStoreErrorOnWrite)
     get_data_expect_call_success(aor_with_binding,
                                  1,
                                  1);
+
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
-      .WillRepeatedly(Return(HTTP_OK));
+      .Times(2)
+      .WillOnce(Return(HTTP_OK));
 
     set_data_expect_call(Store::Status::ERROR, 1);
 
@@ -246,7 +250,9 @@ TEST_F(BasicS4Test, GETFoundInRemoteStoreContentionOnWrite)
                                  1,
                                  1);
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
+      .Times(2)
       .WillRepeatedly(Return(HTTP_OK));
+
     set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
     get_data_expect_call_success(aor_with_binding,
                                  1,
@@ -293,7 +299,7 @@ TEST_F(BasicS4Test, DELETEFoundOnGetValidVersion)
                                3);
   set_data_expect_call(Store::Status::OK, 3);
 
-  EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _))
+  EXPECT_CALL(*(this->_chronos_connection), send_delete(timer_id, _))
     .WillOnce(Return(HTTP_OK));
 
   uint64_t version = 1;
@@ -445,6 +451,27 @@ TEST_F(BasicS4Test, DELETEFoundOnGetErrorOnRemoteSet)
 }
 
 // This test covers a DELETE where the AoR doesn't exist in any store.
+TEST_F(BasicS4Test, CheckPutPostArg)
+{
+  std::string aor_id = "aor_id";
+  std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
+
+  EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, "/timers", opaque, _, _))
+    .WillOnce(DoAll(SetArgReferee<0>(timer_id),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*(this->_chronos_connection), send_put(timer_id, _, "/timers", opaque, _, _))
+    .WillOnce(Return(HTTP_OK));
+  set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
+
+  AoR* aor = AoRTestUtils::build_aor("sip:6505550231@homedomain");
+  HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
+
+  EXPECT_EQ(rc, 412);
+
+  delete aor; aor = NULL;
+}
+
+// This test covers a DELETE where the AoR doesn't exist in any store.
 TEST_F(BasicS4Test, PUTFoundOnGet)
 {
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, _))
@@ -547,6 +574,7 @@ TEST_F(BasicS4Test, PATCHErrorOnLocalSet)
 {
   get_data_expect_call_success(aor_with_binding, 1, 1);
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
+    .Times(2)
     .WillRepeatedly(Return(HTTP_OK));
   set_data_expect_call(Store::Status::ERROR, 1);
 
@@ -567,11 +595,13 @@ TEST_F(BasicS4Test, PATCHContentionOnLocalSet)
     InSequence s;
     get_data_expect_call_success(aor_with_binding, 1, 1);
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
+      .Times(2)
       .WillRepeatedly(Return(HTTP_OK));
     set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
     get_data_expect_call_success(aor_with_binding, 1, 1);
     EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
+      .Times(2)
       .WillRepeatedly(Return(HTTP_OK));
     set_data_expect_call(Store::Status::OK, 1);
 
@@ -599,6 +629,7 @@ TEST_F(BasicS4Test, PATCHSuccess)
   set_data_expect_call(Store::Status::OK, 3);
 
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _))
+    .Times(2)
     .WillRepeatedly(Return(HTTP_OK));
 
   PatchObject* po = new PatchObject();
