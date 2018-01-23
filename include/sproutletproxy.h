@@ -49,6 +49,7 @@ public:
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_local_aliases,
                  const std::unordered_set<std::string>& host_remote_aliases,
+                 const bool always_serve_remote_aliases,
                  const std::list<Sproutlet*>& sproutlets,
                  const std::set<std::string>& stateless_proxies,
                  SNMP::CounterTable* route_to_remote_alias_tbl,
@@ -106,7 +107,17 @@ protected:
     }
   }
 
-  typedef std::pair<Sproutlet*, AliasMatchType> SproutletMatch;
+  struct SproutletMatch
+  {
+    Sproutlet* sproutlet;
+    AliasMatchType match_type;
+    SproutletMatch(Sproutlet* sproutlet,
+                   AliasMatchType match_type) : 
+    sproutlet(sproutlet),
+    match_type(match_type)
+    {}
+  };
+
   typedef std::pair<SproutletTsx*, AliasMatchType> SproutletTsxMatch;
 
   /// Create Sproutlet UAS transaction objects.
@@ -154,8 +165,7 @@ protected:
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
-  // TJW2 TODO naming
-  AliasMatchType is_host_alias(const pj_str_t* host) const;
+  AliasMatchType host_alias_type(const pj_str_t* host) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,
                         const Sproutlet* sproutlet) const;
@@ -248,13 +258,12 @@ protected:
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
 
-    // TJW2 TODO: Alignment
     /// Finds a SproutletTsx willing to handle a request
     SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
-                                        int port,
-                                        std::string& alias,
-                                        bool allow_remote_aliases,
-                                        bool& remote_match_rejected);
+                                    int port,
+                                    std::string& alias,
+                                    bool allow_remote_aliases,
+                                    bool& remote_match_rejected);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;
@@ -317,6 +326,7 @@ protected:
 
   std::unordered_set<std::string> _host_local_aliases;
   std::unordered_set<std::string> _host_remote_aliases;
+  bool _always_serve_remote_aliases;
 
   std::map<std::string, Sproutlet*> _services;
 

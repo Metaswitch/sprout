@@ -146,7 +146,8 @@ enum OptionTypes
   OPT_REQUEST_ON_QUEUE_TIMEOUT,
   OPT_BLACKLISTED_SCSCFS,
   OPT_LOCAL_ALIASES,
-  OPT_REMOTE_ALIASES
+  OPT_REMOTE_ALIASES,
+  OPT_ALWAYS_SERVE_REMOTE_ALIASES
 };
 
 
@@ -159,7 +160,8 @@ const static struct pj_getopt_option long_opt[] =
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
   { "alias",                        required_argument, 0, 'n'},
   { "local-alias-list",             required_argument, 0, OPT_LOCAL_ALIASES},
-  { "remote-alias-list",                required_argument, 0, OPT_REMOTE_ALIASES},
+  { "remote-alias-list",            required_argument, 0, OPT_REMOTE_ALIASES},
+  { "always-serve-remote-aliases",  no_argument,       0, OPT_ALWAYS_SERVE_REMOTE_ALIASES}
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},
@@ -281,6 +283,9 @@ static void usage(void)
        "     --local-alias-list     List of hostnames corresponding to services provided by this node\n"
        "     --remote-alias-list    List of hostnames corresponding to services provided by remote\n"
        "                            nodes for which this node can accept traffic.\n"
+       "     --always-serve-remote-aliases\n"
+       "                            If set to Y, requests for hostnames on the remote alias list will\n"
+       "                            always be handled locally.\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
        "                            as the upstream routing proxy.  Optionally specifies the port,\n"
@@ -718,6 +723,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->remote_alias_hosts = std::string(pj_optarg);
       TRC_INFO("Remote alias host names = %s", pj_optarg);
       break;
+
+    case OPT_ALWAYS_SERVE_REMOTE_ALIASES:
+      options->always_serve_remote_aliases = true;
+      TRC_INFO("Always serving remote aliases.");
+      break;
+
 
     case 'r':
       {
@@ -2386,6 +2397,7 @@ int main(int argc, char* argv[])
                                          opt.sprout_hostname,
                                          host_local_aliases,
                                          host_remote_aliases,
+                                         opt.always_serve_remote_aliases,
                                          sproutlets,
                                          opt.stateless_proxies,
                                          route_to_remote_alias_tbl,

@@ -97,6 +97,7 @@ public:
                                 "proxy1.homedomain",
                                 std::unordered_set<std::string>(),
                                 std::unordered_set<std::string>(),
+                                true,
                                 _sproutlets,
                                 std::set<std::string>(),
                                 nullptr);

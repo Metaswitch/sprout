@@ -895,6 +895,7 @@ public:
                                 "proxy1.homedomain",
                                 host_local_aliases,
                                 host_remote_aliases,
+                                false,
                                 _sproutlets,
                                 std::set<std::string>(),
                                 _mock_route_to_remote_alias_counter);
@@ -960,7 +961,7 @@ public:
     Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
                                                             unused_alias,
                                                             unused_local_hostname,
-                                                            unused_selection_type).first;
+                                                            unused_selection_type).sproutlet;
     if (sproutlet != NULL)
     {
       service_name = sproutlet->service_name();

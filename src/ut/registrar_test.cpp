@@ -265,6 +265,7 @@ public:
                                           "homedomain",
                                           additional_home_domains,
                                           std::unordered_set<std::string>(),
+                                          true,
                                           sproutlets,
                                           std::set<std::string>(),
                                           nullptr);
@@ -3391,6 +3392,7 @@ public:
                                           "homedomain",
                                           additional_home_domains,
                                           std::unordered_set<std::string>(),
+                                          true,
                                           sproutlets,
                                           std::set<std::string>(),
                                           nullptr);

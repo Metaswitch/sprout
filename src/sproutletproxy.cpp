@@ -35,6 +35,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_local_aliases,
                                const std::unordered_set<std::string>& host_remote_aliases,
+                               const bool always_serve_remote_aliases,
                                const std::list<Sproutlet*>& sproutlets,
                                const std::set<std::string>& stateless_proxies,
                                SNMP::CounterTable* route_to_remote_alias_tbl,
@@ -47,6 +48,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
   _root_uri(NULL),
   _host_local_aliases(host_local_aliases),
   _host_remote_aliases(host_remote_aliases),
+  _always_serve_remote_aliases(always_serve_remote_aliases),
   _sproutlets(sproutlets),
   _route_to_remote_alias_tbl(route_to_remote_alias_tbl),
   _max_sproutlet_depth(max_sproutlet_depth)
@@ -217,7 +219,7 @@ SproutletProxy::SproutletMatch
     {
       SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_URI, 0);
       event.add_static_param(selection_type);
-      event.add_var_param(sproutlet_match.first->service_name());
+      event.add_var_param(sproutlet_match.sproutlet->service_name());
       event.add_var_param(alias);
       event.add_var_param(uri_str);
       SAS::report_event(event);
@@ -225,7 +227,7 @@ SproutletProxy::SproutletMatch
 
     if ((port == 0) &&
         (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-        (is_alias_match(is_host_alias(&((pjsip_sip_uri*)uri)->host))))
+        (is_alias_match(host_alias_type(&((pjsip_sip_uri*)uri)->host))))
     {
       // No port was specified by the caller, and the URI is local, so use the URI port instead.
       port = uri->port;
@@ -236,7 +238,7 @@ SproutletProxy::SproutletMatch
     TRC_DEBUG("Can't match a sproutlet based on the URI");
   }
 
-  if ((sproutlet_match.first == NULL) &&
+  if ((sproutlet_match.sproutlet == NULL) &&
       (port != 0))
   {
     // No service identifier in the Route URI, so check if a sproutlet has
@@ -255,7 +257,7 @@ SproutletProxy::SproutletMatch
     else if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
       // If there is a route header, check if it is local.
-      match = is_host_alias(&((pjsip_sip_uri*)route->name_addr.uri)->host);
+      match = host_alias_type(&((pjsip_sip_uri*)route->name_addr.uri)->host);
     }
     else
     {
@@ -274,7 +276,7 @@ SproutletProxy::SproutletMatch
       if (it != _ports.end())
       {
         sproutlet_match = SproutletMatch(it->second, match);
-        alias = sproutlet_match.first->service_name();
+        alias = sproutlet_match.sproutlet->service_name();
         std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)uri);
         SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_PORT, 0);
         event.add_var_param(alias);
@@ -320,7 +322,7 @@ SproutletProxy::SproutletMatch
     TRC_DEBUG("Found services param - %.*s",
               services_param->value.slen,
               services_param->value.ptr);
-    AliasMatchType match = is_host_alias(&sip_uri->host);
+    AliasMatchType match = host_alias_type(&sip_uri->host);
     if (is_alias_match(match))
     {
       // Check if this service matches a sproutlet.
@@ -342,7 +344,7 @@ SproutletProxy::SproutletMatch
   // and check if the rest is still a local hostname. This works for IP
   // addresses since IPv4 addresses cannot have only 3 octets and IPv6
   // addresses contain no periods.
-  if (sproutlet_match.first == NULL)
+  if (sproutlet_match.sproutlet == NULL)
   {
     pj_str_t hostname = sip_uri->host;
     char* sep = pj_strchr(&hostname, '.');
@@ -361,7 +363,7 @@ SproutletProxy::SproutletMatch
                 hostname.slen,
                 hostname.ptr);
 
-      AliasMatchType match = is_host_alias(&hostname);
+      AliasMatchType match = host_alias_type(&hostname);
       if (is_alias_match(match))
       {
         // Check if the part of the hostname before the first '.' matches
@@ -380,12 +382,12 @@ SproutletProxy::SproutletMatch
 
   // If we haven't found a sproutlet yet, check if the user part of the URI
   // matches a sproutlet.
-  if ((sproutlet_match.first == NULL) &&
+  if ((sproutlet_match.sproutlet == NULL) &&
       (sip_uri->user.slen != 0))
   {
     TRC_DEBUG("Found user part - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
 
-    AliasMatchType match = is_host_alias(&sip_uri->host);
+    AliasMatchType match = host_alias_type(&sip_uri->host);
     if (is_alias_match(match))
     {
       // Check if the user part matches a sproutlet.
@@ -484,7 +486,7 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri, bool allow_remote_aliase
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     pj_str_t hostname = ((pjsip_sip_uri*)uri)->host;
-    AliasMatchType match = is_host_alias(&hostname);
+    AliasMatchType match = host_alias_type(&hostname);
     // LCOV_EXCL_START
     if (match == AliasMatchType::LOCAL ||
         (match == AliasMatchType::REMOTE && allow_remote_aliases))
@@ -500,7 +502,7 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri, bool allow_remote_aliase
       hostname.slen -= sep - hostname.ptr + 1;
       hostname.ptr = sep + 1;
 
-      AliasMatchType match = is_host_alias(&hostname);
+      AliasMatchType match = host_alias_type(&hostname);
       return (match == AliasMatchType::LOCAL ||
               (match == AliasMatchType::REMOTE && allow_remote_aliases));
     }
@@ -545,7 +547,7 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
   (void*)match_sproutlet_from_uri((pjsip_uri*)uri,
                                   unused_alias,
                                   local_hostname,
-                                  unused_selection_type).first;
+                                  unused_selection_type).sproutlet;
 
   if (local_hostname.empty())
   {
@@ -577,7 +579,7 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
 // Requests for remote aliases of this node will be accepted off the wire, but
 // will be routed externally if recieved from an internal Sproutlet.
 SproutletProxy::AliasMatchType
-  SproutletProxy::is_host_alias(const pj_str_t* host) const
+  SproutletProxy::host_alias_type(const pj_str_t* host) const
 {
   if (!pj_stricmp(host, &_root_uri->host))
   {
@@ -616,7 +618,7 @@ bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
   Sproutlet* matched_sproutlet = match_sproutlet_from_uri(uri,
                                                           alias_unused,
                                                           local_hostname_unused,
-                                                          selection_type_unused).first;
+                                                          selection_type_unused).sproutlet;
 
   return (sproutlet == matched_sproutlet);
 }
@@ -1026,11 +1028,12 @@ void SproutletProxy::UASTsx::schedule_requests()
       // be routed to that site - this means that the terminating side of a call
       // will be handled in the site that subscriber is registered.
       bool remote_match_rejected = false;
-      SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(req.req,
-                                                      0,
-                                                      alias,
-                                                      false,
-                                                      remote_match_rejected);
+      SproutletTsx* sproutlet_tsx =
+        get_sproutlet_tsx(req.req,
+                          0,
+                          alias,
+                          _sproutlet_proxy->_always_serve_remote_aliases,
+                          remote_match_rejected);
 
       if (sproutlet_tsx != NULL)
       {
@@ -1333,15 +1336,15 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
                                                             port,
                                                             alias,
                                                             trail());
-  if (match.second == AliasMatchType::LOCAL)
+  if (match.match_type == AliasMatchType::LOCAL)
   {
-    sproutlet = match.first;
+    sproutlet = match.sproutlet;
   }
-  else if (match.second == AliasMatchType::REMOTE)
+  else if (match.match_type == AliasMatchType::REMOTE)
   {
     if (allow_remote_aliases)
     {
-      sproutlet = match.first;
+      sproutlet = match.sproutlet;
     }
     else
     {
@@ -1397,15 +1400,15 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
                                                0,
                                                alias,
                                                trail());
-    if (match.second == AliasMatchType::LOCAL)
+    if (match.match_type == AliasMatchType::LOCAL)
     {
-      sproutlet = match.first;
+      sproutlet = match.sproutlet;
     } // LCOV_EXCL_START
-    else if (match.second == AliasMatchType::REMOTE)
+    else if (match.match_type == AliasMatchType::REMOTE)
     {
       if (allow_remote_aliases)
       {
-        sproutlet = match.first;
+        sproutlet = match.sproutlet;
       }
       else
       {

@@ -70,6 +70,7 @@ struct options
   std::string                          deprecated_alias_hosts;
   std::string                          local_alias_hosts;
   std::string                          remote_alias_hosts;
+  bool                                 always_serve_remote_aliases;
   std::string                          trusted_hosts;
   bool                                 auth_enabled;
   std::string                          auth_realm;
