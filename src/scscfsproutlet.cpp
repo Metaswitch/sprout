@@ -1327,10 +1327,8 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
     }
     else
     {
-      std::string reason = "Session case is terminating, but the request contains an overriding route header.";
-      TRC_DEBUG(reason.c_str());
-      SAS::Event event(trail(), SASEvent::NO_SERVED_USER, 0);
-      event.add_var_param(reason);
+      TRC_DEBUG("Session case is terminating, but the request contains an overriding route header.");
+      SAS::Event event(trail(), SASEvent::NO_SERVED_USER_TERMINATING, 0);
       SAS::report_event(event);   
     }
   }
@@ -1351,10 +1349,8 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
     }
     else
     {
-      std::string reason = "URI is not locally hosted.";
-      TRC_DEBUG(reason.c_str());
-      SAS::Event event(trail(), SASEvent::NO_SERVED_USER, 0);
-      event.add_var_param(reason);
+      TRC_DEBUG("URI is not locally hosted.");
+      SAS::Event event(trail(), SASEvent::NO_SERVED_USER_URI_NOT_LOCAL, 0);
       SAS::report_event(event);
     }
   }
