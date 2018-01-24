@@ -64,7 +64,7 @@ class TestWithMockSdms : public SipTest
   AoRPair* build_aor_pair(std::string aor_id,
                           bool include_subscription = true)
   {
-    AoR* aor = AoRTestUtils::build_aor(aor_id);
+    AoR* aor = AoRTestUtils::create_simple_aor(aor_id);
     AoR* aor2 = new AoR(*aor);
     AoRPair* aor_pair = new AoRPair(aor, aor2);
 

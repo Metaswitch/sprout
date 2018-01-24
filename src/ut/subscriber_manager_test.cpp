@@ -138,8 +138,8 @@ void SubscriberManagerTest::set_up_irs_and_aor()
   _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
 
   // Set up AoRs to be returned by S4.
-  _get_aor = AoRTestUtils::build_aor(DEFAULT_ID);
-  _patch_aor = AoRTestUtils::build_aor(DEFAULT_ID);
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID);
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID);
 }
 
 void SubscriberManagerTest::add_binding_expect_calls()
@@ -327,7 +327,7 @@ TEST_F(SubscriberManagerTest, TestAddBinding)
 
   // Set up AoRs to be returned by S4.
   _get_aor = new AoR(DEFAULT_ID);
-  _patch_aor = AoRTestUtils::build_aor(DEFAULT_ID, false);
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
 
   update_bindings_expect_calls();
 
@@ -435,7 +435,7 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
   _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
 
   // Set up AoRs to be returned by S4.
-  _get_aor = AoRTestUtils::build_aor(DEFAULT_ID, false);
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
   _patch_aor = new AoR(DEFAULT_ID);
 
   // Set up expect calls to the HSS and S4.
@@ -482,8 +482,8 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
   _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
 
   // Set up AoRs to be returned by S4.
-  _get_aor = AoRTestUtils::build_aor(DEFAULT_ID, false);
-  _patch_aor = AoRTestUtils::build_aor(DEFAULT_ID, true);
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
 
   subscription_expect_calls();
 
@@ -505,8 +505,8 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
   _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
 
   // Set up AoRs to be returned by S4.
-  _get_aor = AoRTestUtils::build_aor(DEFAULT_ID, true);
-  _patch_aor = AoRTestUtils::build_aor(DEFAULT_ID, false);
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
 
   subscription_expect_calls(true, 0);
 
@@ -594,7 +594,7 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
   _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
 
   // Set up AoRs to be returned by S4.
-  _get_aor = AoRTestUtils::build_aor(DEFAULT_ID, true);;
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);;
 
   // Set up expect calls to the HSS and S4.
   {
@@ -624,7 +624,7 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
 TEST_F(SubscriberManagerTest, TestGetBindings)
 {
   // Set up AoRs to be returned by S4 - these are deleted by the handler
-  _get_aor = AoRTestUtils::build_aor(DEFAULT_ID, true);
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
 
   // Set up expect calls to S4.
   {
@@ -650,7 +650,7 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
 TEST_F(SubscriberManagerTest, TestGetSubscriptions)
 {
   // Set up AoRs to be returned by S4 - these are deleted by the handler
-  _get_aor = AoRTestUtils::build_aor(DEFAULT_ID, true);
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
 
   // Set up expect calls to S4.
   {
@@ -678,8 +678,8 @@ TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
   // Set up AoRs to be returned by S4.
   //AoR* get_aor = new AoR(DEFAULT_ID);
   //get_aor->_associated_uris.add_uri(DEFAULT_ID, false);
-  _get_aor = AoRTestUtils::build_aor(DEFAULT_ID, true);
-  _patch_aor = AoRTestUtils::build_aor(DEFAULT_ID, true);
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
   _patch_aor->_associated_uris.add_uri(OTHER_ID, false);
 
   // Set up expect calls to S4.
