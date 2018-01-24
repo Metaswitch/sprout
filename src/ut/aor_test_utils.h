@@ -17,6 +17,7 @@ namespace AoRTestUtils
   static const std::string CONTACT_URI = "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>";
   static const std::string BINDING_ID = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
   static const std::string SUBSCRIPTION_ID = "1234";
+  static const int EXPIRY = 300;
 
   inline Binding*
     build_binding(std::string aor_id,
@@ -28,7 +29,7 @@ namespace AoRTestUtils
     b->_uri = uri;
     b->_cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
     b->_cseq = 17038;
-    b->_expires = now + 300;
+    b->_expires = now + EXPIRY;
     b->_priority = 0;
     b->_path_headers.push_back("<sip:abcdefgh@bono1.homedomain;lr>");
     b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
