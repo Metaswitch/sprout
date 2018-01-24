@@ -161,7 +161,7 @@ const static struct pj_getopt_option long_opt[] =
   { "alias",                        required_argument, 0, 'n'},
   { "local-alias-list",             required_argument, 0, OPT_LOCAL_ALIASES},
   { "remote-alias-list",            required_argument, 0, OPT_REMOTE_ALIASES},
-  { "always-serve-remote-aliases",  no_argument,       0, OPT_ALWAYS_SERVE_REMOTE_ALIASES}
+  { "always-serve-remote-aliases",  no_argument,       0, OPT_ALWAYS_SERVE_REMOTE_ALIASES},
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},
