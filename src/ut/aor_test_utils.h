@@ -14,6 +14,9 @@
 
 namespace AoRTestUtils
 {
+  static const std::string BINDING_ID = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
+  static const std::string SUBSCRIPTION_ID = "1234";
+
   inline Binding*
     build_binding(std::string aor_id,
                   int now,
@@ -61,17 +64,16 @@ namespace AoRTestUtils
     AoR* aor = new AoR(aor_id);
     int now = time(NULL);
 
-    std::string binding_id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
     Binding* b = build_binding(aor_id, now);
-    aor->_bindings.insert(std::make_pair(binding_id, b));
+    aor->_bindings.insert(std::make_pair(BINDING_ID, b));
 
     if (include_subscription)
     {
-      std::string to_tag = "1234";
-      Subscription* s = build_subscription(to_tag, now);
-      aor->_subscriptions.insert(std::make_pair(to_tag, s));
+      Subscription* s = build_subscription(SUBSCRIPTION_ID, now);
+      aor->_subscriptions.insert(std::make_pair(SUBSCRIPTION_ID, s));
     }
     aor->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+    aor->_associated_uris.add_uri(aor_id, false);
 
     return aor;
   }

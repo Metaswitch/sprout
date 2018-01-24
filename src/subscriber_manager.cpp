@@ -120,6 +120,7 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   // Get all bindings to return to the caller
   all_bindings = AoRUtils::copy_bindings(updated_aor->bindings());
 
+  // Send NOTIFYs and write audit logs.
   send_notifys_and_write_audit_logs(aor_id,
                                     EventTrigger::USER,
                                     orig_aor,
@@ -163,37 +164,44 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
     return rc;
   }
 
-  // Get the current AoR from S4.
-  AoR* aor = NULL;
+  // Get the original AoR from S4.
+  AoR* orig_aor = NULL;
   uint64_t version;
   rc = _s4->handle_get(aor_id,
-                       &aor,
+                       &orig_aor,
                        version,
                        trail);
 
   // If there is no AoR, we still count that as a success.
   if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
   {
+    delete orig_aor; orig_aor = NULL;
     return rc;
   }
 
-  delete aor; aor = NULL;
-
+  AoR* updated_aor = NULL;
   rc = patch_bindings(aor_id,
                       Bindings(),
                       binding_ids,
                       irs_info._associated_uris,
-                      aor,
+                      updated_aor,
                       trail);
   if (rc != HTTP_OK)
   {
+    delete orig_aor; orig_aor = NULL;
+    delete updated_aor; updated_aor = NULL;
     return rc;
   }
 
   // Get all bindings to return to the caller
-  bindings = AoRUtils::copy_bindings(aor->bindings());
+  bindings = AoRUtils::copy_bindings(updated_aor->bindings());
 
   // Send NOTIFYs for removed bindings.
+  send_notifys_and_write_audit_logs(aor_id,
+                                    event_trigger,
+                                    orig_aor,
+                                    updated_aor,
+                                    trail);
 
   // Update HSS if all bindings expired.
   if (bindings.empty())
@@ -202,7 +210,7 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
                                  HSSConnection::DEREG_USER : HSSConnection::DEREG_ADMIN;
     rc = deregister_with_hss(aor_id,
                              dereg_reason,
-                             aor->_scscf_uri,
+                             updated_aor->_scscf_uri,
                              irs_info,
                              trail);
 
@@ -213,7 +221,8 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
     // Send 3rd party REGISTERs
   }
 
-  delete aor; aor = NULL;
+  delete orig_aor; orig_aor = NULL;
+  delete updated_aor; updated_aor = NULL;
 
   return HTTP_OK;
 }
@@ -282,11 +291,12 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
                           version,
                           trail);
 
-  /*send_notifys_and_write_audit_logs(aor_id,
+  // Send NOTIFYs and write audit logs.
+  send_notifys_and_write_audit_logs(aor_id,
                                     event_trigger,
                                     orig_aor,
                                     NULL,
-                                    trail);*/
+                                    trail);
 
   // Deregister with HSS.
   std::string dereg_reason = (event_trigger == EventTrigger::USER) ?
@@ -398,11 +408,14 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
     return rc;
   }
 
-  /*send_notifys_and_write_audit_logs(aor_id,
+  // Send NOTIFYs and write audit logs.
+  send_notifys_and_write_audit_logs(aor_id,
                                     EventTrigger::ADMIN,
                                     orig_aor,
                                     updated_aor,
-                                    trail);*/
+                                    trail);
+
+  // Send 3rd party REGISTERs?
 
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
@@ -453,6 +466,7 @@ HTTPCode SubscriberManager::modify_subscription(const std::string& public_id,
     return rc;
   }
 
+  // Send NOTIFYs and write audit logs.
   send_notifys_and_write_audit_logs(aor_id,
                                     EventTrigger::USER,
                                     orig_aor,
@@ -497,7 +511,7 @@ HTTPCode SubscriberManager::put_bindings(const std::string& aor_id,
                                          SAS::TrailId trail)
 {
   PatchObject patch_object;
-  patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings)); // TODO Do you need to copy this?
+  patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
   patch_object.set_remove_bindings(remove_bindings);
   patch_object.set_associated_uris(associated_uris);
   patch_object.set_increment_cseq(true);
@@ -521,7 +535,7 @@ HTTPCode SubscriberManager::patch_bindings(const std::string& aor_id,
                                            SAS::TrailId trail)
 {
   PatchObject patch_object;
-  patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings)); // TODO do you need to copy this?
+  patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
   patch_object.set_remove_bindings(remove_bindings);
   patch_object.set_associated_uris(associated_uris);
   patch_object.set_increment_cseq(true);
@@ -545,7 +559,7 @@ HTTPCode SubscriberManager::patch_subscription(const std::string& aor_id,
   {
     subscriptions.insert(update_subscription);
   }
-  patch_object.set_update_subscriptions(AoRUtils::copy_subscriptions(subscriptions)); // TODO do you need to copy this?
+  patch_object.set_update_subscriptions(AoRUtils::copy_subscriptions(subscriptions));
   patch_object.set_remove_subscriptions({remove_subscription});
   patch_object.set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
@@ -583,29 +597,27 @@ void SubscriberManager::send_notifys_and_write_audit_logs(const std::string& aor
   classify_bindings(aor_id,
                     event_trigger,
                     (orig_aor != NULL) ? orig_aor->bindings() : Bindings(),
-                    updated_aor->bindings(),
+                    (updated_aor != NULL) ? updated_aor->bindings() : Bindings(),
                     classified_bindings);
 
   // Work out if Associated URIs have changed.
   bool associated_uris_changed = false;
-  if (orig_aor != NULL)
+  if ((orig_aor != NULL) && (updated_aor != NULL))
   {
     associated_uris_changed = (orig_aor->_associated_uris !=
                                updated_aor->_associated_uris);
   }
   else
   {
-    // If there is no orignal AoR, we must be adding one, so associated URIs
-    //  must be changed.
-    associated_uris_changed = true; // TODO check this logic. What if the
-    // updated AoR is NULL e.g. if deleting a subscriber.
+    // One of the AoRs is NULL so we are either creating or deleting an AoR.
+    // This isn't a change to Associated URIs so don't set it to true.
   }
 
   ClassifiedSubscriptions classified_subscriptions;
   classify_subscriptions(aor_id,
                          event_trigger,
                          (orig_aor != NULL) ? orig_aor->subscriptions() : Subscriptions(),
-                         updated_aor->subscriptions(),
+                         (updated_aor != NULL) ? updated_aor->subscriptions() : Subscriptions(),
                          classified_bindings,
                          associated_uris_changed,
                          classified_subscriptions);
@@ -617,8 +629,8 @@ void SubscriberManager::send_notifys_and_write_audit_logs(const std::string& aor
                                EventTrigger::USER,
                                classified_bindings,
                                classified_subscriptions,
-                               updated_aor->_associated_uris,
-                               updated_aor->_notify_cseq,
+                               (updated_aor != NULL) ? updated_aor->_associated_uris : orig_aor->_associated_uris,
+                               (updated_aor != NULL) ? updated_aor->_notify_cseq : orig_aor->_notify_cseq + 1,
                                time(NULL),
                                trail);
 
@@ -661,7 +673,7 @@ void SubscriberManager::classify_bindings(const std::string& aor_id,
                               orig_b.second,
                               determine_contact_event(event_trigger));
       classified_bindings.push_back(binding_record);
-      TRC_DEBUG("Binding %s in AoR %s is no longer present (e.g. has expired)",
+      TRC_DEBUG("Binding %s in AoR %s is no longer present",
                 orig_b.first.c_str(),
                 aor_id.c_str());
     }
@@ -695,6 +707,11 @@ void SubscriberManager::classify_bindings(const std::string& aor_id,
         //
         // TODO The contact URI is used to create the binding ID, so is it even
         // possible to change the contat URI with creating a new binding?
+        // Yes since the binding ID can be the same and the contact change e.g. if
+        // +sip.instance and +sip.reg_id stay the same.
+        TRC_DEBUG("Binding %s in AoR %s has changed contact URI",
+                  binding_id.c_str(),
+                  aor_id.c_str());
         ClassifiedBinding* deactivated_record =
            new ClassifiedBinding(orig_b_match->first,
                                  orig_b_match->second,
@@ -756,15 +773,17 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
   }
 
   // Decide if we should send a NOTIFY for all subscriptions.
-  bool base_notify_required;
+  bool base_notify_required = false;
   std::string base_reasons = "Reason(s): - ";
   if (bindings_changed)
   {
+    TRC_DEBUG("Bindings changed");
     base_notify_required = true;
     base_reasons += "Bindings changed - ";
   }
   if (associated_uris_changed)
   {
+    TRC_DEBUG("Associated URIs changed");
     base_notify_required = true;
     base_reasons += "Associated URIs changed - ";
   }
@@ -833,7 +852,7 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
                 aor_id.c_str());
 
       notify_required = true;
-      reasons += "Subscription created - ";
+      reasons += "Subscription terminated - ";
 
       ClassifiedSubscription* classified_subscription =
         new ClassifiedSubscription(subscription_id,
