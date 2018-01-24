@@ -18,6 +18,7 @@
 #include "test_interposer.hpp"
 #include "mock_s4.h"
 #include "mock_hss_connection.h"
+#include "mock_analytics_logger.h"
 
 using ::testing::_;
 using ::testing::Return;
@@ -38,9 +39,10 @@ public:
   {
     _s4 = new MockS4();
     _hss_connection = new MockHSSConnection();
+    _analytics_logger = new MockAnalyticsLogger();
     _subscriber_manager = new SubscriberManager(_s4,
                                                 _hss_connection,
-                                                NULL);
+                                                _analytics_logger);
 
     // Log all traffic
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
@@ -65,6 +67,7 @@ public:
     delete _subscriber_manager; _subscriber_manager = NULL;
     delete _s4; _s4 = NULL;
     delete _hss_connection; _hss_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   };
 
   static void SetUpTestCase()
@@ -87,10 +90,22 @@ public:
 private:
   void set_up_irs_and_aor();
 
-  void update_bindings_expect_calls();
+  void add_binding_expect_calls();
+  void update_bindings_expect_calls(bool binding_changed = true,
+                                    int expiry = 300);
+  void registration_log_expect_call(int expiry = 300,
+                                    std::string contact = AoRTestUtils::CONTACT_URI,
+                                    std::string binding_id = AoRTestUtils::BINDING_ID,
+                                    std::string aor_id = DEFAULT_ID);
   void update_bindings();
 
-  void subscription_expect_calls();
+  void subscription_expect_calls(bool subscription_changed = true,
+                                 int expiry = 300);
+  void subscription_log_expect_call(int expiry = 300,
+                                    std::string contact = AoRTestUtils::CONTACT_URI,
+                                    std::string subscription_id = AoRTestUtils::SUBSCRIPTION_ID,
+                                    std::string aor_id = DEFAULT_ID);
+
   void update_subscription();
 
   void delete_bindings(Bindings& bindings);
@@ -99,6 +114,7 @@ private:
   SubscriberManager* _subscriber_manager;
   MockS4* _s4;
   MockHSSConnection* _hss_connection;
+  MockAnalyticsLogger* _analytics_logger;
 
   // Common variables used by all tests.
   AoR* _get_aor = NULL;
@@ -126,8 +142,26 @@ void SubscriberManagerTest::set_up_irs_and_aor()
   _patch_aor = AoRTestUtils::build_aor(DEFAULT_ID);
 }
 
+void SubscriberManagerTest::add_binding_expect_calls()
+{
+  InSequence s;
+  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+    .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                    Return(HTTP_NOT_FOUND)));
+  EXPECT_CALL(*_s4, handle_put(DEFAULT_ID, _, _)) // TODO save off the AoR here and check it.
+    .WillOnce(Return(HTTP_OK));
+  EXPECT_CALL(*_analytics_logger, registration(DEFAULT_ID,
+                                               AoRTestUtils::BINDING_ID,
+                                               AoRTestUtils::CONTACT_URI,
+                                               300)).Times(1);
+}
+
 // Sets up the expect calls to the HSS and S4 when update_binding() is called.
-void SubscriberManagerTest::update_bindings_expect_calls()
+void SubscriberManagerTest::update_bindings_expect_calls(bool binding_changed,
+                                                         int expiry)
 {
   InSequence s;
   EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
@@ -140,6 +174,22 @@ void SubscriberManagerTest::update_bindings_expect_calls()
     .WillOnce(DoAll(SaveArg<1>(&_patch_object),
                     SetArgPointee<2>(_patch_aor),
                     Return(HTTP_OK)));
+  if (binding_changed)
+  {
+    registration_log_expect_call(expiry);
+  }
+}
+
+void SubscriberManagerTest::registration_log_expect_call(
+                              int expiry,
+                              std::string contact,
+                              std::string binding_id,
+                              std::string aor_id)
+{
+  EXPECT_CALL(*_analytics_logger, registration(aor_id,
+                                               binding_id,
+                                               contact,
+                                               expiry)).Times(1);
 }
 
 // Calls update_bindings() and checks what is returned.
@@ -169,7 +219,8 @@ void SubscriberManagerTest::update_bindings()
 }
 
 
-void SubscriberManagerTest::subscription_expect_calls()
+void SubscriberManagerTest::subscription_expect_calls(bool subscription_changed,
+                                                      int expiry)
 {
   InSequence s;
   EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
@@ -182,6 +233,22 @@ void SubscriberManagerTest::subscription_expect_calls()
     .WillOnce(DoAll(SaveArg<1>(&_patch_object),
                     SetArgPointee<2>(_patch_aor),
                     Return(HTTP_OK)));
+  if (subscription_changed)
+  {
+    subscription_log_expect_call(expiry);
+  }
+}
+
+void SubscriberManagerTest::subscription_log_expect_call(
+                              int expiry,
+                              std::string contact,
+                              std::string subscription_id,
+                              std::string aor_id)
+{
+  EXPECT_CALL(*_analytics_logger, subscription(aor_id,
+                                               subscription_id,
+                                               contact,
+                                               expiry)).Times(1);
 }
 
 void SubscriberManagerTest::update_subscription()
@@ -226,17 +293,7 @@ TEST_F(SubscriberManagerTest, TestAddFirstBinding)
   _get_aor = NULL;
 
   // Set up expect calls to the HSS and S4.
-  {
-    InSequence s;
-    EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
-      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
-                      Return(HTTP_OK)));
-    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
-      .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
-                      Return(HTTP_NOT_FOUND)));
-    EXPECT_CALL(*_s4, handle_put(DEFAULT_ID, _, _)) // TODO save off the AoR here and check it.
-      .WillOnce(Return(HTTP_OK));
-  }
+  add_binding_expect_calls();
 
   // Build the updated bindings to pass in.
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
@@ -292,7 +349,7 @@ TEST_F(SubscriberManagerTest, TestRefreshBinding)
   Binding* refreshed_binding = _patch_aor->get_binding(AoRTestUtils::BINDING_ID);
   refreshed_binding->_expires += 10;
 
-  update_bindings_expect_calls();
+  update_bindings_expect_calls(true, 310);
 
   // Build the updated bindings to pass in.
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
@@ -315,7 +372,7 @@ TEST_F(SubscriberManagerTest, TestShortenBinding)
   Binding* shortened_binding = _patch_aor->get_binding(AoRTestUtils::BINDING_ID);
   shortened_binding->_expires -= 10;
 
-  update_bindings_expect_calls();
+  update_bindings_expect_calls(true, 290);
 
   // Build the updated bindings to pass in.
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
@@ -334,7 +391,7 @@ TEST_F(SubscriberManagerTest, TestUnchangedBinding)
 {
   set_up_irs_and_aor();
 
-  update_bindings_expect_calls();
+  update_bindings_expect_calls(false);
 
   // Build the updated bindings to pass in.
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
@@ -355,7 +412,7 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
   Binding* refreshed_binding = _patch_aor->get_binding(AoRTestUtils::BINDING_ID);
   refreshed_binding->_uri = "<sip:6505550231@10.225.20.18:5991;transport=tcp;ob>;";
 
-  update_bindings_expect_calls();
+  update_bindings_expect_calls(false);
 
   // Build the updated bindings to pass in.
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
@@ -451,7 +508,7 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
   _get_aor = AoRTestUtils::build_aor(DEFAULT_ID, true);
   _patch_aor = AoRTestUtils::build_aor(DEFAULT_ID, false);
 
-  subscription_expect_calls();
+  subscription_expect_calls(true, 0);
 
   HTTPCode rc = _subscriber_manager->remove_subscription(DEFAULT_ID,
                                                          AoRTestUtils::SUBSCRIPTION_ID,
@@ -477,7 +534,7 @@ TEST_F(SubscriberManagerTest, TestRefreshSubscription)
   refreshed_subscription->_refreshed = true;
   refreshed_subscription->_expires += 10;
 
-  subscription_expect_calls();
+  subscription_expect_calls(true, 310);
 
   Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
   subscription->_refreshed = true;
@@ -500,7 +557,7 @@ TEST_F(SubscriberManagerTest, TestShortenSubscription)
   Subscription* shortened_subscription = _patch_aor->get_subscription(AoRTestUtils::SUBSCRIPTION_ID);
   shortened_subscription->_expires -= 10;
 
-  subscription_expect_calls();
+  subscription_expect_calls(true, 290);
 
   Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
   subscription->_expires -= 10;
@@ -518,7 +575,7 @@ TEST_F(SubscriberManagerTest, TestUnchangedSubscription)
 {
   set_up_irs_and_aor();
 
-  subscription_expect_calls();
+  subscription_expect_calls(false);
 
   Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
   _updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);

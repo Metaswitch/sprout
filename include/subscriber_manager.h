@@ -54,9 +54,11 @@ public:
 
   struct ClassifiedSubscription
   {
-    ClassifiedSubscription(std::string id,
+    ClassifiedSubscription(std::string aor_id,
+                           std::string id,
                            Subscription* subscription,
                            SubscriptionEvent event) :
+      _aor_id(aor_id),
       _id(id),
       _subscription(subscription),
       _subscription_event(event),
@@ -64,6 +66,7 @@ public:
       _reasons()
     {}
 
+    std::string _aor_id;
     std::string _id;
     Subscription* _subscription;
     SubscriptionEvent _subscription_event;
@@ -281,6 +284,12 @@ private:
                                          AoR* orig_aor,
                                          AoR* updated_aor,
                                          SAS::TrailId trail);
+
+  void log_bindings(const ClassifiedBindings& classified_bindings,
+                    int now);
+
+  void log_subscriptions(const ClassifiedSubscriptions& classified_subscriptions,
+                         int now);
 
   HTTPCode deregister_with_hss(const std::string& aor_id,
                                const std::string& dereg_reason,

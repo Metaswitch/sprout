@@ -624,19 +624,79 @@ void SubscriberManager::send_notifys_and_write_audit_logs(const std::string& aor
                          classified_subscriptions);
 
   // Write audit logs.
+  int now = time(NULL);
+  if (_analytics != NULL)
+  {
+    log_bindings(classified_bindings, now);
+    log_subscriptions(classified_subscriptions, now);
+  }
 
-  // Send NOTIFYs
+  // Send NOTIFYs. If the updated AoR is NULL e.g. if we have deleted a
+  // subscriber, the best we can do is use the CSeq on the original AoR and
+  // increment it by 1. TODO Check with EM.
   _notify_sender->send_notifys(aor_id,
                                EventTrigger::USER,
                                classified_bindings,
                                classified_subscriptions,
                                (updated_aor != NULL) ? updated_aor->_associated_uris : orig_aor->_associated_uris,
                                (updated_aor != NULL) ? updated_aor->_notify_cseq : orig_aor->_notify_cseq + 1,
-                               time(NULL),
+                               now,
                                trail);
 
   delete_bindings(classified_bindings);
   delete_subscriptions(classified_subscriptions);
+}
+
+void SubscriberManager::log_bindings(const ClassifiedBindings& classified_bindings,
+                                     int now)
+{
+  for (ClassifiedBinding* cb : classified_bindings)
+  {
+    if (cb->_contact_event == NotifyUtils::ContactEvent::CREATED ||
+        cb->_contact_event == NotifyUtils::ContactEvent::REFRESHED ||
+        cb->_contact_event == NotifyUtils::ContactEvent::SHORTENED)
+
+    {
+      _analytics->registration(cb->_b->_address_of_record,
+                               cb->_id,
+                               cb->_b->_uri,
+                               cb->_b->_expires - now);
+    }
+    else if ((cb->_contact_event == NotifyUtils::ContactEvent::EXPIRED)     ||
+             (cb->_contact_event == NotifyUtils::ContactEvent::DEACTIVATED) ||
+             (cb->_contact_event == NotifyUtils::ContactEvent::UNREGISTERED))
+    {
+      _analytics->registration(cb->_b->_address_of_record,
+                               cb->_id,
+                               cb->_b->_uri,
+                               0);
+    }
+  }
+}
+
+void SubscriberManager::log_subscriptions(const ClassifiedSubscriptions& classified_subscriptions,
+                                          int now)
+{
+  for (ClassifiedSubscription* cs : classified_subscriptions)
+  {
+    if (cs->_subscription_event == SubscriptionEvent::CREATED ||
+        cs->_subscription_event == SubscriptionEvent::REFRESHED ||
+        cs->_subscription_event == SubscriptionEvent::SHORTENED)
+    {
+      _analytics->subscription(cs->_aor_id,
+                               cs->_id,
+                               cs->_subscription->_req_uri,
+                               cs->_subscription->_expires - now);
+    }
+    else if(cs->_subscription_event == SubscriptionEvent::EXPIRED ||
+            cs->_subscription_event == SubscriptionEvent::TERMINATED)
+    {
+      _analytics->subscription(cs->_aor_id,
+                               cs->_id,
+                               cs->_subscription->_req_uri,
+                               0);
+    }
+  }
 }
 
 HTTPCode SubscriberManager::deregister_with_hss(const std::string& aor_id,
@@ -832,7 +892,8 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
                 subscription->_req_uri.c_str());
 
       ClassifiedSubscription* classified_subscription =
-        new ClassifiedSubscription(subscription_id,
+        new ClassifiedSubscription(aor_id,
+                                   subscription_id,
                                    subscription,
                                    SubscriptionEvent::EXPIRED);
 
@@ -856,7 +917,8 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
       reasons += "Subscription terminated - ";
 
       ClassifiedSubscription* classified_subscription =
-        new ClassifiedSubscription(subscription_id,
+        new ClassifiedSubscription(aor_id,
+                                   subscription_id,
                                    subscription,
                                    SubscriptionEvent::TERMINATED);
 
@@ -916,7 +978,8 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
     }
 
     ClassifiedSubscription* classified_subscription =
-      new ClassifiedSubscription(subscription_id,
+      new ClassifiedSubscription(aor_id,
+                                 subscription_id,
                                  subscription,
                                  event);
     classified_subscription->_notify_required = notify_required;
