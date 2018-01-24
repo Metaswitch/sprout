@@ -471,8 +471,10 @@ pj_status_t NotifyUtils::create_notify(
     {
       pjsip_route_hdr* route_hdr;
       route_hdr = pjsip_route_hdr_create((*tdata_notify)->pool);
+      // SDM-REFACTOR-TODO We should call pjsip_parse_hdr here like in the contact
+      // filtering class.
       route_hdr->name_addr.uri = PJUtils::uri_from_string(*i,
-                                                         (*tdata_notify)->pool);
+                                                          (*tdata_notify)->pool);
       pj_list_push_back( &(*tdata_notify)->msg->hdr, route_hdr);
     }
 

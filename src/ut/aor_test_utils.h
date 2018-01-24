@@ -14,17 +14,21 @@
 
 namespace AoRTestUtils
 {
+  static const std::string CONTACT_URI = "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>";
+  static const std::string BINDING_ID = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
+  static const std::string SUBSCRIPTION_ID = "1234";
+
   inline Binding*
     build_binding(std::string aor_id,
                   int now,
-                  std::string uri = "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>")
+                  std::string uri = CONTACT_URI)
   {
     Binding* b = new Binding(aor_id);
 
     b->_uri = uri;
     b->_cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
     b->_cseq = 17038;
-    b->_expires = now + 5;
+    b->_expires = now + 300;
     b->_priority = 0;
     b->_path_headers.push_back("<sip:abcdefgh@bono1.homedomain;lr>");
     b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
@@ -42,13 +46,14 @@ namespace AoRTestUtils
   {
     Subscription* s = new Subscription;
 
-    s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+    s->_req_uri = std::string(CONTACT_URI);
     s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
     s->_from_tag = std::string("4321");
     s->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
     s->_to_tag = to_tag;
     s->_cid = std::string("xyzabc@192.91.191.29");
-    s->_route_uris.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
+    // SDM-REFACTOR-TODO want to change the route URI to a full header not just the URI part.
+    s->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
     s->_expires = now + 300;
 
     return s;
@@ -60,17 +65,16 @@ namespace AoRTestUtils
     AoR* aor = new AoR(aor_id);
     int now = time(NULL);
 
-    std::string binding_id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
     Binding* b = build_binding(aor_id, now);
-    aor->_bindings.insert(std::make_pair(binding_id, b));
+    aor->_bindings.insert(std::make_pair(BINDING_ID, b));
 
     if (include_subscription)
     {
-      std::string to_tag = "1234";
-      Subscription* s = build_subscription(to_tag, now);
-      aor->_subscriptions.insert(std::make_pair(to_tag, s));
+      Subscription* s = build_subscription(SUBSCRIPTION_ID, now);
+      aor->_subscriptions.insert(std::make_pair(SUBSCRIPTION_ID, s));
     }
     aor->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+    aor->_associated_uris.add_uri(aor_id, false);
 
     return aor;
   }
