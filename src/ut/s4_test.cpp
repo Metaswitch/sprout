@@ -509,7 +509,7 @@ TEST_F(BasicS4Test, DeleteSubscriberStoreErrorOnDeleteOnRemoteSite)
 // This test covers adding a subscriber successfully to each site
 TEST_F(BasicS4Test, AddSubscriber)
 {
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", false);
+  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true, false);
   std::string expect_str = _serializer_deserializer.serialize_aor(aor);
 
   EXPECT_CALL(*_mock_store, set_data(_, "aor_id", expect_str, 0, _, _, An<Store::Format>()))
@@ -530,7 +530,7 @@ TEST_F(BasicS4Test, AddSubscriberStoreErrorOnLocalSite)
   set_chronos_post_expectations();
   set_data_expect_call(Store::Status::ERROR, 1);
 
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", false);
+  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true, false);
   HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
 
   EXPECT_EQ(rc, 500);
@@ -545,7 +545,7 @@ TEST_F(BasicS4Test, AddSubscriberContentionOnLocalSite)
   set_chronos_post_expectations();
   set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", false);
+  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true, false);
   HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
 
   EXPECT_EQ(rc, 412);
@@ -558,7 +558,7 @@ TEST_F(BasicS4Test, AddSubscriberContentionOnLocalSite)
 // remote stores are called in the right order.
 TEST_F(BasicS4Test, AddSubscriberThatAlreadyExistsOnRemoteSite)
 {
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", false);
+  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true, false);
   std::string expect_str = _serializer_deserializer.serialize_aor(aor);
 
   // Set up the expectations. The local store should be called once where we
@@ -605,7 +605,7 @@ TEST_F(BasicS4Test, AddSubscriberStoreErrorOnRemoteSite)
     set_data_expect_call(Store::Status::ERROR, 1);
   }
 
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", false);
+  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true, false);
   HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
 
   EXPECT_EQ(rc, 200);
@@ -618,7 +618,7 @@ TEST_F(BasicS4Test, UpdateSubscriber)
 {
   PatchObject* po = AoRTestUtils::create_simple_patch("aor_id");
 
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true);
+  AoR* aor = AoRTestUtils::create_simple_aor("aor_id");
   std::string current_str = _serializer_deserializer.serialize_aor(aor);
 
   // The patch above acts to increment the CSeq, and change the expiry of the
@@ -945,7 +945,7 @@ TEST_F(BasicS4Test, CheckExpiryTimeOnWrite)
     .WillRepeatedly(Return(Store::Status::OK));
   set_chronos_post_expectations();
 
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", false);
+  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true, false);
   HTTPCode rc = this->_s4->handle_put("aor_id", *aor, 0);
 
   EXPECT_EQ(rc, 200);
@@ -1018,7 +1018,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
                     Return(HTTP_OK)));
   set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", false);
+  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true, false);
   HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
 
   EXPECT_EQ(rc, 412);

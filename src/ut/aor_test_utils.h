@@ -62,8 +62,9 @@ namespace AoRTestUtils
     return s;
   }
 
-  inline AoR* build_aor(std::string aor_id,
-                        bool include_subscription = true)
+  inline AoR* create_simple_aor(std::string aor_id,
+                                bool include_subscription = true,
+                                bool set_timer_id = true)
   {
     AoR* aor = new AoR(aor_id);
     int now = time(NULL);
@@ -76,23 +77,6 @@ namespace AoRTestUtils
       Subscription* s = build_subscription(SUBSCRIPTION_ID, now);
       aor->_subscriptions.insert(std::make_pair(SUBSCRIPTION_ID, s));
     }
-    aor->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
-    aor->_associated_uris.add_uri(aor_id, false);
-
-    return aor;
-  }
-
-  inline AoR* create_simple_aor(std::string aor_id,
-                                bool set_timer_id = true)
-  {
-    AoR* aor = new AoR(aor_id);
-    int now = time(NULL);
-
-    Binding* b = build_binding(aor_id, now);
-    aor->_bindings.insert(std::make_pair(BINDING_ID, b));
-
-    Subscription* s = build_subscription(SUBSCRIPTION_ID, now);
-    aor->_subscriptions.insert(std::make_pair(SUBSCRIPTION_ID, s));
 
     aor->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
     aor->_associated_uris.add_uri(aor_id, false);
