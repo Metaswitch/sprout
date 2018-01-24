@@ -99,6 +99,20 @@ public:
     return tdata->msg->line.status.code;
   }
 
+  // Helper function for testing the load monitor expectations on various
+  // types of requests
+  void test_load_monitor_checks_on_requests(TestingCommon::Message& msg,
+                                            bool expect_always_accepted)
+  {
+    EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
+    EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+    EXPECT_CALL(load_monitor, admit_request(_, expect_always_accepted)).WillOnce(Return(true));
+    EXPECT_CALL(load_monitor, request_complete(_, _));
+
+    inject_msg_thread(msg.get_request());
+    process_queue_element();
+  }
+
   static void TearDownTestCase()
   {
     SipTest::TearDownTestCase();
@@ -124,13 +138,7 @@ TEST_F(ThreadDispatcherTest, StandardInviteTest)
   TestingCommon::Message msg;
   msg._method = "INVITE";
 
-  EXPECT_CALL(load_monitor, admit_request(_, _)).WillOnce(Return(true));
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
-
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+  test_load_monitor_checks_on_requests(msg, false);
 }
 
 TEST_F(ThreadDispatcherTest, SlowInviteTest)
@@ -190,13 +198,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectOptionsTest)
   TestingCommon::Message msg;
   msg._method = "OPTIONS";
 
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
-
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+  test_load_monitor_checks_on_requests(msg, true);
 }
 
 // On recieving an ACK message, the thread dispatcher should not call into
@@ -206,13 +208,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectAckTest)
   TestingCommon::Message msg;
   msg._method = "ACK";
 
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
-
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+  test_load_monitor_checks_on_requests(msg, true);
 }
 
 // On recieving a SUBSCRIBE message, the thread dispatcher should not call into
@@ -222,13 +218,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectSubscribeTest)
   TestingCommon::Message msg;
   msg._method = "SUBSCRIBE";
 
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
-
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+  test_load_monitor_checks_on_requests(msg, true);
 }
 
 // On recieving a prioritized INVITE message, the thread dispatcher should not
@@ -240,14 +230,9 @@ TEST_F(ThreadDispatcherTest, NeverRejectPrioritizedInviteTest)
   msg._method = "INVITE";
   msg._extra = "Resource-Priority: wps.0";
 
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
   EXPECT_CALL(rph_service, lookup_priority("wps.0", _)).WillOnce(Return(SIPEventPriorityLevel::HIGH_PRIORITY_11));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
 
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+  test_load_monitor_checks_on_requests(msg, true);
 }
 
 // On recieving a SIP response, the thread dispatcher should not call into the
@@ -275,13 +260,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectInDialogTest)
   msg._method = "UPDATE";
   msg._in_dialog = true;
 
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
-
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+  test_load_monitor_checks_on_requests(msg, true);
 }
 
 // On receiving a request that contains an ODI token in the top route header,
@@ -293,13 +272,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectASRequestTest)
   msg._method = "INVITE";
   msg._route = "Route: <sip:odi_i5u09fdngj45@10.225.20.254;service=scscf>";
 
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
-
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+  test_load_monitor_checks_on_requests(msg, true);
 }
 
 // On recieving a registration, the thread dispatcher should not call into the
@@ -309,13 +282,7 @@ TEST_F(ThreadDispatcherTest, NeverRejectRegisterTest)
   TestingCommon::Message msg;
   msg._method = "REGISTER";
 
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
-
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+  test_load_monitor_checks_on_requests(msg, true);
 }
 
 // On recieving a message with urn:service:sos in the request URI, the thread
@@ -327,13 +294,88 @@ TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosTest)
   msg._method = "MESSAGE";
   msg._requri = "urn:service:sos";
 
-  EXPECT_CALL(*mod_mock, on_rx_request(_)).WillOnce(Return(PJ_TRUE));
-  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
-  EXPECT_CALL(load_monitor, admit_request(_, true)).WillOnce(Return(true));
-  EXPECT_CALL(load_monitor, request_complete(_, _));
+  test_load_monitor_checks_on_requests(msg, true);
+}
 
-  inject_msg_thread(msg.get_request());
-  process_queue_element();
+// On recieving a message with urn:service:sos in the request URI, the thread
+// dispatcher should not call into the load monitor - it should process the
+// request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosTestCaseInsensitive)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "uRn:Service:soS";
+
+  test_load_monitor_checks_on_requests(msg, true);
+}
+
+// On recieving a message with urn:services:sos in the request URI, the thread
+// dispatcher should not call into the load monitor - it should process the
+// request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectUrnServicesSosTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:services:sos";
+
+  test_load_monitor_checks_on_requests(msg, true);
+}
+
+// On recieving a message with urn:service:sos.fire in the request URI, the thread
+// dispatcher should not call into the load monitor - it should process the
+// request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosFireTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:service:sos.fire";
+
+  test_load_monitor_checks_on_requests(msg, true);
+}
+
+// On recieving a message with urn:service:sos.fire in the request URI, the thread
+// dispatcher should not call into the load monitor - it should process the
+// request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectUrnServicesSosFireTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:services:sos.fire";
+
+  test_load_monitor_checks_on_requests(msg, true);
+}
+
+// On recieving a message with sip:service:sos in the request URI, the thread
+// dispatcher treat this message the same as any other non-priotised message.
+TEST_F(ThreadDispatcherTest, NonUrnServicesSosTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "sip:service";
+
+  test_load_monitor_checks_on_requests(msg, false);
+}
+
+// On recieving a message with urn:service:sas in the request URI, the thread
+// dispatcher treat this message the same as any other non-priotised message.
+TEST_F(ThreadDispatcherTest, UrnNonServiceSosTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:service:notsos";
+
+  test_load_monitor_checks_on_requests(msg, false);
+}
+
+// On recieving a message with urn:services:sas in the request URI, the thread
+// dispatcher treat this message the same as any other non-priotised message.
+TEST_F(ThreadDispatcherTest, UrnNonServicesSosTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:services:notsos";
+
+  test_load_monitor_checks_on_requests(msg, false);
 }
 
 // Queued callbacks should be run then destroyed.
