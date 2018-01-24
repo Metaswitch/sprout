@@ -402,6 +402,7 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
                              associated_uris,
                              updated_aor,
                              trail);
+
   if (rc != HTTP_OK)
   {
     delete orig_aor; orig_aor = NULL;

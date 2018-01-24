@@ -661,10 +661,10 @@ static bool expire_bindings(SubscriberDataManager *sdm,
     }
 
     aor_pair->get_current()->_associated_uris = *associated_uris;
-    set_rc = sdm->set_aor_data(aor, 
+    set_rc = sdm->set_aor_data(aor,
                                event_trigger,
-                               aor_pair, 
-                               trail, 
+                               aor_pair,
+                               trail,
                                all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
@@ -867,7 +867,7 @@ bool RegistrationUtils::get_aor_data(AoRPair** aor_pair,
 
     if (found_binding)
     {
-      (*aor_pair)->get_current()->copy_aor(backup_aor_pair->get_current());
+      (*aor_pair)->get_current()->copy_aor(*(backup_aor_pair->get_current()));
     }
 
     if (backup_aor_pair_alloced)
