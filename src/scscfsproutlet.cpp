@@ -1325,6 +1325,14 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
     {
       uri = PJUtils::term_served_user(msg);
     }
+    else
+    {
+      std::string reason = "Session case is terminating, but the request contains an overriding route header.";
+      TRC_DEBUG(reason.c_str());
+      SAS::Event event(trail(), SASEvent::NO_SERVED_USER, 0);
+      event.add_var_param(reason);
+      SAS::report_event(event);   
+    }
   }
 
   if (uri != NULL)
@@ -1343,7 +1351,11 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
     }
     else
     {
-      TRC_DEBUG("URI is not locally hosted");
+      std::string reason = "URI is not locally hosted.";
+      TRC_DEBUG(reason.c_str());
+      SAS::Event event(trail(), SASEvent::NO_SERVED_USER, 0);
+      event.add_var_param(reason);
+      SAS::report_event(event);
     }
   }
 
