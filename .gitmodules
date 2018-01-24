@@ -52,15 +52,6 @@
 [submodule "modules/gemini"]
 	path = modules/gemini
 	url = git@github.com:Metaswitch/gemini.git
-[submodule "modules/thrift"]
-	path = modules/thrift
-	url = git@github.com:Metaswitch/thrift.git
-[submodule "modules/cassandra"]
-	path = modules/cassandra
-	url = https://github.com/apache/cassandra.git
-[submodule "modules/memento-as"]
-	path = modules/memento-as
-	url = git@github.com:Metaswitch/memento-as.git
 [submodule "clearwater-etcd-plugins"]
 	path = modules/clearwater-etcd-plugins
 	url = git@github.com:Metaswitch/clearwater-etcd-plugins.git

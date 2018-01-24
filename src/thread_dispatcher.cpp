@@ -560,7 +560,7 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 {
-  TRC_DEBUG("Recieved message %p on worker thread", rdata);
+  TRC_DEBUG("Received message %p", rdata);
   SAS::TrailId trail = get_trail(rdata);
 
   // SAS log the start of processing by this module
@@ -577,7 +577,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
     return PJ_TRUE;
   }
 
-  TRC_DEBUG("Admitted request %p on worker thread", rdata);
+  TRC_DEBUG("Admitted request %p", rdata);
 
   // Check that the worker threads are not all deadlocked.
   if (sip_event_queue.is_deadlocked())
