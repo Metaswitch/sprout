@@ -227,7 +227,7 @@ SproutletProxy::SproutletMatch
 
     if ((port == 0) &&
         (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-        (is_alias_match(host_alias_type(&((pjsip_sip_uri*)uri)->host))))
+        (is_alias_match(get_host_locality(&((pjsip_sip_uri*)uri)->host))))
     {
       // No port was specified by the caller, and the URI is local, so use the URI port instead.
       port = uri->port;
@@ -257,7 +257,7 @@ SproutletProxy::SproutletMatch
     else if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
       // If there is a route header, check if it is local.
-      match = host_alias_type(&((pjsip_sip_uri*)route->name_addr.uri)->host);
+      match = get_host_locality(&((pjsip_sip_uri*)route->name_addr.uri)->host);
     }
     else
     {
@@ -322,7 +322,7 @@ SproutletProxy::SproutletMatch
     TRC_DEBUG("Found services param - %.*s",
               services_param->value.slen,
               services_param->value.ptr);
-    AliasMatchType match = host_alias_type(&sip_uri->host);
+    AliasMatchType match = get_host_locality(&sip_uri->host);
     if (is_alias_match(match))
     {
       // Check if this service matches a sproutlet.
@@ -363,7 +363,7 @@ SproutletProxy::SproutletMatch
                 hostname.slen,
                 hostname.ptr);
 
-      AliasMatchType match = host_alias_type(&hostname);
+      AliasMatchType match = get_host_locality(&hostname);
       if (is_alias_match(match))
       {
         // Check if the part of the hostname before the first '.' matches
@@ -387,7 +387,7 @@ SproutletProxy::SproutletMatch
   {
     TRC_DEBUG("Found user part - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
 
-    AliasMatchType match = host_alias_type(&sip_uri->host);
+    AliasMatchType match = get_host_locality(&sip_uri->host);
     if (is_alias_match(match))
     {
       // Check if the user part matches a sproutlet.
@@ -481,19 +481,14 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   return uri;
 }
 
-bool SproutletProxy::is_uri_local(const pjsip_uri* uri, bool allow_remote_aliases)
+SproutletProxy::AliasMatchType SproutletProxy::get_uri_locality(const pjsip_uri* uri)
 {
+  AliasMatchType best_match = AliasMatchType::NO_MATCH;
+
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     pj_str_t hostname = ((pjsip_sip_uri*)uri)->host;
-    AliasMatchType match = host_alias_type(&hostname);
-    // LCOV_EXCL_START
-    if (match == AliasMatchType::LOCAL ||
-        (match == AliasMatchType::REMOTE && allow_remote_aliases))
-    {
-      return true;
-    }
-    // LCOV_EXCL_STOP
+    best_match = get_host_locality(&hostname);
 
     // Maybe this is service.<domain> for a local domain.  Check now.
     char* sep = pj_strchr(&hostname, '.');
@@ -502,14 +497,23 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri, bool allow_remote_aliase
       hostname.slen -= sep - hostname.ptr + 1;
       hostname.ptr = sep + 1;
 
-      AliasMatchType match = host_alias_type(&hostname);
-      return (match == AliasMatchType::LOCAL ||
-              (match == AliasMatchType::REMOTE && allow_remote_aliases));
+      AliasMatchType service_match = get_host_locality(&hostname);
+
+      // Set best_match to the 'maximum' of best_match and service_match, 
+      // considering NO_MATCH < REMOTE < LOCAL
+      if (service_match == AliasMatchType::LOCAL)
+      {
+        best_match = AliasMatchType::LOCAL;
+      }
+      else if (service_match == AliasMatchType::REMOTE &&
+               best_match == AliasMatchType::NO_MATCH)
+      {
+        best_match = AliasMatchType::REMOTE;
+      }
+
     }
   }
-  // LCOV_EXCL_START
-  return false;
-  // LCOV_EXCL_STOP
+  return best_match;
 }
 
 pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req,
@@ -579,7 +583,7 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
 // Requests for remote aliases of this node will be accepted off the wire, but
 // will be routed externally if recieved from an internal Sproutlet.
 SproutletProxy::AliasMatchType
-  SproutletProxy::host_alias_type(const pj_str_t* host) const
+  SproutletProxy::get_host_locality(const pj_str_t* host) const
 {
   if (!pj_stricmp(host, &_root_uri->host))
   {
@@ -1340,7 +1344,7 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
   {
     sproutlet = match.sproutlet;
   }
-  else if (match.match_type == AliasMatchType::REMOTE)
+  else if (match.match_type == AliasMatchType::REMOTE) // TJW2 AND we matched on network function?
   {
     if (allow_remote_aliases)
     {
@@ -1361,6 +1365,8 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
   // wants to handle the request or run out of sproutlets.
   while (sproutlet != NULL)
   {
+    // TJW2 Did we match on the network function? If so, and if remote aliases
+    // aren't allowed, we should return NULL
     // Found a local Sproutlet, so offer the sproutlet a chance to handle
     // the request.
     pjsip_sip_uri* next_hop = NULL;
@@ -1382,10 +1388,18 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
     pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req->msg,
                                                                   PJSIP_H_ROUTE,
                                                                   NULL);
-    if ((route != NULL) &&
-        (_sproutlet_proxy->is_uri_local(route->name_addr.uri, allow_remote_aliases)))
+    AliasMatchType uri_match_type = NO_MATCH;
+    if (route != NULL)
     {
-      TRC_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(route).c_str());
+      // If there is a route header, see if it applies to us.
+      uri_match_type = _sproutlet_proxy->get_uri_locality(route->name_addr.uri);
+    }
+
+    if (uri_match_type == AliasMatchType::LOCAL ||
+         (uri_match_type == AliasMatchType::REMOTE && allow_remote_aliases)) //LCOV_EXCL_LINE TJW2 TODO
+    {
+      TRC_DEBUG("Remove top Route header %s",
+                PJUtils::hdr_to_string(route).c_str());
       pj_list_erase(route);
     }
 
@@ -1973,7 +1987,10 @@ bool SproutletWrapper::is_uri_reflexive(const pjsip_uri* uri) const
 
 bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
 {
-  return _proxy->is_uri_local(uri, true);
+  // Sproutlets should not distinguish between LOCAL and REMOTE matches - once a
+  // message has been routed into a Sproutlet, we've already decided to accept
+    // it.
+  return (_proxy->get_uri_locality(uri) != SproutletProxy::AliasMatchType::NO_MATCH);
 }
 
 pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const

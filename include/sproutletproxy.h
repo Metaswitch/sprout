@@ -118,8 +118,6 @@ protected:
     {}
   };
 
-  typedef std::pair<SproutletTsx*, AliasMatchType> SproutletTsxMatch;
-
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
@@ -160,12 +158,12 @@ protected:
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
   // TJW2 TODO signature?
-  bool is_uri_local(const pjsip_uri* uri, bool allow_remote_aliases);
+  AliasMatchType get_uri_locality(const pjsip_uri* uri);
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
-  AliasMatchType host_alias_type(const pj_str_t* host) const;
+  AliasMatchType get_host_locality(const pj_str_t* host) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,
                         const Sproutlet* sproutlet) const;
