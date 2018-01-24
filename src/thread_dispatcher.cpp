@@ -49,7 +49,7 @@ extern "C" {
 #include "snmp_event_accumulator_by_scope_table.h"
 #include "thread_dispatcher.h"
 
-static const boost::regex EMERGENCY_SERVICES_URI = boost::regex("service.*:sos.*");
+static const boost::regex EMERGENCY_SERVICES_URI = boost::regex("service.*:sos.*", boost::regex::icase);
 
 static std::vector<pj_thread_t*> worker_threads;
 

@@ -297,6 +297,18 @@ TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosTest)
   test_load_monitor_checks_on_requests(msg, true);
 }
 
+// On recieving a message with urn:service:sos in the request URI, the thread
+// dispatcher should not call into the load monitor - it should process the
+// request regardless of load.
+TEST_F(ThreadDispatcherTest, NeverRejectUrnServiceSosTestCaseInsensitive)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "uRn:Service:soS";
+
+  test_load_monitor_checks_on_requests(msg, true);
+}
+
 // On recieving a message with urn:services:sos in the request URI, the thread
 // dispatcher should not call into the load monitor - it should process the
 // request regardless of load.
@@ -350,7 +362,7 @@ TEST_F(ThreadDispatcherTest, UrnNonServiceSosTest)
 {
   TestingCommon::Message msg;
   msg._method = "MESSAGE";
-  msg._requri = "urn:service:sas";
+  msg._requri = "urn:service:notsos";
 
   test_load_monitor_checks_on_requests(msg, false);
 }
@@ -361,7 +373,7 @@ TEST_F(ThreadDispatcherTest, UrnNonServicesSosTest)
 {
   TestingCommon::Message msg;
   msg._method = "MESSAGE";
-  msg._requri = "urn:services:sas";
+  msg._requri = "urn:services:notsos";
 
   test_load_monitor_checks_on_requests(msg, false);
 }
