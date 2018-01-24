@@ -1328,7 +1328,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
     else
     {
       TRC_DEBUG("Session case is terminating, but the request contains an overriding route header.");
-      SAS::Event event(trail(), SASEvent::NO_SERVED_USER_TERMINATING, 0);
+      SAS::Event event(trail(), SASEvent::NO_SERVED_USER_OVERRIDING_ROUTE, 0);
       SAS::report_event(event);   
     }
   }
