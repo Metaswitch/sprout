@@ -58,18 +58,26 @@ public:
   ChronosAoRTimeoutTask* handler;
 };
 
-// Mainline test
+// Mainline test where the request is successfully parsed and handler proceeds
+// to call SM. 
 TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
 {
   // Build request from Chronos
+  std::string aor_id = "sip:6505550231@homedomain";
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_POST);
 
   {
     InSequence s;
-      -      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      // Send back response as soon as the request is successfully parsed
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*sm, handle_timer_pop(_, _));
+  }
   handler->run();
 }
+
+
+/// The following tests deal with error cases in parsing the timer pop request.
 
 // Test that an invalid HTTP method fails with HTTP_BADMETHOD
 TEST_F(ChronosAoRTimeoutTasksTest, InvalidHTTPMethodTest)

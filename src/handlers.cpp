@@ -1,4 +1,4 @@
-
+/*
  * @file handlers.cpp
  *
  * Copyright (C) Metaswitch Networks 2017
