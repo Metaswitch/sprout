@@ -978,7 +978,7 @@ TEST_F(BasicS4Test, ClearUpEmptyAoR)
 
 
 /// The following tests check the Chronos sending timer when S4 writes to AoR.
-/*
+
 // This test sends POST successfully to Chronos when S4 creates a new AoR, and
 // checks all the argument for send_post.
 TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
@@ -1136,4 +1136,4 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberDeleteFail)
 
   EXPECT_EQ(rc, 204);
 }
-*/
+
