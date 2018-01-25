@@ -64,12 +64,13 @@ namespace AoRTestUtils
 
   inline AoR* create_simple_aor(std::string aor_id,
                                 bool include_subscription = true,
-                                bool set_timer_id = true)
+                                bool set_timer_id = true,
+                                int expiry = 300)
   {
     AoR* aor = new AoR(aor_id);
     int now = time(NULL);
 
-    Binding* b = build_binding(aor_id, now);
+    Binding* b = build_binding(aor_id, now, CONTACT_URI, expiry);
     aor->_bindings.insert(std::make_pair(BINDING_ID, b));
 
     if (include_subscription)
