@@ -113,6 +113,39 @@ public:
   /// Destructor.
   virtual ~SubscriberManager();
 
+  /// Registers a subscriber in SM to a given AoR Id.
+  ///
+  /// @param[in]  aor_id        The default public ID for this subscriber
+  /// @param[in]  server_name   The S-CSCF assigned to this subscriber
+  /// @param[in]  add_bindings  The bindings to add
+  /// @param[out] all_bindings  All bindings currently stored for this subscriber
+  /// @param[in]  trail         The SAS trail ID
+  virtual HTTPCode register_subscriber(const std::string& aor_id,
+                                       const std::string& server_name,
+                                       const Bindings& add_bindings,
+                                       Bindings& all_bindings,
+                                       SAS::TrailId trail) { return HTTP_OK; };
+
+  /// Reregisters a subscriber in SM to a given AoR Id. This operation can
+  /// result in a deregistration if it removes all bindings.
+  ///
+  /// @param[in]  aor_id        The default public ID for this subscriber
+  /// @param[in]  updated_bindings
+  ///                           The bindings to update
+  /// @param[in]  binding_ids_to_remove
+  ///                           The binding IDs to remove
+  /// @param[out] all_bindings  All bindings currently stored for this subscriber
+  /// @param[out] irs_info      The IRS information from the HSS. This is only
+  ///                           filled out if this operation ends up deregistering
+  ///                           the subscriber
+  /// @param[in]  trail         The SAS trail ID
+  virtual HTTPCode reregister_subscriber(const std::string& aor_id,
+                                         const Bindings& updated_bindings,
+                                         const std::vector<std::string>& binding_ids_to_remove,
+                                         Bindings& all_bindings,
+                                         HSSConnection::irs_info& irs_info,
+                                         SAS::TrailId trail) { return HTTP_OK; } ;
+
   /// Updates the bindings stored in SM for a given public ID.
   ///
   /// @param[in]  irs_query     The IRS query object to use to query the HSS
