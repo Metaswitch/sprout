@@ -31,19 +31,33 @@ class SproutletProxy : public BasicProxy, SproutletHelper
 public:
   static const int DEFAULT_MAX_SPROUTLET_DEPTH = 50;
 
-  /// Constructor.
   ///
-  /// @param  endpt               - The pjsip endpoint to associate with.
-  /// @param  priority            - The pjsip priority to load at.
-  /// @param  host_local_aliases  - Hostnames that should be considered local
-  ///                               for all Sproutlet routing.
-  /// @param  host_remote_aliases - Hostnames that should be considered local
-  ///                               for initial Sproutlet routing.
-  /// @param  sproutlets          - Sproutlets to load in this proxy.
-  /// @param  stateless_proxies   - A set of next-hops that are considered to be
-  ///                               stateless proxies.
-  /// @param  max_sproutlet_depth - The maximum number of Sproutlets that can be
-  ///                               invoked in a row before we break the loop.
+  /// @brief      Constructor
+  ///
+  /// @param[in]  endpt                        The pjsip endpoint to associate
+  ///                                          with.
+  /// @param[in]  priority                     The pjsip priority to load at.
+  /// @param[in]  root_uri                     The Sprout hostname.
+  /// @param[in]  host_local_aliases           Hostnames of local Sproutlets.
+  /// @param[in]  host_remote_aliases          Hostnames of Sproutlets in remote
+  ///                                          sites.
+  /// @param[in]  always_serve_remote_aliases  Whether requests meant for remote
+  ///                                          aliases should always be handled
+  ///                                          locally.
+  /// @param[in]  sproutlets                   Sproutlets to load in this proxy.
+  /// @param[in]  stateless_proxies            A set of next-hops that are
+  ///                                          considered to be stateless
+  ///                                          proxies.
+  /// @param[in]  route_to_remote_alias_tbl    SNMP table for counting the
+  ///                                          number of requests routed to
+  ///                                          remote aliases.
+  /// @param[in]  accept_for_remote_alias_tbl  SNMP table for counting the
+  ///                                          number of requests for remote
+  ///                                          aliases accepted locally.
+  /// @param[in]  max_sproutlet_depth          The maximum number of Sproutlets
+  ///                                          that can be invoked in a row
+  ///                                          before we break the loop.
+  ///
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
@@ -82,18 +96,35 @@ protected:
 
   // When a host is compared against the alias list, there are three different
   // match possibilities.
+
+  ///
+  /// @brief      When a host is compared against the alias list, there are
+  ///             three different match possiblities.
+  ///
+  /// NO_MATCH represents the case that the host does not match any entry on the
+  /// local or remote alias lists.
+  ///
+  /// REMOTE represents the case that the host matches against an entry on the
+  /// remote alias list.
+  ///
+  /// LOCAL represents the case that the host matches against an entry on the
+  /// local alias list.
+  ///
   enum AliasMatchLocality
   {
-    // The hostname matches neither any local alias nor any remote alias
     NO_MATCH,
-
-    // The hostname matches a remote alias, but not a local one
     REMOTE,
-
-    // The hostname matches a local alias
     LOCAL
   };
 
+  ///
+  /// @brief      Utility function that converts an AliasMatchLocality into a
+  ///             bool representing whether or not any match was obtained.
+  ///
+  /// @param[in]  match  The match locality
+  ///
+  /// @return     False if the match locality is NO_MATCH, and true otherwise.
+  ///
   static bool is_alias_match(AliasMatchLocality match)
   {
     switch (match)
@@ -108,17 +139,38 @@ protected:
     }
   }
 
+  ///
+  /// @brief      A pair of a Sproutlet (pointer) and a match locality.
+  ///
   struct SproutletMatch
   {
     Sproutlet* sproutlet;
     AliasMatchLocality match_locality;
     SproutletMatch(Sproutlet* sproutlet,
-                   AliasMatchLocality match_locality) : 
+                   AliasMatchLocality match_locality) :
       sproutlet(sproutlet),
       match_locality(match_locality)
     {}
   };
 
+  ///
+  /// @brief      Represents the four possible cases when attempting to obtain a
+  ///             SproutletTsx.
+  ///
+  /// NO_MATCH_AT_ALL represents the case that neither a local nor remote match
+  /// was found for the host.
+  ///
+  /// NO_MATCH_REJECTED_REMOTE_MATCH represents the case that a remote match was
+  /// found, but was rejected. This is because
+  ///   - always_serve_remote_aliases is set to false, and
+  ///   - the match was on the other side of a network function or originating/
+  ///     terminating S-CSCF boundary.
+  ///
+  /// MATCH_REMOTE represents the case that a remote match was found (and not
+  /// rejected).
+  ///
+  /// MATCH_LOCAL represents the case that a local match was found.
+  ///
   enum SproutletTsxMatchLocality
   {
     NO_MATCH_AT_ALL,
@@ -127,6 +179,9 @@ protected:
     MATCH_LOCAL,
   };
 
+  ///
+  /// @brief      A pair of a SproutletTsx (pointer) and a match locality.
+  ///
   struct SproutletTsxMatch
   {
     SproutletTsx* sproutlet_tsx;
@@ -144,15 +199,48 @@ protected:
   /// Registers a sproutlet.
   bool register_sproutlet(Sproutlet* sproutlet);
 
-  /// Gets the next target Sproutlet for the message by analysing the top
-  /// Route header.
+  ///
+  /// @brief      Utility method to find the appropriate Sproutlet to handle a
+  ///             request.
+  ///
+  /// We first attempt to match a Sproutlet using the request URI, then the
+  /// service name, and then the port. For port matching, the caller-supplied
+  /// port parameter is used if it is non-zero, and otherwise the port supplied
+  /// on the message is used (if it is provided).
+  ///
+  /// @param[in]  req    The request
+  /// @param[in]  port   The port on which the request was recieved
+  /// @param[out] alias  The alias of the returned Sproutlet against which the
+  ///                    request matched.
+  /// @param[in]  trail  The SAS trail ID
+  ///
+  /// @return     The matched Sproutlet or NULL if no Sproutlet was found, and
+  ///             the match locality, or NO_MATCH if no Sproutlet was found.
+  ///
   SproutletMatch target_sproutlet(pjsip_msg* req,
                               int port,
                               std::string& alias,
                               SAS::TrailId trail);
 
-  /// Return the sproutlet that matches the URI supplied, along with the type of
-  /// match.
+  ///
+  /// @brief      Return the Sproutlet that matches the URI supplied along with
+  ///             the locality of the match.
+  ///
+  /// We first attempt to match a Sproutlet using the service parameter, then
+  /// the domain, then the user part of the URI.
+  ///
+  /// @param[in]  uri             The uri against which to match.
+  /// @param[out] alias           The alias of the returned Sproutlet against
+  ///                             which the uri matched.
+  /// @param[out] local_hostname  The hostname of the matched Sproutlet.
+  /// @param      selection_type  Which of the above methods was used to obtain
+  ///                             the matching Sproutlet, that is, whether it
+  ///                             matched on service name, the domain, or the
+  ///                             user part.
+  ///
+  /// @return     The matched Sproutlet or NULL if no Sproutlet was found, and
+  ///             the match locality, or NO_MATCH if no Sproutlet was found.
+  ///
   SproutletMatch match_sproutlet_from_uri(
     const pjsip_uri* uri,
     std::string& alias,
@@ -177,11 +265,40 @@ protected:
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
+  ///
+  /// @brief      Compares the given URI to the alias lists, and returns the
+  ///             match locality.
+  ///
+  /// Determines if the URI matches any alias, and if so, whether it is a local
+  /// alias or a remote one.
+  ///
+  /// @param[in]  uri   The uri
+  ///
+  /// @return     The match locality, either LOCAL, indicating the hostname
+  ///             matched a local alias, REMOTE, indicating a remote match, or
+  ///             NO_MATCH, indicating that the hostname matched neither local nor
+  ///             remote aliases.
+  ///
   AliasMatchLocality get_uri_locality(const pjsip_uri* uri);
+
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
+  ///
+  /// @brief      Compares the given hostname to the alias lists and returns the
+  ///             match locality.
+  ///
+  /// Determines if the hostname matches any alias, and if so, whether it is a
+  /// local alias or a remote one.
+  ///
+  /// @param[in]  host  The hostname to use.
+  ///
+  /// @return     The match locality, either LOCAL, indicating the hostname
+  ///             matched a local alias, REMOTE, indicating a remote match, or
+  ///             NO_MATCH, indicating that the hostname matched neither local nor
+  ///             remote aliases.
+  ///
   AliasMatchLocality get_host_locality(const pj_str_t* host) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,
@@ -199,6 +316,11 @@ protected:
   bool cancel_timer(pj_timer_entry* tentry);
   bool timer_running(pj_timer_entry* tentry);
 
+  ///
+  /// @brief      Represents the server side of a single SIP transaction.
+  ///             Initialized on receipt of a SIP request, and persists for the
+  ///             duration of the transaction.
+  ///
   class UASTsx : public BasicProxy::UASTsx
   {
   public:
@@ -208,7 +330,16 @@ protected:
     /// Destructor.
     virtual ~UASTsx();
 
-    /// Initializes the UAS transaction.
+    ///
+    /// @brief      Initializes the UAS transaction.
+    ///
+    /// Called at the start of a SIP (server) transaction to initialize a
+    /// transaction object from the request data.
+    ///
+    /// @param[in]  rdata  The request data.
+    ///
+    /// @return     The status of the initialization.
+    ///
     virtual pj_status_t init(pjsip_rx_data* rdata);
 
     /// Handle the incoming half of a transaction request.
@@ -256,6 +387,16 @@ protected:
                     int fork_id,
                     SendRequest req);
 
+    ///
+    /// @brief      Takes requests from the pending request queue and processes
+    ///             them.
+    ///
+    /// The request is rejected if Max-Forwards has reached zero, or has been
+    /// through more than the maximum specified number of Sproutlets. Otherwise,
+    /// we attempt to select a Sproutlet and create a SproutletTsx. If this
+    /// succeeds, the request is passed to that Sproutlet, and if not, the
+    /// request is proxied on.
+    ///
     void schedule_requests();
 
     void process_timer_pop(pj_timer_entry* tentry);
@@ -275,17 +416,74 @@ protected:
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
 
-    /// TJW2 TODO: Comment
+    ///
+    /// @brief      Utility function to determine if a matched Sproutlet should
+    ///             be accepted or rejected, based on its locality.
+    ///
+    /// If the match is null, that is, no Sproutlet was matched, the function
+    /// always returns false. The tsx_match_locality parameter is set to
+    /// NO_MATCH_AT_ALL.
+    ///
+    /// If the match is local, the function always returns true, and the
+    /// tsx_match_locality_parameter is set to MATCH_LOCAL.
+    ///
+    /// If the match is remote, the function has the following behaviour.
+    ///   - If the always_serve_remote_aliases flag is set, or if the matched
+    ///     Sproutlet does not lie across a network function or originating/
+    ///     terminating S-CSCF boundary, the function returns true. We also
+    ///     produce a SAS log. The tsx_match_locality parameter is set to
+    ///     MATCH_REMOTE.
+    ///   - Otherwise, the function returns false, and a different SAS log is
+    ///     produced. The tsx_match_locality_parameter is set to
+    ///     NO_MATCH_REMOTE_MATCH_REJECTED.
+    ///
+    /// @param[in]  match                        The match.
+    /// @param[in]  always_serve_remote_aliases  Whether or not remote alias
+    ///                                          matches should always be
+    ///                                          accepted.
+    /// @param[in]  alias                        The alias of match.sproutlet
+    ///                                          used to obtain the match.
+    /// @param[out] tsx_match_locality           The locality of the tsx match.
+    ///
+    /// @return     True if the match should be rejected, and false otherwise.
+    ///
     bool accept_sproutlet_match(SproutletMatch match,
                                 bool always_serve_remote_aliases,
                                 std::string& alias,
                                 SproutletTsxMatchLocality& tsx_match_locality);
 
-    /// Finds a SproutletTsx willing to handle a request
+    ///
+    /// @brief      Finds a SproutletTsx willing to handle a request.
+    ///
+    /// Initially attempts to match the request against a Sproutlet. If a
+    /// Sproutlet is found, we determine whether or not the Sproutlet is
+    /// interested in handling the request. If it is, the request is passed to
+    /// that sproutlet. If not, we attempt to find another Sproutlet - first by
+    /// examining any further route headers on the request, and then using the
+    /// next hop URI that may be supplied by the previous Sproutlet.
+    ///
+    /// The function provides context for the returned SproutletTsx in the form
+    /// of its locality, which is used by the clients for updating statistics.
+    ///
+    /// @param[in]  req                          The request
+    /// @param[in]  port                         The port on which the request
+    ///                                          was recieved. Used to attempt
+    ///                                          port matching. This can be
+    ///                                          disabled by passing zero.
+    /// @param[out] alias                        The alias of the Sproutlet that
+    ///                                          matched the request.
+    /// @param[in]  always_serve_remote_aliases  Whether or not to handle
+    ///                                          requests for remote aliases
+    ///                                          locally in all cases.
+    ///
+    /// @return     The matched SproutletTsx, or NULL, and the match locality.
+    ///             See accept_sproutlet_match for details on tsx match
+    ///             localities.
+    ///
     SproutletTsxMatch get_sproutlet_tsx(pjsip_tx_data* req,
                                         int port,
                                         std::string& alias,
-                                        bool allow_remote_aliases);
+                                        bool always_serve_remote_aliases);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;

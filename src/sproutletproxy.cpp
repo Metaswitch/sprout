@@ -566,25 +566,6 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
   return local_hostname;
 }
 
-// TJW2 TODO: Update comments
-// Checks if the given host is an alias of this node. Returns a true/false
-// value, along with a match type - NO_MATCH, MATCH, or REMOTE_MATCH_REJECTED,
-// returned in the case that remote aliases are not allowed but the host matches
-// one.
-//
-// The allow_remote_aliases flag determines whether the method will return true
-// on hosts that are 'remote' but not 'local' aliases.
-//
-// 'local aliases' are hostnames which correspond to services provided by this
-// node. For example, if this node is in site 1, scscf.site-1.homedomain.com is
-// a local alias.
-// Requests for local aliases of this node will be treated as local throughout.
-//
-// 'remote aliases' are hostnames which correspond to services provided by
-// remote nodes for which this node can accept traffic. For example, if this
-// node is in site 1, scscf.site-2.homedomain.com may be a remote alias.
-// Requests for remote aliases of this node will be accepted off the wire, but
-// will be routed externally if recieved from an internal Sproutlet.
 SproutletProxy::AliasMatchLocality
   SproutletProxy::get_host_locality(const pj_str_t* host) const
 {
@@ -746,11 +727,10 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     pjsip_route_hdr* route = (pjsip_route_hdr*)
                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
 
-    // TJW2 TODO: Update comment
-    // For the purpose of redundancy, we allow remote aliases here, that is,
-    // accept requests intended for a remote alias of this site off the wire.
-    // This means that this node can handle traffic destined for a remote site
-    // in the case that the remote site has failed.
+    // Requests for remote aliases are always accepted off the wire, regardless 
+    // of the value of always_serve_remote_aliases. In the case that the remote
+    // host is down, we should handle requests to maintain service - in order to
+    // do so, we need to be able to accept requests for remote aliases here.
     SproutletTsxMatch sproutlet_tsx_match =
       get_sproutlet_tsx(_req,
                         rdata->tp_info.transport->local_name.port,
@@ -773,6 +753,8 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     else
     {
 
+    // If we've accepted a request on behalf of a remote alias, we increment the
+    // relevant statistic.
     if (sproutlet_tsx_match.match_locality ==
           SproutletTsxMatchLocality::MATCH_REMOTE &&
         _sproutlet_proxy->_accept_for_remote_alias_tbl)
@@ -1039,10 +1021,6 @@ void SproutletProxy::UASTsx::schedule_requests()
     {
       std::string alias;
 
-      // TJW2 TODO: Update comment
-      // Do not allow remote aliases. Requests intended for another site should
-      // be routed to that site - this means that the terminating side of a call
-      // will be handled in the site that subscriber is registered.
       SproutletTsxMatch sproutlet_tsx_match =
         get_sproutlet_tsx(req.req,
                           0,
@@ -1099,6 +1077,8 @@ void SproutletProxy::UASTsx::schedule_requests()
         TRC_DEBUG("No local sproutlet matches request");
         size_t index;
 
+        // In the case that we've rejected a remote alias match, we increment
+        // the relevant statistic.
         if (sproutlet_tsx_match.match_locality ==
               SproutletTsxMatchLocality::NO_MATCH_REJECTED_REMOTE_MATCH &&
             _sproutlet_proxy->_route_to_remote_alias_tbl)
