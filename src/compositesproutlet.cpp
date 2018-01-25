@@ -1,5 +1,5 @@
 /**
- * @file compositesproutlet.h
+ * @file compositesproutlet.cpp
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
