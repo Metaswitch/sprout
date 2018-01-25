@@ -1319,6 +1319,7 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
 {
   if (match.match_locality == AliasMatchLocality::LOCAL)
   {
+    // Local matches are always accepted.
     SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_ACCEPT, 0);
     event.add_var_param(match.sproutlet->service_name());
     event.add_var_param(alias);
@@ -1329,8 +1330,17 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
   }
   else if (match.match_locality == AliasMatchLocality::REMOTE)
   {
+    // If the match is remote, we need to determine whether it lies on the other
+    // side of a network function or originating/terminating S-CSCF boundary.
+    // If the Sproutlet was matched on its network function, we are attempting
+    // to route the message to a _network function_, that is, across such a
+    // boundary. If it is matched on another alias, we are attempting to route
+    // to a specific Sproutlet, in which case we are not crossing such a
+    // boundary.
     if (!always_serve_remote_aliases && alias == match.sproutlet->network_function())
     {
+      // If the Sproutlet was matched on its network function, and we are not
+      // always serving remote aliases, reject it.
       TRC_DEBUG("Routing to remote alias %s", alias.c_str());
       SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_REJECT, 0);
       event.add_var_param(match.sproutlet->service_name());
@@ -1340,6 +1350,7 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
     }
     else
     {
+      // Otherwise we handle the request locally.
       TRC_DEBUG("Serving remote alias %s", alias.c_str());
       SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_ACCEPT, 0);
       event.add_var_param(match.sproutlet->service_name());
@@ -1352,6 +1363,7 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
   }
   else
   {
+    // If there's no match, we trivially reject it.
     tsx_match_locality = SproutletTsxMatchLocality::NO_MATCH_AT_ALL;
     return false;
   }
