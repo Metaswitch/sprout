@@ -976,52 +976,160 @@ TEST_F(BasicS4Test, ClearUpEmptyAoR)
   delete aor; aor = NULL;
 }
 
-// YH-TODO
-// Comments explaining what each test does
-// Tests where the Chronos call fails
-// Check the timer ID in the AoR
+
+/// The following tests check the Chronos sending timer when S4 writes to AoR.
+
+// This test sends POST successfully to Chronos when S4 creates a new AoR, and
+// checks all the argument for send_post.
 TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
 {
-  std::string timer_str;
-  std::string aor_id = "aor_id";
+  // Build AoR with set_timer_id = false
+  std::string aor_id = "sip:6505550231@homedomain";
+  int expiry = 200;
+  AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, false, expiry);
+
+  // Build various arguments for Chronos call
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
+  std::string default_callback_uri = "/timers";
+  std::map<std::string, uint32_t> tag_map;
+  tag_map["BIND"] = aor->get_bindings_count();
+  tag_map["REG"] = 1;
+  tag_map["SUB"] = aor->get_subscriptions_count();
 
-  {
-    InSequence s;
-    get_data_expect_call_failure(Store::Status::NOT_FOUND, 1);
-    get_data_expect_call_success(AOR_WITH_BINDING, 1, 1);
-    EXPECT_CALL(*(this->_mock_chronos), send_put(_, _, _, opaque, _, _))
-      .WillOnce(Return(HTTP_OK));
-    EXPECT_CALL(*_mock_store, set_data(_, _, _, _, _, _, An<Store::Format>()))
-      .WillOnce(DoAll(SaveArg<0>(&timer_str),
-                      Return(Store::Status::OK)));
-  }
-
-  AoR* get_aor = NULL;
-  uint64_t version;
-  HTTPCode rc = this->_s4->handle_get("aor_id", &get_aor, version, 0);
-
-  EXPECT_EQ(rc, 200);
-  ASSERT_FALSE(get_aor == NULL);
-  EXPECT_FALSE(get_aor->bindings().empty());
-
-  delete get_aor; get_aor = NULL;
-}
-
-TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
-{
-  std::string aor_id = "aor_id";
-  std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
-
-  EXPECT_CALL(*(this->_mock_chronos), send_post(_, _, "/timers", opaque, _, _))
+  // S4 and Chronos expectations. S4 sends POST when timer_id is empty.
+  set_data_expect_call(Store::Status::OK, 3);
+  EXPECT_CALL(*(this->_mock_chronos), send_post(_, 
+                                                expiry, 
+                                                default_callback_uri, 
+                                                opaque, 
+                                                _, 
+                                                tag_map))
     .WillOnce(DoAll(SetArgReferee<0>(AoRTestUtils::TIMER_ID),
                     Return(HTTP_OK)));
-  set_data_expect_call(Store::Status::DATA_CONTENTION, 1);
 
-  AoR* aor = AoRTestUtils::create_simple_aor("aor_id", true, false);
   HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
 
-  EXPECT_EQ(rc, 412);
+  // Check the timer_id created during Chronos POST is written to AoR
+  EXPECT_EQ(rc, 200);
+  ASSERT_FALSE(aor == NULL);
+  EXPECT_EQ(aor->_timer_id, AoRTestUtils::TIMER_ID);
 
   delete aor; aor = NULL;
 }
+
+// This test sends POST unsuccessfully to Chronos when S4 creates a new AoR. The
+// overall flow remains the same as the success case, but the timer_id will be
+// left empty in AoR.
+TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreationFail)
+{
+  // Build AoR with set_timer_id = false
+  std::string aor_id = "sip:6505550231@homedomain";
+  AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, false);
+
+  // SM and Chronos expectations
+  set_data_expect_call(Store::Status::OK, 3);
+  EXPECT_CALL(*(this->_mock_chronos), send_post(_, _, _, _, _, _)) 
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+
+  HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
+
+  // Check that Chronos send failure won't impact the overall flow, but leaves
+  // timer_id empty in AoR
+  EXPECT_EQ(rc, 200);
+  ASSERT_FALSE(aor == NULL);
+  EXPECT_EQ(aor->_timer_id, "");
+
+  delete aor; aor = NULL;
+}
+
+// This test sends PUT successfully to Chronos when S4 updates an existing AoR,
+// and checks all the arguments for send_put.
+TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
+{
+  // Build AoR with set_timer_id = true
+  std::string aor_id = "sip:6505550231@homedomain";
+  int expiry = 200;
+  AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, true, expiry);
+  std::string timer_id; 
+
+  // Build various arguments for Chronos call
+  std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
+  std::string default_callback_uri = "/timers";
+  std::map<std::string, uint32_t> tag_map;
+  tag_map["BIND"] = aor->get_bindings_count();
+  tag_map["REG"] = 1;
+  tag_map["SUB"] = aor->get_subscriptions_count();
+
+  // S4 and Chronos expectations. S4 sends PUT when timer_id is not empty.
+  set_data_expect_call(Store::Status::OK, 3);
+  EXPECT_CALL(*(this->_mock_chronos), send_put(_,
+                                               expiry, 
+                                               default_callback_uri, 
+                                               opaque, 
+                                               _, 
+                                               tag_map))
+    .WillOnce(DoAll(SaveArg<0>(&timer_id),
+                    Return(HTTP_OK)));
+
+  HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
+
+  // Check the correct timer_id was used.
+  EXPECT_EQ(rc, 200);
+  EXPECT_EQ(timer_id, AoRTestUtils::TIMER_ID);
+
+  delete aor; aor = NULL;
+}
+
+// This test sends PUT unsuccessfully to Chronos when S4 updates an existing AoR.
+// The overall flow remains the same.
+TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdateFail)
+{
+  // Build AoR with set_timer_id = true
+  std::string aor_id = "sip:6505550231@homedomain";
+  AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, true);
+
+  // SM and Chronos expectations
+  set_data_expect_call(Store::Status::OK, 3);
+  EXPECT_CALL(*(this->_mock_chronos), send_put(_, _, _, _, _, _)) 
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+
+  HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
+
+  // Check that Chronos send failure won't impact the overall flow.
+  EXPECT_EQ(rc, 200);
+  ASSERT_FALSE(aor == NULL);
+  EXPECT_EQ(aor->_timer_id, AoRTestUtils::TIMER_ID);
+
+  delete aor; aor = NULL;
+}
+
+
+// This test sends DELETE successfully to Chronos when S4 deletes an AoR. The
+// argument for send_delete is too simple to worth checking.
+TEST_F(BasicS4Test, ChronosTimerOnSubscriberDelete)
+{
+  get_data_expect_call_success(AOR_WITH_BINDING, 1, 3);
+  set_data_expect_call(Store::Status::OK, 3);
+  EXPECT_CALL(*(this->_mock_chronos), send_delete(AoRTestUtils::TIMER_ID, _))
+    .WillOnce(Return(HTTP_OK));
+
+  HTTPCode rc = this->_s4->handle_delete("aor_id", 1, 0);
+
+  EXPECT_EQ(rc, 204);
+}
+
+// This test sends DELETE unsuccessfully to Chronos when S4 deletes an AoR. As
+// S4 does not check return code for send_delete, behaviour remains identical to
+// the test above.
+TEST_F(BasicS4Test, ChronosTimerOnSubscriberDeleteFail)
+{
+  get_data_expect_call_success(AOR_WITH_BINDING, 1, 3);
+  set_data_expect_call(Store::Status::OK, 3);
+  EXPECT_CALL(*(this->_mock_chronos), send_delete(_, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+
+  HTTPCode rc = this->_s4->handle_delete("aor_id", 1, 0);
+
+  EXPECT_EQ(rc, 204);
+}
+
