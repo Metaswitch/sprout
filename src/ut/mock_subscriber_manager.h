@@ -80,6 +80,9 @@ public:
   MOCK_METHOD3(update_associated_uris, HTTPCode(const std::string& aor_id,
                                                 const AssociatedURIs& associated_uris,
                                                 SAS::TrailId trail));
+
+  MOCK_METHOD2(handle_timer_pop, void(const std::string& aor_id,
+                                      SAS::TrailId trail));
 };
 
 #endif
