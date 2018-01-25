@@ -52,8 +52,6 @@ public:
    }
   };
 
-  // SDM-REFACTOR-TODO: irs_info is the same as SubscriberManager::SubscriberInfo.
-  // Delete this once all clients have been moved to use the SM.
   struct irs_info
   {
     std::string _regstate;
