@@ -29,6 +29,11 @@ using ::testing::Not;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::An;
+using ::testing::InSequence;
+using ::testing::DoAll;
+using ::testing::SaveArg;
+using ::testing::SetArgReferee;
+using ::testing::ElementsAre;
 
 class SubscribeMessage
 {
@@ -154,7 +159,6 @@ string SubscribeMessage::get()
                    "P-Access-Network-Info: DUMMY\r\n"
                    "P-Visited-Network-ID: DUMMY\r\n"
                    "P-Charging-Vector: icid-value=100\r\n"
-                   "P-Charging-Function-Addresses: ccf=1.2.3.4; ecf=5.6.7.8\r\n"
                    "%10$s"
                    "%11$s"
                    "%12$s"
@@ -187,6 +191,12 @@ string SubscribeMessage::get()
 
   string ret(buf, n);
   return ret;
+}
+
+ACTION_P2(SaveSubscriptionPair, first, second)//, "Save off the subscription object")
+{
+  *first = arg1.first;
+  *second = Subscription(*(arg1.second));
 }
 
 /// Fixture for Subscription tests that use a mock store instead of a fake one.
@@ -273,7 +283,9 @@ public:
     delete _subscription_sproutlet; _subscription_sproutlet = NULL;
   }
 
-  void not_handled_by_subscription_sproutlet()
+  // Handle the case where the request isn't absorbed by the subscription
+  // sproutlet. Finish the transaction by returning 200 to the request.
+  void request_not_handled_by_subscription_sproutlet()
   {
     ASSERT_EQ(1, txdata_count());
     inject_msg(respond_to_current_txdata(200));
@@ -282,33 +294,9 @@ public:
     free_txdata();
   }
 
-  std::string do_OK_flow()
-  {
-    EXPECT_EQ(1, txdata_count());
-    pjsip_msg* out = pop_txdata()->msg;
-    EXPECT_EQ(200, out->line.status.code);
-    EXPECT_EQ("OK", str_pj(out->line.status.reason));
-    EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
-    EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
-    EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
-
-    // Pull out the to tag on the OK
-    std::vector<std::string> to_params;
-    Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
-    std::string to_tag = "No to tag in 200 OK";
-
-    for (unsigned ii = 0; ii < to_params.size(); ii++)
-    {
-      if (to_params[ii].find("tag=") != string::npos)
-      {
-        to_tag = to_params[ii].substr(4);
-      }
-    }
-
-    return to_tag;
-  }
-
-  void handle_response(int rc, std::string reason)
+  // Expect an error if the subscribe has failed. Check the return code and
+  // the reason.
+  void check_subscribe_response(int rc, std::string reason)
   {
     ASSERT_EQ(1, txdata_count());
     pjsip_msg* out = pop_txdata()->msg;
@@ -323,47 +311,141 @@ protected:
   SproutletProxy* _subscription_proxy;
 };
 
+// This test adds a subscription then expires it. It checks in detail the
+// created subscription object and the headers on the 200 OKs.
+TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
+{
+  // Add a subscription. Save off the created subscription, then check that
+  // and the headers on the 200 OK.
+  std::string subscription_id;
+  Subscription subscription;
+  HSSConnection::irs_info irs_info;
+  irs_info._ccfs.push_back("CCF TEST");
+  irs_info._ecfs.push_back("ECF TEST");
+
+  EXPECT_CALL(*_sm, update_subscription("sip:6505550231@homedomain", _, _, _))
+    .WillOnce(DoAll(SaveSubscriptionPair(&subscription_id, &subscription),
+                    SetArgReferee<2>(irs_info),
+                    Return(HTTP_OK)));
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  // Check that we got a 200 OK.
+  EXPECT_EQ(1, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  // Check the Charging, From and Expires headers.
+  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
+  EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=\"CCF TEST\";ecf=\"ECF TEST\"", get_headers(out, "P-Charging-Function-Addresses"));
+  EXPECT_EQ("Expires: 300", get_headers(out, "Expires"));
+
+  // Pull out the to tag on the OK
+  std::vector<std::string> to_params;
+  Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
+  std::string to_tag = "No to tag in 200 OK";
+
+  for (unsigned ii = 0; ii < to_params.size(); ii++)
+  {
+    if (to_params[ii].find("tag=") != string::npos)
+    {
+      to_tag = to_params[ii].substr(4);
+    }
+  }
+
+  // Check the created subscription object.
+  int now = time(NULL);
+  std::list<std::string> rrs;
+  rrs.push_back("sip:sprout.example.com;transport=tcp;lr");
+  EXPECT_EQ(subscription_id, to_tag);
+  EXPECT_EQ(subscription._req_uri, "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob");
+  EXPECT_EQ(subscription._from_uri, "<sip:6505550231@homedomain>");
+  EXPECT_EQ(subscription._from_tag, "10.114.61.213+1+8c8b232a+5fb751cf");
+  EXPECT_EQ(subscription._to_uri, "<sip:6505550231@homedomain>");
+  EXPECT_EQ(subscription._cid, "0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213");
+  EXPECT_EQ(subscription._route_uris, rrs);
+  EXPECT_EQ(subscription._expires, now + 300);
+
+  // Now expire the same subscription. The subscription ID is the to tag from
+  // 200 OK.
+  EXPECT_CALL(*_sm, remove_subscription("sip:6505550231@homedomain", to_tag, _, _))
+    .WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                    Return(HTTP_OK)));
+
+  msg._to_tag = to_tag;
+  msg._unique += 1;
+  msg._expires = "0";
+
+  inject_msg(msg.get());
+
+  // Check that we got a 200 OK.
+  EXPECT_EQ(1, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  // Check the Charging, From and Expires headers.
+  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
+  EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=\"CCF TEST\";ecf=\"ECF TEST\"", get_headers(out, "P-Charging-Function-Addresses"));
+  EXPECT_EQ("Expires: 0", get_headers(out, "Expires"));
+}
+
+// Test that a request that isn't a subscribe isn't handled by the subscription
+// sproutlet.
 TEST_F(SubscriptionTest, NotSubscribe)
 {
   SubscribeMessage msg;
   msg._method = "PUBLISH";
   inject_msg(msg.get());
-  not_handled_by_subscription_sproutlet();
+  request_not_handled_by_subscription_sproutlet();
 }
 
+// Test that a request that isn't targeted to us (wrong domain) isn't handled
+// by the subscription sproutlet.
 TEST_F(SubscriptionTest, NotOurs)
 {
   SubscribeMessage msg;
   msg._domain = "not-us.example.org";
   add_host_mapping("not-us.example.org", "5.6.7.8");
   inject_msg(msg.get());
-  not_handled_by_subscription_sproutlet();
+  request_not_handled_by_subscription_sproutlet();
 }
 
+// Test that a request that isn't targeted to us (wrong hostname on the route
+// header) isn't handled by the subscription sproutlet.
 TEST_F(SubscriptionTest, RouteHeaderNotMatching)
 {
   SubscribeMessage msg;
   msg._route = "notthehomedomain";
+  add_host_mapping("notthehomedomain", "5.6.7.8");
   inject_msg(msg.get());
-  handle_response(503, "Service Unavailable");
+  request_not_handled_by_subscription_sproutlet();
 }
 
+// Test that a subscribe with a bad scheme is rejected.
 TEST_F(SubscriptionTest, BadScheme)
 {
   SubscribeMessage msg;
   msg._scheme = "sips";
   inject_msg(msg.get());
-  handle_response(404, "Not Found"); // Is this correct?
+  check_subscribe_response(404, "Not Found");
 }
 
+// Test that a subscribe with no contact headers is rejected.
 TEST_F(SubscriptionTest, NoContact)
 {
   SubscribeMessage msg;
   msg._contact = "";
   inject_msg(msg.get());
-  handle_response(400, "Bad Request"); // Is this correct?
+  check_subscribe_response(400, "Bad Request"); // Is this correct?
 }
 
+// Test that a subscribe that's from a binding that was accepted for emergency
+// registration is rejected.
 TEST_F(SubscriptionTest, EmergencySubscription)
 {
   SubscribeMessage msg;
@@ -377,32 +459,42 @@ TEST_F(SubscriptionTest, EmergencySubscription)
   EXPECT_THAT(get_headers(out, "Allow-Events"), testing::MatchesRegex("Allow-Events: reg"));
 }
 
-// Test the Event Header
-// Missing Event header should be rejected
+// Test that a subscribe with a missing Event header isn't handled by the
+// subscription sproutlet.
 TEST_F(SubscriptionTest, MissingEventHeader)
 {
   SubscribeMessage msg;
   msg._event = "";
   inject_msg(msg.get());
-  not_handled_by_subscription_sproutlet();
+  request_not_handled_by_subscription_sproutlet();
 }
 
-// Test the Event Header
-// Event that isn't reg should be rejected
+// Test that a subscribe that has an Event header that doesn't case-sensitive
+// match 'reg' isn't handled by the subscription sproutlet.
 TEST_F(SubscriptionTest, IncorrectEventHeader)
 {
   SubscribeMessage msg;
   msg._event = "Event: Not Reg";
   inject_msg(msg.get());
-  not_handled_by_subscription_sproutlet();
+  request_not_handled_by_subscription_sproutlet();
 
   SubscribeMessage msg2;
   msg2._event = "Event: Reg";
   inject_msg(msg2.get());
-  not_handled_by_subscription_sproutlet();
+  request_not_handled_by_subscription_sproutlet();
 }
 
-// Test Accept Header. A message with no accepts header should be accepted
+// Test that a subscribe that has an Accept header but where it doesn't contain
+// application/reginfo+xml isn't handled by the subscription sproutlet.
+TEST_F(SubscriptionTest, IncorrectAcceptsHeader)
+{
+  SubscribeMessage msg;
+  msg._accepts = "Accept: notappdata";
+  inject_msg(msg.get());
+  request_not_handled_by_subscription_sproutlet();
+}
+
+// Test that a subscribe with no Accept header is processed successfully.
 TEST_F(SubscriptionTest, EmptyAcceptsHeader)
 {
   EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
@@ -411,23 +503,11 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
   msg._accepts = "";
   inject_msg(msg.get());
 
-  do_OK_flow();
+  check_subscribe_response(200, "OK");
 }
 
-// Test Accept Header.
-// A message with an accept header, but where it doesn't contain
-// application/reginfo+xml shouldn't be accepted
-TEST_F(SubscriptionTest, IncorrectAcceptsHeader)
-{
-  SubscribeMessage msg;
-  msg._accepts = "Accept: notappdata";
-  inject_msg(msg.get());
-  not_handled_by_subscription_sproutlet();
-}
-
-// Test Accept Header.
-// A message with an accept header, which contains
-// application/reginfo+xml and others should be accepted
+// Test that a subscribe with a complicated Accept header but it does contain
+// application/reginfo+xml is processed succesfully
 TEST_F(SubscriptionTest, CorrectAcceptsHeader)
 {
   EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
@@ -436,91 +516,73 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
   inject_msg(msg.get());
 
-  do_OK_flow();
+  check_subscribe_response(200, "OK");
 }
 
-TEST_F(SubscriptionTest, UpdateSubscription)
+// Test that errors from the subscriber manager are correctly converted into
+// client responses (Server Error).
+TEST_F(SubscriptionTest, ErrorConversionSMToCallerServerError)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
-
   SubscribeMessage msg;
-  inject_msg(msg.get());
-
-  do_OK_flow();
-}
-
-TEST_F(SubscriptionTest, UpdateSubscriptionError)
-{
   EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_SERVER_ERROR));
-
-  SubscribeMessage msg;
   inject_msg(msg.get());
-
-  handle_response(500, "Internal Server Error"); // Is this correct?
+  check_subscribe_response(500, "Internal Server Error");
 }
 
-TEST_F(SubscriptionTest, UpdateSubscriptionError2)
+// Test that errors from the subscriber manager are correctly converted into
+// client responses (Unavailable).
+TEST_F(SubscriptionTest, ErrorConversionSMToCallerUnavailable)
 {
+  SubscribeMessage msg;
   EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_TEMP_UNAVAILABLE));
-
-  SubscribeMessage msg;
   inject_msg(msg.get());
-
-  handle_response(480, "Temporarily Unavailable"); // Is this correct?
+  check_subscribe_response(480, "Temporarily Unavailable");
 }
 
-TEST_F(SubscriptionTest, UpdateSubscriptionError3)
+// Test that errors from the subscriber manager are correctly converted into
+// client responses (Forbidden).
+TEST_F(SubscriptionTest, ErrorConversionSMToCallerForbidden)
 {
+  SubscribeMessage msg;
   EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_FORBIDDEN));
-
-  SubscribeMessage msg;
   inject_msg(msg.get());
-
-  handle_response(403, "Forbidden"); // Is this correct?
+  check_subscribe_response(403, "Forbidden");
 }
 
-TEST_F(SubscriptionTest, UpdateSubscriptionError4)
+// Test that errors from the subscriber manager are correctly converted into
+// client responses (Not Found).
+TEST_F(SubscriptionTest, ErrorConversionSMToCallerNotFound)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_NOT_FOUND));
-
   SubscribeMessage msg;
+  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_FORBIDDEN));
   inject_msg(msg.get());
-
-  handle_response(403, "Forbidden"); // Is this correct?
+  check_subscribe_response(403, "Forbidden");
 }
 
-TEST_F(SubscriptionTest, UpdateSubscriptionError5)
+// Test that errors from the subscriber manager are correctly converted into
+// client responses (Timeout).
+TEST_F(SubscriptionTest, ErrorConversionSMToCallerTimeout)
 {
+  SubscribeMessage msg;
   EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_SERVER_UNAVAILABLE));
-
-  SubscribeMessage msg;
   inject_msg(msg.get());
-
-  handle_response(504, "Server Timeout"); // Is this correct?
+  check_subscribe_response(504, "Server Timeout");
 }
 
-TEST_F(SubscriptionTest, RemoteStoreGetError)
+// Test that nothing goes wrong if the subscribe is from a Tel URI
+TEST_F(SubscriptionTest, TelURI)
 {
-  // Set up a single subscription - this should generate a 200 OK then
-  // a NOTIFY
   EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
 
   SubscribeMessage msg;
+  msg._scheme = "tel";
   inject_msg(msg.get());
 
-  std::string to_tag = do_OK_flow();
-
-  // Actively expire the subscription - this generates a 200 OK and a
-  // final NOTIFY
-  EXPECT_CALL(*_sm, remove_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
-  msg._to_tag = to_tag;
-  msg._unique += 1;
-  msg._expires = "0";
-  inject_msg(msg.get());
-  do_OK_flow();
+  check_subscribe_response(200, "OK");
 }
 
-TEST_F(SubscriptionTest, SimpleMainlineWithReqUriTelUri)
+// Test that nothing goes wrong if the ReqURI is a Tel URI
+TEST_F(SubscriptionTest, ReqUriTelUri)
 {
   EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
 
@@ -531,17 +593,5 @@ TEST_F(SubscriptionTest, SimpleMainlineWithReqUriTelUri)
   add_host_mapping("example.domain.org", "5.6.7.8");
   inject_msg(msg.get());
 
-  do_OK_flow();
-}
-
-/// Simple correct example with Tel URIs
-TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
-{
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
-
-  SubscribeMessage msg;
-  msg._scheme = "tel";
-  inject_msg(msg.get());
-
-  do_OK_flow();
+  check_subscribe_response(200, "OK");
 }
