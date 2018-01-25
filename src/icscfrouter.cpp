@@ -374,6 +374,7 @@ int ICSCFUARouter::hss_query()
   {
     // HSS failed to respond or responded with invalid data, so reject the
     // request with a 480.
+    TRC_ERROR("I-CSCF UAR got %d HTTP response from Homestead, replying with SIP error 475", rc);
     status_code = (pjsip_status_code)475;
   }
   else
@@ -447,6 +448,7 @@ int ICSCFLIRouter::hss_query()
     // HSS failed to respond or responded with invalid data, so reject the
     // request with a 480.
     // LCOV_EXCL_START
+    TRC_ERROR("I-CSCF UAR got %d HTTP response from Homestead, replying with SIP error 476", rc);
     status_code = (pjsip_status_code)476;
     // LCOV_EXCL_STOP
   }
