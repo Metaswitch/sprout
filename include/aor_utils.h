@@ -24,7 +24,6 @@ extern "C" {
 
 namespace AoRUtils {
 
-
 // Generates the public GRUU for this binding from the address of record and
 // instance-id. Returns NULL if this binding has no valid GRUU.
 pjsip_sip_uri* pub_gruu(const Binding* binding, pj_pool_t* pool);
