@@ -976,9 +976,11 @@ TEST_F(BasicS4Test, ClearUpEmptyAoR)
   delete aor; aor = NULL;
 }
 
+
 /// The following tests check the Chronos sending timer when S4 writes to AoR.
 
-// This test sends POST successfully to Chronos when S4 creates a new AoR.
+// This test sends POST successfully to Chronos when S4 creates a new AoR, and
+// checks all the argument for send_post.
 TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
 {
   // Build AoR
@@ -1014,7 +1016,9 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
   delete aor; aor = NULL;
 }
 
-// This test sends POST unsuccessfully to Chronos when S4 creates a new AoR.
+// This test sends POST unsuccessfully to Chronos when S4 creates a new AoR. The
+// overall flow remains the same as the success case, but the timer_id will be
+// left empty in AoR.
 TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreationFail)
 {
   // Build AoR
@@ -1038,7 +1042,8 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreationFail)
   delete aor; aor = NULL;
 }
 
-// This test sends PUT successfully to Chronos when S4 updates an existing AoR.
+// This test sends PUT successfully to Chronos when S4 updates an existing AoR,
+// and checks all the arguments for send_put.
 TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
 {
   // Build AoR
@@ -1073,12 +1078,35 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
   delete aor; aor = NULL;
 }
 
-// This test sends DELETE unsuccessfully to Chronos when S4 deletes an AoR.
-TEST_F(BasicS4Test, ChronosTimerOnSubscriberDeleteFail)
+// This test sends PUT unsuccessfully to Chronos when S4 updates an existing AoR.
+// The overall flow stay the same??
+TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdateFail)
+{
+}
+
+
+// This test sends DELETE successfully to Chronos when S4 deletes an AoR. The
+// argument for send_delete is too simple to worth checking.
+TEST_F(BasicS4Test, ChronosTimerOnSubscriberDelete)
 {
   get_data_expect_call_success(AOR_WITH_BINDING, 1, 3);
   set_data_expect_call(Store::Status::OK, 3);
   set_chronos_delete_expectations();
+
+  HTTPCode rc = this->_s4->handle_delete("aor_id", 1, 0);
+
+  EXPECT_EQ(rc, 204);
+}
+
+// This test sends DELETE unsuccessfully to Chronos when S4 deletes an AoR. As
+// S4 does not check return code for send_delete, behaviour remains identical to
+// the test above.
+TEST_F(BasicS4Test, ChronosTimerOnSubscriberDeleteFail)
+{
+  get_data_expect_call_success(AOR_WITH_BINDING, 1, 3);
+  set_data_expect_call(Store::Status::OK, 3);
+  EXPECT_CALL(*(this->_mock_chronos), send_delete(_, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
 
   HTTPCode rc = this->_s4->handle_delete("aor_id", 1, 0);
 
