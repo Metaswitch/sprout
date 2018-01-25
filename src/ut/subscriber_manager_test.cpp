@@ -414,6 +414,13 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
 
   update_bindings_expect_calls(false);
 
+  // Set up expect calls for audit logs. Expect that the binding is removed with
+  // the old contact, added with the new contact and the subscription that
+  // shares the same contact as the original binidng is removed implicitly.
+  registration_log_expect_call(0);
+  registration_log_expect_call(300, "<sip:6505550231@10.225.20.18:5991;transport=tcp;ob>;");
+  subscription_log_expect_call(0);
+
   // Build the updated bindings to pass in.
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
   binding->_uri = "<sip:6505550231@10.225.20.18:5991;transport=tcp;ob>;";
@@ -422,10 +429,9 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
   // Update binding on SM.
   update_bindings();
 
-  // We should have a NOTIFYs. TODO need to check that it contains both the
-  // deactived binding and the new binding.
-  ASSERT_EQ(1, txdata_count());
-  free_txdata();
+  // The subscription shares the same contact as the binding so we do NOT expect
+  // a NOTIFY since there is a good change the NOTIFY will fail.
+  ASSERT_EQ(0, txdata_count());
 }
 
 TEST_F(SubscriberManagerTest, TestRemoveBinding)
@@ -451,6 +457,7 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
       .WillOnce(DoAll(SaveArg<1>(&_patch_object),
                       SetArgPointee<2>(_patch_aor),
                       Return(HTTP_OK)));
+    registration_log_expect_call(0);
     EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
       .WillOnce(Return(HTTP_OK));
   }
@@ -607,6 +614,8 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
                       Return(HTTP_OK)));
     EXPECT_CALL(*_s4, handle_delete(DEFAULT_ID, _, _))
       .WillOnce(Return(HTTP_OK));
+    registration_log_expect_call(0);
+    subscription_log_expect_call(0);
     EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
       .WillOnce(Return(HTTP_OK));
   }
