@@ -3440,21 +3440,20 @@ TEST_F(SCSCFTest, SimpleRedirect)
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
 }
-
+*/
 
 // Test DefaultHandling=TERMINATE for non-responsive AS.
 TEST_F(SCSCFTest, DefaultHandlingTerminate)
 {
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551234@homedomain"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("408")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3517,28 +3516,25 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   SCOPED_TRACE("ACK");
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
-}
 
+  free(ifc_str);
+}
 
 // Test that if an AS is unresponsive (ie. does not respond before it times
 // out), and Default Handling is set to Session Terminated, that the call is
 // rejected (without waiting for all retries to the AS to time out).
 TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
 {
-  // Register an endpoint to act as the callee.
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-
-  // Set up an application server for the caller. It's default handling is set
-  // to session terminated.
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription.return_sub());
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session terminated.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
@@ -3588,27 +3584,24 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   inject_msg(msg.get_request(), &tpCaller);
   poll();
   ASSERT_EQ(0, txdata_count());
-}
 
+  free(ifc_str);
+}
 
 // Test that after a 408 has been sent in response to an unresponsive AS, a 100
 // Trying response from the AS is still handled.
 TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
 {
-  // Register an endpoint to act as the callee.
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-
-  // Set up an application server for the caller. It's default handling is set
-  // to session terminated.
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription.return_sub());
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session terminated.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
@@ -3691,27 +3684,24 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
   // Check no other messages are pending.
   ASSERT_EQ(0, txdata_count());
   pjsip_tx_data_dec_ref(inv_for_as); inv_for_as = NULL;
-}
 
+  free(ifc_str);
+}
 
 // Test that after a 408 has been sent in response to an unresponsive AS, a 100
 // Trying response from the AS is still handled (while handling a MESSAGE).
 TEST_F(SCSCFTest, DefaultHandlingTerminateMessage100AfterTimeout)
 {
-  // Register an endpoint to act as UE2.
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-
-  // Set up an application server for UE1. It's default handling is set to
-  // session terminated.
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription.return_sub());
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session terminated.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
@@ -3777,27 +3767,24 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateMessage100AfterTimeout)
   // Check no other messages are pending.
   ASSERT_EQ(0, txdata_count());
   pjsip_tx_data_dec_ref(msg_for_as); msg_for_as = NULL;
-}
 
+  free(ifc_str);
+}
 
 // Test that after a 408 has been sent in response to an unresponsive AS, a 200
 // OK response from the AS is still handled.
 TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
 {
-  // Register an endpoint to act as the callee.
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-
-  // Set up an application server for the caller. It's default handling is set
-  // to session terminated.
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription.return_sub());
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session terminated.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
@@ -3861,27 +3848,24 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
 
   // Check no other messages are pending.
   ASSERT_EQ(0, txdata_count());
-}
 
+  free(ifc_str);
+}
 
 // Test that after a 408 has been sent in response to an unresponsive AS, a 4xx
 // error response from the AS is still handled.
 TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
 {
-  // Register an endpoint to act as the callee.
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-
-  // Set up an application server for the caller. It's default handling is set
-  // to session terminated.
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription.return_sub());
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session terminated.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
@@ -3949,27 +3933,24 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
 
   // Check error is not forwarded on, as timeout error has already been sent.
   ASSERT_EQ(0, txdata_count());
-}
 
+  free(ifc_str);
+}
 
 // Test that after a 408 has been sent in response to an unresponsive AS, a 5xx
 // error response from the AS is still handled.
 TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 {
-  // Register an endpoint to act as the callee.
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-
-  // Set up an application server for the caller. It's default handling is set
-  // to session terminated.
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription.return_sub());
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session terminated.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("501")));
@@ -4038,8 +4019,9 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 
   // Check error is not forwarded on, as timeout error has already been sent.
   ASSERT_EQ(0, txdata_count());
-}
 
+  free(ifc_str);
+}
 
 // Test that after a 100 Trying is received from an AS, the request isn't timed
 // out after 6 secs (set as the default timeout for an AS when Default
@@ -4048,20 +4030,16 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 // response).
 TEST_F(SCSCFTest, TimeoutExtendedByProofOfLife)
 {
-  // Register an endpoint to act as the callee.
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-
-  // Set up an application server for the caller. It's default handling is set
-  // to session terminated.
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription.return_sub());
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session terminated.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4132,29 +4110,25 @@ TEST_F(SCSCFTest, TimeoutExtendedByProofOfLife)
   // Check no other messages pending.
   poll();
   ASSERT_EQ(0, txdata_count());
-}
 
+  free(ifc_str);
+}
 
 TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
 {
   // Disable the liveness timer for session terminated ASs.
   _scscf_sproutlet->set_session_terminated_timeout(0);
 
-  // Register an endpoint to act as the callee.
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-
-  // Set up an application server for the caller. It's default handling is set
-  // to session terminate.
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0 , 1);
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription.return_sub());
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session terminated.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4205,35 +4179,41 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   inject_msg(msg.get_request(), &tpCaller);
   poll();
   ASSERT_EQ(0, txdata_count());
+
+  free(ifc_str);
 }
 
 // Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
 TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
 {
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
+  // Expect a call looking up the iFCs for the caller. Return an iFC with its
+  // default handling set to session continued.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  char* ifc_str = add_ifcs(irs_info_1, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551000@homedomain"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
+                    Return(HTTP_OK)));
 
-  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
-  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
-    .addServiceProfile(service_profile_1);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription_1.return_sub());
+  // Expect calls looking up the iFCs and the bindings for the callee. Return an
+  // iFC with its default handling set to session continued.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_basic_test_info(irs_info_2, bindings);
+  add_ifcs(irs_info_2, ifc_list, "sip:6505551234@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551234@homedomain"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_2),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(bindings),
+                    Return(HTTP_OK)));
 
-  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
-  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
-    .addServiceProfile(service_profile_2);
- _hss_connection->set_impu_result("sip:6505551234@homedomain",
-                                  "call",
-                                  RegDataXMLUtils::STATE_REGISTERED,
-                                  subscription_2.return_sub());
-
- _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
+  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
+  // as well) should be moved out into a seperate test suite.
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
@@ -4274,20 +4254,31 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_diversion = false;
   stack_data.record_route_on_every_hop = false;
+
+  free(ifc_str);
 }
 
 // Test DefaultHandling=CONTINUE for TCP transport error when contacting AS
 TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
 {
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+  // Expect calls looking up the iFCs and the bindings for the callee. Return an
+  // iFC with its default handling set up session continued.
+  HSSConnection::irs_info irs_info;
+  Bindings bindings;
+  setup_basic_test_info(irs_info, bindings);
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(bindings),
+                    Return(HTTP_OK)));
+
+  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
+  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
+  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -4299,8 +4290,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
   // We're within the trust boundary, so no stripping should occur.
   SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain";
-  msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
@@ -4331,6 +4320,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
 
   tpCaller.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r3.uri());
+
+  free(ifc_str);
 }
 
 // Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
@@ -4873,8 +4864,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // Set up an application server for the caller. Its default handling is set to
+  // session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
@@ -4953,8 +4944,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // Set up an application server for the caller. Its default handling is set to
+  // session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
@@ -5218,8 +5209,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // Set up an application server for the caller. Its default handling is set to
+  // session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
@@ -5304,8 +5295,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // Set up an application server for the caller. Its default handling is set to
+  // session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp")
@@ -5373,8 +5364,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // Set up an application server for the caller. Its default handling is set to
+  // session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551234@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp")
@@ -5449,8 +5440,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // Set up an application server for the caller. Its default handling is set to
+  // session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP")
@@ -5577,8 +5568,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   // Register an endpoint to act as the callee.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // Set up an application server for the caller. It's default handling is set
-  // to session continue.
+  // Set up an application server for the caller. Its default handling is set to
+  // session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP")
@@ -5702,7 +5693,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueMessageErrorTimeoutThenResp)
   // Register an endpoint to act as UE2.
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // Set up an application server for UE1. It's default handling is set to
+  // Set up an application server for UE1. Its default handling is set to
   // session continue.
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
@@ -9685,7 +9676,6 @@ TEST_F(SCSCFTest, TestCalleeNotBarred)
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
-*/
 
 // Test emergency registrations receive calls when barred.
 TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
