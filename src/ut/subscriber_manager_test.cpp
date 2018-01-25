@@ -97,7 +97,7 @@ private:
                                     std::string contact = AoRTestUtils::CONTACT_URI,
                                     std::string binding_id = AoRTestUtils::BINDING_ID,
                                     std::string aor_id = DEFAULT_ID);
-  void update_bindings();
+  void update_bindings(bool subscription_removed = false);
 
   void subscription_expect_calls(bool subscription_changed = true,
                                  int expiry = 300);
@@ -193,7 +193,7 @@ void SubscriberManagerTest::registration_log_expect_call(
 }
 
 // Calls update_bindings() and checks what is returned.
-void SubscriberManagerTest::update_bindings()
+void SubscriberManagerTest::update_bindings(bool subscription_removed)
 {
   // Update binding on SM.
   HTTPCode rc = _subscriber_manager->update_bindings(_irs_query,
@@ -208,6 +208,15 @@ void SubscriberManagerTest::update_bindings()
   Bindings ub = _patch_object.get_update_bindings();
   EXPECT_EQ(ub.size(), 1);
   EXPECT_TRUE(ub.find(AoRTestUtils::BINDING_ID) != ub.end());
+
+  // If this operation is expected to remove a subscription also, the patch
+  // object contains the subscription to remove.
+  if (subscription_removed)
+  {
+    std::vector<std::string> rs = _patch_object.get_remove_subscriptions();
+    EXPECT_EQ(rs.size(), 1);
+    EXPECT_TRUE(rs[0] == AoRTestUtils::SUBSCRIPTION_ID);
+  }
 
   // Check that the binding we set is returned in all bindings.
   EXPECT_EQ(_all_bindings.size(), 1);
@@ -411,6 +420,7 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
   // Modify the binding in the patch AoR to give it a different contact.
   Binding* refreshed_binding = _patch_aor->get_binding(AoRTestUtils::BINDING_ID);
   refreshed_binding->_uri = "<sip:6505550231@10.225.20.18:5991;transport=tcp;ob>;";
+  _patch_aor->remove_subscription(AoRTestUtils::SUBSCRIPTION_ID);
 
   update_bindings_expect_calls(false);
 
@@ -427,7 +437,7 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
   _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
 
   // Update binding on SM.
-  update_bindings();
+  update_bindings(true);
 
   // The subscription shares the same contact as the binding so we do NOT expect
   // a NOTIFY since there is a good change the NOTIFY will fail.
