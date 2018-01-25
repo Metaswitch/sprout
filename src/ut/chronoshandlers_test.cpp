@@ -33,6 +33,8 @@ using ::testing::SaveArg;
 using ::testing::InSequence;
 using ::testing::NiceMock;
 
+// Test that S4 handles request from Chronos about AoRTimeout, by sending back
+// response and calling into SM.
 class ChronosAoRTimeoutTasksTest : public TestWithMockSdms
 {
 public:
@@ -56,13 +58,16 @@ public:
   ChronosAoRTimeoutTask* handler;
 };
 
-// Test main flow, without a remote store.
+// Mainline test
 TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
 {
-  // Build request
+  // Build request from Chronos
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_POST);
 
+  {
+    InSequence s;
+      -      EXPECT_CALL(*stack, send_reply(_, 200, _));
   handler->run();
 }
 
