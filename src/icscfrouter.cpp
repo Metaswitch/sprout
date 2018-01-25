@@ -169,7 +169,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
       else
       {
         TRC_WARNING("Invalid SCSCF URI %s", scscf.c_str());
-        status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+        status_code = (pjsip_status_code)477;
       }
     }
     else
@@ -253,7 +253,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
         {
           // Failed to parse capabilities, so reject with 480 response.
           TRC_INFO("Malformed required capabilities returned by HSS");
-          status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+          status_code = (pjsip_status_code)473;
         }
       }
 
@@ -270,7 +270,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
     {
       // Failure response from HSS indicating that a subscriber exists but is unregistered and
       // has no unregistered services, so respond with 480 Temporarily Unavailable.
-      status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+      status_code = (pjsip_status_code)474;
     }
     else
     {
@@ -374,7 +374,7 @@ int ICSCFUARouter::hss_query()
   {
     // HSS failed to respond or responded with invalid data, so reject the
     // request with a 480.
-    status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    status_code = (pjsip_status_code)475;
   }
   else
   {
@@ -447,7 +447,7 @@ int ICSCFLIRouter::hss_query()
     // HSS failed to respond or responded with invalid data, so reject the
     // request with a 480.
     // LCOV_EXCL_START
-    status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    status_code = (pjsip_status_code)476;
     // LCOV_EXCL_STOP
   }
   else

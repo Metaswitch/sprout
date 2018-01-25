@@ -1150,7 +1150,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           {
             // Send a SIP 504 response if we got a 500/503 HTTP response.
             TRC_ERROR("AS retargeting failed to lookup IFCs for served user");
-            status_code = PJSIP_SC_SERVER_TIMEOUT;
+            status_code = (pjsip_status_code)574;
           }
           else
           {
@@ -1266,7 +1266,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
         {
           // Send a SIP 504 response if we got a 500/503 HTTP response.
-          status_code = PJSIP_SC_SERVER_TIMEOUT;
+          status_code = (pjsip_status_code)584;
         }
         else
         {
@@ -1859,7 +1859,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
   if (targets.empty())
   {
     // No valid target bindings for this request, so reject it.
-    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+    pjsip_msg* rsp = create_response(req, (pjsip_status_code)479);
     send_response(rsp);
     free_msg(req);
   }

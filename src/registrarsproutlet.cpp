@@ -530,7 +530,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // response.
     // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
     TRC_ERROR("Failed to connect to local store, private_id= %s", private_id.c_str());
-    st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+    st_code = (pjsip_status_code)510;
 
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED_REGSTORE, 0);
     event.add_var_param(public_id);
@@ -611,7 +611,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     event.add_var_param(public_id);
     SAS::report_event(event);
 
-    rsp->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+    rsp->line.status.code = 520;
 
     acr->tx_response(rsp);
 

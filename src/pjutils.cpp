@@ -1875,7 +1875,7 @@ pjsip_status_code PJUtils::redirect_int(pjsip_msg* msg, pjsip_uri* target, pj_po
   static const int MAX_HISTORY_INFOS = 5;
 
   // Default the code to 480 Temporarily Unavailable.
-  code = (code != 0) ? code : PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+  code = (code != 0) ? code : (pjsip_status_code)478;
   pjsip_status_code rc = code;
 
   // Count the number of existing History-Info headers.
@@ -1900,7 +1900,7 @@ pjsip_status_code PJUtils::redirect_int(pjsip_msg* msg, pjsip_uri* target, pj_po
     std::string div = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
     div += ";reason=";
     div += (code == PJSIP_SC_BUSY_HERE) ? "user-busy" :
-      (code == PJSIP_SC_TEMPORARILY_UNAVAILABLE) ? "no-answer" :
+      (code == (pjsip_status_code)478) ? "no-answer" :
       (code == PJSIP_SC_NOT_FOUND) ? "out-of-service" :
       (code == 0) ? "unconditional" :
       "unknown";

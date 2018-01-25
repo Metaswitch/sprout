@@ -903,8 +903,8 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     if (av_source_unavailable)
     {
       TRC_ERROR("Downstream node is overloaded or unresponsive, unable to get Authentication vector");
-      rsp->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
-      rsp->line.status.reason = *pjsip_get_status_text(PJSIP_SC_SERVER_TIMEOUT);
+      rsp->line.status.code = 514;
+      rsp->line.status.reason = *pjsip_get_status_text((pjsip_status_code)55);
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_FAILED_OVERLOAD, 0);
       SAS::report_event(event);
     }
