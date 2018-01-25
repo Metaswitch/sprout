@@ -17,15 +17,9 @@
 #include <vector>
 #include <unordered_map>
 
-#include "analyticslogger.h"
-#include "aschain.h"
 #include "acr.h"
-#include "hssconnection.h"
 #include "subscriber_manager.h"
 #include "sproutlet.h"
-#include "snmp_counter_table.h"
-#include "session_expires_helper.h"
-#include "as_communication_tracker.h"
 #include "compositesproutlet.h"
 
 class SubscriptionSproutletTsx;
@@ -88,7 +82,13 @@ public:
 protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
+
+  /// Create a subscription object. This is called if the subscribe processing
+  /// is going to add/update a subscription.
   Subscription* create_subscription(pjsip_msg* req, int expiry);
+
+  /// Convert the response from the Subscriber Manager to a SIP code to send
+  /// to the caller.
   pjsip_status_code subscribe_convert_to_sip(HTTPCode rc);
 
   SubscriptionSproutlet* _subscription;

@@ -193,7 +193,13 @@ string SubscribeMessage::get()
   return ret;
 }
 
-ACTION_P2(SaveSubscriptionPair, first, second)//, "Save off the subscription object")
+/// Save off the SubscriptionPair. We can't just use SaveArg, as this only
+/// saves off the SubscriptionPair, not the SubscriptionPair members. This
+/// means that the subscription object has been deleted before we can
+/// check it. This allows us to create a copy of the Subscription object
+/// we can check against. The caller is responsible for deleting the copied
+/// object.
+ACTION_P2(SaveSubscriptionPair, first, second)
 {
   *first = arg1.first;
   *second = Subscription(*(arg1.second));
@@ -339,7 +345,6 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
 
   // Check the Charging, From and Expires headers.
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
-  EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=\"CCF TEST\";ecf=\"ECF TEST\"", get_headers(out, "P-Charging-Function-Addresses"));
   EXPECT_EQ("Expires: 300", get_headers(out, "Expires"));
 
@@ -389,7 +394,6 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
 
   // Check the Charging, From and Expires headers.
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
-  EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=\"CCF TEST\";ecf=\"ECF TEST\"", get_headers(out, "P-Charging-Function-Addresses"));
   EXPECT_EQ("Expires: 0", get_headers(out, "Expires"));
 }
