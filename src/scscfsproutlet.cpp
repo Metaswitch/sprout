@@ -1149,6 +1149,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
           {
             // Send a SIP 504 response if we got a 500/503 HTTP response.
+            TRC_ERROR("AS retargeting failed to lookup IFCs for served user");
             status_code = PJSIP_SC_SERVER_TIMEOUT;
           }
           else
@@ -1260,7 +1261,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       }
       else
       {
-        TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
+        TRC_ERROR("Failed to retrieve ServiceProfile for %s", served_user.c_str());
 
         if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
         {
