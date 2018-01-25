@@ -53,6 +53,7 @@ public:
                  const std::list<Sproutlet*>& sproutlets,
                  const std::set<std::string>& stateless_proxies,
                  SNMP::CounterTable* route_to_remote_alias_tbl,
+                 SNMP::CounterTable* accept_for_remote_alias_tbl,
                  int max_sproutlet_depth=DEFAULT_MAX_SPROUTLET_DEPTH);
 
   /// Destructor.
@@ -81,7 +82,7 @@ protected:
 
   // When a host is compared against the alias list, there are three different
   // match possibilities.
-  enum AliasMatchType
+  enum AliasMatchLocality
   {
     // The hostname matches neither any local alias nor any remote alias
     NO_MATCH,
@@ -93,7 +94,7 @@ protected:
     LOCAL
   };
 
-  static bool is_alias_match(AliasMatchType match)
+  static bool is_alias_match(AliasMatchLocality match)
   {
     switch (match)
     {
@@ -110,11 +111,30 @@ protected:
   struct SproutletMatch
   {
     Sproutlet* sproutlet;
-    AliasMatchType match_type;
+    AliasMatchLocality match_locality;
     SproutletMatch(Sproutlet* sproutlet,
-                   AliasMatchType match_type) : 
-    sproutlet(sproutlet),
-    match_type(match_type)
+                   AliasMatchLocality match_locality) : 
+      sproutlet(sproutlet),
+      match_locality(match_locality)
+    {}
+  };
+
+  enum SproutletTsxMatchLocality
+  {
+    NO_MATCH_AT_ALL,
+    NO_MATCH_REJECTED_REMOTE_MATCH,
+    MATCH_REMOTE,
+    MATCH_LOCAL,
+  };
+
+  struct SproutletTsxMatch
+  {
+    SproutletTsx* sproutlet_tsx;
+    SproutletTsxMatchLocality match_locality;
+    SproutletTsxMatch(SproutletTsx* sproutlet_tsx,
+                      SproutletTsxMatchLocality match_locality) :
+      sproutlet_tsx(sproutlet_tsx),
+      match_locality(match_locality)
     {}
   };
 
@@ -157,13 +177,12 @@ protected:
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
-  // TJW2 TODO signature?
-  AliasMatchType get_uri_locality(const pjsip_uri* uri);
+  AliasMatchLocality get_uri_locality(const pjsip_uri* uri);
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
-  AliasMatchType get_host_locality(const pj_str_t* host) const;
+  AliasMatchLocality get_host_locality(const pj_str_t* host) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,
                         const Sproutlet* sproutlet) const;
@@ -256,12 +275,17 @@ protected:
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
 
+    /// TJW2 TODO: Comment
+    bool accept_sproutlet_match(SproutletMatch match,
+                                bool always_serve_remote_aliases,
+                                std::string& alias,
+                                SproutletTsxMatchLocality& tsx_match_locality);
+
     /// Finds a SproutletTsx willing to handle a request
-    SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
-                                    int port,
-                                    std::string& alias,
-                                    bool allow_remote_aliases,
-                                    bool& remote_match_rejected);
+    SproutletTsxMatch get_sproutlet_tsx(pjsip_tx_data* req,
+                                        int port,
+                                        std::string& alias,
+                                        bool allow_remote_aliases);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;
@@ -335,6 +359,7 @@ protected:
   static const pj_str_t STR_SERVICE;
 
   SNMP::CounterTable* _route_to_remote_alias_tbl;
+  SNMP::CounterTable* _accept_for_remote_alias_tbl;
 
   const int _max_sproutlet_depth;
 

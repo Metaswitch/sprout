@@ -1991,6 +1991,7 @@ int main(int argc, char* argv[])
   SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
   SNMP::CounterTable* route_to_remote_alias_tbl = NULL;
+  SNMP::CounterTable* accept_for_remote_alias_tbl = NULL;
 
   if (opt.pcscf_enabled)
   {
@@ -2045,6 +2046,8 @@ int main(int argc, char* argv[])
 
     route_to_remote_alias_tbl = SNMP::CounterTable::create("route_to_remote_alias",
                                                            "1.2.826.0.1.1578918.9.3.44");
+    accept_for_remote_alias_tbl = SNMP::CounterTable::create("accept_for_remote_alias",
+                                                           "1.2.826.0.1.1578918.9.3.45");
   }
 
   // Create Sprout's alarm objects.
@@ -2401,6 +2404,7 @@ int main(int argc, char* argv[])
                                          sproutlets,
                                          opt.stateless_proxies,
                                          route_to_remote_alias_tbl,
+                                         accept_for_remote_alias_tbl,
                                          opt.max_sproutlet_depth);
     if (sproutlet_proxy == NULL)
     {
@@ -2693,6 +2697,7 @@ int main(int argc, char* argv[])
   delete token_rate_scalar;
 
   delete route_to_remote_alias_tbl;
+  delete accept_for_remote_alias_tbl;
 
   hc->stop_thread();
   delete hc;

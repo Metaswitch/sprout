@@ -39,6 +39,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::list<Sproutlet*>& sproutlets,
                                const std::set<std::string>& stateless_proxies,
                                SNMP::CounterTable* route_to_remote_alias_tbl,
+                               SNMP::CounterTable* accept_for_remote_alias_tbl,
                                int max_sproutlet_depth) :
   BasicProxy(endpt,
              "mod-sproutlet-controller",
@@ -51,6 +52,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
   _always_serve_remote_aliases(always_serve_remote_aliases),
   _sproutlets(sproutlets),
   _route_to_remote_alias_tbl(route_to_remote_alias_tbl),
+  _accept_for_remote_alias_tbl(accept_for_remote_alias_tbl),
   _max_sproutlet_depth(max_sproutlet_depth)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
@@ -173,7 +175,7 @@ SproutletProxy::SproutletMatch
 {
   TRC_DEBUG("Find target Sproutlet for request");
 
-  SproutletMatch sproutlet_match(NULL, AliasMatchType::NO_MATCH);
+  SproutletMatch sproutlet_match(NULL, AliasMatchLocality::NO_MATCH);
   std::string id;
 
   // Find and parse the top Route header.
@@ -246,13 +248,13 @@ SproutletProxy::SproutletMatch
     // header or the URI in the Route header corresponds to our hostname.
     TRC_DEBUG("No Sproutlet found using service name or host");
 
-    AliasMatchType match;
+    AliasMatchLocality match;
 
     if (route == NULL)
     {
       // If there is no route header, we may assume that we can try to handle
       // the request locally.
-      match = AliasMatchType::LOCAL;
+      match = AliasMatchLocality::LOCAL;
     }
     else if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
@@ -262,7 +264,7 @@ SproutletProxy::SproutletMatch
     else
     {
       // Otherwise, there is no way to match.
-      match = AliasMatchType::NO_MATCH; // LCOV_EXCL_LINE
+      match = AliasMatchLocality::NO_MATCH; // LCOV_EXCL_LINE
     }
 
     if (is_alias_match(match))
@@ -297,13 +299,13 @@ SproutletProxy::SproutletMatch
                                            std::string& local_hostname,
                                            SPROUTLET_SELECTION_TYPES& selection_type) const
 {
-  SproutletMatch sproutlet_match(NULL, AliasMatchType::NO_MATCH);
+  SproutletMatch sproutlet_match(NULL, AliasMatchLocality::NO_MATCH);
 
   if (!PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     // LCOV_EXCL_START
     TRC_DEBUG("Sproutlets cannot match non-SIP URIs");
-    return SproutletMatch(NULL, AliasMatchType::NO_MATCH);
+    return SproutletMatch(NULL, AliasMatchLocality::NO_MATCH);
     // LCOV_EXCL_STOP
   }
 
@@ -322,7 +324,7 @@ SproutletProxy::SproutletMatch
     TRC_DEBUG("Found services param - %.*s",
               services_param->value.slen,
               services_param->value.ptr);
-    AliasMatchType match = get_host_locality(&sip_uri->host);
+    AliasMatchLocality match = get_host_locality(&sip_uri->host);
     if (is_alias_match(match))
     {
       // Check if this service matches a sproutlet.
@@ -363,7 +365,7 @@ SproutletProxy::SproutletMatch
                 hostname.slen,
                 hostname.ptr);
 
-      AliasMatchType match = get_host_locality(&hostname);
+      AliasMatchLocality match = get_host_locality(&hostname);
       if (is_alias_match(match))
       {
         // Check if the part of the hostname before the first '.' matches
@@ -387,7 +389,7 @@ SproutletProxy::SproutletMatch
   {
     TRC_DEBUG("Found user part - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
 
-    AliasMatchType match = get_host_locality(&sip_uri->host);
+    AliasMatchLocality match = get_host_locality(&sip_uri->host);
     if (is_alias_match(match))
     {
       // Check if the user part matches a sproutlet.
@@ -481,9 +483,9 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   return uri;
 }
 
-SproutletProxy::AliasMatchType SproutletProxy::get_uri_locality(const pjsip_uri* uri)
+SproutletProxy::AliasMatchLocality SproutletProxy::get_uri_locality(const pjsip_uri* uri)
 {
-  AliasMatchType best_match = AliasMatchType::NO_MATCH;
+  AliasMatchLocality best_match = AliasMatchLocality::NO_MATCH;
 
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
@@ -497,18 +499,18 @@ SproutletProxy::AliasMatchType SproutletProxy::get_uri_locality(const pjsip_uri*
       hostname.slen -= sep - hostname.ptr + 1;
       hostname.ptr = sep + 1;
 
-      AliasMatchType service_match = get_host_locality(&hostname);
+      AliasMatchLocality service_match = get_host_locality(&hostname);
 
       // Set best_match to the 'maximum' of best_match and service_match, 
       // considering NO_MATCH < REMOTE < LOCAL
-      if (service_match == AliasMatchType::LOCAL)
+      if (service_match == AliasMatchLocality::LOCAL)
       {
-        best_match = AliasMatchType::LOCAL;
+        best_match = AliasMatchLocality::LOCAL;
       }
-      else if (service_match == AliasMatchType::REMOTE &&
-               best_match == AliasMatchType::NO_MATCH)
+      else if (service_match == AliasMatchLocality::REMOTE &&
+               best_match == AliasMatchLocality::NO_MATCH)
       {
-        best_match = AliasMatchType::REMOTE;
+        best_match = AliasMatchLocality::REMOTE;
       }
 
     }
@@ -564,6 +566,7 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
   return local_hostname;
 }
 
+// TJW2 TODO: Update comments
 // Checks if the given host is an alias of this node. Returns a true/false
 // value, along with a match type - NO_MATCH, MATCH, or REMOTE_MATCH_REJECTED,
 // returned in the case that remote aliases are not allowed but the host matches
@@ -582,12 +585,12 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
 // node is in site 1, scscf.site-2.homedomain.com may be a remote alias.
 // Requests for remote aliases of this node will be accepted off the wire, but
 // will be routed externally if recieved from an internal Sproutlet.
-SproutletProxy::AliasMatchType
+SproutletProxy::AliasMatchLocality
   SproutletProxy::get_host_locality(const pj_str_t* host) const
 {
   if (!pj_stricmp(host, &_root_uri->host))
   {
-    return AliasMatchType::LOCAL;
+    return AliasMatchLocality::LOCAL;
   }
 
   for (std::unordered_set<std::string>::const_iterator it = _host_local_aliases.begin();
@@ -596,7 +599,7 @@ SproutletProxy::AliasMatchType
   {
     if (!pj_stricmp2(host, it->c_str()))
     {
-      return AliasMatchType::LOCAL;
+      return AliasMatchLocality::LOCAL;
     }
   }
 
@@ -606,11 +609,11 @@ SproutletProxy::AliasMatchType
   {
     if (!pj_stricmp2(host, it->c_str()))
     {
-      return AliasMatchType::REMOTE;
+      return AliasMatchLocality::REMOTE;
     }
   }
 
-  return AliasMatchType::NO_MATCH;
+  return AliasMatchLocality::NO_MATCH;
 }
 
 bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
@@ -743,18 +746,18 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     pjsip_route_hdr* route = (pjsip_route_hdr*)
                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
 
+    // TJW2 TODO: Update comment
     // For the purpose of redundancy, we allow remote aliases here, that is,
     // accept requests intended for a remote alias of this site off the wire.
     // This means that this node can handle traffic destined for a remote site
     // in the case that the remote site has failed.
-    bool unused;
-    SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(_req,
-                                                    rdata->tp_info.transport->local_name.port,
-                                                    alias,
-                                                    true,
-                                                    unused);
+    SproutletTsxMatch sproutlet_tsx_match =
+      get_sproutlet_tsx(_req,
+                        rdata->tp_info.transport->local_name.port,
+                        alias,
+                        true);
 
-    if (sproutlet_tsx == NULL)
+    if (sproutlet_tsx_match.sproutlet_tsx == NULL)
     {
       // Failed to find a target Sproutlet for this request, so we need to
       // decide what to do.
@@ -769,8 +772,16 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     }
     else
     {
+
+    if (sproutlet_tsx_match.match_locality ==
+          SproutletTsxMatchLocality::MATCH_REMOTE &&
+        _sproutlet_proxy->_accept_for_remote_alias_tbl)
+    {
+      _sproutlet_proxy->_accept_for_remote_alias_tbl->increment();
+    }
+
       // We have a SproutletTsx, so get the sproutlet that relates to it.
-      sproutlet = sproutlet_tsx->_sproutlet;
+      sproutlet = sproutlet_tsx_match.sproutlet_tsx->_sproutlet;
     }
 
     if (status == PJ_SUCCESS)
@@ -778,7 +789,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
       _root = new SproutletWrapper(_sproutlet_proxy,
                                    this,
                                    sproutlet,
-                                   sproutlet_tsx,
+                                   sproutlet_tsx_match.sproutlet_tsx,
                                    alias,
                                    _req,
                                    _original_transport,
@@ -1028,32 +1039,32 @@ void SproutletProxy::UASTsx::schedule_requests()
     {
       std::string alias;
 
+      // TJW2 TODO: Update comment
       // Do not allow remote aliases. Requests intended for another site should
       // be routed to that site - this means that the terminating side of a call
       // will be handled in the site that subscriber is registered.
-      bool remote_match_rejected = false;
-      SproutletTsx* sproutlet_tsx =
+      SproutletTsxMatch sproutlet_tsx_match =
         get_sproutlet_tsx(req.req,
                           0,
                           alias,
-                          _sproutlet_proxy->_always_serve_remote_aliases,
-                          remote_match_rejected);
+                          _sproutlet_proxy->_always_serve_remote_aliases);
 
-      if (sproutlet_tsx != NULL)
+      if (sproutlet_tsx_match.sproutlet_tsx != NULL)
       {
         // Found a local Sproutlet and SproutletTsx to handle the request, so
         // create a SproutletWrapper. Since the Tsx is non-NULL, there is
         // guaranteed to be a sproutlet to handle the request.
-        SproutletWrapper* downstream = new SproutletWrapper(_sproutlet_proxy,
-                                                            this,
-                                                            sproutlet_tsx->_sproutlet,
-                                                            sproutlet_tsx,
-                                                            alias,
-                                                            req.req,
-                                                            _original_transport,
-                                                            req.upstream_network_func,
-                                                            req.sproutlet_depth,
-                                                            trail());
+        SproutletWrapper* downstream =
+          new SproutletWrapper(_sproutlet_proxy,
+                               this,
+                               sproutlet_tsx_match.sproutlet_tsx->_sproutlet,
+                               sproutlet_tsx_match.sproutlet_tsx,
+                               alias,
+                               req.req,
+                               _original_transport,
+                               req.upstream_network_func,
+                               req.sproutlet_depth,
+                               trail());
 
         // Set up the mappings.
         if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
@@ -1088,7 +1099,8 @@ void SproutletProxy::UASTsx::schedule_requests()
         TRC_DEBUG("No local sproutlet matches request");
         size_t index;
 
-        if (remote_match_rejected &&
+        if (sproutlet_tsx_match.match_locality ==
+              SproutletTsxMatchLocality::NO_MATCH_REJECTED_REMOTE_MATCH &&
             _sproutlet_proxy->_route_to_remote_alias_tbl)
         {
           _sproutlet_proxy->_route_to_remote_alias_tbl->increment();
@@ -1320,41 +1332,73 @@ void SproutletProxy::UASTsx::check_destroy()
   }
 }
 
-// TJW2 TODO: Only disregard remote aliases on network function boundary,
-// including in next hops
-// TJW2 TODO: Extract up another level?
-SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
-                                                        int port,
-                                                        std::string& alias,
-                                                        bool allow_remote_aliases,
-                                                        bool& remote_match_rejected)
+bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
+                                                    bool always_serve_remote_aliases,
+                                                    std::string& alias,
+                                                    SproutletTsxMatchLocality& tsx_match_locality)
 {
-  TRC_DEBUG("%s remote aliases.",
-            allow_remote_aliases ? "Allowing" : "Not allowing");
+  if (match.match_locality == AliasMatchLocality::LOCAL)
+  {
+    SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_ACCEPT, 0);
+    event.add_var_param(match.sproutlet->service_name());
+    event.add_var_param(alias);
+    event.add_static_param(match.match_locality);
+    SAS::report_event(event);
+    tsx_match_locality = SproutletTsxMatchLocality::MATCH_LOCAL;
+    return true;
+  }
+  else if (match.match_locality == AliasMatchLocality::REMOTE)
+  {
+    if (!always_serve_remote_aliases && alias == match.sproutlet->network_function())
+    {
+      TRC_DEBUG("Routing to remote alias %s", alias.c_str());
+      SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_REJECT, 0);
+      event.add_var_param(match.sproutlet->service_name());
+      event.add_var_param(alias);
+      tsx_match_locality = SproutletTsxMatchLocality::NO_MATCH_REJECTED_REMOTE_MATCH;
+      return false;
+    }
+    else
+    {
+      TRC_DEBUG("Serving remote alias %s", alias.c_str());
+      SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_ACCEPT, 0);
+      event.add_var_param(match.sproutlet->service_name());
+      event.add_var_param(alias);
+      event.add_static_param(match.match_locality);
+      SAS::report_event(event);
+      tsx_match_locality = SproutletTsxMatchLocality::MATCH_REMOTE;
+      return true;
+    }
+  }
+  else
+  {
+    tsx_match_locality = SproutletTsxMatchLocality::NO_MATCH_AT_ALL;
+    return false;
+  }
+}
+
+SproutletProxy::SproutletTsxMatch
+  SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
+                                            int port,
+                                            std::string& alias,
+                                            bool always_serve_remote_aliases)
+{
   SproutletTsx* sproutlet_tsx = NULL;
   Sproutlet* sproutlet = NULL;
-  remote_match_rejected = false;
+  SproutletTsxMatchLocality tsx_match_locality = 
+    SproutletTsxMatchLocality::NO_MATCH_AT_ALL;
 
   // Do an initial lookup for the target sproutlet.
   SproutletMatch match = _sproutlet_proxy->target_sproutlet(req->msg,
                                                             port,
                                                             alias,
                                                             trail());
-  if (match.match_type == AliasMatchType::LOCAL)
+  if (accept_sproutlet_match(match,
+                             always_serve_remote_aliases,
+                             alias,
+                             tsx_match_locality))
   {
     sproutlet = match.sproutlet;
-  }
-  else if (match.match_type == AliasMatchType::REMOTE) // TJW2 AND we matched on network function?
-  {
-    if (allow_remote_aliases)
-    {
-      sproutlet = match.sproutlet;
-    }
-    else
-    {
-      remote_match_rejected = true;
-      sproutlet = NULL;
-    }
   }
   else
   {
@@ -1365,8 +1409,6 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
   // wants to handle the request or run out of sproutlets.
   while (sproutlet != NULL)
   {
-    // TJW2 Did we match on the network function? If so, and if remote aliases
-    // aren't allowed, we should return NULL
     // Found a local Sproutlet, so offer the sproutlet a chance to handle
     // the request.
     pjsip_sip_uri* next_hop = NULL;
@@ -1388,15 +1430,14 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
     pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req->msg,
                                                                   PJSIP_H_ROUTE,
                                                                   NULL);
-    AliasMatchType uri_match_type = NO_MATCH;
+    AliasMatchLocality uri_match_locality = NO_MATCH;
     if (route != NULL)
     {
       // If there is a route header, see if it applies to us.
-      uri_match_type = _sproutlet_proxy->get_uri_locality(route->name_addr.uri);
+      uri_match_locality = _sproutlet_proxy->get_uri_locality(route->name_addr.uri);
     }
 
-    if (uri_match_type == AliasMatchType::LOCAL ||
-         (uri_match_type == AliasMatchType::REMOTE && allow_remote_aliases)) //LCOV_EXCL_LINE TJW2 TODO
+    if (is_alias_match(uri_match_locality))
     {
       TRC_DEBUG("Remove top Route header %s",
                 PJUtils::hdr_to_string(route).c_str());
@@ -1414,29 +1455,19 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
                                                0,
                                                alias,
                                                trail());
-    if (match.match_type == AliasMatchType::LOCAL)
+    if (accept_sproutlet_match(match,
+                               always_serve_remote_aliases,
+                               alias,
+                               tsx_match_locality))
     {
       sproutlet = match.sproutlet;
-    } // LCOV_EXCL_START
-    else if (match.match_type == AliasMatchType::REMOTE)
-    {
-      if (allow_remote_aliases)
-      {
-        sproutlet = match.sproutlet;
-      }
-      else
-      {
-        remote_match_rejected = true;
-        sproutlet = NULL;
-      } // LCOV_EXCL_STOP
     }
     else
     {
       sproutlet = NULL;
     }
   }
-
-  return sproutlet_tsx;
+  return SproutletTsxMatch(sproutlet_tsx, tsx_match_locality);
 }
 
 
@@ -1990,7 +2021,7 @@ bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
   // Sproutlets should not distinguish between LOCAL and REMOTE matches - once a
   // message has been routed into a Sproutlet, we've already decided to accept
     // it.
-  return (_proxy->get_uri_locality(uri) != SproutletProxy::AliasMatchType::NO_MATCH);
+  return (_proxy->get_uri_locality(uri) != SproutletProxy::AliasMatchLocality::NO_MATCH);
 }
 
 pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const

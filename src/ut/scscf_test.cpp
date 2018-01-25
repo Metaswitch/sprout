@@ -395,6 +395,7 @@ public:
                                 true,
                                 sproutlets,
                                 std::set<std::string>(),
+                                nullptr,
                                 nullptr);
   }
 
@@ -10436,6 +10437,7 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                 true,
                                 sproutlets,
                                 std::set<std::string>(),
+                                nullptr,
                                 nullptr);
   }
 
@@ -10550,6 +10552,7 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
                                 true,
                                 sproutlets,
                                 std::set<std::string>(),
+                                nullptr,
                                 nullptr);
   }
 
@@ -10685,6 +10688,7 @@ class SCSCFTestWithRalf : public SCSCFTestBase
                                 true,
                                 sproutlets,
                                 std::set<std::string>(),
+                                nullptr,
                                 nullptr);
   }
 

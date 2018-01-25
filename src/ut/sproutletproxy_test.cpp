@@ -886,8 +886,9 @@ public:
     std::unordered_set<std::string> host_remote_aliases;
     host_remote_aliases.insert("proxy1.homedomain-remote");
 
-    // Create a mock SNMP counter.
+    // Create mock SNMP counters.
     _mock_route_to_remote_alias_counter = new MockSnmpCounterTable();
+    _mock_accept_for_remote_alias_counter = new MockSnmpCounterTable();
 
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
@@ -898,7 +899,8 @@ public:
                                 false,
                                 _sproutlets,
                                 std::set<std::string>(),
-                                _mock_route_to_remote_alias_counter);
+                                _mock_route_to_remote_alias_counter,
+                                _mock_accept_for_remote_alias_counter);
 
     // Schedule timers.
     SipTest::poll();
@@ -913,6 +915,7 @@ public:
     delete _proxy;
 
     delete _mock_route_to_remote_alias_counter;
+    delete _mock_accept_for_remote_alias_counter;
 
     for (std::list<Sproutlet*>::iterator i = _sproutlets.begin();
          i != _sproutlets.end();
@@ -1132,9 +1135,11 @@ protected:
   static SproutletProxy* _proxy;
   static std::list<Sproutlet*> _sproutlets;
   static MockSnmpCounterTable* _mock_route_to_remote_alias_counter;
+  static MockSnmpCounterTable* _mock_accept_for_remote_alias_counter;
 };
 
-MockSnmpCounterTable* SproutletProxyTest::_mock_route_to_remote_alias_counter; // TJW2 Why?
+MockSnmpCounterTable* SproutletProxyTest::_mock_route_to_remote_alias_counter;
+MockSnmpCounterTable* SproutletProxyTest::_mock_accept_for_remote_alias_counter;
 SproutletProxy* SproutletProxyTest::_proxy;
 std::list<Sproutlet*> SproutletProxyTest::_sproutlets;
 

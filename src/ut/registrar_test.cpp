@@ -268,6 +268,7 @@ public:
                                           true,
                                           sproutlets,
                                           std::set<std::string>(),
+                                          nullptr,
                                           nullptr);
   }
 
@@ -3395,6 +3396,7 @@ public:
                                           true,
                                           sproutlets,
                                           std::set<std::string>(),
+                                          nullptr,
                                           nullptr);
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
