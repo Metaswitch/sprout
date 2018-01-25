@@ -989,20 +989,8 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
     // we'll log an ICID marker to correlate the trails.
     if (!_as_chain_link.is_set())
     {
-      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)pjsip_msg_find_hdr_by_name(req,
-                                                                          &STR_P_C_V,
-                                                                          NULL);
-      if (pcv)
-      {
-        TRC_DEBUG("No ODI token, or invalid ODI token, on request - logging ICID marker %.*s for B2BUA AS correlation", pcv->icid.slen, pcv->icid.ptr);
-        SAS::Marker icid_marker(trail(), MARKER_ID_IMS_CHARGING_ID, 1u);
-        icid_marker.add_var_param(pcv->icid.slen, pcv->icid.ptr);
-        SAS::report_marker(icid_marker, SAS::Marker::Scope::Trace);
-      }
-      else
-      {
-        TRC_DEBUG("No ODI token, or invalid ODI token, on request, and no P-Charging-Vector header (so can't log ICID for correlation)");
-      }
+      TRC_DEBUG("No ODI token, or invalid ODI token, on request");
+      PJUtils::mark_icid(trail(), req);
     }
 
     TRC_DEBUG("Got our Route header, session case %s, OD=%s",
