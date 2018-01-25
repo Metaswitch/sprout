@@ -528,35 +528,26 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       {
         // The bindings are keyed off the default IMPU.
         std::string aor = _hss_cache_helper->_default_uri;
-        AoRPair* aor_pair = NULL;
         // This empty bindings map will be returned by the get_bindings function
         // containing all non-expired bindings for the given aor.
         Bindings bindings;
         _scscf->get_bindings(aor, bindings, trail());
 
-        if ((aor_pair != NULL) &&
-            (aor_pair->get_current() != NULL))
+        if (!bindings.empty())
         {
-          if (!aor_pair->get_current()->bindings().empty())
+          // Loop over the bindings. If any binding has an emergency registration,
+          // let the request through. When routing to UEs, we will make sure we
+          // only route the request to the bindings that have an emergency registration.
+          for (Bindings::const_iterator binding = bindings.begin();
+               binding != bindings.end();
+               ++binding)
           {
-            const Bindings bindings = aor_pair->get_current()->bindings();
-
-            // Loop over the bindings. If any binding has an emergency registration,
-            // let the request through. When routing to UEs, we will make sure we
-            // only route the request to the bindings that have an emergency registration.
-            for (Bindings::const_iterator binding = bindings.begin();
-                 binding != bindings.end();
-                 ++binding)
+            if (binding->second->_emergency_registration)
             {
-              if (binding->second->_emergency_registration)
-              {
-                emergency = true;
-                break;
-              }
+              emergency = true;
+              break;
             }
           }
-
-          delete aor_pair; aor_pair = NULL;
         }
       }
 

@@ -60,7 +60,7 @@ class BasicS4Test : public ::testing::Test
     _remote_s4_2 = new S4("site3", _aor_store);
     _s4 = new S4("site1",
                  _mock_chronos,
-                 "callback_uri",
+                 "/timers",
                  _aor_store,
                  {_remote_s4_1, _remote_s4_2});
 
@@ -987,10 +987,10 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
   std::string aor_id = "sip:6505550231@homedomain";
   int expiry = 200;
   AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, false, expiry);
+  std::string callback_uri; 
 
   // Build various arguments for Chronos call
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
-  std::string default_callback_uri = "/timers";
   std::map<std::string, uint32_t> tag_map;
   tag_map["BIND"] = aor->get_bindings_count();
   tag_map["REG"] = 1;
@@ -1000,11 +1000,12 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
   set_data_expect_call(Store::Status::OK, 3);
   EXPECT_CALL(*(this->_mock_chronos), send_post(_, 
                                                 expiry, 
-                                                default_callback_uri, 
+                                                _, 
                                                 opaque, 
                                                 _, 
                                                 tag_map))
     .WillOnce(DoAll(SetArgReferee<0>(AoRTestUtils::TIMER_ID),
+                    SaveArg<2>(&callback_uri),
                     Return(HTTP_OK)));
 
   HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
@@ -1013,6 +1014,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
   EXPECT_EQ(rc, 200);
   ASSERT_FALSE(aor == NULL);
   EXPECT_EQ(aor->_timer_id, AoRTestUtils::TIMER_ID);
+  EXPECT_EQ(callback_uri, "/timers");
 
   delete aor; aor = NULL;
 }
@@ -1051,10 +1053,10 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
   int expiry = 200;
   AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, true, expiry);
   std::string timer_id; 
+  std::string callback_uri; 
 
   // Build various arguments for Chronos call
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
-  std::string default_callback_uri = "/timers";
   std::map<std::string, uint32_t> tag_map;
   tag_map["BIND"] = aor->get_bindings_count();
   tag_map["REG"] = 1;
@@ -1064,11 +1066,12 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
   set_data_expect_call(Store::Status::OK, 3);
   EXPECT_CALL(*(this->_mock_chronos), send_put(_,
                                                expiry, 
-                                               default_callback_uri, 
+                                               _, 
                                                opaque, 
                                                _, 
                                                tag_map))
     .WillOnce(DoAll(SaveArg<0>(&timer_id),
+                    SaveArg<2>(&callback_uri),
                     Return(HTTP_OK)));
 
   HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
@@ -1076,6 +1079,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
   // Check the correct timer_id was used.
   EXPECT_EQ(rc, 200);
   EXPECT_EQ(timer_id, AoRTestUtils::TIMER_ID);
+  EXPECT_EQ(callback_uri, "/timers");
 
   delete aor; aor = NULL;
 }

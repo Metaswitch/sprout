@@ -2244,7 +2244,7 @@ int main(int argc, char* argv[])
 
   s4 = new S4("TODO LOCAL SITE NAME",
               chronos_connection,
-              "",
+              "/timers",
               local_aor_store,
               remote_s4s);
 
