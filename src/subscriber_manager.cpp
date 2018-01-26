@@ -9,6 +9,7 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
+#include "base_subscriber_manager.h"
 #include "subscriber_manager.h"
 #include "aor_utils.h"
 #include "pjutils.h"
@@ -21,6 +22,11 @@ SubscriberManager::SubscriberManager(S4* s4,
   _analytics(analytics_logger),
   _notify_sender(new NotifySender())
 {
+  if (_s4 != NULL)
+  {
+    TRC_DEBUG("Initialising S4 with reference to this subscriber manager");
+    _s4->initialise(this);
+  }
 }
 
 SubscriberManager::~SubscriberManager()

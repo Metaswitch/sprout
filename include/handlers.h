@@ -23,67 +23,6 @@
 #include "fifcservice.h"
 #include "aor.h"
 
-/// Common factory for all handlers that deal with timer pops. This is
-/// a subclass of SpawningHandler that requests HTTP flows to be
-/// logged at detail level.
-template<class H, class C>
-class TimerHandler : public HttpStackUtils::SpawningHandler<H, C>
-{
-public:
-  TimerHandler(C* cfg) : HttpStackUtils::SpawningHandler<H, C>(cfg)
-  {}
-
-  virtual ~TimerHandler() {}
-
-  HttpStack::SasLogger* sas_logger(HttpStack::Request& req)
-  {
-    // Note that we use a Chronos SAS Logger here even though this TimerHandler
-    // isn't specific to Chronos.  In reality there isn't anything Chronos
-    // specific about the logger, but we should fix up the naming in future
-    // when we actually support multiple timer services.
-    return &HttpStackUtils::CHRONOS_SAS_LOGGER;
-  }
-};
-
-/// Base AoRTimeoutTask class for tasks that implement AoR timeout callbacks
-/// from specific timer services.
-class AoRTimeoutTask : public HttpStackUtils::Task
-{
-public:
-  struct Config
-  {
-    Config(SubscriberDataManager* sdm,
-           std::vector<SubscriberDataManager*> remote_sdms,
-           HSSConnection* hss,
-           FIFCService* fifc_service,
-           IFCConfiguration ifc_configuration) :
-      _sdm(sdm),
-      _remote_sdms(remote_sdms),
-      _hss(hss),
-      _fifc_service(fifc_service),
-      _ifc_configuration(ifc_configuration)
-    {}
-    SubscriberDataManager* _sdm;
-    std::vector<SubscriberDataManager*> _remote_sdms;
-    HSSConnection* _hss;
-    FIFCService* _fifc_service;
-    IFCConfiguration _ifc_configuration;
-  };
-
-  AoRTimeoutTask(HttpStack::Request& req,
-                       const Config* cfg,
-                       SAS::TrailId trail) :
-    HttpStackUtils::Task(req, trail), _cfg(cfg)
-  {};
-
-  virtual void run() = 0;
-
-protected:
-  void process_aor_timeout(std::string aor_id);
-
-protected:
-  const Config* _cfg;
-};
 
 /// Base AuthTimeoutTask class for tasks that implement authentication timeout
 /// callbacks from specific timer services.

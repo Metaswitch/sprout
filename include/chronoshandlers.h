@@ -14,27 +14,6 @@
 
 #include "handlers.h"
 
-class ChronosAoRTimeoutTaskHandler;
-
-class ChronosAoRTimeoutTask : public AoRTimeoutTask
-{
-public:
-  ChronosAoRTimeoutTask(HttpStack::Request& req,
-                        const Config* cfg,
-                        SAS::TrailId trail) :
-    AoRTimeoutTask::AoRTimeoutTask(req, cfg, trail)
-  {};
-
-  void run();
-
-protected:
-  HTTPCode parse_response(std::string body);
-  void handle_response();
-  std::string _aor_id;
-
-  friend class ChronosAoRTimeoutTaskHandler;
-};
-
 class ChronosAuthTimeoutTask : public AuthTimeoutTask
 {
 public:
