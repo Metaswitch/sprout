@@ -19,6 +19,7 @@
 #include "mock_s4.h"
 #include "mock_hss_connection.h"
 #include "mock_analytics_logger.h"
+#include "rapidxml/rapidxml.hpp"
 
 using ::testing::_;
 using ::testing::Return;
@@ -30,6 +31,18 @@ using ::testing::InSequence;
 static const int DUMMY_TRAIL_ID = 0;
 static const std::string DEFAULT_ID = "sip:example.com";
 static const std::string OTHER_ID = "sip:another.com";
+
+// Constants for checking NOTIFY bodies.
+static const std::string ACTIVE = "active";
+static const std::string TERMINATED = "terminated";
+static const std::pair<std::string, std::string> ACTIVE_REGISTERED = std::make_pair("active", "registered");
+static const std::pair<std::string, std::string> ACTIVE_CREATED = std::make_pair("active", "created");
+static const std::pair<std::string, std::string> ACTIVE_REFRESHED = std::make_pair("active", "refreshed");
+static const std::pair<std::string, std::string> ACTIVE_SHORTENED = std::make_pair("active", "shortened");
+static const std::pair<std::string, std::string> TERMINATED_EXPIRED = std::make_pair("terminated", "expired");
+static const std::pair<std::string, std::string> TERMINATED_UNREGISTERED = std::make_pair("terminated", "unregistered");
+static const std::pair<std::string, std::string> TERMINATED_DEACTIVATED = std::make_pair("terminated", "deactivated");
+static const std::vector<std::pair<std::string, bool>> IRS_IMPUS = {std::make_pair(DEFAULT_ID, false)};
 
 /// Fixture for SubscriberManagerTest.
 class SubscriberManagerTest : public SipTest
@@ -110,6 +123,11 @@ private:
 
   void delete_bindings(Bindings& bindings);
   void delete_subscriptions(Subscriptions& subscriptions);
+
+  void check_notify(pjsip_msg* notify,
+                    std::string reg_state = ACTIVE,
+                    std::pair<std::string, std::string> contact_values = ACTIVE_REGISTERED,
+                    std::vector<std::pair<std::string, bool>> irs_impus = IRS_IMPUS);
 
   SubscriberManager* _subscriber_manager;
   MockS4* _s4;
@@ -292,6 +310,84 @@ void SubscriberManagerTest::delete_subscriptions(Subscriptions& subscriptions)
   }
 }
 
+void SubscriberManagerTest::check_notify(pjsip_msg* notify,
+                                        std::string reg_state,
+                                        std::pair<std::string, std::string> contact_values,
+                                        std::vector<std::pair<std::string, bool>> irs_impus)
+{
+  EXPECT_EQ("NOTIFY", str_pj(notify->line.status.reason));
+  EXPECT_EQ("Event: reg", get_headers(notify, "Event"));
+
+  // TODO check Subscription-State header.
+
+  std::string body;
+  char buf[16384];
+  int n = notify->body->print_body(notify->body, buf, sizeof(buf));
+  body.assign(buf, n);
+
+  // Parse the XML document, saving off the passed in string first (as parsing
+  // is destructive)
+  rapidxml::xml_document<> doc;
+  char* xml_str = doc.allocate_string(body.c_str());
+
+  try
+  {
+    doc.parse<rapidxml::parse_strip_xml_namespaces>(xml_str);
+  }
+  catch (rapidxml::parse_error err)
+  {
+    printf("Parse error in NOTIFY: %s\n\n%s", err.what(), body.c_str());
+    doc.clear();
+  }
+
+  rapidxml::xml_node<> *reg_info = doc.first_node("reginfo");
+  EXPECT_TRUE(reg_info);
+
+  EXPECT_EQ("urn:ietf:params:xml:ns:reginfo", std::string(reg_info->first_attribute("xmlns")->value()));
+  EXPECT_EQ("urn:ietf:params:xml:ns:gruuinfo", std::string(reg_info->first_attribute("gr")->value()));
+  EXPECT_EQ("http://www.w3.org/2001/XMLSchema-instance", std::string(reg_info->first_attribute("xsi")->value()));
+  EXPECT_EQ("urn:3gpp:ns:extRegExp:1.0", std::string(reg_info->first_attribute("ere")->value()));
+  EXPECT_EQ("0", std::string(reg_info->first_attribute("version")->value()));
+
+  int num_reg = 0;
+
+  for (rapidxml::xml_node<> *registration = reg_info->first_node("registration");
+       registration;
+       registration = registration->next_sibling("registration"), num_reg++)
+  {
+    // Check if the registration element should have a wildcard identity. We pass
+    // this in as a simple bool rather than use is_wildcard_identity, as using
+    // the function in UT and production code will mask any issues with it.
+    if (irs_impus.at(num_reg).second)
+    {
+      // In the wildcard case the aor value should be set to the default value,
+      // and the wildcard identity is in its own element (note that the ere: namespace
+      // has been stripped off already when we parse this in UT).
+      EXPECT_EQ("sip:wildcardimpu@wildcard", std::string(registration->first_attribute("aor")->value()));
+      rapidxml::xml_node<> *wildcard = registration->first_node("wildcardedIdentity");
+      EXPECT_TRUE(wildcard);
+      EXPECT_EQ(irs_impus.at(num_reg).first, std::string(wildcard->value()));
+    }
+    else
+    {
+      EXPECT_EQ(irs_impus.at(num_reg).first, std::string(registration->first_attribute("aor")->value()));
+    }
+
+    rapidxml::xml_node<> *contact = registration->first_node("contact");
+    EXPECT_TRUE(contact);
+
+    EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
+    EXPECT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
+    ASSERT_NE(nullptr, contact);
+    EXPECT_EQ(AoRTestUtils::BINDING_ID, std::string(contact->first_attribute("id")->value()));
+    EXPECT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
+    EXPECT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
+  }
+
+  // We should have found one registration element for each IMPU
+  EXPECT_EQ(irs_impus.size(), num_reg);
+}
+
 TEST_F(SubscriberManagerTest, TestAddFirstBinding)
 {
   // Set up an IRS to be returned by the mocked update_registration_state()
@@ -370,6 +466,8 @@ TEST_F(SubscriberManagerTest, TestRefreshBinding)
 
   // We should have a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+
+  check_notify(current_txdata()->msg, ACTIVE, ACTIVE_REFRESHED);
   free_txdata();
 }
 
@@ -393,6 +491,7 @@ TEST_F(SubscriberManagerTest, TestShortenBinding)
 
   // We should have a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg, ACTIVE, ACTIVE_SHORTENED);
   free_txdata();
 }
 
@@ -440,7 +539,7 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
   update_bindings(true);
 
   // The subscription shares the same contact as the binding so we do NOT expect
-  // a NOTIFY since there is a good change the NOTIFY will fail.
+  // a NOTIFY since there is a good chance the NOTIFY will fail.
   ASSERT_EQ(0, txdata_count());
 }
 
@@ -512,6 +611,7 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
 
   // Subscription has been added so expect a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
   free_txdata();
 }
 
@@ -539,6 +639,7 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
 
   // Subscription has been removed so expect a final NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
   free_txdata();
 }
 
@@ -563,6 +664,7 @@ TEST_F(SubscriberManagerTest, TestRefreshSubscription)
 
   // Subscription has been refreshed so expect a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
   free_txdata();
 }
 
@@ -585,6 +687,7 @@ TEST_F(SubscriberManagerTest, TestShortenSubscription)
 
   // Subscription has been shortened so expect a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
   free_txdata();
 }
 
@@ -637,6 +740,7 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
 
   // Expect a final NOTIFY for the subscription.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg, TERMINATED, TERMINATED_DEACTIVATED);
   free_txdata();
 }
 

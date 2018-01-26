@@ -704,8 +704,8 @@ void SubscriberManager::send_notifys_and_write_audit_logs(const std::string& aor
   }
 
   // Send NOTIFYs. If the updated AoR is NULL e.g. if we have deleted a
-  // subscriber, the best we can do is use the CSeq on the original AoR and
-  // increment it by 1. TODO Check with EM.
+  // subscriber, the best we should use the CSeq on the original AoR and
+  // increment it by 1.
   _notify_sender->send_notifys(aor_id,
                                EventTrigger::USER,
                                classified_bindings,
@@ -1130,6 +1130,8 @@ void SubscriberManager::NotifySender::send_notifys(const std::string& aor_id,
   {
     if (classified_subscription->_notify_required)
     {
+      // TODO NotifyUtils needs to use make sure it doesn't send the emergency
+      // bindings in its NOTIFYs.
       TRC_DEBUG("Sending NOTIFY for subscription %s: %s",
                 classified_subscription->_id.c_str(),
                 classified_subscription->_reasons.c_str());
