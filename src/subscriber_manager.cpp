@@ -147,7 +147,6 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 
   // Send 3rd party REGISTERs.
 
-
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
 
@@ -291,27 +290,36 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
 
   // Get the original AoR from S4.
   AoR* orig_aor = NULL;
-  uint64_t version;
-  rc = _s4->handle_get(aor_id,
-                       &orig_aor,
-                       version,
-                       trail);
-
-  // If there is no AoR, we still count that as a success.
-  if (rc != HTTP_OK)
+  do
   {
-    delete orig_aor; orig_aor = NULL;
-    if (rc == HTTP_NOT_FOUND)
+    uint64_t version;
+    rc = _s4->handle_get(aor_id,
+                         &orig_aor,
+                         version,
+                         trail);
+
+    // If there is no AoR, we still count that as a success.
+    if (rc != HTTP_OK)
     {
-      return HTTP_OK;
+      delete orig_aor; orig_aor = NULL;
+      if (rc == HTTP_NOT_FOUND)
+      {
+        return HTTP_OK;
+      }
+
+      return rc;
     }
 
+    rc = _s4->handle_delete(aor_id,
+                            version,
+                            trail);
+  } while (rc == HTTP_PRECONDITION_FAILED);
+
+  if ((rc != HTTP_OK) && (rc != HTTP_NO_CONTENT))
+  {
+    delete orig_aor; orig_aor = NULL;
     return rc;
   }
-
-  rc = _s4->handle_delete(aor_id,
-                          version,
-                          trail);
 
   // Send NOTIFYs and write audit logs.
   send_notifys_and_write_audit_logs(aor_id,
@@ -521,6 +529,7 @@ HTTPCode SubscriberManager::get_cached_default_id(const std::string& public_id,
   if (!irs_info._associated_uris.get_default_impu(aor_id, false))
   {
     // TODO No default IMPU - what should we do here? Probably bail out.
+    TRC_ERROR("No Default IMPU in IRS");
     return HTTP_BAD_REQUEST;
   }
 
@@ -544,6 +553,7 @@ HTTPCode SubscriberManager::put_bindings(const std::string& aor_id,
   aor = new AoR(aor_id);
   aor->patch_aor(patch_object);
   aor->_scscf_uri = scscf_uri;
+  // TODO Retry with patch if contention (HTTP_PRECONDITION_FAILED)
   HTTPCode rc = _s4->handle_put(aor_id,
                                 *aor,
                                 trail);
