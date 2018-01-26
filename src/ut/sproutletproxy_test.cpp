@@ -62,12 +62,11 @@ public:
   const std::string _next_hop;
 };
 
-// TJW2 TODO: Comments
-// TJW2 TODO: Rename
-class MockForwarderTsx: public SproutletTsx
+// A SproutletTsx that routes the message to the specified forwarding URI.
+class FakeForwarderTsx: public SproutletTsx
 {
 public:
-  MockForwarderTsx(Sproutlet* sproutlet,
+  FakeForwarderTsx(Sproutlet* sproutlet,
                    std::string forwarding_uri) :
    SproutletTsx(sproutlet),
    forwarding_uri(forwarding_uri)
@@ -76,7 +75,7 @@ public:
 
   void on_rx_initial_request(pjsip_msg* req)
   {
-    TRC_DEBUG("MockForwarderTsx routing to URI: %s", forwarding_uri.c_str());
+    TRC_DEBUG("FakeForwarderTsx routing to URI: %s", forwarding_uri.c_str());
     pj_pool_t* pool = get_pool(req);
     pjsip_route_hdr* route = pjsip_route_hdr_create(pool);
     route->name_addr.uri = PJUtils::uri_from_string(forwarding_uri, pool, PJ_FALSE);
@@ -88,7 +87,9 @@ public:
   std::string forwarding_uri;
 };
 
-// TJW2 TODO: Comments
+// A Sproutlet that routes the message to a forwarding URI specified by a mock
+// function call. Mock functions also determine whether the Sproutlet is
+// interested, and if not, its next hop.
 class MockForwarderSproutlet : public Sproutlet
 {
 public:
@@ -125,9 +126,9 @@ public:
     if (is_interested())
     {
       std::string forwarding_uri = get_forwarding_uri();
-      TRC_DEBUG("MockForwarderSproutlet interested, returning MockForwarderTsx for URI %s",
+      TRC_DEBUG("MockForwarderSproutlet interested, returning FakeForwarderTsx for URI %s",
                 forwarding_uri.c_str());
-      return (SproutletTsx*)new MockForwarderTsx(this,
+      return (SproutletTsx*)new FakeForwarderTsx(this,
                                                  forwarding_uri);
     }
     else
@@ -142,8 +143,6 @@ public:
       return NULL;
     }
   }
-
-  const std::string _next_hop;
 };
 
 template <class T>
@@ -735,40 +734,6 @@ public:
     pjsip_route_hdr* foo_hdr = identity_hdr_create(pool, foo);
     foo_hdr->name_addr.uri = PJUtils::uri_from_string("sip:bar@baz", pool, PJ_FALSE);
     pjsip_msg_add_hdr(req, (pjsip_hdr*)foo_hdr);
-
-    send_request(req);
-  }
-};
-
-class MockRouteSetter
-{
-public:
-  MOCK_METHOD0(get_uri, std::string());
-};
-
-// TJW2 TODO: Tidy up
-static MockRouteSetter* mock_route_setter;
-
-class FakeSproutletMockForwarder : public CompositeSproutletTsx
-{
-public:
-  FakeSproutletMockForwarder(Sproutlet* sproutlet) :
-   CompositeSproutletTsx(sproutlet, static_cast<FakeSproutlet<FakeSproutletMockForwarder>*>(sproutlet)->_next_hop)
-  {
-  }
-
-  void on_rx_initial_request(pjsip_msg* req)
-  {
-    //TJW2 TODO: Comment
-    // Regardless of what we receive, forward the request on using a Route
-    // header to route the message to the specified (external) URI.  This is
-    // used to test Tel URIs, which are not themselves routable.
-    std::string forwarding_uri = mock_route_setter->get_uri();
-    TRC_DEBUG("MockForwarder routing to URI: %s", forwarding_uri.c_str());
-    pj_pool_t* pool = get_pool(req);
-    pjsip_route_hdr* route = pjsip_route_hdr_create(pool);
-    route->name_addr.uri = PJUtils::uri_from_string(forwarding_uri, pool, PJ_FALSE);
-    pjsip_msg_add_hdr(req, (pjsip_hdr*)route);
 
     send_request(req);
   }
