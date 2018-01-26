@@ -76,10 +76,10 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 
   // Get the current AoR from S4, if one exists.
   AoR* orig_aor = NULL;
-  uint64_t version;
+  uint64_t unused_version;
   rc = _s4->handle_get(aor_id,
                        &orig_aor,
-                       version,
+                       unused_version,
                        trail);
 
   // It is valid to return HTTP_NOT_FOUND since there will not be a stored AoR
@@ -107,9 +107,17 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
   {
     // There is an existing AoR in the store, so patch it. The S-CSCF URI should
     // only be set when the AoR is first created, so do not try to update it.
+    // Check if there are any subscriptions that share the same contact as
+    // the removed bindings, and delete them too.
+    std::vector<std::string> subscription_ids_to_remove =
+                               subscriptions_to_remove(orig_aor->bindings(),
+                                                       orig_aor->subscriptions(),
+                                                       updated_bindings,
+                                                       binding_ids_to_remove);
     rc = patch_bindings(aor_id,
                         updated_bindings,
                         binding_ids_to_remove,
+                        subscription_ids_to_remove,
                         irs_info._associated_uris,
                         updated_aor,
                         trail);
@@ -145,7 +153,6 @@ HTTPCode SubscriberManager::update_bindings(const HSSConnection::irs_query& irs_
 
   // Send 3rd party REGISTERs.
 
-
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
 
@@ -172,23 +179,37 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
 
   // Get the original AoR from S4.
   AoR* orig_aor = NULL;
-  uint64_t version;
+  uint64_t unused_version;
   rc = _s4->handle_get(aor_id,
                        &orig_aor,
-                       version,
+                       unused_version,
                        trail);
 
   // If there is no AoR, we still count that as a success.
-  if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
+  if (rc != HTTP_OK)
   {
     delete orig_aor; orig_aor = NULL;
+    if (rc == HTTP_NOT_FOUND)
+    {
+      return HTTP_OK;
+    }
+
     return rc;
   }
+
+  // Check if there are any subscriptions that share the same contact as
+  // the removed bindings, and delete them too.
+  std::vector<std::string> subscription_ids_to_remove =
+                             subscriptions_to_remove(orig_aor->bindings(),
+                                                     orig_aor->subscriptions(),
+                                                     Bindings(),
+                                                     binding_ids);
 
   AoR* updated_aor = NULL;
   rc = patch_bindings(aor_id,
                       Bindings(),
                       binding_ids,
+                      subscription_ids_to_remove,
                       irs_info._associated_uris,
                       updated_aor,
                       trail);
@@ -275,27 +296,36 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
 
   // Get the original AoR from S4.
   AoR* orig_aor = NULL;
-  uint64_t version;
-  rc = _s4->handle_get(aor_id,
-                       &orig_aor,
-                       version,
-                       trail);
-
-  // If there is no AoR, we still count that as a success.
-  if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
+  do
   {
-    // TODO deal with deal with deletion
-    if (rc == HTTP_NOT_FOUND)
+    uint64_t version;
+    rc = _s4->handle_get(aor_id,
+                         &orig_aor,
+                         version,
+                         trail);
+
+    // If there is no AoR, we still count that as a success.
+    if (rc != HTTP_OK)
     {
-      return HTTP_OK;
+      delete orig_aor; orig_aor = NULL;
+      if (rc == HTTP_NOT_FOUND)
+      {
+        return HTTP_OK;
+      }
+
+      return rc;
     }
 
+    rc = _s4->handle_delete(aor_id,
+                            version,
+                            trail);
+  } while (rc == HTTP_PRECONDITION_FAILED);
+
+  if ((rc != HTTP_OK) && (rc != HTTP_NO_CONTENT))
+  {
+    delete orig_aor; orig_aor = NULL;
     return rc;
   }
-
-  rc = _s4->handle_delete(aor_id,
-                          version,
-                          trail);
 
   // Send NOTIFYs and write audit logs.
   send_notifys_and_write_audit_logs(aor_id,
@@ -325,6 +355,7 @@ HTTPCode SubscriberManager::get_bindings(const std::string& public_id,
                                          SAS::TrailId trail)
 {
   // Get the current AoR from S4.
+  // TODO make sure this only returns not expired bindings.
   AoR* aor = NULL;
   uint64_t unused_version;
   HTTPCode rc = _s4->handle_get(public_id,
@@ -348,6 +379,7 @@ HTTPCode SubscriberManager::get_subscriptions(const std::string& public_id,
                                               SAS::TrailId trail)
 {
   // Get the current AoR from S4.
+  // TODO make sure this only returns not expired subscriptions.
   AoR* aor = NULL;
   uint64_t unused_version;
   HTTPCode rc = _s4->handle_get(public_id,
@@ -392,10 +424,10 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
 {
   // Get the original AoR from S4.
   AoR* orig_aor = NULL;
-  uint64_t version;
+  uint64_t unused_version;
   HTTPCode rc = _s4->handle_get(aor_id,
                                 &orig_aor,
-                                version,
+                                unused_version,
                                 trail);
 
   if (rc != HTTP_OK)
@@ -449,10 +481,10 @@ HTTPCode SubscriberManager::modify_subscription(const std::string& public_id,
 
   // Get the current AoR from S4.
   AoR* orig_aor = NULL;
-  uint64_t version;
+  uint64_t unused_version;
   rc = _s4->handle_get(aor_id,
                        &orig_aor,
-                       version,
+                       unused_version,
                        trail);
 
   // There must be an existing AoR since there must be bindings to subscribe to.
@@ -503,6 +535,7 @@ HTTPCode SubscriberManager::get_cached_default_id(const std::string& public_id,
   if (!irs_info._associated_uris.get_default_impu(aor_id, false))
   {
     // TODO No default IMPU - what should we do here? Probably bail out.
+    TRC_ERROR("No Default IMPU in IRS");
     return HTTP_BAD_REQUEST;
   }
 
@@ -526,10 +559,10 @@ HTTPCode SubscriberManager::put_bindings(const std::string& aor_id,
   aor = new AoR(aor_id);
   aor->patch_aor(patch_object);
   aor->_scscf_uri = scscf_uri;
+  // TODO Retry with patch if contention (HTTP_PRECONDITION_FAILED)
   HTTPCode rc = _s4->handle_put(aor_id,
                                 *aor,
                                 trail);
-  // Set up AoR? TODO what does this mean
 
   return rc;
 }
@@ -537,6 +570,7 @@ HTTPCode SubscriberManager::put_bindings(const std::string& aor_id,
 HTTPCode SubscriberManager::patch_bindings(const std::string& aor_id,
                                            const Bindings& update_bindings,
                                            const std::vector<std::string>& remove_bindings,
+                                           const std::vector<std::string>& remove_subscriptions,
                                            const AssociatedURIs& associated_uris,
                                            AoR*& aor,
                                            SAS::TrailId trail)
@@ -544,6 +578,7 @@ HTTPCode SubscriberManager::patch_bindings(const std::string& aor_id,
   PatchObject patch_object;
   patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
   patch_object.set_remove_bindings(remove_bindings);
+  patch_object.set_remove_subscriptions(remove_subscriptions);
   patch_object.set_associated_uris(associated_uris);
   patch_object.set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
@@ -593,6 +628,53 @@ HTTPCode SubscriberManager::patch_associated_uris(const std::string& aor_id,
   return rc;
 }
 
+std::vector<std::string> SubscriberManager::subscriptions_to_remove(const Bindings& orig_bindings,
+                                                                    const Subscriptions& orig_subscriptions,
+                                                                    const Bindings& bindings_to_update,
+                                                                    const std::vector<std::string> binding_ids_to_remove)
+{
+  std::vector<std::string> subscription_ids_to_remove;
+  std::set<std::string> missing_uris;
+
+  // Store off the contact URIs of bindings to be removed.
+  for (std::string binding_id : binding_ids_to_remove)
+  {
+    Bindings::const_iterator b = orig_bindings.find(binding_id);
+    if (b != orig_bindings.end())
+    {
+      missing_uris.insert(b->second->_uri);
+    }
+  }
+
+  // Store off the original contact URI of bindings where the contact is about
+  // to be changed.
+  for (BindingPair bp : bindings_to_update)
+  {
+    Bindings::const_iterator b = orig_bindings.find(bp.first);
+    if ((b != orig_bindings.end()) &&
+        (b->second->_uri != bp.second->_uri))
+    {
+      missing_uris.insert(b->second->_uri);
+    }
+  }
+
+  // Loop over the subscriptions. If any have the same contact as one of the
+  // missing URIs, the subscription should be removed.
+  for (SubscriptionPair sp : orig_subscriptions)
+  {
+    if (missing_uris.find(sp.second->_req_uri) != missing_uris.end())
+    {
+      TRC_DEBUG("Subscription %s is being removed because the binding that shares"
+                " its contact URI %s is being removed or changing contact URI",
+                sp.first.c_str(),
+                sp.second->_req_uri.c_str());
+      subscription_ids_to_remove.push_back(sp.first);
+    }
+  }
+
+  return subscription_ids_to_remove;
+}
+
 void SubscriberManager::send_notifys_and_write_audit_logs(const std::string& aor_id,
                                                           const EventTrigger& event_trigger,
                                                           AoR* orig_aor,
@@ -638,8 +720,8 @@ void SubscriberManager::send_notifys_and_write_audit_logs(const std::string& aor
   }
 
   // Send NOTIFYs. If the updated AoR is NULL e.g. if we have deleted a
-  // subscriber, the best we can do is use the CSeq on the original AoR and
-  // increment it by 1. TODO Check with EM.
+  // subscriber, the best we should use the CSeq on the original AoR and
+  // increment it by 1.
   _notify_sender->send_notifys(aor_id,
                                EventTrigger::USER,
                                classified_bindings,
@@ -768,14 +850,9 @@ void SubscriberManager::classify_bindings(const std::string& aor_id,
       if (orig_b_match->second->_uri.compare(binding->_uri) != 0)
       {
         // Change of Contact URI. If the contact URI has been changed, we need to
-        // terminate the old contact (ref TS24.229 -  NOTE 2 in 5.4.2.1.2
+        // terminate the old contact (ref TS24.229 - NOTE 2 in 5.4.2.1.2
         // "Notification about registration state") and create a new one.
         // We do this by adding a DEACTIVATED and then a CREATED ClassifiedBinding.
-        //
-        // TODO The contact URI is used to create the binding ID, so is it even
-        // possible to change the contat URI with creating a new binding?
-        // Yes since the binding ID can be the same and the contact change e.g. if
-        // +sip.instance and +sip.reg_id stay the same.
         TRC_DEBUG("Binding %s in AoR %s has changed contact URI",
                   binding_id.c_str(),
                   aor_id.c_str());
@@ -839,7 +916,9 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
     }
   }
 
-  // Decide if we should send a NOTIFY for all subscriptions.
+  // Decide if we should send a NOTIFY for all subscriptions. We do this if either:
+  //  - Any bindings have changed.
+  //  - The associated URIs have changed.
   bool base_notify_required = false;
   std::string base_reasons = "Reason(s): - ";
   if (bindings_changed)
@@ -855,9 +934,9 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
     base_reasons += "Associated URIs changed - ";
   }
 
-  // Work out the URIs of bindings that have been removed. If there are
-  // subscriptions that match any of these URIs, we may want to send a final
-  // NOTIFY.
+  // Store the contact URIs of any bindings that have been removed. If there
+  // are any subscriptions that share the same contact URI, we may want to send
+  // a final NOTIFY.
   std::set<std::string> missing_binding_uris;
   for (ClassifiedBinding* classified_binding : classified_bindings)
   {
@@ -871,15 +950,12 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
 
   // 1/2: Iterate over the original subscriptions and classify those that aren't
   // in the updated subscriptions.
-  // TODO work out what reasons and notify_required should be here.
   for (SubscriptionPair orig_s : orig_subscriptions)
   {
     std::string subscription_id = orig_s.first;
     Subscription* subscription = orig_s.second;
 
-    bool notify_required = base_notify_required;
     std::string reasons = base_reasons;
-
     if ((missing_binding_uris.find(subscription->_req_uri) !=
          missing_binding_uris.end()) &&
         (event_trigger != EventTrigger::ADMIN))
@@ -887,12 +963,8 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
       // Binding is missing, and this event is not triggered by admin. The
       // binding no longer exists due to user deregestration or timeout, so
       // classify the subscription as EXPIRED.
-      // TODO Even if we don't send NOTIFYs for expired bindings, won't we still
-      // see this subscription in both AoRs so we'll send a NOTIFY if e.g. bindings
-      // are changed. Should S4 be able to expire subscriptions when their binding
-      // is removed?
-      TRC_DEBUG("Subscription %s in AoR %s has been expired since its binding "
-                "%s has expired",
+      TRC_DEBUG("Subscription %s in AoR %s has been expired since the binding that"
+                " shares its contact URI %s has expired or changed contact URI",
                 subscription_id.c_str(),
                 aor_id.c_str(),
                 subscription->_req_uri.c_str());
@@ -903,15 +975,10 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
                                    subscription,
                                    SubscriptionEvent::EXPIRED);
 
-      // TODO can't we just not add the classified subscription here.
-
+      classified_subscription->_notify_required = false;
       classified_subscriptions.push_back(classified_subscription);
     }
-
-    // Is this subscription present in the new AoR?
-    // TODO can't this result in us adding the same subscription twice.
-    // Should probably make this an 'else if()'
-    if (updated_subscriptions.find(subscription_id) == updated_subscriptions.end())
+    else if (updated_subscriptions.find(subscription_id) == updated_subscriptions.end())
     {
       // The subscription has either been deleted by the user or has expired, so
       // classify it as TERMINATED.
@@ -919,7 +986,6 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
                 subscription_id.c_str(),
                 aor_id.c_str());
 
-      notify_required = true;
       reasons += "Subscription terminated - ";
 
       ClassifiedSubscription* classified_subscription =
@@ -928,7 +994,7 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
                                    subscription,
                                    SubscriptionEvent::TERMINATED);
 
-      classified_subscription->_notify_required = notify_required;
+      classified_subscription->_notify_required = true;
       classified_subscription->_reasons = reasons;
       classified_subscriptions.push_back(classified_subscription);
     }
@@ -941,8 +1007,8 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
     std::string subscription_id = updated_s.first;
     Subscription* subscription = updated_s.second;
 
-    // Find the subscription in the original AoR to determine if the current
-    // subscription has been created.
+    // Find the subscription in the set if original subscriptions to determine
+    // if the current subscription has been changed.
     Subscriptions::const_iterator orig_s_match = orig_subscriptions.find(subscription_id);
 
     SubscriptionEvent event;
@@ -973,7 +1039,7 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
                 aor_id.c_str());
       event = SubscriptionEvent::SHORTENED;
       notify_required = true;
-      reasons += "Subscription shortened - "; // TODO - is this a valid reason to send a NOTIFY?
+      reasons += "Subscription shortened - "; // TODO - is this a valid reason to send a NOTIFY? Check specs
     }
     else
     {
@@ -991,9 +1057,6 @@ void SubscriberManager::classify_subscriptions(const std::string& aor_id,
     classified_subscription->_notify_required = notify_required;
     classified_subscription->_reasons = reasons;
     classified_subscriptions.push_back(classified_subscription);
-
-    // TODO if a NOTIFY is required you need to update the CSeq but it's too late
-    // to write it back now.
   }
 }
 
@@ -1023,10 +1086,12 @@ void SubscriberManager::delete_subscriptions(ClassifiedSubscriptions& classified
 NotifyUtils::ContactEvent SubscriberManager::determine_contact_event(const EventTrigger& event_trigger)
 {
   NotifyUtils::ContactEvent contact_event;
-  switch(event_trigger){
+  switch(event_trigger)
+  {
+    // TODO Uncomment this when the timer pop interface is added.
     /*case SubscriberDataManager::EventTrigger::TIMEOUT:
       contact_event = NotifyUtils::ContactEvent::EXPIRED;
-      break;*/ //TODO what about expired - can it ever happen?
+      break;*/
     case EventTrigger::USER:
       contact_event = NotifyUtils::ContactEvent::UNREGISTERED;
       break;
@@ -1061,17 +1126,28 @@ void SubscriberManager::NotifySender::send_notifys(const std::string& aor_id,
                                                    int now,
                                                    SAS::TrailId trail)
 {
-  // The registration state to send is ACTIVE if we have at least one active binding,
-  // otherwise TERMINATED. TODO change this to use classified_bindings.
-  /*NotifyUtils::RegistrationState reg_state = (!aor_pair->get_current()->bindings().empty()) ?
-    NotifyUtils::RegistrationState::ACTIVE :
-    NotifyUtils::RegistrationState::TERMINATED;*/
-  NotifyUtils::RegistrationState reg_state = NotifyUtils::RegistrationState::ACTIVE;
+  // The registration state is ACTIVE if we have at least one active binding,
+  // otherwise it is TERMINATED.
+  NotifyUtils::RegistrationState reg_state = NotifyUtils::RegistrationState::TERMINATED;
+  for (ClassifiedBinding* classified_binding : classified_bindings)
+  {
+    if (classified_binding->_contact_event == NotifyUtils::ContactEvent::REGISTERED ||
+        classified_binding->_contact_event == NotifyUtils::ContactEvent::CREATED ||
+        classified_binding->_contact_event == NotifyUtils::ContactEvent::REFRESHED ||
+        classified_binding->_contact_event == NotifyUtils::ContactEvent::SHORTENED)
+    {
+      TRC_DEBUG("Registration state ACTIVE on NOTIFY");
+      reg_state = NotifyUtils::RegistrationState::ACTIVE;
+      break;
+    }
+  }
 
   for (ClassifiedSubscription* classified_subscription : classified_subscriptions)
   {
     if (classified_subscription->_notify_required)
     {
+      // TODO NotifyUtils needs to use make sure it doesn't send the emergency
+      // bindings in its NOTIFYs.
       TRC_DEBUG("Sending NOTIFY for subscription %s: %s",
                 classified_subscription->_id.c_str(),
                 classified_subscription->_reasons.c_str());

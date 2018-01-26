@@ -306,6 +306,7 @@ private:
   HTTPCode patch_bindings(const std::string& aor_id,
                           const Bindings& update_bindings,
                           const std::vector<std::string>& remove_bindings,
+                          const std::vector<std::string>& remove_subscriptions,
                           const AssociatedURIs& associated_uris,
                           AoR*& aor,
                           SAS::TrailId trail);
@@ -320,6 +321,11 @@ private:
                                  const AssociatedURIs& associated_uris,
                                  AoR*& aor,
                                  SAS::TrailId trail);
+
+  std::vector<std::string> subscriptions_to_remove(const Bindings& orig_bindings,
+                                                   const Subscriptions& orig_subscriptions,
+                                                   const Bindings& bindings_to_update,
+                                                   const std::vector<std::string> binding_ids_to_remove);
 
   void send_notifys_and_write_audit_logs(const std::string& aor_id,
                                          const EventTrigger& event_trigger,

@@ -19,6 +19,7 @@
 #include "mock_s4.h"
 #include "mock_hss_connection.h"
 #include "mock_analytics_logger.h"
+#include "rapidxml/rapidxml.hpp"
 
 using ::testing::_;
 using ::testing::Return;
@@ -30,6 +31,19 @@ using ::testing::InSequence;
 static const int DUMMY_TRAIL_ID = 0;
 static const std::string DEFAULT_ID = "sip:example.com";
 static const std::string OTHER_ID = "sip:another.com";
+static const std::string WILDCARD_ID = "sip:65055!.*!@example.com";
+
+// Constants for checking NOTIFY bodies.
+static const std::string ACTIVE = "active";
+static const std::string TERMINATED = "terminated";
+static const std::pair<std::string, std::string> ACTIVE_REGISTERED = std::make_pair("active", "registered");
+static const std::pair<std::string, std::string> ACTIVE_CREATED = std::make_pair("active", "created");
+static const std::pair<std::string, std::string> ACTIVE_REFRESHED = std::make_pair("active", "refreshed");
+static const std::pair<std::string, std::string> ACTIVE_SHORTENED = std::make_pair("active", "shortened");
+static const std::pair<std::string, std::string> TERMINATED_EXPIRED = std::make_pair("terminated", "expired");
+static const std::pair<std::string, std::string> TERMINATED_UNREGISTERED = std::make_pair("terminated", "unregistered");
+static const std::pair<std::string, std::string> TERMINATED_DEACTIVATED = std::make_pair("terminated", "deactivated");
+static const std::vector<std::pair<std::string, bool>> IRS_IMPUS = {std::make_pair(DEFAULT_ID, false)};
 
 /// Fixture for SubscriberManagerTest.
 class SubscriberManagerTest : public SipTest
@@ -97,7 +111,7 @@ private:
                                     std::string contact = AoRTestUtils::CONTACT_URI,
                                     std::string binding_id = AoRTestUtils::BINDING_ID,
                                     std::string aor_id = DEFAULT_ID);
-  void update_bindings();
+  void update_bindings(bool subscription_removed = false);
 
   void subscription_expect_calls(bool subscription_changed = true,
                                  int expiry = 300);
@@ -110,6 +124,11 @@ private:
 
   void delete_bindings(Bindings& bindings);
   void delete_subscriptions(Subscriptions& subscriptions);
+
+  void check_notify(pjsip_msg* notify,
+                    std::string reg_state = ACTIVE,
+                    std::pair<std::string, std::string> contact_values = ACTIVE_REGISTERED,
+                    std::vector<std::pair<std::string, bool>> irs_impus = IRS_IMPUS);
 
   SubscriberManager* _subscriber_manager;
   MockS4* _s4;
@@ -193,7 +212,7 @@ void SubscriberManagerTest::registration_log_expect_call(
 }
 
 // Calls update_bindings() and checks what is returned.
-void SubscriberManagerTest::update_bindings()
+void SubscriberManagerTest::update_bindings(bool subscription_removed)
 {
   // Update binding on SM.
   HTTPCode rc = _subscriber_manager->update_bindings(_irs_query,
@@ -208,6 +227,15 @@ void SubscriberManagerTest::update_bindings()
   Bindings ub = _patch_object.get_update_bindings();
   EXPECT_EQ(ub.size(), 1);
   EXPECT_TRUE(ub.find(AoRTestUtils::BINDING_ID) != ub.end());
+
+  // If this operation is expected to remove a subscription also, the patch
+  // object contains the subscription to remove.
+  if (subscription_removed)
+  {
+    std::vector<std::string> rs = _patch_object.get_remove_subscriptions();
+    EXPECT_EQ(rs.size(), 1);
+    EXPECT_TRUE(rs[0] == AoRTestUtils::SUBSCRIPTION_ID);
+  }
 
   // Check that the binding we set is returned in all bindings.
   EXPECT_EQ(_all_bindings.size(), 1);
@@ -281,6 +309,84 @@ void SubscriberManagerTest::delete_subscriptions(Subscriptions& subscriptions)
   {
     delete s.second;
   }
+}
+
+void SubscriberManagerTest::check_notify(pjsip_msg* notify,
+                                        std::string reg_state,
+                                        std::pair<std::string, std::string> contact_values,
+                                        std::vector<std::pair<std::string, bool>> irs_impus)
+{
+  EXPECT_EQ("NOTIFY", str_pj(notify->line.status.reason));
+  EXPECT_EQ("Event: reg", get_headers(notify, "Event"));
+
+  // TODO check Subscription-State header.
+
+  std::string body;
+  char buf[16384];
+  int n = notify->body->print_body(notify->body, buf, sizeof(buf));
+  body.assign(buf, n);
+
+  // Parse the XML document, saving off the passed in string first (as parsing
+  // is destructive)
+  rapidxml::xml_document<> doc;
+  char* xml_str = doc.allocate_string(body.c_str());
+
+  try
+  {
+    doc.parse<rapidxml::parse_strip_xml_namespaces>(xml_str);
+  }
+  catch (rapidxml::parse_error err)
+  {
+    printf("Parse error in NOTIFY: %s\n\n%s", err.what(), body.c_str());
+    doc.clear();
+  }
+
+  rapidxml::xml_node<> *reg_info = doc.first_node("reginfo");
+  EXPECT_TRUE(reg_info);
+
+  EXPECT_EQ("urn:ietf:params:xml:ns:reginfo", std::string(reg_info->first_attribute("xmlns")->value()));
+  EXPECT_EQ("urn:ietf:params:xml:ns:gruuinfo", std::string(reg_info->first_attribute("gr")->value()));
+  EXPECT_EQ("http://www.w3.org/2001/XMLSchema-instance", std::string(reg_info->first_attribute("xsi")->value()));
+  EXPECT_EQ("urn:3gpp:ns:extRegExp:1.0", std::string(reg_info->first_attribute("ere")->value()));
+  EXPECT_EQ("0", std::string(reg_info->first_attribute("version")->value()));
+
+  int num_reg = 0;
+
+  for (rapidxml::xml_node<> *registration = reg_info->first_node("registration");
+       registration;
+       registration = registration->next_sibling("registration"), num_reg++)
+  {
+    // Check if the registration element should have a wildcard identity. We pass
+    // this in as a simple bool rather than use is_wildcard_identity, as using
+    // the function in UT and production code will mask any issues with it.
+    if (irs_impus.at(num_reg).second)
+    {
+      // In the wildcard case the aor value should be set to the default value,
+      // and the wildcard identity is in its own element (note that the ere: namespace
+      // has been stripped off already when we parse this in UT).
+      EXPECT_EQ("sip:wildcardimpu@wildcard", std::string(registration->first_attribute("aor")->value()));
+      rapidxml::xml_node<> *wildcard = registration->first_node("wildcardedIdentity");
+      EXPECT_TRUE(wildcard);
+      EXPECT_EQ(irs_impus.at(num_reg).first, std::string(wildcard->value()));
+    }
+    else
+    {
+      EXPECT_EQ(irs_impus.at(num_reg).first, std::string(registration->first_attribute("aor")->value()));
+    }
+
+    rapidxml::xml_node<> *contact = registration->first_node("contact");
+    EXPECT_TRUE(contact);
+
+    EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
+    EXPECT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
+    ASSERT_NE(nullptr, contact);
+    EXPECT_EQ(AoRTestUtils::BINDING_ID, std::string(contact->first_attribute("id")->value()));
+    EXPECT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
+    EXPECT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
+  }
+
+  // We should have found one registration element for each IMPU
+  EXPECT_EQ(irs_impus.size(), num_reg);
 }
 
 TEST_F(SubscriberManagerTest, TestAddFirstBinding)
@@ -361,6 +467,8 @@ TEST_F(SubscriberManagerTest, TestRefreshBinding)
 
   // We should have a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+
+  check_notify(current_txdata()->msg, ACTIVE, ACTIVE_REFRESHED);
   free_txdata();
 }
 
@@ -384,6 +492,7 @@ TEST_F(SubscriberManagerTest, TestShortenBinding)
 
   // We should have a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg, ACTIVE, ACTIVE_SHORTENED);
   free_txdata();
 }
 
@@ -409,10 +518,19 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
   set_up_irs_and_aor();
 
   // Modify the binding in the patch AoR to give it a different contact.
+  // This should also remove the subscription with the same contact.
   Binding* refreshed_binding = _patch_aor->get_binding(AoRTestUtils::BINDING_ID);
   refreshed_binding->_uri = "<sip:6505550231@10.225.20.18:5991;transport=tcp;ob>;";
+  _patch_aor->remove_subscription(AoRTestUtils::SUBSCRIPTION_ID);
 
   update_bindings_expect_calls(false);
+
+  // Set up expect calls for audit logs. Expect that the binding is removed with
+  // the old contact, added with the new contact and the subscription that
+  // shares the same contact as the original binidng is removed implicitly.
+  registration_log_expect_call(0);
+  registration_log_expect_call(300, "<sip:6505550231@10.225.20.18:5991;transport=tcp;ob>;");
+  subscription_log_expect_call(0);
 
   // Build the updated bindings to pass in.
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
@@ -420,17 +538,111 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
   _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
 
   // Update binding on SM.
-  update_bindings();
+  update_bindings(true);
 
-  // We should have a NOTIFYs. TODO need to check that it contains both the
-  // deactived binding and the new binding.
-  ASSERT_EQ(1, txdata_count());
-  free_txdata();
+  // The subscription shares the same contact as the binding so we do NOT expect
+  // a NOTIFY since there is a good chance the NOTIFY will fail.
+  ASSERT_EQ(0, txdata_count());
+}
+
+TEST_F(SubscriberManagerTest, TestRemoveBindingHSSFail)
+{
+  EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+    .WillOnce(Return(HTTP_NOT_FOUND));
+
+  std::vector<std::string> binding_ids = {AoRTestUtils::BINDING_ID};
+  HTTPCode rc = _subscriber_manager->remove_bindings(DEFAULT_ID,
+                                                     binding_ids,
+                                                     SubscriberManager::EventTrigger::USER,
+                                                     _all_bindings,
+                                                     DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_NOT_FOUND);
+}
+
+TEST_F(SubscriberManagerTest, TestRemoveBindingGETFail)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  std::vector<std::string> binding_ids = {AoRTestUtils::BINDING_ID};
+  HTTPCode rc = _subscriber_manager->remove_bindings(DEFAULT_ID,
+                                                     binding_ids,
+                                                     SubscriberManager::EventTrigger::USER,
+                                                     _all_bindings,
+                                                     DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+}
+
+TEST_F(SubscriberManagerTest, TestRemoveBindingGETNotFound)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_NOT_FOUND));
+  }
+
+  std::vector<std::string> binding_ids = {AoRTestUtils::BINDING_ID};
+  HTTPCode rc = _subscriber_manager->remove_bindings(DEFAULT_ID,
+                                                     binding_ids,
+                                                     SubscriberManager::EventTrigger::USER,
+                                                     _all_bindings,
+                                                     DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+}
+
+TEST_F(SubscriberManagerTest, TestRemoveBindingPATCHFail)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up AoRs to be returned by S4.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  std::vector<std::string> binding_ids = {AoRTestUtils::BINDING_ID};
+  HTTPCode rc = _subscriber_manager->remove_bindings(DEFAULT_ID,
+                                                     binding_ids,
+                                                     SubscriberManager::EventTrigger::USER,
+                                                     _all_bindings,
+                                                     DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
 }
 
 TEST_F(SubscriberManagerTest, TestRemoveBinding)
 {
-  // Set up an IRS to be returned by the mocked update_registration_state()
+  // Set up an IRS to be returned by the mocked get_registration_data()
   // call.
   _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
 
@@ -451,6 +663,7 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
       .WillOnce(DoAll(SaveArg<1>(&_patch_object),
                       SetArgPointee<2>(_patch_aor),
                       Return(HTTP_OK)));
+    registration_log_expect_call(0);
     EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
       .WillOnce(Return(HTTP_OK));
   }
@@ -475,7 +688,100 @@ TEST_F(SubscriberManagerTest, TestRemoveBinding)
   delete_bindings(_all_bindings);
 }
 
-TEST_F(SubscriberManagerTest, TestAddNewSubscription)
+TEST_F(SubscriberManagerTest, TestAddSubscriptionHSSFail)
+{
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(Return(HTTP_NOT_FOUND));
+  }
+
+  // Update subscription on SM.
+  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
+                                                         SubscriptionPair(),
+                                                         _irs_info_out,
+                                                         DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_NOT_FOUND);
+}
+
+TEST_F(SubscriberManagerTest, TestAddSubscriptionNoDefaultIMPU)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  //_irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+  }
+
+  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
+                                                         SubscriptionPair(),
+                                                         _irs_info_out,
+                                                         DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_BAD_REQUEST);
+}
+
+TEST_F(SubscriberManagerTest, TestAddSubscriptionGETFail)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
+                                                         SubscriptionPair(),
+                                                         _irs_info_out,
+                                                         DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+}
+
+TEST_F(SubscriberManagerTest, TestAddSubscriptionPATCHFail)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up AoRs to be returned by S4.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
+  _updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);
+
+  // Update subscriptions on SM.
+  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
+                                                         _updated_subscription,
+                                                         _irs_info_out,
+                                                         DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+
+  // Delete the subscription we put in.
+  delete _updated_subscription.second; _updated_subscription.second = NULL;
+}
+
+TEST_F(SubscriberManagerTest, TestAddSubscription)
 {
   // Set up an IRS to be returned by the mocked get_registration_data()
   // call.
@@ -495,6 +801,123 @@ TEST_F(SubscriberManagerTest, TestAddNewSubscription)
 
   // Subscription has been added so expect a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
+  free_txdata();
+}
+
+TEST_F(SubscriberManagerTest, TestAddSubscriptionMultipleIMPUs)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+  _irs_info._associated_uris.add_uri(OTHER_ID, false);
+
+  // Set up AoRs to be returned by S4.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+  _get_aor->_associated_uris.add_uri(OTHER_ID, false);
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
+  _patch_aor->_associated_uris.add_uri(OTHER_ID, false);
+
+  subscription_expect_calls();
+
+  Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
+  _updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);
+
+  // Update subscriptions on SM.
+  update_subscription();
+
+  // Subscription has been added so expect a NOTIFY.
+  ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg,
+               ACTIVE,
+               ACTIVE_REGISTERED,
+               {std::make_pair(DEFAULT_ID, false), std::make_pair(OTHER_ID, false)});
+  free_txdata();
+}
+
+
+TEST_F(SubscriberManagerTest, TestAddSubscriptionMultipleBindings)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up AoRs to be returned by S4.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+  Binding* b = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL), "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>", 0);
+  _get_aor->_bindings.insert(std::make_pair("biniding_id", b));
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
+  b = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL), "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>", 0);
+  _patch_aor->_bindings.insert(std::make_pair("biniding_id", b));
+
+  subscription_expect_calls();
+
+  Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
+  _updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);
+
+  // Update subscriptions on SM.
+  update_subscription();
+
+  // Subscription has been added so expect a NOTIFY.
+  ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
+  free_txdata();
+}
+
+TEST_F(SubscriberManagerTest, TestAddSubscriptionWildcardIMPU)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+  _irs_info._associated_uris.add_uri(WILDCARD_ID, false);
+
+  // Set up AoRs to be returned by S4.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+  _get_aor->_associated_uris.add_uri(WILDCARD_ID, false);
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
+  _patch_aor->_associated_uris.add_uri(WILDCARD_ID, false);
+
+  subscription_expect_calls();
+
+  Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
+  _updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);
+
+  // Update subscriptions on SM.
+  update_subscription();
+
+  // Subscription has been added so expect a NOTIFY.
+  ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg,
+               ACTIVE,
+               ACTIVE_REGISTERED,
+               {std::make_pair(DEFAULT_ID, false), std::make_pair("sip:65055!.*!@example.com", true)});
+  free_txdata();
+}
+
+TEST_F(SubscriberManagerTest, TestAddSubscriptionBarredIMPU)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+  _irs_info._associated_uris.add_uri(OTHER_ID, true);
+
+  // Set up AoRs to be returned by S4.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+  _get_aor->_associated_uris.add_uri(OTHER_ID, true);
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
+  _patch_aor->_associated_uris.add_uri(OTHER_ID, true);
+
+  subscription_expect_calls();
+
+  Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
+  _updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);
+
+  // Update subscriptions on SM.
+  update_subscription();
+
+  // Subscription has been added so expect a NOTIFY.
+  ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
   free_txdata();
 }
 
@@ -522,6 +945,7 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
 
   // Subscription has been removed so expect a final NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
   free_txdata();
 }
 
@@ -546,6 +970,7 @@ TEST_F(SubscriberManagerTest, TestRefreshSubscription)
 
   // Subscription has been refreshed so expect a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
   free_txdata();
 }
 
@@ -568,6 +993,7 @@ TEST_F(SubscriberManagerTest, TestShortenSubscription)
 
   // Subscription has been shortened so expect a NOTIFY.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg);
   free_txdata();
 }
 
@@ -587,6 +1013,93 @@ TEST_F(SubscriberManagerTest, TestUnchangedSubscription)
   ASSERT_EQ(0, txdata_count());
 }
 
+// TODO add emergency binding test.
+
+TEST_F(SubscriberManagerTest, TestDeregisterSubscriberHSSFail)
+{
+  EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+    .WillOnce(Return(HTTP_NOT_FOUND));
+
+  HTTPCode rc = _subscriber_manager->deregister_subscriber(DEFAULT_ID,
+                                                           SubscriberManager::EventTrigger::ADMIN,
+                                                           DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_NOT_FOUND);
+}
+
+TEST_F(SubscriberManagerTest, TestDeregisterSubscriberGETFail)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  HTTPCode rc = _subscriber_manager->deregister_subscriber(DEFAULT_ID,
+                                                           SubscriberManager::EventTrigger::ADMIN,
+                                                           DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+}
+
+TEST_F(SubscriberManagerTest, TestDeregisterSubscriberGETNotFound)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_NOT_FOUND));
+  }
+
+  HTTPCode rc = _subscriber_manager->deregister_subscriber(DEFAULT_ID,
+                                                           SubscriberManager::EventTrigger::ADMIN,
+                                                           DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+}
+
+TEST_F(SubscriberManagerTest, TestDeregisterSubscriberPATCHFail)
+{
+  // Set up an IRS to be returned by the mocked get_registration_data()
+  // call.
+  _irs_info._associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up AoRs to be returned by S4.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_hss_connection, get_registration_data(DEFAULT_ID, _, _))
+      .WillOnce(DoAll(SetArgReferee<1>(_irs_info),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_delete(DEFAULT_ID, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  HTTPCode rc = _subscriber_manager->deregister_subscriber(DEFAULT_ID,
+                                                           SubscriberManager::EventTrigger::ADMIN,
+                                                           DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+}
+
+// TODO add test for precondition failed (data contention)
+
 TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
 {
   // Set up an IRS to be returned by the mocked update_registration_state()
@@ -604,9 +1117,12 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
                       Return(HTTP_OK)));
     EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
       .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                      SetArgReferee<2>(12),
                       Return(HTTP_OK)));
-    EXPECT_CALL(*_s4, handle_delete(DEFAULT_ID, _, _))
+    EXPECT_CALL(*_s4, handle_delete(DEFAULT_ID, 12, _))
       .WillOnce(Return(HTTP_OK));
+    registration_log_expect_call(0);
+    subscription_log_expect_call(0);
     EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
       .WillOnce(Return(HTTP_OK));
   }
@@ -618,8 +1134,26 @@ TEST_F(SubscriberManagerTest, TestDeregisterSubscriber)
 
   // Expect a final NOTIFY for the subscription.
   ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg, TERMINATED, TERMINATED_DEACTIVATED);
   free_txdata();
 }
+
+TEST_F(SubscriberManagerTest, TestGetBindingsFail)
+{
+  // Set up expect calls to S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_NOT_FOUND));
+  }
+
+  // Call get bindings on SM.
+  HTTPCode rc = _subscriber_manager->get_bindings(DEFAULT_ID,
+                                                  _all_bindings,
+                                                  DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_NOT_FOUND);
+}
+
 
 TEST_F(SubscriberManagerTest, TestGetBindings)
 {
@@ -645,6 +1179,22 @@ TEST_F(SubscriberManagerTest, TestGetBindings)
 
   // Delete the bindings passed out.
   delete_bindings(_all_bindings);
+}
+
+TEST_F(SubscriberManagerTest, TestGetSubscriptionsFail)
+{
+  // Set up expect calls to S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_NOT_FOUND));
+  }
+
+  // Call get bindings on SM.
+  HTTPCode rc = _subscriber_manager->get_subscriptions(DEFAULT_ID,
+                                                       _all_subscriptions,
+                                                       DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_NOT_FOUND);
 }
 
 TEST_F(SubscriberManagerTest, TestGetSubscriptions)
@@ -673,11 +1223,57 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   delete_subscriptions(_all_subscriptions);
 }
 
+TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIsGETFail)
+{
+  // Set up expect calls to S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_NOT_FOUND));
+  }
+
+  // Set up new associated URIs.
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(DEFAULT_ID, false);
+  associated_uris.add_uri(OTHER_ID, false);
+
+  // Call update associated URIs on SM.
+  HTTPCode rc = _subscriber_manager->update_associated_uris(DEFAULT_ID,
+                                                            associated_uris,
+                                                            DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_NOT_FOUND);
+}
+
+TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIsPATCHFail)
+{
+  // Set up AoRs to be returned by S4.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
+
+  // Set up expect calls to S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  // Set up new associated URIs.
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(DEFAULT_ID, false);
+  associated_uris.add_uri(OTHER_ID, false);
+
+  // Call update associated URIs on SM.
+  HTTPCode rc = _subscriber_manager->update_associated_uris(DEFAULT_ID,
+                                                            associated_uris,
+                                                            DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+}
+
 TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
 {
   // Set up AoRs to be returned by S4.
-  //AoR* get_aor = new AoR(DEFAULT_ID);
-  //get_aor->_associated_uris.add_uri(DEFAULT_ID, false);
   _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
   _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
   _patch_aor->_associated_uris.add_uri(OTHER_ID, false);
