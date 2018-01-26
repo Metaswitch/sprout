@@ -1563,6 +1563,7 @@ std::string SubscriptionTest::do_OK_NOTIFY_flow(std::string* body,
 
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
+  EXPECT_EQ("Contact: <sip:all.the.sprout.nodes:5058;transport=TCP>", get_headers(out, "Contact"));
 
   EXPECT_THAT(from_hdr, testing::MatchesRegex(string(".*tag=").append(to_tag)));
 
