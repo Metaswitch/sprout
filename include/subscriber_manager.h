@@ -30,10 +30,11 @@ extern "C" {
 #include "ifchandler.h"
 #include "aor.h"
 #include "s4.h"
+#include "base_subscriber_manager.h"
 #include "notify_utils.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
-class SubscriberManager
+class SubscriberManager : BaseSubscriberManager
 {
 public:
   enum EventTrigger
@@ -101,7 +102,8 @@ public:
                       SAS::TrailId trail);
   };
 
-  /// SubscriberManager constructor.
+  /// SubscriberManager constructor. It calls the S4 to store a reference to
+  /// itself, so that local S4 and SM contacts each other in one-to-one mapping.
   ///
   /// @param s4                 - Pointer to the underlying data store interface
   /// @param hss_connection     - Sprout's HSS connection (via homestead)

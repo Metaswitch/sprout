@@ -2376,7 +2376,7 @@ int main(int argc, char* argv[])
   PushProfileTask::Config push_profile_config(subscriber_manager);
   DeleteImpuTask::Config delete_impu_config(subscriber_manager);
 
-  AoRTimeoutTask::Config aor_timeout_config(subscriber_manager);
+  AoRTimeoutTask::Config aor_timeout_config(s4);
 
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
