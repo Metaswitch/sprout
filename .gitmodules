@@ -1,9 +1,6 @@
 [submodule "build-infra"]
 	path = build-infra
 	url = git@github.com:Metaswitch/clearwater-build-infra.git
-[submodule "modules/c-ares"]
-	path = modules/c-ares
-	url = git@github.com:bagder/c-ares.git
 [submodule "modules/curl"]
 	path = modules/curl
 	url = git@github.com:Metaswitch/curl.git
@@ -16,9 +13,6 @@
 [submodule "modules/libre"]
 	path = modules/libre
 	url = git@github.com:Metaswitch/libre-upstream.git
-[submodule "modules/openssl"]
-	path = modules/openssl
-	url = git@github.com:openssl/openssl.git
 [submodule "modules/pjsip"]
 	path = modules/pjsip
 	url = git@github.com:Metaswitch/pjsip-upstream.git
