@@ -108,12 +108,15 @@ private:
   void register_subscriber_expect_calls();
   void reregister_subscriber_expect_calls(bool binding_changed = true,
                                           int expiry = 300);
+  void deregister_subscriber_expect_calls();
+
   void registration_log_expect_call(int expiry = 300,
                                     std::string contact = AoRTestUtils::CONTACT_URI,
                                     std::string binding_id = AoRTestUtils::BINDING_ID,
                                     std::string aor_id = DEFAULT_ID);
   void reregister_subscriber(AssociatedURIs associated_uris,
                              bool subscription_removed = false);
+  void deregister_subscriber(AssociatedURIs associated_uris);
 
   void subscription_expect_calls(bool subscription_changed = true,
                                  int expiry = 300);
@@ -145,6 +148,7 @@ private:
   HSSConnection::irs_info _irs_info_out;
   PatchObject _patch_object;
   Bindings _updated_bindings;
+  std::vector<std::string> _remove_bindings;
   SubscriptionPair _updated_subscription;
   Bindings _all_bindings;
   Subscriptions _all_subscriptions;
@@ -197,6 +201,16 @@ void SubscriberManagerTest::reregister_subscriber_expect_calls(bool binding_chan
   }
 }
 
+// Sets up the expect calls to the HSS and S4 when reregister_subscriber() is called
+// to deregister a subscriber.
+void SubscriberManagerTest::deregister_subscriber_expect_calls()
+{
+  reregister_subscriber_expect_calls(true, 0);
+  EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
+    .WillOnce(Return(HTTP_OK));
+  subscription_log_expect_call(0);
+}
+
 void SubscriberManagerTest::registration_log_expect_call(
                               int expiry,
                               std::string contact,
@@ -213,11 +227,11 @@ void SubscriberManagerTest::registration_log_expect_call(
 void SubscriberManagerTest::reregister_subscriber(AssociatedURIs associated_uris,
                                                   bool subscription_removed)
 {
-  // Update binding on SM.
+  // Reregister subscriber on SM.
   HTTPCode rc = _subscriber_manager->reregister_subscriber(DEFAULT_ID,
                                                            associated_uris,
                                                            _updated_bindings,
-                                                           std::vector<std::string>(),
+                                                           _remove_bindings,
                                                            _all_bindings,
                                                            _irs_info_out,
                                                            DUMMY_TRAIL_ID);
@@ -246,6 +260,32 @@ void SubscriberManagerTest::reregister_subscriber(AssociatedURIs associated_uris
   delete_bindings(_all_bindings);
 }
 
+// Calls reregister_subscriber() and checks what is returned.
+void SubscriberManagerTest::deregister_subscriber(AssociatedURIs associated_uris)
+{
+  // Deregister subscriber on SM.
+  HTTPCode rc = _subscriber_manager->reregister_subscriber(DEFAULT_ID,
+                                                           associated_uris,
+                                                           Bindings(),
+                                                           _remove_bindings,
+                                                           _all_bindings,
+                                                           _irs_info_out,
+                                                           DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_OK);
+
+  // Check that the patch object contains the expected binding.
+  std::vector<std::string> rb = _patch_object.get_remove_bindings();
+  EXPECT_EQ(rb.size(), 1);
+  EXPECT_EQ(rb[0], AoRTestUtils::BINDING_ID);
+
+  // This operation should also remove the subscription.
+  std::vector<std::string> rs = _patch_object.get_remove_subscriptions();
+  EXPECT_EQ(rs.size(), 1);
+  EXPECT_TRUE(rs[0] == AoRTestUtils::SUBSCRIPTION_ID);
+
+  // Check that the binding we set is returned in all bindings.
+  EXPECT_EQ(_all_bindings.size(), 0);
+}
 
 void SubscriberManagerTest::subscription_expect_calls(bool subscription_changed,
                                                       int expiry)
@@ -389,6 +429,33 @@ void SubscriberManagerTest::check_notify(pjsip_msg* notify,
   EXPECT_EQ(irs_impus.size(), num_reg);
 }
 
+TEST_F(SubscriberManagerTest, TestAddFirstBindingPUTFail)
+{
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  EXPECT_CALL(*_s4, handle_put(DEFAULT_ID, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+
+  // Build the updated bindings to pass in.
+  Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
+  _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
+
+  // Register subscriber on SM.
+  HTTPCode rc = _subscriber_manager->register_subscriber(DEFAULT_ID,
+                                                         "",
+                                                         associated_uris,
+                                                         _updated_bindings,
+                                                         _all_bindings,
+                                                         DUMMY_TRAIL_ID);
+
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+
+  // Delete the bindings we put in.
+  delete_bindings(_updated_bindings);
+}
+
 TEST_F(SubscriberManagerTest, TestAddFirstBinding)
 {
   AssociatedURIs associated_uris;
@@ -420,6 +487,63 @@ TEST_F(SubscriberManagerTest, TestAddFirstBinding)
   // Delete the bindings we put in and the ones passed out.
   delete_bindings(_updated_bindings);
   delete_bindings(_all_bindings);
+}
+
+TEST_F(SubscriberManagerTest, TestAddBindingGETFail)
+{
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri(DEFAULT_ID, false);
+
+  EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+
+  // Build the updated bindings to pass in.
+  Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
+  _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
+
+  HTTPCode rc = _subscriber_manager->reregister_subscriber(DEFAULT_ID,
+                                                           associated_uris,
+                                                           _updated_bindings,
+                                                           std::vector<std::string>(),
+                                                           _all_bindings,
+                                                           _irs_info_out,
+                                                           DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+
+  // Delete the bindings we put in.
+  delete_bindings(_updated_bindings);
+}
+
+TEST_F(SubscriberManagerTest, TestAddBindingPATCHFail)
+{
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up AoRs to be returned by S4.
+  _get_aor = new AoR(DEFAULT_ID);
+
+  EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+    .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*_s4, handle_patch(DEFAULT_ID, _, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+
+  // Build the updated bindings to pass in.
+  Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
+  _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
+
+  // Reregister subscriber on SM.
+  HTTPCode rc = _subscriber_manager->reregister_subscriber(DEFAULT_ID,
+                                                           associated_uris,
+                                                           _updated_bindings,
+                                                           std::vector<std::string>(),
+                                                           _all_bindings,
+                                                           _irs_info_out,
+                                                           DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+
+  // Delete the bindings we put in.
+  delete_bindings(_updated_bindings);
 }
 
 TEST_F(SubscriberManagerTest, TestAddBinding)
@@ -460,7 +584,7 @@ TEST_F(SubscriberManagerTest, TestRefreshBinding)
   binding->_expires += 10;
   _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
 
-  // Update binding on SM.
+  // Reregister subscriber on SM.
   reregister_subscriber(associated_uris);
 
   // We should have a NOTIFY.
@@ -487,12 +611,35 @@ TEST_F(SubscriberManagerTest, TestShortenBinding)
   binding->_expires -= 10;
   _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
 
-  // Update binding on SM.
+  // Reregister subscriber on SM.
   reregister_subscriber(associated_uris);
 
   // We should have a NOTIFY.
   ASSERT_EQ(1, txdata_count());
   check_notify(current_txdata()->msg, ACTIVE, ACTIVE_SHORTENED);
+  free_txdata();
+}
+
+TEST_F(SubscriberManagerTest, TestDeregisterBinding)
+{
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri(DEFAULT_ID, false);
+  set_up_aors();
+
+  // Modify the binding in the patch AoR to remove the binding.
+  _patch_aor->remove_binding(AoRTestUtils::BINDING_ID);
+
+  deregister_subscriber_expect_calls();
+
+  // Build the updated bindings to pass in.
+  _remove_bindings = {AoRTestUtils::BINDING_ID};
+
+  // Reregister subscriber on SM.
+  deregister_subscriber(associated_uris);
+
+  // We should have a NOTIFY.
+  ASSERT_EQ(1, txdata_count());
+  check_notify(current_txdata()->msg, TERMINATED, TERMINATED_UNREGISTERED);
   free_txdata();
 }
 
@@ -508,7 +655,7 @@ TEST_F(SubscriberManagerTest, TestUnchangedBinding)
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
   _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
 
-  // Update binding on SM.
+  // Reregister subscriber on SM.
   reregister_subscriber(associated_uris);
 
   // We should not have a NOTIFY since the binding is unchanged.
@@ -541,7 +688,7 @@ TEST_F(SubscriberManagerTest, TestContactChangedBinding)
   binding->_uri = "<sip:6505550231@10.225.20.18:5991;transport=tcp;ob>;";
   _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
 
-  // Update binding on SM.
+  // Reregister subscriber on SM.
   reregister_subscriber(associated_uris, true);
 
   // The subscription shares the same contact as the binding so we do NOT expect
