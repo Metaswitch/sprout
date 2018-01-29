@@ -23,7 +23,6 @@
 #include "fifcservice.h"
 #include "aor.h"
 
-
 /// Base AuthTimeoutTask class for tasks that implement authentication timeout
 /// callbacks from specific timer services.
 class AuthTimeoutTask : public HttpStackUtils::Task
