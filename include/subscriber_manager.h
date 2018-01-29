@@ -154,23 +154,6 @@ public:
                                          HSSConnection::irs_info& irs_info,
                                          SAS::TrailId trail);
 
-  /// Updates the bindings stored in SM for a given public ID.
-  ///
-  /// @param[in]  irs_query     The IRS query object to use to query the HSS
-  /// @param[in]  updated_bindings
-  ///                           The bindings to update
-  /// @param[in]  binding_ids_to_remove
-  ///                           The binding IDs to remove
-  /// @param[out] all_bindings  All bindings currently stores for this public ID
-  /// @param[out] irs_info      The IRS information stored about this public ID
-  /// @param[in]  trail         The SAS trail ID
-  virtual HTTPCode update_bindings(const HSSConnection::irs_query& irs_query,
-                                   const Bindings& updated_bindings,
-                                   const std::vector<std::string>& binding_ids_to_remove,
-                                   Bindings& all_bindings,
-                                   HSSConnection::irs_info& irs_info,
-                                   SAS::TrailId trail);
-
   /// Removes bindings stored in SM for a given public ID.
   ///
   /// @param[in]  public_id     The public IDs to remove bindings for
