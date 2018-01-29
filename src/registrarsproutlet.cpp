@@ -375,6 +375,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     rc = _registrar->_sm->register_subscriber(default_impu,
                                               _scscf_uri,
+                                              irs_info._associated_uris,
                                               bindings_to_update,
                                               all_bindings,
                                               trail());
@@ -382,6 +383,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   else
   {
     rc = _registrar->_sm->reregister_subscriber(default_impu,
+                                                irs_info._associated_uris,
                                                 bindings_to_update,
                                                 binding_ids_to_remove,
                                                 all_bindings,
