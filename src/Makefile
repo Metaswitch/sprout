@@ -12,7 +12,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          baseresolver.cpp \
                          sipresolver.cpp \
                          bono.cpp \
-                         registration_utils.cpp \
                          hss_sip_mapping.cpp \
                          options.cpp \
                          sip_connection_pool.cpp \
@@ -30,7 +29,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          memcached_config.cpp \
                          impistore.cpp \
                          astaire_impistore.cpp \
-                         subscriber_data_manager.cpp \
+                         subscriber_data_utils.cpp \
                          subscriber_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \
@@ -58,6 +57,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          acr.cpp \
                          signalhandler.cpp \
                          health_checker.cpp \
+                         notify_sender.cpp \
                          notify_utils.cpp \
                          unique.cpp \
                          chronosconnection.cpp \
@@ -208,7 +208,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_rph_service.cpp \
                        s4_test.cpp \
                        mock_s4.cpp \
-                       s4_chronoshandlers_test.cpp
+                       s4_chronoshandlers_test.cpp \
+                       sprout_xml_utils_test.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/clearwater-s4/src/ut

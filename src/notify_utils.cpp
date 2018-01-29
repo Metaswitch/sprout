@@ -79,9 +79,9 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
 pj_xml_node* notify_create_reg_state_xml(
                          pj_pool_t *pool,
                          std::string& aor,
-                         AssociatedURIs* associated_uris,
+                         AssociatedURIs& associated_uris,
                          Subscription* subscription,
-                         std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
+                         SubscriberDataUtils::ClassifiedBindings bnis,
                          NotifyUtils::RegistrationState reg_state,
                          SAS::TrailId trail)
 {
@@ -123,7 +123,7 @@ pj_xml_node* notify_create_reg_state_xml(
 
   // Log any URIs that have been left out of the P-Associated-URI because they
   // are barred.
-  std::vector<std::string> barred_uris = associated_uris->get_barred_uris();
+  std::vector<std::string> barred_uris = associated_uris.get_barred_uris();
   if (!barred_uris.empty())
   {
     std::stringstream ss;
@@ -142,7 +142,7 @@ pj_xml_node* notify_create_reg_state_xml(
 
   // Iterate over the unbarred IMPUs in the IRS, inserting a registration
   // element for each one
-  std::vector<std::string> irs_impus = associated_uris->get_unbarred_uris();
+  std::vector<std::string> irs_impus = associated_uris.get_unbarred_uris();
   for (std::vector<std::string>::const_iterator impu = irs_impus.begin();
        impu != irs_impus.end();
        ++impu)
@@ -181,46 +181,43 @@ pj_xml_node* notify_create_reg_state_xml(
 
     // Create the contact nodes
     // For each binding, add a contact node to the registration node
-    for (std::vector<NotifyUtils::BindingNotifyInformation*>::const_iterator bni =
-           bnis.begin();
-         bni != bnis.end();
-         ++bni)
+    for (SubscriberDataUtils::ClassifiedBinding* bni : bnis)
     {
       // for each attribute, correctly populate
       pj_str_t c_id;
       pj_str_t c_state;
       pj_str_t c_event;
 
-      std::string unescaped_c_id = (*bni)->_id;
+      std::string unescaped_c_id = bni->_id;
       pj_strdup2(pool, &c_id, Utils::xml_escape(unescaped_c_id).c_str());
 
-      switch ((*bni)->_contact_event)
+      switch (bni->_contact_event)
       {
-        case NotifyUtils::ContactEvent::REGISTERED:
+        case SubscriberDataUtils::ContactEvent::REGISTERED:
           c_event = STR_REGISTERED;
           c_state = STR_ACTIVE;
           break;
-        case NotifyUtils::ContactEvent::CREATED:
+        case SubscriberDataUtils::ContactEvent::CREATED:
           c_event = STR_CREATED;
           c_state = STR_ACTIVE;
           break;
-        case NotifyUtils::ContactEvent::REFRESHED:
+        case SubscriberDataUtils::ContactEvent::REFRESHED:
           c_event = STR_REFRESHED;
           c_state = STR_ACTIVE;
           break;
-        case NotifyUtils::ContactEvent::SHORTENED:
+        case SubscriberDataUtils::ContactEvent::SHORTENED:
           c_event = STR_SHORTENED;
           c_state = STR_ACTIVE;
           break;
-        case NotifyUtils::ContactEvent::EXPIRED:
+        case SubscriberDataUtils::ContactEvent::EXPIRED:
           c_event = STR_EXPIRED;
           c_state = STR_TERMINATED;
           break;
-        case NotifyUtils::ContactEvent::UNREGISTERED:
+        case SubscriberDataUtils::ContactEvent::UNREGISTERED:
           c_event = STR_UNREGISTERED;
           c_state = STR_TERMINATED;
           break;
-        case NotifyUtils::ContactEvent::DEACTIVATED:
+        case SubscriberDataUtils::ContactEvent::DEACTIVATED:
           c_event = STR_DEACTIVATED;
           c_state = STR_TERMINATED;
           break;
@@ -234,9 +231,9 @@ pj_xml_node* notify_create_reg_state_xml(
       // Create and add URI element
       pj_str_t c_uri;
 
-      if ((*bni)->_b->_uri.size() > 0)
+      if (bni->_binding->_uri.size() > 0)
       {
-        std::string unescaped_c_uri = (*bni)->_b->_uri;
+        std::string unescaped_c_uri = bni->_binding->_uri;
         pj_strdup2(pool, &c_uri, Utils::xml_escape(unescaped_c_uri).c_str());
       }
 
@@ -247,7 +244,7 @@ pj_xml_node* notify_create_reg_state_xml(
       pj_str_t gruu;
       pj_strdup2(pool,
                  &gruu,
-                 Utils::xml_escape(AoRUtils::pub_gruu_str((*bni)->_b, pool)).c_str());
+                 Utils::xml_escape(AoRUtils::pub_gruu_str(bni->_binding, pool)).c_str());
 
       // Add all 'unknown parameters' from the contact header into the contact
       // element as <unknown-param> elements. For example, a contact header that
@@ -262,7 +259,7 @@ pj_xml_node* notify_create_reg_state_xml(
       //
       // Note that p1 is not included (as it's a URI parameter) and expires is
       // not included (as it is defined in RFC 3261 so is a 'known' parameter).
-      for (const std::pair<std::string, std::string>& param: (*bni)->_b->_params)
+      for (const std::pair<std::string, std::string>& param: bni->_binding->_params)
       {
         // RFC 3680 defines unknown parameters as any parameter not defined in
         // RFC 3261. RFC 3261 defines 'q' and 'expires' so don't add these.
@@ -326,9 +323,9 @@ static int xml_print_body( struct pjsip_msg_body *msg_body,
 pj_status_t notify_create_body(pjsip_msg_body* body,
                                pj_pool_t *pool,
                                std::string& aor,
-                               AssociatedURIs* associated_uris,
+                               AssociatedURIs& associated_uris,
                                Subscription* subscription,
-                               std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
+                               SubscriberDataUtils::ClassifiedBindings bnis,
                                NotifyUtils::RegistrationState reg_state,
                                SAS::TrailId trail)
 {
@@ -397,9 +394,9 @@ pj_status_t NotifyUtils::create_subscription_notify(
                                     pjsip_tx_data** tdata_notify,
                                     Subscription* s,
                                     std::string aor,
-                                    AssociatedURIs* associated_uris,
+                                    AssociatedURIs& associated_uris,
                                     int cseq,
-                                    std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
+                                    SubscriberDataUtils::ClassifiedBindings bnis,
                                     NotifyUtils::RegistrationState reg_state,
                                     int now,
                                     SAS::TrailId trail)
@@ -431,9 +428,9 @@ pj_status_t NotifyUtils::create_notify(
                                     pjsip_tx_data** tdata_notify,
                                     Subscription* subscription,
                                     std::string aor,
-                                    AssociatedURIs* associated_uris,
+                                    AssociatedURIs& associated_uris,
                                     int cseq,
-                                    std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
+                                    SubscriberDataUtils::ClassifiedBindings bnis,
                                     NotifyUtils::RegistrationState reg_state,
                                     NotifyUtils::SubscriptionState subscription_state,
                                     int expiry,

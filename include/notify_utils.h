@@ -21,10 +21,10 @@ extern "C" {
 }
 
 #include <string>
-#include "subscriber_data_manager.h"
 #include "ifchandler.h"
 #include "hssconnection.h"
 #include "pjsip-simple/evsub.h"
+#include "subscriber_data_utils.h"
 
 namespace NotifyUtils
 {
@@ -33,7 +33,9 @@ namespace NotifyUtils
   enum class RegistrationState { ACTIVE, TERMINATED };
   enum class ContactState { ACTIVE, TERMINATED };
   enum class SubscriptionState { ACTIVE, TERMINATED };
-  enum class ContactEvent {
+
+  enum class ContactEvent
+  {
     REGISTERED,
     CREATED,
     REFRESHED,
@@ -43,28 +45,12 @@ namespace NotifyUtils
     UNREGISTERED
   };
 
-  // Wrapper for the bindings in a NOTIFY. The information needed is
-  // the binding itself, a unique ID for it and the contact event
-  struct BindingNotifyInformation {
-    BindingNotifyInformation(std::string id,
-                             Binding* b,
-                             NotifyUtils::ContactEvent event) :
-      _id(id),
-      _b(b),
-      _contact_event(event)
-    {}
-
-    std::string _id;
-    Binding* _b;
-    NotifyUtils::ContactEvent _contact_event;
-  };
-
   pj_status_t create_subscription_notify(pjsip_tx_data** tdata_notify,
                                          Subscription* s,
                                          std::string aor,
-                                         AssociatedURIs* associated_uris,
+                                         AssociatedURIs& associated_uris,
                                          int cseq,
-                                         std::vector<BindingNotifyInformation*> bnis,
+                                         SubscriberDataUtils::ClassifiedBindings bnis,
                                          NotifyUtils::RegistrationState reg_state,
                                          int now,
                                          SAS::TrailId trail);
@@ -72,9 +58,9 @@ namespace NotifyUtils
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
                             Subscription* subscription,
                             std::string aor,
-                            AssociatedURIs* associated_uris,
+                            AssociatedURIs& associated_uris,
                             int cseq,
-                            std::vector<BindingNotifyInformation*> bnis,
+                            SubscriberDataUtils::ClassifiedBindings bnis,
                             NotifyUtils::RegistrationState reg_state,
                             NotifyUtils::SubscriptionState subscription_state,
                             int expiry,

@@ -26,7 +26,6 @@ extern "C" {
 #include "pjutils.h"
 #include "enumservice.h"
 #include "analyticslogger.h"
-#include "subscriber_data_manager.h"
 #include "stack.h"
 #include "sessioncase.h"
 #include "ifchandler.h"

@@ -39,7 +39,6 @@ extern "C" {
 #include "cfgoptions.h"
 #include "sasevent.h"
 #include "analyticslogger.h"
-#include "subscriber_data_manager.h"
 #include "subscriber_manager.h"
 #include "stack.h"
 #include "bono.h"
@@ -1396,10 +1395,9 @@ Store* local_impi_data_store = NULL;
 std::vector<Store*> remote_impi_data_stores;
 AoRStore* local_aor_store = NULL;
 std::vector<AoRStore*> remote_aor_stores;
-SubscriberDataManager* local_sdm = NULL;
-std::vector<SubscriberDataManager*> remote_sdms;
 S4* s4 = NULL;
 std::vector<S4*> remote_s4s;
+NotifySender* notify_sender = NULL;
 SubscriberManager* subscriber_manager = NULL;
 ImpiStore* local_impi_store = NULL;
 std::vector<ImpiStore*> remote_impi_stores;
@@ -2216,25 +2214,6 @@ int main(int argc, char* argv[])
     return rc;
   }
 
-  // SDM-REFACTOR-TODO - remove these and all other refs to local and remote sdms
-  // Use the AOR stores we've create to create the local (and optionally remote)
-  // SDMs.
-  local_sdm = new SubscriberDataManager(local_aor_store,
-                                        chronos_connection,
-                                        analytics_logger,
-                                        true);
-
-  for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
-       it != remote_aor_stores.end();
-       ++it)
-  {
-    SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
-                                                                  chronos_connection,
-                                                                  NULL,
-                                                                  false);
-    remote_sdms.push_back(remote_sdm);
-  }
-
   // Set up the SM and S4s
   for (AoRStore* store : remote_aor_stores)
   {
@@ -2248,9 +2227,11 @@ int main(int argc, char* argv[])
               local_aor_store,
               remote_s4s);
 
+  NotifySender* notify_sender = new NotifySender();
   subscriber_manager = new SubscriberManager(s4,
                                              hss_connection,
-                                             analytics_logger);
+                                             analytics_logger,
+                                             notify_sender);
 
   // Start the HTTP stack early as plugins might need to register handlers
   // with it.
@@ -2524,19 +2505,11 @@ int main(int argc, char* argv[])
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;
-  delete local_sdm;
   delete subscriber_manager;
+  delete notify_sender;
   delete s4;
   delete local_aor_store;
   delete local_data_store;
-
-  for (std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
-       it != remote_sdms.end();
-       ++it)
-  {
-    delete *it;
-  }
-  remote_sdms.clear();
 
   for (S4* remote_s4 : remote_s4s)
   {

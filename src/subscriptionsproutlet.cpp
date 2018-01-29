@@ -29,7 +29,6 @@ extern "C" {
 #include "custom_headers.h"
 #include "stack.h"
 #include "contact_filtering.h"
-#include "registration_utils.h"
 #include "subscriptionsproutlet.h"
 #include "uri_classifier.h"
 #include "hss_sip_mapping.h"
