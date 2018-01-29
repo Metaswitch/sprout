@@ -292,7 +292,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
 
   if ((st_code != PJSIP_SC_OK) ||
-     (irs_info._associated_uris.get_default_impu(default_impu, false))) // EM-TODO false here??
+      (!irs_info._associated_uris.get_default_impu(default_impu, false))) // EM-TODO false here??
   {
     // Getting the subscriber information failed. SAS log and reject the request
     TRC_DEBUG("Failed to get subscriber information for %s - error is %d",
@@ -316,6 +316,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     pjsip_msg* rsp = create_response(req, st_code);
     send_response(rsp);
     free_msg(req);
+
+    return;
   }
 
   // 3. We've now got the subscriber information - in particular the default
@@ -326,11 +328,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   Bindings current_bindings;
   rc = _registrar->_sm->get_bindings(default_impu, current_bindings, trail());
 
-  if (rc != HTTP_OK)
+  if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
   {
     // Getting the current bindings failed. SAS log and reject the request.
     TRC_DEBUG("Failed to get current bindings for %s  - error is %d",
-              default_impu.c_str(), st_code);
+              default_impu.c_str(), rc);
     // EM-TODO: REDO SAS log
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
     event.add_var_param(default_impu);
@@ -351,6 +353,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     pjsip_msg* rsp = create_response(req, st_code);
     send_response(rsp);
     free_msg(req);
+
+    return;
   }
 
   // 4. We've successfully got the current bindings. Parse the register to work
