@@ -250,8 +250,7 @@ private:
                               SAS::TrailId chain_trail);
 
   /// Check whether the request has been retargeted, given the updated URI.
-  bool is_retarget(std::string new_served_user,
-                   std::string public_id);
+  bool is_retarget(std::string new_served_user);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);
