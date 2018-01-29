@@ -62,7 +62,9 @@ extern "C" {
 #include "scscfselector.h"
 #include "chronosconnection.h"
 #include "chronoshandlers.h"
+#include "s4_chronoshandlers.h"
 #include "handlers.h"
+#include "s4_handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
 #include "sproutletproxy.h"
@@ -2242,7 +2244,7 @@ int main(int argc, char* argv[])
 
   s4 = new S4("TODO LOCAL SITE NAME",
               chronos_connection,
-              "",
+              "/timers",
               local_aor_store,
               remote_s4s);
 
@@ -2374,23 +2376,16 @@ int main(int argc, char* argv[])
   PushProfileTask::Config push_profile_config(subscriber_manager);
   DeleteImpuTask::Config delete_impu_config(subscriber_manager);
 
-  AoRTimeoutTask::Config aor_timeout_config(local_sdm,
-                                            remote_sdms,
-                                            hss_connection,
-                                            fifc_service,
-                                            IFCConfiguration(opt.apply_fallback_ifcs,
-                                                             opt.reject_if_no_matching_ifcs,
-                                                             opt.dummy_app_server,
-                                                             NULL,
-                                                             NULL));
+  AoRTimeoutTask::Config aor_timeout_config(s4);
+
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
 
   GetBindingsTask::Config get_bindings_config(subscriber_manager);
   GetSubscriptionsTask::Config get_subscriptions_config(subscriber_manager);
 
-  TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
-  TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+  HttpStackUtils::TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  HttpStackUtils::TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
   HttpStackUtils::PingHandler ping_handler;

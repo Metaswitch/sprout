@@ -30,10 +30,11 @@ extern "C" {
 #include "ifchandler.h"
 #include "aor.h"
 #include "s4.h"
+#include "base_subscriber_manager.h"
 #include "notify_utils.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
-class SubscriberManager
+class SubscriberManager : BaseSubscriberManager
 {
 public:
   enum EventTrigger
@@ -101,7 +102,8 @@ public:
                       SAS::TrailId trail);
   };
 
-  /// SubscriberManager constructor.
+  /// SubscriberManager constructor. It calls the S4 to store a reference to
+  /// itself, so that local S4 and SM contacts each other in one-to-one mapping.
   ///
   /// @param s4                 - Pointer to the underlying data store interface
   /// @param hss_connection     - Sprout's HSS connection (via homestead)
@@ -269,6 +271,13 @@ public:
   virtual HTTPCode update_associated_uris(const std::string& aor_id,
                                           const AssociatedURIs& associated_uris,
                                           SAS::TrailId trail);
+
+  /// Handle a timer pop.
+  ///
+  /// @param[in]  aor_id        The AoR ID to handle a timer pop for
+  /// @param[in]  trail         The SAS trail ID
+  virtual void handle_timer_pop(const std::string& aor_id,
+                                SAS::TrailId trail) {};
 private:
   S4* _s4;
   HSSConnection* _hss_connection;
@@ -297,6 +306,7 @@ private:
   HTTPCode patch_bindings(const std::string& aor_id,
                           const Bindings& update_bindings,
                           const std::vector<std::string>& remove_bindings,
+                          const std::vector<std::string>& remove_subscriptions,
                           const AssociatedURIs& associated_uris,
                           AoR*& aor,
                           SAS::TrailId trail);
@@ -311,6 +321,11 @@ private:
                                  const AssociatedURIs& associated_uris,
                                  AoR*& aor,
                                  SAS::TrailId trail);
+
+  std::vector<std::string> subscriptions_to_remove(const Bindings& orig_bindings,
+                                                   const Subscriptions& orig_subscriptions,
+                                                   const Bindings& bindings_to_update,
+                                                   const std::vector<std::string> binding_ids_to_remove);
 
   void send_notifys_and_write_audit_logs(const std::string& aor_id,
                                          const EventTrigger& event_trigger,
