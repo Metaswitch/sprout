@@ -1,4 +1,4 @@
-TARGETS := sprout call-diversion-as.so gemini-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so
+TARGETS := sprout sprout_bgcf.so sprout_icscf.so sprout_scscf.so 
 
 TEST_TARGETS := sprout_test
 

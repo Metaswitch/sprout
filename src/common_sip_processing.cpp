@@ -101,6 +101,22 @@ static void local_log_tx_msg(pjsip_tx_data* tdata)
               tdata->tp_info.dst_port,
               (int)(tdata->buf.cur - tdata->buf.start),
               tdata->buf.start);
+
+  if (tdata->msg->type == PJSIP_RESPONSE_MSG &&
+      tdata->msg->line.status.code == 503)
+  {
+    TRC_WARNING("TX %d bytes %s to %s %s:%d:\n"
+                "--start msg--\n\n"
+                "%.*s\n"
+                "--end msg--",
+                (tdata->buf.cur - tdata->buf.start),
+                pjsip_tx_data_get_info(tdata),
+                tdata->tp_info.transport->type_name,
+                tdata->tp_info.dst_name,
+                tdata->tp_info.dst_port,
+                (int)(tdata->buf.cur - tdata->buf.start),
+                tdata->buf.start);
+  }
 }
 
 // LCOV_EXCL_START - can't meaningfully test SAS in UT

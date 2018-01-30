@@ -966,6 +966,17 @@ BaseAddrIterator* PJUtils::resolve_next_hop_iter(pjsip_tx_data* tdata,
   // and transport.
   pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(tdata->msg);
   std::string name = std::string(next_hop->host.ptr, next_hop->host.slen);
+  if (name.empty())
+  {
+    char buf[8192];
+    int size = pjsip_msg_print(tdata->msg, buf, 8192);
+    TRC_WARNING("About to look up empty name for message:\n" 
+                "--start msg--\n\n"
+                "%.*s\n"
+                "--end msg--",
+                size,
+                buf); 
+  }
   int port = next_hop->port;
   int transport = -1;
   if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)

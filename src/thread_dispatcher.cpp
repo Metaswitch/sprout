@@ -125,19 +125,21 @@ static void resume_stopwatch(Utils::StopWatch& s, const std::string& reason)
 }
 // LCOV_EXCL_STOP
 
-static void dump_message_details(pjsip_rx_data* rdata)
+static void dump_message_details(pjsip_rx_data* rdata, const char* prefix = "")
 {
-  TRC_WARNING("SAS Trail: %llu", get_trail(rdata));
+  TRC_WARNING("%s SAS Trail: %llu", prefix, get_trail(rdata));
 
   if (rdata->msg_info.cid != NULL)
   {
-    TRC_WARNING("Call-Id: %.*s",
+    TRC_WARNING("%s Call-Id: %.*s",
+                prefix,
                 ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
                 ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
   }
   if (rdata->msg_info.cseq != NULL)
   {
-    TRC_WARNING("CSeq: %ld %.*s",
+    TRC_WARNING("%s CSeq: %ld %.*s",
+                prefix,
                 ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
                 ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
                 ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
@@ -147,7 +149,8 @@ static void dump_message_details(pjsip_rx_data* rdata)
 
   if (via != NULL)
   {
-    TRC_WARNING("Via: %.*s",
+    TRC_WARNING("%s Via: %.*s",
+                prefix,
                 via->branch_param.slen,
                 via->branch_param.ptr);
   }
@@ -272,12 +275,12 @@ bool process_queue_element()
           unsigned long latency_us = 0;
           if (qe.stop_watch.read(latency_us))
           {
-            if ((50L * target_latency_us) < latency_us)
+            if (70000 < latency_us)
             {
               TRC_WARNING("SIP Message took %ldus - vastly exceeding target of %ldus",
                           latency_us,
                           target_latency_us);
-              dump_message_details(rdata);
+              dump_message_details(rdata, "vastly exceeding");
             }
             else
             {
