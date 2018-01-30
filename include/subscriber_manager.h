@@ -34,7 +34,7 @@ extern "C" {
 #include "notify_utils.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
-class SubscriberManager : BaseSubscriberManager
+class SubscriberManager : public BaseSubscriberManager
 {
 public:
   enum EventTrigger
