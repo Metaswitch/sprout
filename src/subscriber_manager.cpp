@@ -32,6 +32,8 @@ SubscriberManager::SubscriberManager(S4* s4,
 
 SubscriberManager::~SubscriberManager()
 {
+  // EM-TODO: temp line to fix memory leaks in the UTs
+  delete _notify_sender; _notify_sender = NULL;
 }
 
 
