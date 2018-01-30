@@ -315,7 +315,7 @@ TEST_F(BasicS4Test, GetSubscriberInfoFoundOnRemoteSiteContentionOnWrite)
 TEST_F(BasicS4Test, DeleteSubscriber)
 {
   get_data_expect_call_success(AOR_WITH_BINDING, 1, 3);
-  EXPECT_CALL(*_mock_store, set_data(_, "aor_id", _, _, 10, _, An<Store::Format>()))
+  EXPECT_CALL(*_mock_store, set_data(_, "aor_id", _, _, 0, _, An<Store::Format>()))
     .Times(3)
     .WillRepeatedly(Return(Store::Status::OK));
   set_chronos_delete_expectations();
@@ -958,11 +958,11 @@ TEST_F(BasicS4Test, ClearUpEmptyAoR)
 {
   // The get call returns an AoR with one binding and one subscription. The
   // patch removes the binding. S4 then removes the subscription, as shown
-  // by the expiry time of 10 on the set call, and the send_delete chronos
+  // by the expiry time of 0 on the set call, and the send_delete chronos
   // call. We then have the local store return an error to stop the
   // processing.
   get_data_expect_call_success(AOR_WITH_BINDING, 1, 1);
-  EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 10, _, An<Store::Format>()))
+  EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 0, _, An<Store::Format>()))
     .WillOnce(Return(Store::Status::ERROR));
   set_chronos_delete_expectations();
 
@@ -987,7 +987,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
   std::string aor_id = "sip:6505550231@homedomain";
   int expiry = 200;
   AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, false, expiry);
-  std::string callback_uri; 
+  std::string callback_uri;
 
   // Build various arguments for Chronos call
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
@@ -998,11 +998,11 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
 
   // S4 and Chronos expectations. S4 sends POST when timer_id is empty.
   set_data_expect_call(Store::Status::OK, 3);
-  EXPECT_CALL(*(this->_mock_chronos), send_post(_, 
-                                                expiry, 
-                                                _, 
-                                                opaque, 
-                                                _, 
+  EXPECT_CALL(*(this->_mock_chronos), send_post(_,
+                                                expiry,
+                                                _,
+                                                opaque,
+                                                _,
                                                 tag_map))
     .WillOnce(DoAll(SetArgReferee<0>(AoRTestUtils::TIMER_ID),
                     SaveArg<2>(&callback_uri),
@@ -1030,7 +1030,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreationFail)
 
   // SM and Chronos expectations
   set_data_expect_call(Store::Status::OK, 3);
-  EXPECT_CALL(*(this->_mock_chronos), send_post(_, _, _, _, _, _)) 
+  EXPECT_CALL(*(this->_mock_chronos), send_post(_, _, _, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
 
   HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
@@ -1052,8 +1052,8 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
   std::string aor_id = "sip:6505550231@homedomain";
   int expiry = 200;
   AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, true, expiry);
-  std::string timer_id; 
-  std::string callback_uri; 
+  std::string timer_id;
+  std::string callback_uri;
 
   // Build various arguments for Chronos call
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
@@ -1065,10 +1065,10 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
   // S4 and Chronos expectations. S4 sends PUT when timer_id is not empty.
   set_data_expect_call(Store::Status::OK, 3);
   EXPECT_CALL(*(this->_mock_chronos), send_put(_,
-                                               expiry, 
-                                               _, 
-                                               opaque, 
-                                               _, 
+                                               expiry,
+                                               _,
+                                               opaque,
+                                               _,
                                                tag_map))
     .WillOnce(DoAll(SaveArg<0>(&timer_id),
                     SaveArg<2>(&callback_uri),
@@ -1094,7 +1094,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdateFail)
 
   // SM and Chronos expectations
   set_data_expect_call(Store::Status::OK, 3);
-  EXPECT_CALL(*(this->_mock_chronos), send_put(_, _, _, _, _, _)) 
+  EXPECT_CALL(*(this->_mock_chronos), send_put(_, _, _, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
 
   HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
