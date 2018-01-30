@@ -2382,8 +2382,8 @@ int main(int argc, char* argv[])
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
 
-  TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
-  TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+  HttpStackUtils::TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  HttpStackUtils::TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
   HttpStackUtils::PingHandler ping_handler;
