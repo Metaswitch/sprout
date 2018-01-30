@@ -38,7 +38,7 @@ public:
 
   MOCK_METHOD5(remove_bindings, HTTPCode(const std::string& public_id,
                                          const std::vector<std::string>& binding_ids,
-                                         const EventTrigger& event_trigger,
+                                         const SubscriberDataUtils::EventTrigger& event_trigger,
                                          Bindings& bindings,
                                          SAS::TrailId trail));
 
@@ -53,7 +53,7 @@ public:
                                              SAS::TrailId trail));
 
   MOCK_METHOD3(deregister_subscriber, HTTPCode(const std::string& public_id,
-                                               const EventTrigger& event_trigger,
+                                               const SubscriberDataUtils::EventTrigger& event_trigger,
                                                SAS::TrailId trail));
 
   MOCK_METHOD3(get_bindings, HTTPCode(const std::string& public_id,

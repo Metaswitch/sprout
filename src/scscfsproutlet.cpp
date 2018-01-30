@@ -17,7 +17,6 @@
 #include "custom_headers.h"
 #include "stack.h"
 #include "contact_filtering.h"
-#include "registration_utils.h"
 #include "scscfsproutlet.h"
 #include "uri_classifier.h"
 #include "wildcard_utils.h"
@@ -278,7 +277,7 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
   // HSSConnection::DEREG_USER if need to pass it through in future.
   long http_code = _sm->remove_bindings(aor_id,
                                         binding_ids,
-                                        SubscriberManager::EventTrigger::USER,
+                                        SubscriberDataUtils::EventTrigger::USER,
                                         bindings,
                                         trail);
 

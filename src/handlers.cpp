@@ -22,9 +22,7 @@ extern "C" {
 #include "aor.h"
 #include "handlers.h"
 #include "log.h"
-#include "subscriber_data_manager.h"
 #include "ifchandler.h"
-#include "registration_utils.h"
 #include "stack.h"
 #include "pjutils.h"
 #include "sproutsasevent.h"
@@ -238,7 +236,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
   Bindings unused_bindings;
   return _cfg->_sm->remove_bindings(aor_id,
                                     binding_ids,
-                                    SubscriberManager::EventTrigger::ADMIN,
+                                    SubscriberDataUtils::EventTrigger::ADMIN,
                                     unused_bindings,
                                     trail());
 }
@@ -481,7 +479,7 @@ void DeleteImpuTask::run()
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
   HTTPCode sc = _cfg->_sm->deregister_subscriber(impu,
-                                                 SubscriberManager::EventTrigger::ADMIN,
+                                                 SubscriberDataUtils::EventTrigger::ADMIN,
                                                  trail());
 
   send_http_reply(sc);

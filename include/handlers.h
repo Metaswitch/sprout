@@ -16,7 +16,6 @@
 #include "httpstack_utils.h"
 #include "chronosconnection.h"
 #include "hssconnection.h"
-#include "subscriber_data_manager.h"
 #include "subscriber_manager.h"
 #include "sipresolver.h"
 #include "impistore.h"

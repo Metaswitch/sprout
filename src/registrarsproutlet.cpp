@@ -34,7 +34,6 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "hss_sip_mapping.h"
 #include "registrarsproutlet.h"
-#include "registration_utils.h"
 #include "constants.h"
 #include "custom_headers.h"
 #include "log.h"
@@ -76,8 +75,8 @@ bool RegistrarSproutlet::init()
 {
   bool init_success = true;
 
-  RegistrationUtils::init(_third_party_reg_stats_tbls,
-                          _force_original_register_inclusion);
+  // EM-TODORegistrationUtils::init(_third_party_reg_stats_tbls,
+  //                                _force_original_register_inclusion);
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
@@ -541,9 +540,9 @@ pjsip_status_code
 
     pjsip_expires_hdr* expires =
              (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
-    int expiry = RegistrationUtils::expiry_for_binding(contact_hdr,
-                                                       expires,
-                                                       _registrar->_max_expires);
+    int expiry = PJUtils::expiry_for_binding(contact_hdr,
+                                             expires,
+                                             _registrar->_max_expires);
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -603,9 +602,9 @@ void RegistrarSproutletTsx::get_bindings_from_req(
 
   while (contact != NULL)
   {
-    expiry = RegistrationUtils::expiry_for_binding(contact,
-                                                   expires,
-                                                   _registrar->_max_expires);
+    expiry = PJUtils::expiry_for_binding(contact,
+                                         expires,
+                                         _registrar->_max_expires);
 
     pjsip_uri* uri = (contact->uri != NULL) ?
                       (pjsip_uri*)pjsip_uri_get_uri(contact->uri) :
