@@ -549,6 +549,19 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
             }
           }
         }
+
+        /*
+        // Delete bindings to fix memory leak - is there an easier way of doing
+        // this? SDM-REFACTOR-TODO
+        for (std::map<std::string, Binding*>::iterator binding = bindings.begin();
+             binding != bindings.end();
+             binding++)
+        {
+          delete binding->second;
+          binding->second = NULL;
+        }
+        */
+
       }
 
       if (!emergency)
@@ -736,6 +749,19 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       Bindings bindings;
       std::string aor_id; //SDM-REFACTOR-TODO - NEED TO SET THIS
       _scscf->remove_binding(i->second, aor_id, bindings, trail());
+
+      /*
+      // Delete bindings to fix memory leak - is there an easier way of doing
+      // this? SDM-REFACTOR-TODO
+      for (std::map<std::string, Binding*>::iterator binding = bindings.begin();
+           binding != bindings.end();
+           binding++)
+      {
+        delete binding->second;
+        binding->second = NULL;
+      }
+      */
+
     }
   }
 
@@ -981,8 +1007,7 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
   }
 }
 
-bool SCSCFSproutletTsx::is_retarget(std::string new_served_user,
-                                    std::string public_id)
+bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
 {
   std::string old_served_user = _as_chain_link.served_user();
 
@@ -991,11 +1016,11 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user,
   // check.
   std::vector<std::string> aliases;
 // Once have all tests passing, add this in since this will be better code.
-//  bool rc = _hss_cache_helper->get_aliases(public_id,
+//  bool rc = _hss_cache_helper->get_aliases(old_served_user,
 //                                           aliases,
 //                                           trail(),
 //                                           _scscf->_sm);
-  _hss_cache_helper->get_aliases(public_id,
+  _hss_cache_helper->get_aliases(old_served_user,
                                  aliases,
                                  _scscf->_sm,
                                  trail());
@@ -1043,11 +1068,9 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
     bool retargeted = false;
     std::string served_user = served_user_from_msg(req);
-    pjsip_uri* req_uri = req->line.req.uri;
-    std::string public_id = PJUtils::public_id_from_uri(req_uri);
 
     if ((_session_case->is_terminating()) &&
-        is_retarget(served_user, public_id))
+        is_retarget(served_user))
     {
       if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
       {
@@ -1831,6 +1854,18 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       event.add_var_param(public_id);
       SAS::report_event(event);
     }
+
+    /*
+    // Delete bindings to fix memory leak - is there an easier way of doing
+    // this? Also signal 11 when I include this. SDM-REFACTOR-TODO
+    for (std::map<std::string, Binding*>::iterator binding = bindings.begin();
+         binding != bindings.end();
+         binding++)
+    {
+      delete binding->second;
+      binding->second = NULL;
+    }
+    */
 
   }
   else
