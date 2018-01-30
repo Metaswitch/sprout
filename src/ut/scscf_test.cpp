@@ -9,6 +9,7 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
+/*
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -441,7 +442,7 @@ public:
 };
 
 
-/*void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
+void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
 {
   // Expect a call to look up the iFCs for the caller.
   HSSConnection::irs_info irs_info_1;
@@ -682,7 +683,7 @@ public:
   free(ifc_str_1);
   free(ifc_str_2);
 }
-*/
+
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 // Check the transport each message is on, and the headers.
 // Test a call from Alice to Bob.
@@ -4935,7 +4936,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   free(ifc_str);
 }
 
-/*
+
 TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
 {
   // Expect calls looking up the iFCs and the bindings for the callee. Return an
