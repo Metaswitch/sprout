@@ -85,10 +85,18 @@ protected:
 
   /// Create a subscription object. This is called if the subscribe processing
   /// is going to add/update a subscription.
+  ///
+  /// @param req[in]    - The SIP request to create a subscription object from.
+  /// @param expiry[in] - The expiry time of the subscription. This is passed in
+  ///                     rather than calculated from the request, as we've
+  ///                     already had to calculate it in order to know if we're
+  ///                     adding/updating or removing a subscription.
+  ///
+  /// @return The created subscription object
   Subscription* create_subscription(pjsip_msg* req, int expiry);
 
-  /// Convert the response from the Subscriber Manager to a SIP code to send
-  /// to the caller.
+  /// Convert the HTTPCode response from the Subscriber Manager to a SIP code
+  /// to send to the caller.
   pjsip_status_code subscribe_convert_to_sip(HTTPCode rc);
 
   SubscriptionSproutlet* _subscription;

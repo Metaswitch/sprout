@@ -17,7 +17,6 @@
 #include "custom_headers.h"
 #include "stack.h"
 #include "contact_filtering.h"
-#include "registration_utils.h"
 #include "scscfsproutlet.h"
 #include "uri_classifier.h"
 #include "wildcard_utils.h"
@@ -278,7 +277,7 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
   // HSSConnection::DEREG_USER if need to pass it through in future.
   long http_code = _sm->remove_bindings(aor_id,
                                         binding_ids,
-                                        SubscriberManager::EventTrigger::USER,
+                                        SubscriberDataUtils::EventTrigger::USER,
                                         bindings,
                                         trail);
 
@@ -1122,9 +1121,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
         Ifcs ifcs;
         // Get the public user identity corresponding to the RequestURI.
-        pjsip_uri* req_uri = req->line.req.uri;
-        std::string public_id = PJUtils::public_id_from_uri(req_uri);
-        long http_code = _hss_cache_helper->lookup_ifcs(public_id,
+        long http_code = _hss_cache_helper->lookup_ifcs(served_user,
                                                         ifcs,
                                                         _scscf->_sm,
                                                         trail());

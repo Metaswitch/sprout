@@ -596,7 +596,7 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
 
 // SDM-REFACTOR-TODO: Check if this is still used once refactor is done, and
 // remove it if not.
-void SipTest::register_uri(SubscriberDataManager* sdm,
+/*void SipTest::register_uri(SubscriberDataManager* sdm,
                            FakeHSSConnection* hss,
                            const std::string& user,
                            const std::string& domain,
@@ -629,6 +629,7 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   delete aor;
   EXPECT_TRUE(ret);
 };
+*/
 
 pjsip_tx_data* SipTest::current_txdata()
 {

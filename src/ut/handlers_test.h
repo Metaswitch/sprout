@@ -21,7 +21,6 @@
 #include "siptest.hpp"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
-#include "mock_subscriber_data_manager.h"
 #include "mock_subscriber_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
@@ -30,45 +29,21 @@
 
 
 // Base class used for testing handlers with Mock SDMs.
-class TestWithMockSdms : public SipTest
+class TestWithMocks : public SipTest
 {
   MockSubscriberManager* sm;
-
-  MockSubscriberDataManager* store;
-  MockSubscriberDataManager* remote_store1;
-  MockSubscriberDataManager* remote_store2;
   MockHttpStack* stack;
-  MockHSSConnection* mock_hss;
 
   virtual void SetUp()
   {
     sm = new MockSubscriberManager();
-
-    store = new MockSubscriberDataManager();
-    remote_store1 = new MockSubscriberDataManager();
-    remote_store2 = new MockSubscriberDataManager();
-    mock_hss = new MockHSSConnection();
     stack = new MockHttpStack();
   }
 
   virtual void TearDown()
   {
-    delete stack;
+    delete stack; stack = NULL;
     delete sm; sm = NULL;
-    delete remote_store1; remote_store1 = NULL;
-    delete remote_store2; remote_store2 = NULL;
-    delete store; store = NULL;
-    delete mock_hss;
-  }
-
-  AoRPair* build_aor_pair(std::string aor_id,
-                          bool include_subscription = true)
-  {
-    AoR* aor = AoRTestUtils::create_simple_aor(aor_id);
-    AoR* aor2 = new AoR(*aor);
-    AoRPair* aor_pair = new AoRPair(aor, aor2);
-
-    return aor_pair;
   }
 };
 

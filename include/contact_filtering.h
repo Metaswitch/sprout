@@ -12,9 +12,9 @@
 #ifndef CONTACT_FILTERING_H__
 #define CONTACT_FILTERING_H__
 
-#include "subscriber_data_manager.h"
 #include "aschain.h"
 #include "custom_headers.h"
+#include "aor.h"
 
 typedef std::map<std::string, std::string> FeatureSet;
 typedef std::pair<const std::string, std::string> Feature;
