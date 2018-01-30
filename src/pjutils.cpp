@@ -2852,12 +2852,13 @@ pjsip_routing_hdr* PJUtils::msg_get_first_routing_hdr_by_name(pjsip_msg* msg, co
   pjsip_routing_hdr* hdr;
   h = hdr = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg,
                                 name, NULL);
-  
-	while ( (h=(pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, 
-                                 name, 
-                                 h->next)) != NULL )
-	{
-	    hdr = h;
+  if (h != NULL)
+  {
+    while ( (h=(pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, 
+                                  name, h->next)) != NULL )
+    {
+        hdr = h;
+    }
   }
   return hdr;
 }
