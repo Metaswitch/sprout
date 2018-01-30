@@ -155,7 +155,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        options_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
-                       ifchandler_test.cpp \
                        sip_parser_test.cpp \
                        connection_tracker_test.cpp \
                        quiescing_manager_test.cpp \
@@ -188,7 +187,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_analytics_logger.cpp \
                        mock_sproutlet.cpp \
                        session_expires_helper_test.cpp \
-                       mock_subscriber_data_manager.cpp \
                        mock_subscriber_manager.cpp \
                        mock_chronos_connection.cpp \
                        bgcf_test.cpp \

@@ -21,7 +21,6 @@
 #include "fakechronosconnection.hpp"
 
 #include "ifchandler.h"
-#include "registration_utils.h"
 
 using namespace std;
 
@@ -33,7 +32,6 @@ public:
   static FakeHSSConnection* _hss_connection;
   static AstaireAoRStore* _local_aor_store;
   static LocalStore* _local_data_store;
-  static SubscriberDataManager* _sdm;
   static IfcHandler* _ifc_handler;
   pjsip_msg* TEST_MSG;
 
@@ -45,13 +43,11 @@ public:
     _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _ifc_handler = new IfcHandler();
   }
 
   static void TearDownTestCase()
   {
-    delete _sdm; _sdm = NULL;
     delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _ifc_handler; _ifc_handler = NULL;
@@ -132,7 +128,6 @@ FakeChronosConnection* IfcHandlerTest::_chronos_connection;
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
 LocalStore* IfcHandlerTest::_local_data_store;
 AstaireAoRStore* IfcHandlerTest::_local_aor_store;
-SubscriberDataManager* IfcHandlerTest::_sdm;
 IfcHandler* IfcHandlerTest::_ifc_handler;
 
 TEST_F(IfcHandlerTest, ServedUser)

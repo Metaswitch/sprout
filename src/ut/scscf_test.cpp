@@ -89,7 +89,6 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _sm = new MockSubscriberManager();
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
@@ -116,7 +115,6 @@ public:
     pjsip_tsx_layer_destroy();
     delete _fifc_service; _fifc_service = NULL;
     delete _acr_factory; _acr_factory = NULL;
-    delete _sdm; _sdm = NULL;
     delete _sm; _sm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_aor_store; _local_aor_store = NULL;
@@ -253,7 +251,6 @@ protected:
   static LocalStore* _local_data_store;
   static FakeChronosConnection* _chronos_connection;
   static AstaireAoRStore* _local_aor_store;
-  static SubscriberDataManager* _sdm;
   static MockSubscriberManager* _sm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
@@ -318,7 +315,6 @@ protected:
 LocalStore* SCSCFTestBase::_local_data_store;
 FakeChronosConnection* SCSCFTestBase::_chronos_connection;
 AstaireAoRStore* SCSCFTestBase::_local_aor_store;
-SubscriberDataManager* SCSCFTestBase::_sdm; // DO WE STILL NEED THIS (for other sproulet used in file?)
 MockSubscriberManager* SCSCFTestBase::_sm;
 AnalyticsLogger* SCSCFTestBase::_analytics;
 FakeHSSConnection* SCSCFTestBase::_hss_connection;
@@ -422,7 +418,7 @@ public:
 };
 
 
-void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
+/*void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
@@ -666,7 +662,7 @@ void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app
 
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
-
+*/
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 // Check the transport each message is on, and the headers.
 // Test a call from Alice to Bob.
@@ -10609,7 +10605,6 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
 protected:
   static LocalStore* _remote_data_store;
   static AstaireAoRStore* _remote_aor_store;
-  static SubscriberDataManager* _remote_sdm;
 };
 
 
