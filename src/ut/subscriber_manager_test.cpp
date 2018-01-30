@@ -458,6 +458,74 @@ TEST_F(SubscriberManagerTest, TestAddFirstBindingPUTFail)
   delete_bindings(_updated_bindings);
 }
 
+TEST_F(SubscriberManagerTest, TestAddFirstBindingPUTretryPATCHfail)
+{
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  EXPECT_CALL(*_s4, handle_put(DEFAULT_ID, _, _))
+    .WillOnce(Return(HTTP_PRECONDITION_FAILED));
+  EXPECT_CALL(*_s4, handle_patch(DEFAULT_ID, _, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+
+  // Build the updated bindings to pass in.
+  Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
+  _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
+
+  // Register subscriber on SM.
+  HTTPCode rc = _subscriber_manager->register_subscriber(DEFAULT_ID,
+                                                         "",
+                                                         associated_uris,
+                                                         _updated_bindings,
+                                                         _all_bindings,
+                                                         DUMMY_TRAIL_ID);
+  EXPECT_EQ(rc, HTTP_SERVER_ERROR);
+
+  // Delete the bindings we put in.
+  delete_bindings(_updated_bindings);
+}
+
+TEST_F(SubscriberManagerTest, TestAddFirstBindingPUTretryPATCH)
+{
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri(DEFAULT_ID, false);
+
+  // Set up AoRs to be returned by S4.
+  _patch_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
+
+  // Set up expect calls to the HSS and S4.
+  EXPECT_CALL(*_s4, handle_put(DEFAULT_ID, _, _))
+    .WillOnce(Return(HTTP_PRECONDITION_FAILED));
+  EXPECT_CALL(*_s4, handle_patch(DEFAULT_ID, _, _, _))
+    .WillOnce(DoAll(SaveArg<1>(&_patch_object),
+                    SetArgPointee<2>(_patch_aor),
+                    Return(HTTP_OK)));
+
+  // Build the updated bindings to pass in.
+  Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
+  _updated_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
+
+  // Register subscriber on SM.
+  HTTPCode rc = _subscriber_manager->register_subscriber(DEFAULT_ID,
+                                                         "",
+                                                         associated_uris,
+                                                         _updated_bindings,
+                                                         _all_bindings,
+                                                         DUMMY_TRAIL_ID);
+
+  EXPECT_EQ(rc, HTTP_OK);
+
+  // Check that the patch object contains the expected binding.
+  Bindings ub = _patch_object.get_update_bindings();
+  EXPECT_EQ(ub.size(), 1);
+  EXPECT_TRUE(ub.find(AoRTestUtils::BINDING_ID) != ub.end());
+
+  // Delete the bindings we put in.
+  delete_bindings(_updated_bindings);
+  delete_bindings(_all_bindings);
+}
+
 TEST_F(SubscriberManagerTest, TestAddFirstBinding)
 {
   AssociatedURIs associated_uris;

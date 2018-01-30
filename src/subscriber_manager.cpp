@@ -44,6 +44,8 @@ HTTPCode SubscriberManager::register_subscriber(const std::string& aor_id,
                                                 Bindings& all_bindings,
                                                 SAS::TrailId trail)
 {
+  TRC_DEBUG("Registering AoR %s for the first time", aor_id.c_str());
+
   // We are registering a subscriber for the first time, so there is no stored
   // AoR. PUT the new bindings to S4.
   AoR* orig_aor = NULL;
@@ -570,10 +572,21 @@ HTTPCode SubscriberManager::put_bindings(const std::string& aor_id,
   aor = new AoR(aor_id);
   aor->patch_aor(patch_object);
   aor->_scscf_uri = scscf_uri;
-  // TODO Retry with patch if contention (HTTP_PRECONDITION_FAILED)
   HTTPCode rc = _s4->handle_put(aor_id,
                                 *aor,
                                 trail);
+
+  // TODO don't we need the original AoR for Audit logs?
+  // If the PUT returned 412 Precondition Failed, something must have added data
+  // for this AoR since we decided to send a PUT. Retry with a PATCH.
+  if (rc == HTTP_PRECONDITION_FAILED)
+  {
+    delete aor; aor = NULL;
+    rc = _s4->handle_patch(aor_id,
+                           patch_object,
+                           &aor,
+                           trail);
+  }
 
   return rc;
 }
