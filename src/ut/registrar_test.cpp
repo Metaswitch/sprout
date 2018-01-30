@@ -66,7 +66,7 @@ public:
     _domain("homedomain"),
     _contact("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob"),
     _contact_instance(";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""),
-    _contact_params(";expires=3600;+sip.ice;reg-id=1"),
+    _contact_params(";expires=3600;reg-id=1;+sip.ice"),
     _expires(""),
     _path("Path: <sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>"),
     _auth(""),
@@ -466,7 +466,7 @@ private:
     EXPECT_THAT(get_headers(out, "Contact"),
                 MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header
+    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header, so we require outbound
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -493,7 +493,7 @@ private:
     EXPECT_THAT(get_headers(out, "Contact"),
                 MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header
+    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header, so we require outbound
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -520,7 +520,7 @@ private:
                 MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-    EXPECT_EQ("", get_headers(out, "Require")); // We don't have +sip.instance
+    EXPECT_EQ("", get_headers(out, "Require")); // We don't have +sip.instance so outbound not required
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -545,7 +545,7 @@ private:
                 MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-    EXPECT_EQ("", get_headers(out, "Require")); // We don't have +sip.instance
+    EXPECT_EQ("", get_headers(out, "Require")); // We don't have +sip.instance so outbound not required
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -572,7 +572,7 @@ private:
                 MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-    EXPECT_EQ("", get_headers(out, "Require")); // No Contact header and no +sip.instance
+    EXPECT_EQ("", get_headers(out, "Require")); // No Contact header and no +sip.instance, so outbound not required
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -599,7 +599,7 @@ private:
                 MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
                              "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-    EXPECT_EQ("", get_headers(out, "Require")); // no +sip.instance
+    EXPECT_EQ("", get_headers(out, "Require")); // We have no +sip.instance, so outbound not required
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -650,7 +650,7 @@ private:
     EXPECT_EQ("OK", str_pj(out->line.status.reason));
     EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
     EXPECT_EQ("", get_headers(out, "Contact"));
-    EXPECT_EQ("", get_headers(out, "Require")); // we have no bindings
+    EXPECT_EQ("", get_headers(out, "Require")); // we have no bindings so outbound not required
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -846,7 +846,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
             get_headers(out, "Contact"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header, so we require outbound
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -867,7 +867,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
             get_headers(out, "Contact"));
-  EXPECT_EQ("", get_headers(out, "Require")); // no Conatct header
+  EXPECT_EQ("", get_headers(out, "Require")); // No Conatct header so outbound not required
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -897,7 +897,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderNoRoute)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
             get_headers(out, "Contact"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header, so we require outbound
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -918,7 +918,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderNoRoute)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
             get_headers(out, "Contact"));
-  EXPECT_EQ("", get_headers(out, "Require")); // no Contact header
+  EXPECT_EQ("", get_headers(out, "Require")); // No Contact header so outbound not required
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -2689,7 +2689,7 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistrationNoSipInstance)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;+sip.ice;reg-id=1",
             get_headers(out, "Contact"));
-  EXPECT_EQ("", get_headers(out, "Require")); // We have no +sip.instance
+  EXPECT_EQ("", get_headers(out, "Require")); // We have no +sip.instance so outbound not required
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -2774,7 +2774,7 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
               MatchesRegex("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header, so we require outbound
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -2803,7 +2803,7 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
               MatchesRegex("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header, so we require outbound
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -2831,7 +2831,7 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   EXPECT_THAT(get_headers(out, "Contact"),
               MatchesRegex("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
                            "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We have outbound option tag in Supported header && +sip.instance && reg-id && ob parameter in Path header, so we require outbound
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -2861,7 +2861,7 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
               MatchesRegex("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
                            "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;reg-id=1\r\n"
                            "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("", get_headers(out, "Require")); // no +sip.instance
+  EXPECT_EQ("", get_headers(out, "Require")); // We have no +sip.instance, so outbound not required
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -2893,7 +2893,7 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   EXPECT_THAT(get_headers(out, "Contact"),
               MatchesRegex("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;reg-id=1\r\n"
                            "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("", get_headers(out, "Require")); // no +sip.instance && reg-id
+  EXPECT_EQ("", get_headers(out, "Require")); // We have no +sip.instance && reg-id, so outbound not required
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -2932,7 +2932,7 @@ TEST_F(RegistrarTest, RinstanceParameter)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:6505550138@172.18.42.27:46826;transport=tcp;rinstance=7690e89fc4105d1e>;expires=300",
             get_headers(out, "Contact"));
-  EXPECT_EQ("", get_headers(out, "Require")); // no +sip.instance && reg-id
+  EXPECT_EQ("", get_headers(out, "Require")); // We have no +sip.instance && reg-id, so outbound not required
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -3347,15 +3347,7 @@ TEST_F(RegistrarTest, RequireOutboundSuccess)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // We expect the outbound options tag in the Require header
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -3371,15 +3363,7 @@ TEST_F(RegistrarTest, RequireOutboundNoSupportedOutbound)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // We expect no Require header
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -3395,15 +3379,7 @@ TEST_F(RegistrarTest, RequireOutboundNoInstanceId)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1",
-            get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // We expect no Require header
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -3419,20 +3395,12 @@ TEST_F(RegistrarTest, RequireOutboundNoRegId)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // We expect no Require header
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
 // We are now missing the "ob" parameter from the Path header
-TEST_F(RegistrarTest, RequireOutbound)
+TEST_F(RegistrarTest, RequireOutboundNoOb)
 {
   _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "");
 
@@ -3443,16 +3411,25 @@ TEST_F(RegistrarTest, RequireOutbound)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // We expect no Require header
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
+}
+
+// There are now multiple Path headers with the "ob" parameter missing from the first one
+TEST_F(RegistrarTest, RequireOutboundNoFirstOb)
+{
+  _hss_connection->set_impu_result_with_prev("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, RegDataXMLUtils::STATE_NOT_REGISTERED, "");
+
+  Message msg;
+  msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>\n
+               Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr>";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("", get_headers(out, "Require")); // We expect no Require header
+  free_txdata();  
 }
 
 /// Fixture for RegistrarTest.
