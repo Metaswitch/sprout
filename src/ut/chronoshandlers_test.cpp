@@ -21,8 +21,10 @@
 #include "handlers_test.h"
 #include "chronoshandlers.h"
 #include "hssconnection.h"
+#include "testingcommon.h"
 
 using namespace std;
+using namespace TestingCommon;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::SetArgReferee;
@@ -43,8 +45,13 @@ public:
 
   void build_timeout_request(std::string body, htp_method method)
   {
+    IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
     req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
-    config = new AoRTimeoutTask::Config(store, {remote_store1, remote_store2}, mock_hss);
+    config = new AoRTimeoutTask::Config(store, 
+                                        {remote_store1, remote_store2}, 
+                                        mock_hss, 
+                                        NULL, 
+                                        ifc_configuration);
     handler = new ChronosAoRTimeoutTask(*req, config, 0);
   }
 
@@ -372,10 +379,11 @@ class ChronosAoRTimeoutTasksMockStoreTest : public SipTest
 
   void SetUp()
   {
+    IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
     store = new MockSubscriberDataManager();
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
-    config = new AoRTimeoutTask::Config(store, {}, fake_hss);
+    config = new AoRTimeoutTask::Config(store, {}, fake_hss, NULL, ifc_configuration);
     handler = new ChronosAoRTimeoutTask(*req, config, 0);
   }
 
@@ -389,6 +397,66 @@ class ChronosAoRTimeoutTasksMockStoreTest : public SipTest
   }
 
 };
+
+// Test that deregister is sent to AS when all bindings expired
+TEST_F(ChronosAoRTimeoutTasksMockStoreTest, DeregisterAS)
+{
+  AoR* aor = new AoR("sip:6505550231@homedomain");
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
+
+  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri("sip:6505550231@homedomain", false);
+
+  // Set all bindings expired to true, this should trigger a deregister with AS
+  EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(true),
+                    Return(Store::OK)));
+
+  fake_hss->set_impu_result("sip:6505550231@homedomain",
+                             "dereg-timeout",
+                             RegDataXMLUtils::STATE_REGISTERED,
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>1</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+  // Parse and handle the request
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
+  int status = handler->parse_response(body);
+
+  ASSERT_EQ(status, 200);
+
+  handler->handle_response();
+
+  // Expect a 3rd-party deregister to be sent to the AS in the iFCs
+  ASSERT_EQ(1, txdata_count());
+  // REGISTER passed on to AS
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_THAT(r1.uri(), testing::MatchesRegex(".*sip:1.2.3.4:56789.*"));
+
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+}
 
 TEST_F(ChronosAoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
 {

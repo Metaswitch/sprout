@@ -114,6 +114,9 @@ const static std::string _known_statnames[] = {
   "cdiv_not_registered",
   "cdiv_no_answer",
   "cdiv_not_reachable",
+  // The following stats are used by memento-as. Since memento has not yet been
+  // updated to use SNMP stats, we must declare the statistics here. All new
+  // sproutlets should use SNMP stats, so this is a problem unique to memento.
   "memento_completed_calls",
   "memento_failed_calls",
   "memento_not_recorded_overload",

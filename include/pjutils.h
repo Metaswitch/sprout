@@ -247,6 +247,8 @@ void create_random_token(size_t length, std::string& token);
 
 std::string get_header_value(pjsip_hdr*);
 
+void mark_icid(const SAS::TrailId trail, pjsip_msg* msg);
+
 void mark_sas_call_branch_ids(const SAS::TrailId trail,
                               pjsip_msg* msg,
                               const std::vector<std::string>& cids = std::vector<std::string>());

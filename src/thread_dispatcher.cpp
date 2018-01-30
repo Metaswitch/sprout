@@ -17,7 +17,6 @@ extern "C" {
 }
 #include <arpa/inet.h>
 
-// Common STL includes.
 #include <cassert>
 #include <vector>
 #include <map>
@@ -25,6 +24,8 @@ extern "C" {
 #include <list>
 #include <queue>
 #include <string>
+
+#include <boost/regex.hpp>
 
 #include "constants.h"
 #include "eventq.h"
@@ -47,6 +48,8 @@ extern "C" {
 #include "snmp_event_accumulator_table.h"
 #include "snmp_event_accumulator_by_scope_table.h"
 #include "thread_dispatcher.h"
+
+static const boost::regex EMERGENCY_SERVICES_URI = boost::regex("service.*:sos.*", boost::regex::icase);
 
 static std::vector<pj_thread_t*> worker_threads;
 
@@ -467,13 +470,19 @@ static bool ignore_load_monitor(pjsip_rx_data* rdata,
     return true;
   }
 
-  // Always accept messages with "urn:service:sos" in the request URI.
+  // Always accept messages that represent emergency services. These are URNs
+  // that have the format urn:service:sos[.ambulance|.fire|...]. We also accept
+  // 'services' rather than 'service', as this appears to be a common mistake.
   pjsip_uri* req_uri = rdata->msg_info.msg->line.req.uri;
-  std::string req_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri);
-  if (req_uri_str == "urn:service:sos")
+  if (PJSIP_URI_SCHEME_IS_URN(req_uri))
   {
-    log_ignore_load_monitor(trail, URN_SERVICE_SOS);
-    return true;
+    std::string uri_str = PJUtils::pj_str_to_string(&((pjsip_other_uri*)req_uri)->content);
+    boost::match_results<std::string::const_iterator> results;
+    if (boost::regex_match(uri_str, results, EMERGENCY_SERVICES_URI))
+    {
+      log_ignore_load_monitor(trail, URN_SERVICE_SOS);
+      return true;
+    }
   }
 
   return false;
@@ -551,7 +560,7 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 {
-  TRC_DEBUG("Recieved message %p on worker thread", rdata);
+  TRC_DEBUG("Received message %p", rdata);
   SAS::TrailId trail = get_trail(rdata);
 
   // SAS log the start of processing by this module
@@ -568,7 +577,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
     return PJ_TRUE;
   }
 
-  TRC_DEBUG("Admitted request %p on worker thread", rdata);
+  TRC_DEBUG("Admitted request %p", rdata);
 
   // Check that the worker threads are not all deadlocked.
   if (sip_event_queue.is_deadlocked())

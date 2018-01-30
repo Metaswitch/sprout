@@ -177,7 +177,6 @@ get_daemon_args()
         [ "$enable_orig_sip_to_tel_coerce" != "Y" ] || enable_orig_sip_to_tel_coerce_arg="--enable-orig-sip-to-tel-coerce"
 
         [ -z "$sprout_target_latency_us" ] || target_latency_us_arg="--target-latency-us=$sprout_target_latency_us"
-        [ -z "$cass_target_latency_us" ] || cass_target_latency_us_arg="--cass-target-latency-us=$cass_target_latency_us"
         [ -z "$sprout_max_tokens" ] || max_tokens_arg="--max-tokens=$sprout_max_tokens"
         [ -z "$sprout_init_token_rate" ] || init_token_rate_arg="--init-token-rate=$sprout_init_token_rate"
         [ -z "$sprout_min_token_rate" ] || min_token_rate_arg="--min-token-rate=$sprout_min_token_rate"
@@ -219,7 +218,6 @@ get_daemon_args()
                      --default-session-expires=$default_session_expires
                      $max_session_expires_arg
                      $target_latency_us_arg
-                     $cass_target_latency_us_arg
                      $max_tokens_arg
                      $init_token_rate_arg
                      $min_token_rate_arg
@@ -259,31 +257,6 @@ get_daemon_args()
           DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires=$sub_max_expires"
         fi
 
-        if [ -n "$memento_threads" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --memento-threads=$memento_threads"
-        fi
-
-        if [ -n "$max_call_list_length" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --max-call-list-length=$max_call_list_length"
-        fi
-
-        if [ -n "$memento_notify_url" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --memento-notify-url=$memento_notify_url"
-        fi
-
-        if [ -n "$call_list_ttl" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl=$call_list_ttl"
-        fi
-
-        if [ -n "$memento" ] && [ -n "$cassandra_hostname" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --plugin-option=memento,cassandra,$cassandra_hostname"
-        fi
-
         # TODO improve this so we don't have to have the same parameters
         # repeated for each Sproutlet
         [ "$icscf" = "" ]                         || DAEMON_ARGS="$DAEMON_ARGS --icscf=$icscf"
@@ -295,9 +268,6 @@ get_daemon_args()
         [ "$bgcf" = "" ]                          || DAEMON_ARGS="$DAEMON_ARGS --bgcf=$bgcf"
         [ "$bgcf_prefix" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --prefix-bgcf=$bgcf_prefix"
         [ "$bgcf_uri" = "" ]                      || DAEMON_ARGS="$DAEMON_ARGS --uri-bgcf=$bgcf_uri"
-        [ "$memento" = "" ]                       || DAEMON_ARGS="$DAEMON_ARGS --memento=$memento"
-        [ "$memento_prefix" = "" ]                || DAEMON_ARGS="$DAEMON_ARGS --prefix-memento=$memento_prefix"
-        [ "$memento_uri" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --uri-memento=$memento_uri"
         [ "$gemini" = "" ]                        || DAEMON_ARGS="$DAEMON_ARGS --gemini=$gemini"
         [ "$gemini_prefix" = "" ]                 || DAEMON_ARGS="$DAEMON_ARGS --prefix-gemini=$gemini_prefix"
         [ "$gemini_uri" = "" ]                    || DAEMON_ARGS="$DAEMON_ARGS --uri-gemini=$gemini_uri"

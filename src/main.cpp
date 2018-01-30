@@ -94,9 +94,6 @@ enum OptionTypes
   OPT_ADDITIONAL_HOME_DOMAINS,
   OPT_EMERGENCY_REG_ACCEPTED,
   OPT_SUB_MAX_EXPIRES,
-  OPT_MAX_CALL_LIST_LENGTH,
-  OPT_MEMENTO_THREADS,
-  OPT_CALL_LIST_TTL,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
   OPT_OVERRIDE_NPDI,
@@ -104,7 +101,6 @@ enum OptionTypes
   OPT_INIT_TOKEN_RATE,
   OPT_MIN_TOKEN_RATE,
   OPT_MAX_TOKEN_RATE,
-  OPT_CASS_TARGET_LATENCY_US,
   OPT_EXCEPTION_MAX_TTL,
   OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
@@ -122,7 +118,6 @@ enum OptionTypes
   OPT_PBX_SERVICE_ROUTE,
   OPT_NON_REGISTER_AUTHENTICATION,
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
-  OPT_MEMENTO_NOTIFY_URL,
   OPT_PIDFILE,
   OPT_SPROUT_HOSTNAME,
   OPT_LISTEN_PORT,
@@ -196,10 +191,6 @@ const static struct pj_getopt_option long_opt[] =
   { "http-threads",                 required_argument, 0, 'q'},
   { "billing-cdf",                  required_argument, 0, 'B'},
   { "allow-emergency-registration", no_argument,       0, OPT_EMERGENCY_REG_ACCEPTED},
-  { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
-  { "memento-threads",              required_argument, 0, OPT_MEMENTO_THREADS},
-  { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
-  { "memento-notify-url",           required_argument, 0, OPT_MEMENTO_NOTIFY_URL},
   { "log-level",                    required_argument, 0, 'L'},
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
@@ -209,7 +200,6 @@ const static struct pj_getopt_option long_opt[] =
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
   { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
   { "max-token-rate",               required_argument, 0, OPT_MAX_TOKEN_RATE},
-  { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
@@ -353,9 +343,6 @@ static void usage(void)
        "                            (in seconds. Min 90. Defaults to 600)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
-       "     --cass-target-latency-us <usecs>\n"
-       "                            Target latency above which throttling applies for the Cassandra store\n"
-       "                            that's part of the Memento application server (default: 1000000)\n"
        "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n"
        "                            the throttling code (default: 1000))\n"
        "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
@@ -386,10 +373,7 @@ static void usage(void)
        "     --max-call-list-length N\n"
        "                            Maximum number of complete call list entries to store. If this is 0,\n"
        "                            then there is no limit (default: 0)\n"
-       "     --memento-threads N    Number of Memento threads (default: 25)\n"
        "     --call-list-ttl N      Time to store call lists entries (default: 604800)\n"
-       "     --memento-notify-url <url>\n"
-       "                            URL Memento should notify when call lists change.\n"
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
@@ -900,14 +884,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case OPT_CASS_TARGET_LATENCY_US:
-      {
-        VALIDATE_INT_PARAM_NON_ZERO(options->cass_target_latency_us,
-                                    cass_target_latency_us,
-                                    Target cassandra latency (in microseconds));
-      }
-      break;
-
     case OPT_MAX_TOKENS:
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->max_tokens,
@@ -1029,30 +1005,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_EMERGENCY_REG_ACCEPTED:
       options->emerg_reg_accepted = PJ_TRUE;
       TRC_INFO("Emergency registrations accepted");
-      break;
-
-    case OPT_MAX_CALL_LIST_LENGTH:
-      {
-        VALIDATE_INT_PARAM(options->max_call_list_length,
-                           max_call_list_length,
-                           Max call list length);
-      }
-      break;
-
-    case OPT_MEMENTO_THREADS:
-      {
-        VALIDATE_INT_PARAM(options->memento_threads,
-                           memento_threads,
-                           Memento threads);
-      }
-      break;
-
-    case OPT_CALL_LIST_TTL:
-      {
-        VALIDATE_INT_PARAM(options->call_list_ttl,
-                           call_list_ttl,
-                           TTL for entries in the call list);
-      }
       break;
 
     case OPT_BLACKLISTED_SCSCFS:
@@ -1218,12 +1170,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         TRC_INFO("Forcing inclusion of original REGISTER requests/responses on third-party REGISTERs");
         options->force_third_party_register_body = true;
       }
-      break;
-
-    case OPT_MEMENTO_NOTIFY_URL:
-      options->memento_notify_url = std::string(pj_optarg);
-      TRC_INFO("Memento notify URL set to: '%s'",
-               options->memento_notify_url.c_str());
       break;
 
     case OPT_PIDFILE:
@@ -1756,11 +1702,7 @@ int main(int argc, char* argv[])
   opt.dns_servers.push_back("127.0.0.1");
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
-  opt.max_call_list_length = 0;
-  opt.memento_threads = 25;
-  opt.call_list_ttl = 604800;
   opt.target_latency_us = 10000;
-  opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 1000;
   opt.init_token_rate = 2000.0;
   opt.min_token_rate = 10.0;
@@ -2476,12 +2418,18 @@ int main(int argc, char* argv[])
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm,
                                             remote_sdms,
-                                            hss_connection);
+                                            hss_connection,
+                                            fifc_service,
+                                            IFCConfiguration(opt.apply_fallback_ifcs,
+                                                             opt.reject_if_no_matching_ifcs,
+                                                             opt.dummy_app_server,
+                                                             NULL,
+                                                             NULL));
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
 
-  TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
-  TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+  HttpStackUtils::TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  HttpStackUtils::TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
   HttpStackUtils::PingHandler ping_handler;
