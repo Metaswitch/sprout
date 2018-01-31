@@ -1194,4 +1194,6 @@ TEST_F(BasicS4Test, MimicTimerPop)
   EXPECT_EQ(rc, 200);
 
   EXPECT_EQ(actual_aor_id, "aor_id");
+
+  delete get_aor; get_aor = NULL;
 }
