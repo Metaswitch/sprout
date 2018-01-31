@@ -35,7 +35,7 @@ extern "C" {
 #include "subscriber_data_utils.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
-class SubscriberManager : BaseSubscriberManager
+class SubscriberManager : public BaseSubscriberManager
 {
 public:
   /// SubscriberManager constructor. It calls the S4 to store a reference to
