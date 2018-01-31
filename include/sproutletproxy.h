@@ -276,11 +276,6 @@ protected:
   bool cancel_timer(pj_timer_entry* tentry);
   bool timer_running(pj_timer_entry* tentry);
 
-  ///
-  /// @brief      Represents the server side of a single SIP transaction.
-  ///             Initialized on receipt of a SIP request, and persists for the
-  ///             duration of the transaction.
-  ///
   class UASTsx : public BasicProxy::UASTsx
   {
   public:
@@ -290,16 +285,7 @@ protected:
     /// Destructor.
     virtual ~UASTsx();
 
-    ///
-    /// @brief      Initializes the UAS transaction.
-    ///
-    /// Called at the start of a SIP (server) transaction to initialize a
-    /// transaction object from the request data.
-    ///
-    /// @param[in]  rdata  The request data.
-    ///
-    /// @return     The status of the initialization.
-    ///
+    /// Initializes the UAS transaction.
     virtual pj_status_t init(pjsip_rx_data* rdata);
 
     /// Handle the incoming half of a transaction request.
@@ -366,16 +352,6 @@ protected:
                     int fork_id,
                     SendRequest req);
 
-    ///
-    /// @brief      Takes requests from the pending request queue and processes
-    ///             them.
-    ///
-    /// The request is rejected if Max-Forwards has reached zero, or has been
-    /// through more than the maximum specified number of Sproutlets. Otherwise,
-    /// we attempt to select a Sproutlet and create a SproutletTsx. If this
-    /// succeeds, the request is passed to that Sproutlet, and if not, the
-    /// request is proxied on.
-    ///
     void schedule_requests();
 
     void process_timer_pop(pj_timer_entry* tentry);
