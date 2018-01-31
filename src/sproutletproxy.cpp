@@ -501,7 +501,7 @@ SproutletProxy::AliasMatchLocality SproutletProxy::get_uri_locality(const pjsip_
 
       AliasMatchLocality service_match = get_host_locality(&hostname);
 
-      // Set best_match to the 'maximum' of best_match and service_match, 
+      // Set best_match to the 'maximum' of best_match and service_match,
       // considering NO_MATCH < REMOTE < LOCAL
       if (service_match == AliasMatchLocality::LOCAL)
       {
@@ -751,15 +751,16 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     pjsip_route_hdr* route = (pjsip_route_hdr*)
                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
 
-    // Requests for remote aliases are always accepted off the wire, regardless 
+    // Requests for remote aliases are always accepted off the wire, regardless
     // of the value of always_serve_remote_aliases. In the case that the remote
     // host is down, we should handle requests to maintain service - in order to
     // do so, we need to be able to accept requests for remote aliases here.
     SproutletTsx* sproutlet_tsx =
       get_sproutlet_tsx(_req,
                         rdata->tp_info.transport->local_name.port,
-                        alias,
-                        true);
+                        true,
+                        true,
+                        alias);
 
     if (sproutlet_tsx == NULL)
     {
@@ -776,15 +777,6 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     }
     else
     {
-
-    // If we've accepted a request on behalf of a remote alias, we increment the
-    // relevant statistic.
-    // TJW2 TODO
-    if (_sproutlet_proxy->_accept_for_remote_alias_tbl)
-    {
-      _sproutlet_proxy->_accept_for_remote_alias_tbl->increment();
-    }
-
       // We have a SproutletTsx, so get the sproutlet that relates to it.
       sproutlet = sproutlet_tsx->_sproutlet;
     }
@@ -1058,8 +1050,9 @@ void SproutletProxy::UASTsx::schedule_requests()
       SproutletTsx* sproutlet_tsx =
         get_sproutlet_tsx(req.req,
                           0,
-                          alias,
-                          _sproutlet_proxy->_always_serve_remote_aliases);
+                          _sproutlet_proxy->_always_serve_remote_aliases,
+                          false,
+                          alias);
 
       if (sproutlet_tsx != NULL)
       {
@@ -1110,14 +1103,6 @@ void SproutletProxy::UASTsx::schedule_requests()
         // No local Sproutlet, proxy the request.
         TRC_DEBUG("No local sproutlet matches request");
         size_t index;
-
-        // In the case that we've rejected a remote alias match, we increment
-        // the relevant statistic.
-        // TJW2 TODO
-        if (_sproutlet_proxy->_route_to_remote_alias_tbl)
-        {
-          _sproutlet_proxy->_route_to_remote_alias_tbl->increment();
-        }
 
         pj_status_t status = allocate_uac(req.req, index, req.allowed_host_state);
 
@@ -1348,6 +1333,7 @@ void SproutletProxy::UASTsx::check_destroy()
 
 bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
                                                     bool always_serve_remote_aliases,
+                                                    bool first_match_in_tsx,
                                                     std::string& alias)
 {
   if (match.match_locality == AliasMatchLocality::LOCAL)
@@ -1377,6 +1363,14 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
       SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_REJECT, 0);
       event.add_var_param(match.sproutlet->service_name());
       event.add_var_param(alias);
+
+      // In the case that we've rejected a remote alias match, we increment
+      // the relevant statistic.
+      if (_sproutlet_proxy->_route_to_remote_alias_tbl)
+      {
+        _sproutlet_proxy->_route_to_remote_alias_tbl->increment();
+      }
+
       return false;
     }
     else
@@ -1388,6 +1382,15 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
       event.add_var_param(alias);
       event.add_static_param(match.match_locality);
       SAS::report_event(event);
+
+      // If we've accepted a request on behalf of a remote alias from the wire,
+      // we increment the relevant statistic.
+      if (first_match_in_tsx &&
+          _sproutlet_proxy->_accept_for_remote_alias_tbl)
+      {
+        _sproutlet_proxy->_accept_for_remote_alias_tbl->increment();
+      }
+
       return true;
     }
   }
@@ -1401,8 +1404,9 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
 SproutletTsx*
   SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
                                             int port,
-                                            std::string& alias,
-                                            bool always_serve_remote_aliases)
+                                            bool serve_remote_aliases,
+                                            bool recieved_from_wire,
+                                            std::string& alias)
 {
   SproutletTsx* sproutlet_tsx = NULL;
   Sproutlet* sproutlet = NULL;
@@ -1413,7 +1417,8 @@ SproutletTsx*
                                                             alias,
                                                             trail());
   if (accept_sproutlet_match(match,
-                             always_serve_remote_aliases,
+                             serve_remote_aliases,
+                             recieved_from_wire,
                              alias))
   {
     sproutlet = match.sproutlet;
@@ -1473,8 +1478,10 @@ SproutletTsx*
                                                0,
                                                alias,
                                                trail());
+
     if (accept_sproutlet_match(match,
-                               always_serve_remote_aliases,
+                               serve_remote_aliases,
+                               false,
                                alias))
     {
       sproutlet = match.sproutlet;

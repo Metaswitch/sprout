@@ -392,6 +392,10 @@ protected:
     /// @param[in]  always_serve_remote_aliases  Whether or not remote alias
     ///                                          matches should always be
     ///                                          accepted.
+    /// @param[in]  first_match_in_tsx           Whether this is the first
+    ///                                          Sproutlet matched in the
+    ///                                          transaction. Used to correctly
+    ///                                          increment statistics.
     /// @param[in]  alias                        The alias of match.sproutlet
     ///                                          used to obtain the match.
     ///
@@ -399,6 +403,7 @@ protected:
     ///
     bool accept_sproutlet_match(SproutletMatch match,
                                 bool always_serve_remote_aliases,
+                                bool first_match_in_tsx,
                                 std::string& alias);
 
     ///
@@ -416,18 +421,22 @@ protected:
     ///                                          was recieved. Used to attempt
     ///                                          port matching. This can be
     ///                                          disabled by passing zero.
-    /// @param[out] alias                        The alias of the Sproutlet that
-    ///                                          matched the request.
     /// @param[in]  always_serve_remote_aliases  Whether or not to handle
     ///                                          requests for remote aliases
     ///                                          locally in all cases.
+    /// @param[in]  recieved_from_wire           Whether this request has been
+    ///                                          recieved from the wire, or
+    ///                                          from a local Sproutlet.
+    /// @param[out] alias                        The alias of the Sproutlet that
+    ///                                          matched the request.
     ///
     /// @return     The matched SproutletTsx, or NULL.
     ///
     SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
-                                        int port,
-                                        std::string& alias,
-                                        bool always_serve_remote_aliases);
+                                    int port,
+                                    bool serve_remote_aliases,
+                                    bool recieved_from_wire,
+                                    std::string& alias);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;
