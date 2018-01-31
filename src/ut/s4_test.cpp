@@ -24,6 +24,7 @@
 #include "mock_store.h"
 #include "aor_test_utils.h"
 #include "mock_chronos_connection.h"
+#include "mock_subscriber_manager.h"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -36,7 +37,19 @@ using ::testing::An;
 // An AoR with a single binding, subscription, and Associated URIs. This is
 // used in tests where we want to return a valid AoR, but there's no
 // thorough testing of the exact get/set calls.
-std::string AOR_WITH_BINDING = "{\"bindings\":{\"" + AoRTestUtils::BINDING_ID + "\":{\"uri\":\"<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>\",\"cid\":\"gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq\",\"cseq\":17038,\"expires\":1516813835,\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:abcdefgh@bono1.homedomain;lr>\"],\"private_id\":\"6505550231\",\"emergency_reg\":false}},\"subscriptions\":{\"" + AoRTestUtils::SUBSCRIPTION_ID + "\":{\"req_uri\":\"<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>\",\"from_uri\":\"<sip:5102175698@cw-ngv.com>\",\"from_tag\":\"4321\",\"to_uri\":\"<sip:5102175698@cw-ngv.com>\",\"to_tag\":\"1234\",\"cid\":\"xyzabc@192.91.191.29\",\"routes\":[\"sip:abcdefgh@bono1.homedomain;lr\"],\"expires\":1516813835}},\"associated-uris\":{\"uris\":[{\"uri\":\"aor_id\",\"barring\":false},{\"uri\":\"aor_id-wildcard!.*!\",\"barring\":false},{\"uri\":\"aor_id-barred\",\"barring\":true}],\"wildcard-mapping\":{\"distinct\":\"aor_id-wildcard!.*!\",\"wildcard\":\"aor_id-wildcard\"}},\"notify_cseq\":20,\"timer_id\":\"" + AoRTestUtils::TIMER_ID + "\",\"scscf-uri\":\"sip:scscf.sprout.homedomain:5058;transport=TCP\"}";
+std::string aor_template(std::string expires)
+{
+  return "{\"bindings\":{\"" + AoRTestUtils::BINDING_ID + "\":{\"uri\":\"<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>\",\"cid\":\"gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq\",\"cseq\":17038,\"expires\":" + expires + ",\"priority\":0,\"params\":{\"+sip.ice\":\"\",\"+sip.instance\":\"\\\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\\\"\",\"reg-id\":\"1\"},\"path_headers\":[\"<sip:abcdefgh@bono1.homedomain;lr>\"],\"private_id\":\"6505550231\",\"emergency_reg\":false}},\"subscriptions\":{\"" + AoRTestUtils::SUBSCRIPTION_ID + "\":{\"req_uri\":\"<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>\",\"from_uri\":\"<sip:5102175698@cw-ngv.com>\",\"from_tag\":\"4321\",\"to_uri\":\"<sip:5102175698@cw-ngv.com>\",\"to_tag\":\"1234\",\"cid\":\"xyzabc@192.91.191.29\",\"routes\":[\"sip:abcdefgh@bono1.homedomain;lr\"],\"expires\":" + expires + "}},\"associated-uris\":{\"uris\":[{\"uri\":\"aor_id\",\"barring\":false},{\"uri\":\"aor_id-wildcard!.*!\",\"barring\":false},{\"uri\":\"aor_id-barred\",\"barring\":true}],\"wildcard-mapping\":{\"distinct\":\"aor_id-wildcard!.*!\",\"wildcard\":\"aor_id-wildcard\"}},\"notify_cseq\":20,\"timer_id\":\"" + AoRTestUtils::TIMER_ID + "\",\"scscf-uri\":\"sip:scscf.sprout.homedomain:5058;transport=TCP\"}";
+}
+
+// Leave buffer time to ensure this expiry time hasn't passed when reading AoR
+// from remote site. All tests using this AoR will not have mimic timer pop.
+std::string not_expired = std::to_string(time(NULL) + 500);
+std::string AOR_WITH_BINDING = aor_template(not_expired);
+
+// Tests that use this expired binding will have mimic timer pop.
+std::string expired = std::to_string(time(NULL) - 1);
+std::string AOR_WITH_BINDING_EXPIRED = aor_template(expired);
 
 /// Fixture for BasicS4Test.
 class BasicS4Test : public ::testing::Test
@@ -63,6 +76,8 @@ class BasicS4Test : public ::testing::Test
                  "/timers",
                  _aor_store,
                  {_remote_s4_1, _remote_s4_2});
+    _mock_sm = new MockSubscriberManager();
+    _s4->initialise(_mock_sm);
 
     cwtest_completely_control_time();
   }
@@ -71,6 +86,7 @@ class BasicS4Test : public ::testing::Test
   {
     cwtest_reset_time();
 
+    delete _mock_sm; _mock_sm = NULL;
     delete _s4; _s4 = NULL;
     delete _remote_s4_1, _remote_s4_1 = NULL;
     delete _remote_s4_2, _remote_s4_2 = NULL;
@@ -152,6 +168,7 @@ class BasicS4Test : public ::testing::Test
   S4* _remote_s4_1;
   S4* _remote_s4_2;
   S4* _s4;
+  MockSubscriberManager* _mock_sm;
 };
 
 
@@ -315,7 +332,7 @@ TEST_F(BasicS4Test, GetSubscriberInfoFoundOnRemoteSiteContentionOnWrite)
 TEST_F(BasicS4Test, DeleteSubscriber)
 {
   get_data_expect_call_success(AOR_WITH_BINDING, 1, 3);
-  EXPECT_CALL(*_mock_store, set_data(_, "aor_id", _, _, 10, _, An<Store::Format>()))
+  EXPECT_CALL(*_mock_store, set_data(_, "aor_id", _, _, 0, _, An<Store::Format>()))
     .Times(3)
     .WillRepeatedly(Return(Store::Status::OK));
   set_chronos_delete_expectations();
@@ -958,11 +975,11 @@ TEST_F(BasicS4Test, ClearUpEmptyAoR)
 {
   // The get call returns an AoR with one binding and one subscription. The
   // patch removes the binding. S4 then removes the subscription, as shown
-  // by the expiry time of 10 on the set call, and the send_delete chronos
+  // by the expiry time of 0 on the set call, and the send_delete chronos
   // call. We then have the local store return an error to stop the
   // processing.
   get_data_expect_call_success(AOR_WITH_BINDING, 1, 1);
-  EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 10, _, An<Store::Format>()))
+  EXPECT_CALL(*_mock_store, set_data(_, _, _, _, 0, _, An<Store::Format>()))
     .WillOnce(Return(Store::Status::ERROR));
   set_chronos_delete_expectations();
 
@@ -987,7 +1004,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
   std::string aor_id = "sip:6505550231@homedomain";
   int expiry = 200;
   AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, false, expiry);
-  std::string callback_uri; 
+  std::string callback_uri;
 
   // Build various arguments for Chronos call
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
@@ -998,11 +1015,11 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreation)
 
   // S4 and Chronos expectations. S4 sends POST when timer_id is empty.
   set_data_expect_call(Store::Status::OK, 3);
-  EXPECT_CALL(*(this->_mock_chronos), send_post(_, 
-                                                expiry, 
-                                                _, 
-                                                opaque, 
-                                                _, 
+  EXPECT_CALL(*(this->_mock_chronos), send_post(_,
+                                                expiry,
+                                                _,
+                                                opaque,
+                                                _,
                                                 tag_map))
     .WillOnce(DoAll(SetArgReferee<0>(AoRTestUtils::TIMER_ID),
                     SaveArg<2>(&callback_uri),
@@ -1030,7 +1047,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberCreationFail)
 
   // SM and Chronos expectations
   set_data_expect_call(Store::Status::OK, 3);
-  EXPECT_CALL(*(this->_mock_chronos), send_post(_, _, _, _, _, _)) 
+  EXPECT_CALL(*(this->_mock_chronos), send_post(_, _, _, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
 
   HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
@@ -1052,8 +1069,8 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
   std::string aor_id = "sip:6505550231@homedomain";
   int expiry = 200;
   AoR* aor = AoRTestUtils::create_simple_aor(aor_id, true, true, expiry);
-  std::string timer_id; 
-  std::string callback_uri; 
+  std::string timer_id;
+  std::string callback_uri;
 
   // Build various arguments for Chronos call
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
@@ -1065,10 +1082,10 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdate)
   // S4 and Chronos expectations. S4 sends PUT when timer_id is not empty.
   set_data_expect_call(Store::Status::OK, 3);
   EXPECT_CALL(*(this->_mock_chronos), send_put(_,
-                                               expiry, 
-                                               _, 
-                                               opaque, 
-                                               _, 
+                                               expiry,
+                                               _,
+                                               opaque,
+                                               _,
                                                tag_map))
     .WillOnce(DoAll(SaveArg<0>(&timer_id),
                     SaveArg<2>(&callback_uri),
@@ -1094,7 +1111,7 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdateFail)
 
   // SM and Chronos expectations
   set_data_expect_call(Store::Status::OK, 3);
-  EXPECT_CALL(*(this->_mock_chronos), send_put(_, _, _, _, _, _)) 
+  EXPECT_CALL(*(this->_mock_chronos), send_put(_, _, _, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
 
   HTTPCode rc = this->_s4->handle_put(aor_id, *aor, 0);
@@ -1137,3 +1154,46 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberDeleteFail)
   EXPECT_EQ(rc, 204);
 }
 
+// This test covers handling a Chronos timer pop.
+TEST_F(BasicS4Test, HandleTimerPop)
+{
+  std::string aor_id = "sip:6505550231@homedomain";
+  std::string actual_aor_id;
+  EXPECT_CALL(*(this->_mock_sm), handle_timer_pop(_, _))
+    .WillOnce(SaveArg<0>(&actual_aor_id));
+
+  // No return code for this function, therefore no error case.
+  this->_s4->handle_timer_pop(aor_id, 0);
+
+  EXPECT_EQ(actual_aor_id, aor_id);
+}
+
+// This test checks that a mimic timer pop will be sent when binding is found to
+// have expired.
+TEST_F(BasicS4Test, MimicTimerPop)
+{
+  std::string actual_aor_id;
+
+  {
+    InSequence s;
+    get_data_expect_call_failure(Store::Status::NOT_FOUND, 1);
+    get_data_expect_call_success(AOR_WITH_BINDING_EXPIRED, 1, 1);
+    set_chronos_put_expectations();
+
+    // Unlike the test above, this timer pop comes from mimic_timer_pop rather
+    // than handle_timer_pop. It can also be verified by looking at log.
+    EXPECT_CALL(*(this->_mock_sm), handle_timer_pop(_, _))
+      .WillOnce(SaveArg<0>(&actual_aor_id));
+
+    set_data_expect_call(Store::Status::OK, 1);
+  }
+
+  AoR* get_aor = NULL;
+  uint64_t version;
+  HTTPCode rc = this->_s4->handle_get("aor_id", &get_aor, version, 0);
+  EXPECT_EQ(rc, 200);
+
+  EXPECT_EQ(actual_aor_id, "aor_id");
+
+  delete get_aor; get_aor = NULL;
+}
