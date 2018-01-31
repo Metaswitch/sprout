@@ -64,8 +64,6 @@ struct ClassifiedBinding
   ContactEvent _contact_event;
 };
 
-typedef std::vector<ClassifiedBinding*> ClassifiedBindings;
-
 struct ClassifiedSubscription
 {
   ClassifiedSubscription(std::string aor_id,
@@ -88,8 +86,6 @@ struct ClassifiedSubscription
   std::string _reasons; // Stores reasons for requiring a notify (for logging)
 };
 
-typedef std::vector<ClassifiedSubscription*> ClassifiedSubscriptions;
-
 // Iterate over all original and current bindings in an AoR pair and
 // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),
 // shortened ("SHORTENED") or unchanged ("REGISTERED").
@@ -101,20 +97,23 @@ void classify_bindings(const std::string& aor_id,
                        const EventTrigger& event_trigger,
                        const Bindings& orig_bindings,
                        const Bindings& updated_bindings,
-                       ClassifiedBindings& classified_bindings);
+                       std::vector<SubscriberDataUtils::ClassifiedBinding*>& classified_bindings);
 
 void classify_subscriptions(const std::string& aor_id,
                             const EventTrigger& event_trigger,
                             const Subscriptions& orig_subscriptions,
                             const Subscriptions& updated_subscriptions,
-                            const ClassifiedBindings& classified_bindings,
+                            const std::vector<SubscriberDataUtils::ClassifiedBinding*>& classified_bindings,
                             const bool& associated_uris_changed,
-                            ClassifiedSubscriptions& classified_subscriptions);
+                            std::vector<SubscriberDataUtils::ClassifiedSubscription*>& classified_subscriptions);
 
-void delete_bindings(ClassifiedBindings& classified_bindings);
-void delete_subscriptions(ClassifiedSubscriptions& classified_subscriptions);
+void delete_bindings(std::vector<SubscriberDataUtils::ClassifiedBinding*>& classified_bindings);
+void delete_subscriptions(std::vector<SubscriberDataUtils::ClassifiedSubscription*>& classified_subscriptions);
 
 ContactEvent determine_contact_event(const EventTrigger& event_trigger);
 };
+
+typedef std::vector<SubscriberDataUtils::ClassifiedBinding*> ClassifiedBindings;
+typedef std::vector<SubscriberDataUtils::ClassifiedSubscription*> ClassifiedSubscriptions;
 
 #endif

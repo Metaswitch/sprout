@@ -19,6 +19,7 @@
 #include "mock_s4.h"
 #include "mock_hss_connection.h"
 #include "mock_analytics_logger.h"
+#include "mock_notify_sender.h"
 #include "rapidxml/rapidxml.hpp"
 
 using ::testing::_;
@@ -54,10 +55,11 @@ public:
     _s4 = new MockS4();
     _hss_connection = new MockHSSConnection();
     _analytics_logger = new MockAnalyticsLogger();
+    _notify_sender = new MockNotifySender();
     _subscriber_manager = new SubscriberManager(_s4,
                                                 _hss_connection,
                                                 _analytics_logger,
-                                                new NotifySender());
+                                                _notify_sender);
 
     // Log all traffic
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
@@ -80,9 +82,10 @@ public:
     poll();
 
     delete _subscriber_manager; _subscriber_manager = NULL;
-    delete _s4; _s4 = NULL;
-    delete _hss_connection; _hss_connection = NULL;
+    delete _notify_sender; _notify_sender = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _s4; _s4 = NULL;
   };
 
   static void SetUpTestCase()
@@ -140,6 +143,7 @@ private:
   MockS4* _s4;
   MockHSSConnection* _hss_connection;
   MockAnalyticsLogger* _analytics_logger;
+  MockNotifySender* _notify_sender;
 
   // Common variables used by all tests.
   AoR* _get_aor = NULL;
@@ -954,14 +958,14 @@ TEST_F(SubscriberManagerTest, TestAddSubscription)
   Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
   _updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);
 
+  EXPECT_CALL(*_analytics_logger, subscription(DEFAULT_ID,
+                                               AoRTestUtils::SUBSCRIPTION_ID,
+                                               "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>", // EM-TODO make this a constant
+                                               300)).Times(1);
+  EXPECT_CALL(*_notify_sender, send_notifys(DEFAULT_ID, _get_aor, _patch_aor, _, _, _));  // EM-TODO check trigger
+
   // Update subscriptions on SM.
   update_subscription();
-
-  // Subscription has been added so expect a NOTIFY.
-    // EM-TODO: Check the call out to the notify_sender.
-  //ASSERT_EQ(1, txdata_count());
-  //check_notify(current_txdata()->msg);
-  //free_txdata();
 }
 
 TEST_F(SubscriberManagerTest, TestAddSubscriptionMultipleIMPUs)
