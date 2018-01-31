@@ -70,7 +70,6 @@ struct stack_data_struct
   bool record_route_on_diversion;
 
   int default_session_expires;
-  int max_session_expires;
   int sip_tcp_connect_timeout;
   int sip_tcp_send_timeout;
   bool enable_orig_sip_to_tel_coerce;
@@ -149,7 +148,6 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               SIPResolver* sipresolver,
                               int record_routing_model,
                               const int default_session_expires,
-                              const int max_session_expires,
                               const int sip_tcp_connect_timeout,
                               const int sip_tcp_send_timeout,
                               QuiescingManager *quiescing_mgr,
