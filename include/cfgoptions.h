@@ -16,7 +16,6 @@
 #include <set>
 
 #include "hssconnection.h"
-#include "subscriber_data_manager.h"
 #include "subscriber_manager.h"
 #include "httpconnection.h"
 #include "httpresolver.h"
@@ -152,10 +151,9 @@ extern Store* local_data_store;
 extern std::vector<Store*> remote_data_stores;
 extern Store* local_impi_data_store;
 extern std::vector<Store*> remote_impi_data_stores;
-extern SubscriberDataManager* local_sdm;
-extern std::vector<SubscriberDataManager*> remote_sdms;
 extern S4* s4;
 extern std::vector<S4*> remote_s4s;
+extern NotifySender* notify_sender;
 extern SubscriberManager* subscriber_manager;
 extern ImpiStore* local_impi_store;
 extern std::vector<ImpiStore*> remote_impi_stores;

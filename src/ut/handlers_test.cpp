@@ -22,7 +22,6 @@
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
-#include "mock_subscriber_data_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
 #include "rapidjson/document.h"
@@ -115,7 +114,7 @@ class DeregistrationTaskTest : public SipTest
       .WillOnce(DoAll(SetArgReferee<1>(bindings), Return(HTTP_OK)));
 
     EXPECT_CALL(*_subscriber_manager,
-                remove_bindings(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
+                remove_bindings(aor_id, _, SubscriberDataUtils::EventTrigger::ADMIN, _, _))
           .WillOnce(DoAll(SaveArg<1>(&binding_ids), Return(HTTP_OK)));
   }
 
@@ -241,7 +240,7 @@ TEST_F(DeregistrationTaskTest, SubscriberManagerWritesFail)
                     Return(HTTP_OK)));
 
   EXPECT_CALL(*_subscriber_manager,
-              remove_bindings(aor_id, _, SubscriberManager::EventTrigger::ADMIN, _, _))
+              remove_bindings(aor_id, _, SubscriberDataUtils::EventTrigger::ADMIN, _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
 
   // Run the task
@@ -430,7 +429,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 // Test reading sprout's bindings.
 //
 
-class GetBindingsTest : public TestWithMockSdms
+class GetBindingsTest : public TestWithMocks
 {
 };
 
@@ -546,7 +545,7 @@ TEST_F(GetBindingsTest, BadMethod)
 // Test fetching sprout's subscriptions.
 //
 
-class GetSubscriptionsTest : public TestWithMockSdms
+class GetSubscriptionsTest : public TestWithMocks
 {
 };
 
@@ -685,7 +684,7 @@ TEST_F(GetSubscriptionsTest, BadMethod)
 // Tests for deleting sprout's cached data.
 //
 
-class DeleteImpuTaskTest : public TestWithMockSdms
+class DeleteImpuTaskTest : public TestWithMocks
 {
   MockHttpStack::Request* req;
   DeleteImpuTask::Config* cfg;
@@ -693,20 +692,20 @@ class DeleteImpuTaskTest : public TestWithMockSdms
 
   static void SetUpTestCase()
   {
-    TestWithMockSdms::SetUpTestCase();
-    TestWithMockSdms::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
+    TestWithMocks::SetUpTestCase();
+    TestWithMocks::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
   }
 
   void SetUp()
   {
-    TestWithMockSdms::SetUp();
+    TestWithMocks::SetUp();
   }
 
   void TearDown()
   {
     delete req;
     delete cfg;
-    TestWithMockSdms::TearDown();
+    TestWithMocks::TearDown();
   }
 
   // Build the deregistration request
@@ -760,7 +759,7 @@ TEST_F(DeleteImpuTaskTest, BadMethod)
 }
 
 
-class PushProfileTaskTest : public TestWithMockSdms
+class PushProfileTaskTest : public TestWithMocks
 {
   MockHttpStack::Request* req;
   PushProfileTask::Config* cfg;
@@ -768,20 +767,20 @@ class PushProfileTaskTest : public TestWithMockSdms
 
   static void SetUpTestCase()
   {
-    TestWithMockSdms::SetUpTestCase();
-    TestWithMockSdms::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
+    TestWithMocks::SetUpTestCase();
+    TestWithMocks::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
   }
 
   void SetUp()
   {
-    TestWithMockSdms::SetUp();
+    TestWithMocks::SetUp();
   }
 
   void TearDown()
   {
     delete req;
     delete cfg;
-    TestWithMockSdms::TearDown();
+    TestWithMocks::TearDown();
   }
 
   // Build the push profile request

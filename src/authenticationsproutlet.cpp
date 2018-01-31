@@ -12,7 +12,6 @@
 #include "constants.h"
 #include "sproutsasevent.h"
 #include "authenticationsproutlet.h"
-#include "registration_utils.h"
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
@@ -334,9 +333,9 @@ int AuthenticationSproutletTsx::calculate_challenge_expiration_time(pjsip_msg* r
        contact_hdr = (pjsip_contact_hdr*)
           pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
   {
-    expires = std::max(expires, RegistrationUtils::expiry_for_binding(contact_hdr,
-                                                                      expires_hdr,
-                                                                      _authentication->_max_expires));
+    expires = std::max(expires, PJUtils::expiry_for_binding(contact_hdr,
+                                                            expires_hdr,
+                                                            _authentication->_max_expires));
   }
 
   return expires + time(NULL);

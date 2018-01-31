@@ -94,7 +94,6 @@ extern "C" {
 #include "ifchandler.h"
 #include "hssconnection.h"
 #include "aschain.h"
-#include "registration_utils.h"
 #include "custom_headers.h"
 #include "dialog_tracker.hpp"
 #include "quiescing_manager.h"

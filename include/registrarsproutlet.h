@@ -31,6 +31,22 @@
 
 class RegistrarSproutletTsx;
 
+/// Enum to determine what type of request a register is. If the request is
+/// removing any bindings then it's a deregister request, otherwise if the
+/// subscriber has no current bindings then it's any initial request,
+/// otherwise it's a register request.
+///
+/// Ideally there would also be an UNKNOWN type to cover the cases where the
+/// register fails too early for us to be able to determine what type of
+/// register it really was. Instead, all unknown requests are treated as
+/// deregister requests.
+enum RegisterType
+{
+  INITIAL = 0,
+  REREGISTER,
+  DEREGISTER,
+};
+
 class RegistrarSproutlet : public Sproutlet
 {
 public:
@@ -96,6 +112,23 @@ public:
 
 protected:
   void process_register_request(pjsip_msg* req);
+
+  /// Perform basic validation of the register. We can reject the request
+  /// early which saves contacting the HSS/memcached.
+  ///
+  /// @param req[in]                  - The request to validate.
+  /// @param num_contact_headers[out] - How many contact headers there were in
+  ///                                   the request.
+  ///
+  /// @return Whether the request is valid. The cases are:
+  ///   PJSIP_OK - The request is valid
+  ///   PJSIP_SC_NOT_FOUND - The request has an invalid scheme
+  ///   PJSIP_SC_BAD_REQUEST - The request has an invalid contact URI
+  ///   PJSIP_SC_NOT_IMPLEMENTED - The request is attempting to deregister
+  ///                              emergency registrations
+  pjsip_status_code basic_validation_of_register(pjsip_msg* req,
+                                                 int& num_contact_headers);
+
   void get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
                              std::string private_id, ///<private ID that the request refers to
                              const int& now,
@@ -104,6 +137,7 @@ protected:
 
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);
+
   void add_contact_headers(pjsip_msg* rsp,
                            pjsip_msg* req,
                            Bindings all_bindings,
@@ -119,6 +153,17 @@ protected:
                                     HSSConnection::irs_info& irs_info,
                                     std::string aor,
                                     SAS::TrailId trail);
+
+  /// Get what type of registration this is.
+  RegisterType get_register_type(
+                         const Bindings& current_bindings,
+                         const Bindings& bindings_to_update,
+                         const std::vector<std::string>& binding_ids_to_remove);
+
+  /// Track the register statistics
+  void track_register_attempts_statistics(RegisterType rt);
+  void track_register_successes_statistics(RegisterType rt);
+  void track_register_failures_statistics(RegisterType rt);
 
   RegistrarSproutlet* _registrar;
 

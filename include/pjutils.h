@@ -401,6 +401,12 @@ SIPEventPriorityLevel get_priority_of_message(const pjsip_msg* msg,
                                               RPHService* rph_service,
                                               SAS::TrailId trail);
 
+
+/// EM-TODO
+int expiry_for_binding(pjsip_contact_hdr* contact,
+                       pjsip_expires_hdr* expires,
+                       int max_expires);
+
 } // namespace PJUtils
 
 #endif

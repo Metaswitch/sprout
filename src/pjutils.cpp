@@ -2258,7 +2258,7 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
          ++it)
     {
       TRC_DEBUG("Adding CCF %s to PCFA header", it->c_str());
-      add_pcfa_param(&pcfa_hdr->ccf, pool, STR_CCF, *it);      
+      add_pcfa_param(&pcfa_hdr->ccf, pool, STR_CCF, *it);
     }
 
     for (std::deque<std::string>::const_iterator it = ecfs.begin();
@@ -2266,7 +2266,7 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
          ++it)
     {
       TRC_DEBUG("Adding ECF %s to PCFA header", it->c_str());
-      add_pcfa_param(&pcfa_hdr->ecf, pool, STR_ECF, *it);      
+      add_pcfa_param(&pcfa_hdr->ecf, pool, STR_ECF, *it);
     }
 
     pjsip_msg_add_hdr(msg, (pjsip_hdr*)pcfa_hdr);
@@ -2285,10 +2285,10 @@ void PJUtils::add_pcfa_param(pj_list_type *cf_list,
 
   // Check whether we need to quote the value.  We'll need to do this if
   // - its not already quoted
-  // - it contains characters other than those allowed for a host or 
+  // - it contains characters other than those allowed for a host or
   //   token (see RFC 3455, section 5.5)
-  // Note that we assume for simplicity that if the value starts with '[', 
-  // its an ipv6 address (int_parse_host in sip_parser.c makes the same 
+  // Note that we assume for simplicity that if the value starts with '[',
+  // its an ipv6 address (int_parse_host in sip_parser.c makes the same
   // assumption and the pjsip_HOST_SPEC doesn't cover IPv6 parsing).
   const char *inbuf = value.c_str();
   bool quote = false;
@@ -2313,13 +2313,13 @@ void PJUtils::add_pcfa_param(pj_list_type *cf_list,
   else
   {
     TRC_DEBUG("Use unquoted cf value %s", inbuf);
-    final_value = value;    
+    final_value = value;
   }
 
   new_param->value = pj_strdup3(pool, final_value.c_str());
 
-  pj_list_insert_before(cf_list, new_param);      
-}                             
+  pj_list_insert_before(cf_list, new_param);
+}
 
 /// Takes a SIP URI and turns it into its equivalent tel URI. This is used
 /// for SIP URIs that actually represent phone numbers, i.e. SIP URIs that
@@ -2890,4 +2890,20 @@ SIPEventPriorityLevel PJUtils::get_priority_of_message(const pjsip_msg* msg,
   }
 
   return priority;
+}
+
+int PJUtils::expiry_for_binding(pjsip_contact_hdr* contact,
+                                pjsip_expires_hdr* expires,
+                                int max_expires)
+{
+  int expiry = (contact->expires != -1) ? contact->expires :
+               (expires != NULL) ? expires->ivalue :
+               max_expires;
+  if (expiry > max_expires)
+  {
+    // Expiry is too long, set it to the maximum.
+    expiry = max_expires;
+  }
+
+  return expiry;
 }
