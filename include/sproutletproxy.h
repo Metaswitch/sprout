@@ -153,46 +153,6 @@ protected:
     {}
   };
 
-  ///
-  /// @brief      Represents the four possible cases when attempting to obtain a
-  ///             SproutletTsx.
-  ///
-  /// NO_MATCH_AT_ALL represents the case that neither a local nor remote match
-  /// was found for the host.
-  ///
-  /// NO_MATCH_REJECTED_REMOTE_MATCH represents the case that a remote match was
-  /// found, but was rejected. This is because
-  ///   - always_serve_remote_aliases is set to false, and
-  ///   - the match was on the other side of a network function or originating/
-  ///     terminating S-CSCF boundary.
-  ///
-  /// MATCH_REMOTE represents the case that a remote match was found (and not
-  /// rejected).
-  ///
-  /// MATCH_LOCAL represents the case that a local match was found.
-  ///
-  enum SproutletTsxMatchLocality
-  {
-    NO_MATCH_AT_ALL,
-    NO_MATCH_REJECTED_REMOTE_MATCH,
-    MATCH_REMOTE,
-    MATCH_LOCAL,
-  };
-
-  ///
-  /// @brief      A pair of a SproutletTsx (pointer) and a match locality.
-  ///
-  struct SproutletTsxMatch
-  {
-    SproutletTsx* sproutlet_tsx;
-    SproutletTsxMatchLocality match_locality;
-    SproutletTsxMatch(SproutletTsx* sproutlet_tsx,
-                      SproutletTsxMatchLocality match_locality) :
-      sproutlet_tsx(sproutlet_tsx),
-      match_locality(match_locality)
-    {}
-  };
-
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
@@ -440,21 +400,17 @@ protected:
     ///             be accepted or rejected, based on its locality.
     ///
     /// If the match is null, that is, no Sproutlet was matched, the function
-    /// always returns false. The tsx_match_locality parameter is set to
-    /// NO_MATCH_AT_ALL.
+    /// always returns false.
     ///
-    /// If the match is local, the function always returns true, and the
-    /// tsx_match_locality_parameter is set to MATCH_LOCAL.
+    /// If the match is local, the function always returns true.
     ///
     /// If the match is remote, the function has the following behaviour.
     ///   - If the always_serve_remote_aliases flag is set, or if the matched
     ///     Sproutlet does not lie across a network function or originating/
     ///     terminating S-CSCF boundary, the function returns true. We also
-    ///     produce a SAS log. The tsx_match_locality parameter is set to
-    ///     MATCH_REMOTE.
+    ///     produce a SAS log.
     ///   - Otherwise, the function returns false, and a different SAS log is
-    ///     produced. The tsx_match_locality_parameter is set to
-    ///     NO_MATCH_REMOTE_MATCH_REJECTED.
+    ///     produced.
     ///
     /// @param[in]  match                        The match.
     /// @param[in]  always_serve_remote_aliases  Whether or not remote alias
@@ -462,14 +418,12 @@ protected:
     ///                                          accepted.
     /// @param[in]  alias                        The alias of match.sproutlet
     ///                                          used to obtain the match.
-    /// @param[out] tsx_match_locality           The locality of the tsx match.
     ///
     /// @return     True if the match should be rejected, and false otherwise.
     ///
     bool accept_sproutlet_match(SproutletMatch match,
                                 bool always_serve_remote_aliases,
-                                std::string& alias,
-                                SproutletTsxMatchLocality& tsx_match_locality);
+                                std::string& alias);
 
     ///
     /// @brief      Finds a SproutletTsx willing to handle a request.
@@ -480,9 +434,6 @@ protected:
     /// that sproutlet. If not, we attempt to find another Sproutlet - first by
     /// examining any further route headers on the request, and then using the
     /// next hop URI that may be supplied by the previous Sproutlet.
-    ///
-    /// The function provides context for the returned SproutletTsx in the form
-    /// of its locality, which is used by the clients for updating statistics.
     ///
     /// @param[in]  req                          The request
     /// @param[in]  port                         The port on which the request
@@ -495,11 +446,9 @@ protected:
     ///                                          requests for remote aliases
     ///                                          locally in all cases.
     ///
-    /// @return     The matched SproutletTsx, or NULL, and the match locality.
-    ///             See accept_sproutlet_match for details on tsx match
-    ///             localities.
+    /// @return     The matched SproutletTsx, or NULL.
     ///
-    SproutletTsxMatch get_sproutlet_tsx(pjsip_tx_data* req,
+    SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
                                         int port,
                                         std::string& alias,
                                         bool always_serve_remote_aliases);
