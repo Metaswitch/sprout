@@ -9,7 +9,7 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-/*
+
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -304,9 +304,10 @@ protected:
   void setup_callee_info(HSSConnection::irs_info& irs_info,
                          Bindings& bindings);
   void setup_callee_ifcs(HSSConnection::irs_info& irs_info);
-  void setup_callee_bindings(Bindings& bindings,
+  void setup_callee_binding(Bindings& bindings,
                              std::string uri = "sip:6505551234@homedomain",
-                             std::string contact = "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+                             std::string contact = "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob",
+                             bool emergency = false);
   void setup_all_callee_calls(HSSConnection::irs_info& irs_info,
                               Bindings& bindings,
                               std::string uri = "sip:6505551234@homedomain",
@@ -334,6 +335,13 @@ protected:
                       int cond_neg = 0,
                       std::string default_handling = "0");
   list<string> doProxyCalculateTargets(int max_targets);
+  // We don't want to remove extra info from this route header that we match
+  // against, as then we could not catch errors where not all the info was
+  // passed through (we've had errors in this area before). However, we can't
+  // guarantee the order of "lr" and "transport=tcp".
+  // TODO - Turn this into a function which will match against the full header
+  // with either order.
+  const std::string BONO_ROUTE_HEADER = "Route: <sip:abcdefgh@bono1.homedomain;transport=tcp;lr>";
 };
 
 LocalStore* SCSCFTestBase::_local_data_store;
@@ -1204,7 +1212,7 @@ void SCSCFTestBase::setup_callee_info(HSSConnection::irs_info& irs_info,
                                       Bindings& bindings)
 {
   setup_callee_ifcs(irs_info);
-  setup_callee_bindings(bindings);
+  setup_callee_binding(bindings);
 }
 
 void SCSCFTestBase::setup_callee_ifcs(HSSConnection::irs_info& irs_info)
@@ -1212,13 +1220,18 @@ void SCSCFTestBase::setup_callee_ifcs(HSSConnection::irs_info& irs_info)
   set_irs_info(irs_info, "6505551234", "homedomain");
 }
 
-void SCSCFTestBase::setup_callee_bindings(Bindings& bindings,
+void SCSCFTestBase::setup_callee_binding(Bindings& bindings,
                                           std::string uri,
-                                          std::string contact)
+                                          std::string contact,
+                                          bool emergency)
 {
   Binding* binding = AoRTestUtils::build_binding(uri,
                                                  time(NULL),
                                                  contact);
+  if (emergency)
+  {
+    binding->_emergency_registration = true;
+  }
   bindings.insert(std::make_pair(contact, binding));
 }
 
@@ -1813,9 +1826,9 @@ TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
 {
   SCOPED_TRACE("");
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
+  // TODO - It is messy that we need this HSS connection to talk to the I-CSCF
+  // in the S-CSCF UTs. This test, and others which do this, should be moved out
+  // into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A%2B15108580271%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -1893,9 +1906,6 @@ TEST_F(SCSCFTest, TestGRUUFailure)
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  //  as well) should be moved out into a seperate test suite.
    _hss_connection->set_result("/impu/sip%3A%2B15108580271%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -1931,14 +1941,11 @@ TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_2),
                     Return(HTTP_OK)));
   Bindings bindings;
-  setup_callee_bindings(bindings, "sip:+15108580271@homedomain");
+  setup_callee_binding(bindings, "sip:+15108580271@homedomain");
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  //  as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -2278,8 +2285,8 @@ TEST_F(SCSCFTest, TestWithoutEnum)
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "+15108580271", "homedomain");
   Bindings bindings;
-  setup_callee_bindings(bindings, "sip:+15108580271@homedomain", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
-  setup_callee_bindings(bindings, "tel:+15108580271", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:+15108580271@homedomain", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "tel:+15108580271", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
   EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("tel:+15108580271"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_2),
                     Return(HTTP_OK)));
@@ -2287,9 +2294,6 @@ TEST_F(SCSCFTest, TestWithoutEnum)
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/tel%3A%2B15108580271/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -2321,8 +2325,8 @@ void SCSCFTestBase::setupForkedFlow(SCSCFMessage& msg)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings); // Adds bindings for "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob".
-  setup_callee_bindings(bindings, "sip:6505551234@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  setup_callee_bindings(bindings, "sip:6505551234@homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob");
   setup_all_callee_calls(irs_info, bindings);
 
   pjsip_msg* out;
@@ -2703,9 +2707,15 @@ TEST_F(SCSCFTest, TestReceiveCallToEmergencyBinding)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings); // This adds the non emergency binding.
-  setup_callee_bindings(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob");
-  // SDM-REFACTOR-TODO - set binding->emergency_registration to true?
-  setup_all_callee_calls(irs_info, bindings);
+  setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", true);
+  setup_callee_ifc_call(irs_info);
+  // Expect two calls to get bindings, one to check for any emergency
+  // registrations after it is realised the served user is barred, and one to
+  // find the target to route to.
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .Times(2)
+    .WillRepeatedly(DoAll(SetArgReferee<1>(bindings),
+                          Return(HTTP_OK)));
 
   SCSCFMessage msg;
   pjsip_msg* out;
@@ -2750,9 +2760,6 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   setup_callee_info(irs_info_2, bindings);
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -2825,7 +2832,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
-  EXPECT_EQ(("Route: " + AoRTestUtils::PATH_HEADER), get_headers(out, "Route"));
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   // Target sends back 100 Trying
   inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
@@ -2859,9 +2866,6 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   setup_callee_info(irs_info_2, bindings);
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -2938,7 +2942,7 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
-  EXPECT_EQ(("Route: " + AoRTestUtils::PATH_HEADER), get_headers(out, "Route"));
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   // Target sends back 100 Trying
   inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
@@ -3049,7 +3053,7 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
   // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
-  EXPECT_EQ(("Route: " + AoRTestUtils::PATH_HEADER), get_headers(out, "Route"));
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   free_txdata();
   free(ifc_str_1);
@@ -3229,9 +3233,6 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
   setup_callee_info(irs_info_2, bindings);
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -3302,7 +3303,7 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
   // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
-  EXPECT_EQ(("Route: " + AoRTestUtils::PATH_HEADER), get_headers(out, "Route"));
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   free_txdata();
   free(ifc_str);
@@ -3543,9 +3544,6 @@ TEST_F(SCSCFTest, SimpleRedirect)
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -4901,7 +4899,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
-  EXPECT_EQ(("Route: " + AoRTestUtils::PATH_HEADER), get_headers(out, "Route"));
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   free_txdata();
 
@@ -4944,14 +4942,14 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
   setup_all_callee_calls(irs_info, bindings);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
 
   // Caller sends INVITE
   SCSCFMessage msg;
@@ -4987,10 +4985,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   out = current_txdata()->msg;
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
-  tpCallee.expect_target(current_txdata(), true);
+  tpBono.expect_target(current_txdata(), true);
 
   // Callee sends 200 OK.
-  inject_msg(respond_to_txdata(current_txdata(), 200, "", ""), &tpCallee);
+  inject_msg(respond_to_txdata(current_txdata(), 200, "", ""), &tpBono);
   free_txdata();
 
   // 200 OK received at caller.
@@ -5014,14 +5012,14 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
   setup_all_callee_calls(irs_info, bindings);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, _));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
 
   // Caller sends INVITE
   SCSCFMessage msg;
@@ -5061,10 +5059,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   out = current_txdata()->msg;
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
-  tpCallee.expect_target(current_txdata(), true);
+  tpBono.expect_target(current_txdata(), true);
 
   // Callee sends 200 OK.
-  inject_msg(respond_to_txdata(current_txdata(), 200, "", ""), &tpCallee);
+  inject_msg(respond_to_txdata(current_txdata(), 200, "", ""), &tpBono);
   free_txdata();
 
   // 200 OK received at caller.
@@ -5193,9 +5191,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
   setup_callee_info(irs_info_2, bindings);
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -5263,9 +5258,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   setup_callee_info(irs_info_2, bindings);
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -5274,7 +5266,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
 
   // Caller sends INVITE
   SCSCFMessage msg;
@@ -5310,14 +5302,14 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   out = current_txdata()->msg;
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
-  tpCallee.expect_target(current_txdata(), true);
+  tpBono.expect_target(current_txdata(), true);
 
   EXPECT_THAT(get_headers(out, "Record-Route"),
               MatchesRegex("Record-Route:.*billing-role=charge-term.*"
                            "Record-Route:.*billing-role=charge-orig.*"));
 
   // Callee sends 200 OK.
-  inject_msg(respond_to_txdata(current_txdata(), 200, "", ""), &tpCallee);
+  inject_msg(respond_to_txdata(current_txdata(), 200, "", ""), &tpBono);
   free_txdata();
 
   // 200 OK received at callee.
@@ -5389,7 +5381,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   free(ifc_str);
 }
 
-// SDM-REFACTOR-TODO - calls for bindings? I didn't expect this....
 // Test DefaultHandling=CONTINUE for non-existent AS.
 //
 // This test configures two ASs for the terminating subscriber, and checks that
@@ -5410,13 +5401,12 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp");
   add_ifc_info(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_ifc_call(irs_info, "sip:6505551234@homedomain");
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   bool old_rr_on_comp_of_orig = stack_data.record_route_on_completion_of_originating;
   bool old_rr_on_init_of_term = stack_data.record_route_on_initiation_of_terminating;
@@ -5804,9 +5794,6 @@ TEST_F(SCSCFTest, RecordRoutingTest)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -6043,7 +6030,7 @@ void SCSCFTestBase::doAsOriginated(const std::string& msg, bool expect_orig)
   // INVITE passed to final destination, so to callee.
   tpCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
-  EXPECT_EQ(("Route: " + AoRTestUtils::PATH_HEADER), get_headers(out, "Route"));
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   // Inject succesful responses to finish up the flow
   inject_msg(respond_to_current_txdata(200));
@@ -6117,13 +6104,10 @@ TEST_F(SCSCFTest, Cdiv)
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "6505555678", "homedomain");
   Bindings bindings;
-  setup_callee_bindings(bindings, "sip:6505555678@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:6505555678@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   setup_callee_ifc_call(irs_info_2, "sip:6505555678@homedomain");
   setup_callee_bindings_call(bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -6236,7 +6220,7 @@ TEST_F(SCSCFTest, Cdiv)
   // was diverted to).
   tpDivertedToCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", r1.uri());
-  EXPECT_EQ(("Route: " + AoRTestUtils::PATH_HEADER), get_headers(out, "Route"));
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   free_txdata();
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
@@ -6374,9 +6358,6 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
   setup_callee_ifc_call(irs_info_2);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -6444,7 +6425,7 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
   char* ifc_str = add_single_ifc(irs_info, "sip:1115551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
   setup_callee_ifc_call(irs_info, "sip:1115551234@homedomain");
   Bindings bindings;
-  setup_callee_bindings(bindings, "sip:1115551234@homedomain");
+  setup_callee_binding(bindings, "sip:1115551234@homedomain");
   //setup_all_callee_calls(irs_info, bindings, "sip:1115551234@homedomain");
   // SDM-REFACTOR-TODO - signal 11 when called, gmock call when not called - ask
   // AJH
@@ -6519,7 +6500,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "6505555678", "homedomain");
   Bindings bindings;
-  setup_callee_bindings(bindings, "sip:6505555678@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:6505555678@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   setup_callee_ifc_call(irs_info_2, "sip:6505555678@homedomain");
   setup_callee_bindings_call(bindings);
 
@@ -6543,9 +6524,6 @@ TEST_F(SCSCFTest, MmtelCdiv)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -6632,7 +6610,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   // was diverted to).
   tpDivertedToCallee.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", r1.uri());
-  EXPECT_EQ(("Route: " + AoRTestUtils::PATH_HEADER), get_headers(out, "Route"));
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
   EXPECT_THAT(get_headers(out, "History-Info"),
               testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
   free_txdata();
@@ -6666,7 +6644,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   HSSConnection::irs_info irs_info_3;
   Bindings bindings;
   set_irs_info(irs_info_3, "6505559012", "homedomain");
-  setup_callee_bindings(bindings, "sip:6505559012@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:6505559012@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   setup_all_callee_calls(irs_info_3, bindings, "sip:6505559012@homedomain");
 
   //SDM-REFACTOR-TODO - WHAT ARE THESE???
@@ -6710,9 +6688,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -6821,17 +6796,19 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
 // Test a simple MMTEL flow.
 TEST_F(SCSCFTest, MmtelFlow)
 {
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  char* ifc_str_1 = add_single_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  setup_all_caller_calls(irs_info_1);
 
-  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
-  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
-    .addServiceProfile(service_profile_1);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription_1.return_sub());
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  char* ifc_str_2 = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  setup_all_callee_calls(irs_info_2, bindings, "sip:6505551234@homedomain", true);
+
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -6844,15 +6821,6 @@ TEST_F(SCSCFTest, MmtelFlow)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
-  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
-    .addServiceProfile(service_profile_2);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription_2.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -6875,7 +6843,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   poll();
   ASSERT_EQ(2, txdata_count());
 
-  // 100 Trying goes back to bono
+  // 100 Trying goes back to bono.
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
@@ -6885,7 +6853,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   // Call should pass through MMTEL AS, and then proceed. This should
   // add a privacy header.
 
-  // INVITE passed on to AS1
+  // INVITE passed on to AS1.
   SCOPED_TRACE("INVITE (S)");
   out = current_txdata()->msg;
   ReqMatcher r1("INVITE");
@@ -6907,14 +6875,14 @@ TEST_F(SCSCFTest, MmtelFlow)
   inject_msg(out, &tpAS1);
   free_txdata();
 
-  // 100 Trying goes back to AS1
+  // 100 Trying goes back to AS1.
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
   msg.convert_routeset(out);
   free_txdata();
 
-  // INVITE passed on to final destination
+  // INVITE passed on to final destination.
   SCOPED_TRACE("INVITE (4)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -6924,8 +6892,10 @@ TEST_F(SCSCFTest, MmtelFlow)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
   EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
-
   free_txdata();
+
+  free(ifc_str_1);
+  free(ifc_str_2);
 }
 
 /// Test MMTEL-then-external-AS flows (both orig and term).
@@ -6943,18 +6913,26 @@ TEST_F(SCSCFTest, MmtelFlow)
 //
 TEST_F(SCSCFTest, MmtelThenExternal)
 {
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
-    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
-    .addServiceProfile(service_profile_1);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "UNREGISTERED",
-                                   subscription_1.return_sub());
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list_1;
+  add_ifc_info(ifc_list_1, 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  add_ifc_info(ifc_list_1, 2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  char* ifc_str_1 = add_ifcs(irs_info_1, ifc_list_1, "sip:6505551000@homedomain");
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  std::vector<std::string> ifc_list_2;
+  add_ifc_info(ifc_list_2, 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  add_ifc_info(ifc_list_2, 2, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  char* ifc_str_2 = add_ifcs(irs_info_2, ifc_list_2, "sip:6505551234@homedomain");
+  setup_all_callee_calls(irs_info_2, bindings, "sip:6505551234@homedomain", true, 2);
+
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -6967,16 +6945,6 @@ TEST_F(SCSCFTest, MmtelThenExternal)
                             <outgoing-communication-barring active="false"/>
                        </simservs>)");  // "
 
-  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
-    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
-  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
-    .addServiceProfile(service_profile_2);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription_2.return_sub());
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -6988,6 +6956,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -7045,7 +7014,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   inject_msg(out, &tpAS1);
   free_txdata();
 
-  // 100 Trying goes back to AS1
+  // 100 Trying goes back to AS1.
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
@@ -7067,7 +7036,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
 
-  // ---------- AS2 turns it around (acting as proxy)
+  // ---------- AS2 turns it around (acting as proxy).
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   if (hdr)
   {
@@ -7076,14 +7045,14 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   inject_msg(out, &tpAS2);
   free_txdata();
 
-  // 100 Trying goes back to AS2
+  // 100 Trying goes back to AS2.
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
   msg.convert_routeset(out);
   free_txdata();
 
-  // INVITE passed on to final destination
+  // INVITE passed on to final destination.
   SCOPED_TRACE("INVITE (4)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -7093,8 +7062,10 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
   EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
-
   free_txdata();
+
+  free(ifc_str_1);
+  free(ifc_str_2);
 }
 
 
@@ -7113,17 +7084,26 @@ TEST_F(SCSCFTest, MmtelThenExternal)
 //
 TEST_F(SCSCFTest, MultipleMmtelFlow)
 {
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
-    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
-  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
-    .addServiceProfile(service_profile_1);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription_1.return_sub());
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  std::vector<std::string> ifc_list_1;
+  add_ifc_info(ifc_list_1, 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  add_ifc_info(ifc_list_1, 2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  char* ifc_str_1 = add_ifcs(irs_info_1, ifc_list_1, "sip:6505551000@homedomain");
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  std::vector<std::string> ifc_list_2;
+  add_ifc_info(ifc_list_2, 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  add_ifc_info(ifc_list_2, 2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  add_ifc_info(ifc_list_2, 3, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  char* ifc_str_2 = add_ifcs(irs_info_2, ifc_list_2, "sip:6505551234@homedomain");
+  setup_all_callee_calls(irs_info_2, bindings, "sip:6505551234@homedomain", true, 3);
+
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -7135,17 +7115,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
-    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
-    .addIfc(3, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
-  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
-    .addServiceProfile(service_profile_2);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription_2.return_sub());
+
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -7157,6 +7127,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -7228,9 +7199,12 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
   EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
-
   free_txdata();
+
+  free(ifc_str_1);
+  free(ifc_str_2);
 }
+
 
 // Test basic ISC (AS) OPTIONS final acceptance flow (AS sinks request).
 TEST_F(SCSCFTest, SimpleOptionsAccept)
@@ -7246,9 +7220,6 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>OPTIONS</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -7314,9 +7285,6 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505501234@homedomain", 1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -7609,9 +7577,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   char* ifc_str_2 = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -7820,9 +7785,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   char* ifc_str_2 = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8097,9 +8059,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   char* ifc_str_2 = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8295,9 +8254,6 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8499,7 +8455,7 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
   set_irs_info(irs_info, "6515551000", "homedomain");
   irs_info._associated_uris.add_uri("tel:6515551000", false);
   Bindings bindings;
-  setup_callee_bindings(bindings, "sip:6515551000@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:6515551000@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   // I don't think I need binding from tel to contact, do I?
 
   EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6515551000@homedomain"), _, _))
@@ -8518,9 +8474,6 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
    //                                "",
     //                               wildcard);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6515551000%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8538,16 +8491,19 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551000");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551000", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8565,16 +8521,19 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdrWithAlias)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551001");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551001", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8593,17 +8552,20 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrWithAlias)
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliasesNoMatch)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551003")
-    .addIdentity("tel:6505551002");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551003", false);
+  irs_info_1._associated_uris.add_uri("tel:6505551002", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8622,17 +8584,20 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliasesNoMatch)
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliases)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551003")
-    .addIdentity("tel:6505551000");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551003", false);
+  irs_info_1._associated_uris.add_uri("tel:6505551000", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8648,16 +8613,19 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliases)
 TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551000");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("tel:6505551000",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551000", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8675,15 +8643,18 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
 TEST_F(SCSCFTest, TestAddSecondSIPPAIHdrNoSIPUri)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("tel:6505551000");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("tel:6505551000",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "", false, true);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8699,16 +8670,19 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdrNoSIPUri)
 TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551000");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551000", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8721,19 +8695,25 @@ TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
 }
 
 
+// SDM-REFACTOR-TODO - for this, and all other PAI, haven't cared what we're
+// expecting to call the HSS with (regarding the caller). Check that doesn't
+// matter.
 TEST_F(SCSCFTest, TestNoPAIHdrs)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551000");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551000", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8748,16 +8728,19 @@ TEST_F(SCSCFTest, TestNoPAIHdrs)
 TEST_F(SCSCFTest, TestPAIHdrODIToken)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551000");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551000", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8773,16 +8756,19 @@ TEST_F(SCSCFTest, TestPAIHdrODIToken)
 TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
 {
   SCOPED_TRACE("");
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIdentity("tel:6505551000");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
+
+  // Setup caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._associated_uris.add_uri("tel:6505551000", false);
+  setup_all_caller_calls(irs_info_1);
+
+  // Setup callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
+
   SCSCFMessage msg;
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
@@ -8791,7 +8777,7 @@ TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
 }
 
 
-// SDM-REFACTOR-TODO - get rid of call to sdm.
+/* SDM-REFACTOR-TODO - talk to SS5, issue with update_bindings()
 /// Test handling of 430 Flow Failed response
 TEST_F(SCSCFTest, FlowFailedResponse)
 {
@@ -8875,7 +8861,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   inject_msg(msg.get_request(), &tpBono);
 
   free(ifc_str);
-}
+}*/
 
 
 // SDM-REFACTOR-TODO - random comment? what does it belong to?
@@ -9373,7 +9359,7 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings); // Sets up binding for "6505551234".
-  setup_callee_bindings(bindings, "sip:6505551000@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:6505551000@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   std::vector<std::string> ifc_list;
   add_ifc_info(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP");
   add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
@@ -9656,62 +9642,21 @@ TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
 }
 
 
-TEST_F(SCSCFTest, TestAddStoredPathHeader)
-{
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  SCOPED_TRACE("");
-
-  // Add a binding with the _path_headers and _path_uris set.
-  string uri("sip:6505551234@homedomain");
-  string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  AoRPair* aor = _sdm->get_aor_data(uri, 0);
-  Binding* binding = aor->get_current()->get_binding(contact);
-  binding->_uri = contact;
-  binding->_cid = "1";
-  binding->_cseq = 1;
-  binding->_path_uris.push_back(std::string("sip:abcdefgh@ut.cw-ngv.com;lr"));
-  binding->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@ut.cw-ngv.com;lr>;tag=6ht7"));
-  binding->_expires = time(NULL) + 300;
-  binding->_priority = 1000;
-  binding->_emergency_registration = false;
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(uri, false);
-  bool ret = _sdm->set_aor_data(uri, SubscriberDataManager::EventTrigger::USER, aor, 0);
-  delete aor;
-  EXPECT_TRUE(ret);
-
-  // Check that the Route header contains the full path header form the binding.
-  SCSCFMessage msg;
-  list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Route", "Route: \"Bob\" <sip:abcdefgh@ut.cw-ngv.com;lr>;tag=6ht7"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
-}
-
-
+//SDM-REFACTOR-TODO - kept this test for now... may not need it but sounds like
+//a weak area to me.
 TEST_F(SCSCFTest, TestAddStoredPathURI)
 {
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7"); //Needed? I have no idea...
   SCOPED_TRACE("");
 
-  // Add a binding with only _path_uris set.
-  string uri("sip:6505551234@homedomain");
-  string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  AoRPair* aor = _sdm->get_aor_data(uri, 0);
-  Binding* binding = aor->get_current()->get_binding(contact);
-  binding->_uri = contact;
-  binding->_cid = "1";
-  binding->_cseq = 1;
-  binding->_path_uris.push_back(std::string("sip:abcdefgh@ut.cw-ngv.com;lr"));
-  binding->_expires = time(NULL) + 300;
-  binding->_priority = 1000;
-  binding->_emergency_registration = false;
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(uri, false);
-  bool ret = _sdm->set_aor_data(uri, SubscriberDataManager::EventTrigger::USER, aor, 0);
-  delete aor;
-  EXPECT_TRUE(ret);
+  // Setup callee info. Its binding will have only the path uri set, and no path
+  // headers.
+  HSSConnection::irs_info irs_info;
+  Bindings bindings;
+  setup_callee_info(irs_info, bindings);
+  //add this to bindings, and remove path header
+  bindings.find("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob")->second->_path_uris.push_back(std::string("sip:abcdefgh@ut.cw-ngv.com;lr"));
+  bindings.find("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob")->second->_path_headers.clear();
 
   // Check that the Route header contains the URI part of the path header.
   SCSCFMessage msg;
@@ -9731,8 +9676,8 @@ TEST_F(SCSCFTest, TestCallerNotBarred)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   set_irs_info(irs_info, "6505551001", "homedomain", true);
-  setup_callee_bindings(bindings, "sip:6505551001@homedomain");
-  setup_callee_bindings(bindings, "sip:6505551000@homedomain");
+  setup_callee_binding(bindings, "sip:6505551001@homedomain");
+  setup_callee_binding(bindings, "sip:6505551000@homedomain");
   char* ifc_str_1 = add_single_ifc(irs_info, "sip:6505551001@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
   char* ifc_str_2 = add_single_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
   setup_all_callee_calls(irs_info, bindings);
@@ -9766,8 +9711,8 @@ TEST_F(SCSCFTest, TestCalleeNotBarred)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   set_irs_info(irs_info, "6505551235", "homedomain", true);
-  setup_callee_bindings(bindings, "sip:6505551235@homedomain");
-  setup_callee_bindings(bindings); // Second unbarred IMPU
+  setup_callee_binding(bindings, "sip:6505551235@homedomain");
+  setup_callee_binding(bindings); // Second unbarred IMPU
   char* ifc_str_1 = add_single_ifc(irs_info, "sip:6505551235@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
   char* ifc_str_2 = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
 
@@ -9788,16 +9733,10 @@ TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain", true);
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
-  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
-    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
-                    Return(HTTP_OK)));
+  setup_callee_ifc_call(irs_info);
 
   Bindings bindings;
-  Binding* binding = AoRTestUtils::build_binding("sip:6505551234@homedomain",
-                                                 time(NULL),
-                                                 "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob");
-  binding->_emergency_registration = true;
-  bindings.insert(std::make_pair("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", binding));
+  setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", true);
   // Expect two calls to get bindings, one to check for any emergency
   // registrations after it is realised the served user is barred, and one to
   // find the target to route to.
@@ -9814,8 +9753,6 @@ TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
 }
 
 
-// SDM-REFACTOR-TODO - check this test actually checks something!! Previous
-// version didn't.....
 // Test only emergency registrations in an implicit registration set receive
 // calls to barred IMPUs.
 TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
@@ -9828,9 +9765,16 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
   Bindings bindings;
   set_irs_info(irs_info, "6505551234", "homedomain", true);
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
-  setup_callee_bindings(bindings, "sip:6505551235@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  setup_callee_bindings(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob");
-// SDM-REFACTOR-TODO - set binding->emergency_registration to true?
+  setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:fowertreetoowun@10.114.61.213:5061;transport=tcp;ob");
+  setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", true);
+  setup_callee_ifc_call(irs_info);
+  // Expect two calls to get bindings, one to check for any emergency
+  // registrations after it is realised the served user is barred, and one to
+  // find the target to route to.
+  EXPECT_CALL(*_sm, get_bindings(_, _, _))
+    .Times(2)
+    .WillRepeatedly(DoAll(SetArgReferee<1>(bindings),
+                          Return(HTTP_OK)));
 
   SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
@@ -9945,9 +9889,6 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
   setup_callee_info(irs_info_2, bindings);
   setup_all_callee_calls(irs_info_2, bindings);
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
    _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10065,9 +10006,6 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
 
   _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10216,14 +10154,11 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_2),
                     Return(HTTP_OK)));
   Bindings bindings;
-  setup_callee_bindings(bindings);
+  setup_callee_binding(bindings);
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10320,7 +10255,7 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
                     Return(HTTP_OK)));
 
   Bindings bindings;
-  setup_callee_bindings(bindings);
+  setup_callee_binding(bindings);
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
@@ -10831,9 +10766,6 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
 
-  // SDM-REFACTOR-TODO - It is messy that we need this HSS connection to talk to
-  // the I-CSCF in the S-CSCF UTs. This test, and others which do this (marked
-  // as well) should be moved out into a seperate test suite.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10944,4 +10876,4 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   delete ralf_request_4; ralf_request_4 = NULL;
   free(ifc_str);
 }
-*/
+
