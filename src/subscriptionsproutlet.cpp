@@ -314,6 +314,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   if (expiry > _subscription->_max_expires)
   {
     // Expiry is too long, set it to the maximum.
+    TRC_DEBUG("Requested expiry (%d) is too long, setting to the maximum (%d)",
+              expiry, _subscription->_max_expires);
     expiry = _subscription->_max_expires;
   }
 
@@ -327,6 +329,9 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // the expiry time.
   if (expiry != 0)
   {
+    TRC_DEBUG("Adding/updating the subscription with ID %s",
+              new_subscription->get_id().c_str());
+
     rc = _subscription->_sm->update_subscription(
                    public_id,
                    std::make_pair(new_subscription->get_id(), new_subscription),
@@ -335,6 +340,9 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   }
   else
   {
+    TRC_DEBUG("Removing the subscription with ID %s",
+              new_subscription->get_id().c_str());
+
     rc = _subscription->_sm->remove_subscription(public_id,
                                                  new_subscription->get_id(),
                                                  irs_info,
@@ -348,6 +356,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   if (st_code == PJSIP_SC_OK)
   {
     // The subscribe was successful. SAS log, and add headers to the response.
+    TRC_DEBUG("The subscribe has been successful");
+
     SAS::Event sub_accepted(trail_id, SASEvent::SUBSCRIBE_ACCEPTED, 0);
     SAS::report_event(sub_accepted);
 
@@ -369,12 +379,17 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   {
     // A 480 response means that the subscriber wasn't registered. SAS log
     // this.
+    TRC_DEBUG("The subscribe has failed as the subscriber (%s) wasn't registered",
+              public_id.c_str());
+
     SAS::Event event(trail_id, SASEvent::SUBSCRIBE_FAILED_EARLY_NOT_REG, 0);
     SAS::report_event(event);
   }
   else
   {
     // The subscribe was unsuccessful.
+    TRC_DEBUG("The subscribe failed with return code %d", st_code);
+
     SAS::Event sub_failed(trail_id, SASEvent::SUBSCRIBE_FAILED, 0);
     sub_failed.add_var_param(public_id);
     SAS::report_event(sub_failed);

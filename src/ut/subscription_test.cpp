@@ -205,8 +205,6 @@ ACTION_P2(SaveSubscriptionPair, first, second)
   *second = Subscription(*(arg1.second));
 }
 
-/// Fixture for Subscription tests that use a mock store instead of a fake one.
-/// Also use a real analyticslogger to get UT coverage of that.
 class SubscriptionTest : public SipTest
 {
 public:
@@ -300,8 +298,9 @@ public:
     free_txdata();
   }
 
-  // Expect an error if the subscribe has failed. Check the return code and
-  // the reason.
+  // Check the return code and the reason. This function covers basic checking
+  // of the subscription sproutlets response - the mainline tests cover checking
+  // the response in much more detail.
   void check_subscribe_response(int rc, std::string reason)
   {
     ASSERT_EQ(1, txdata_count());
@@ -445,7 +444,7 @@ TEST_F(SubscriptionTest, NoContact)
   SubscribeMessage msg;
   msg._contact = "";
   inject_msg(msg.get());
-  check_subscribe_response(400, "Bad Request"); // Is this correct?
+  check_subscribe_response(400, "Bad Request");
 }
 
 // Test that a subscribe that's from a binding that was accepted for emergency
