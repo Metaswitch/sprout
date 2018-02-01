@@ -1543,6 +1543,96 @@ TEST_F(SubscriberManagerTest, TestUpdateAssociatedURIs)
   EXPECT_EQ(rc, HTTP_OK);
 }
 
+TEST_F(SubscriberManagerTest, TestHandleTimerPopGETFail)
+{
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  // Call handle timer pops on SM.
+  _subscriber_manager->handle_timer_pop(DEFAULT_ID, DUMMY_TRAIL_ID);
+}
+
+TEST_F(SubscriberManagerTest, TestHandleTimerPopPATCHFail)
+{
+  int now = time(NULL);
+
+  // Set up an AoR with one expired subscription.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID);
+  Subscription* subscription = _get_aor->get_subscription(AoRTestUtils::SUBSCRIPTION_ID);
+  subscription->_expires = now;
+
+  // Set up expect calls to S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(DEFAULT_ID, _, _, _))
+      .WillOnce(Return(HTTP_SERVER_ERROR));
+  }
+
+  // Call handle timer pops on SM.
+  _subscriber_manager->handle_timer_pop(DEFAULT_ID, DUMMY_TRAIL_ID);
+}
+
+TEST_F(SubscriberManagerTest, TestHandleTimerPop)
+{
+  int now = time(NULL);
+
+  // Set up an AoR with one expired binding and one expired subscription.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID);
+  Binding* binding = _get_aor->get_binding(AoRTestUtils::BINDING_ID);
+  binding->_expires = now;
+  Subscription* subscription = _get_aor->get_subscription(AoRTestUtils::SUBSCRIPTION_ID);
+  subscription->_expires = now;
+
+  // Set up an empty patch AoR.
+  _patch_aor = new AoR(DEFAULT_ID);
+
+  // Set up expect calls to S4.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                      Return(HTTP_OK)));
+    EXPECT_CALL(*_s4, handle_patch(DEFAULT_ID, _, _, _))
+      .WillOnce(DoAll(SaveArg<1>(&_patch_object),
+                      SetArgPointee<2>(_patch_aor),
+                      Return(HTTP_OK)));
+  }
+
+  // Call handle timer pops on SM.
+  _subscriber_manager->handle_timer_pop(DEFAULT_ID, DUMMY_TRAIL_ID);
+
+  // Check the patch object.
+  std::vector<std::string> rb = _patch_object.get_remove_bindings();
+  EXPECT_EQ(rb.size(), 1);
+  EXPECT_TRUE(rb[0] == AoRTestUtils::BINDING_ID);
+  std::vector<std::string> rs = _patch_object.get_remove_subscriptions();
+  EXPECT_EQ(rs.size(), 1);
+  EXPECT_TRUE(rs[0] == AoRTestUtils::SUBSCRIPTION_ID);
+}
+
+TEST_F(SubscriberManagerTest, TestHandleTimerPopNoExpire)
+{
+  // Set up an AoR with no expired bindings or subscriptions.
+  _get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID);
+
+  // Set up expect calls to S4. We should not send a PATCH in this case.
+  {
+    InSequence s;
+    EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<1>(_get_aor),
+                      Return(HTTP_OK)));
+  }
+
+  // Call handle timer pops on SM.
+  _subscriber_manager->handle_timer_pop(DEFAULT_ID, DUMMY_TRAIL_ID);
+}
+
 TEST_F(SubscriberManagerTest, TestGetCachedSubscriberState)
 {
   EXPECT_CALL(*_hss_connection, get_registration_data(_, _, DUMMY_TRAIL_ID)).WillOnce(Return(HTTP_OK));

@@ -530,6 +530,81 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
   return HTTP_OK;
 }
 
+void SubscriberManager::handle_timer_pop(const std::string& aor_id,
+                                         SAS::TrailId trail)
+{
+  TRC_DEBUG("Handling a timer pop for AoR %s", aor_id.c_str());
+
+  // Get the original AoR from S4.
+  AoR* orig_aor = NULL;
+  uint64_t unused_version;
+  HTTPCode rc = _s4->handle_get(aor_id,
+                                &orig_aor,
+                                unused_version,
+                                trail);
+  if (rc != HTTP_OK)
+  {
+    TRC_DEBUG("Handling timer pop for AoR %s failed during GET with return code %d",
+              aor_id.c_str(),
+              rc);
+    delete orig_aor; orig_aor = NULL;
+    return;
+  }
+
+  // Find any expired bindings in the original AoR.
+  int now = time(NULL);
+  std::vector<std::string> binding_ids_to_remove;
+  for (BindingPair bp : orig_aor->bindings())
+  {
+    if (bp.second->_expires <= now)
+    {
+      binding_ids_to_remove.push_back(bp.first);
+    }
+  }
+
+  // Find any expired subscriptions in the original AoR.
+  std::vector<std::string> subscription_ids_to_remove;
+  for (SubscriptionPair sp : orig_aor->subscriptions())
+  {
+    if (sp.second->_expires <= now)
+    {
+      subscription_ids_to_remove.push_back(sp.first);
+    }
+  }
+
+  // Send a PATCH to remove any expired bindings and subscriptions.
+  AoR* updated_aor = NULL;
+  if ((!binding_ids_to_remove.empty()) ||
+      (!subscription_ids_to_remove.empty()))
+  {
+    rc = patch_bindings_and_subscriptions(aor_id,
+                                          binding_ids_to_remove,
+                                          subscription_ids_to_remove,
+                                          updated_aor,
+                                          trail);
+
+    if (rc != HTTP_OK)
+    {
+      TRC_DEBUG("Handling timer pop for AoR %s failed during PATCH with return code %d",
+                aor_id.c_str(),
+                rc);
+      delete orig_aor; orig_aor = NULL;
+      return;
+    }
+  }
+  else
+  {
+    TRC_DEBUG("Timer pop for AoR %s didn't result in any removed bindings or subscriptions",
+              aor_id.c_str());
+    return;
+  }
+
+  // TODO NOTIFYs, 3rd party (de)registrations, update HSS.
+
+  delete orig_aor; orig_aor = NULL;
+  delete updated_aor; updated_aor = NULL;
+}
+
 HTTPCode SubscriberManager::modify_subscription(const std::string& public_id,
                                                 const SubscriptionPair& update_subscription,
                                                 const std::string& remove_subscription,
@@ -700,6 +775,23 @@ HTTPCode SubscriberManager::patch_subscription(const std::string& aor_id,
                                   &aor,
                                   trail);
 
+  return rc;
+}
+
+HTTPCode SubscriberManager::patch_bindings_and_subscriptions(const std::string& aor_id,
+                                                             const std::vector<std::string>& remove_bindings,
+                                                             const std::vector<std::string>& remove_subscriptions,
+                                                             AoR*& aor,
+                                                             SAS::TrailId trail)
+{
+  PatchObject patch_object;
+  patch_object.set_remove_bindings(remove_bindings);
+  patch_object.set_remove_subscriptions(remove_subscriptions);
+  patch_object.set_increment_cseq(true);
+  HTTPCode rc = _s4->handle_patch(aor_id,
+                                  patch_object,
+                                  &aor,
+                                  trail);
   return rc;
 }
 
