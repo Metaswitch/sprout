@@ -204,7 +204,7 @@ public:
   /// @param[in]  aor_id        The AoR ID to handle a timer pop for
   /// @param[in]  trail         The SAS trail ID
   virtual void handle_timer_pop(const std::string& aor_id,
-                                SAS::TrailId trail) {};
+                                SAS::TrailId trail);
 private:
   S4* _s4;
   HSSConnection* _hss_connection;
@@ -242,6 +242,12 @@ private:
                               const std::string& remove_subscription,
                               AoR*& aor,
                               SAS::TrailId trail);
+
+  HTTPCode patch_bindings_and_subscriptions(const std::string& aor_id,
+                                            const std::vector<std::string>& remove_bindings,
+                                            const std::vector<std::string>& remove_subscriptions,
+                                            AoR*& aor,
+                                            SAS::TrailId trail);
 
   HTTPCode patch_associated_uris(const std::string& aor_id,
                                  const AssociatedURIs& associated_uris,
