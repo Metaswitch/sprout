@@ -596,6 +596,7 @@ void SubscriberManager::handle_timer_pop(const std::string& aor_id,
   {
     TRC_DEBUG("Timer pop for AoR %s didn't result in any removed bindings or subscriptions",
               aor_id.c_str());
+    delete orig_aor; orig_aor = NULL;
     return;
   }
 
