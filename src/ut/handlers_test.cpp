@@ -459,21 +459,21 @@ TEST_F(GetBindingsTest, OneBinding)
   GetBindingsTask::Config config(sm);
   GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
 
-  // Set up subscriber_manager expectations
+  // Build one binding
   std::string aor_id = "sip:6505550231@homedomain";
   std::string binding_id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
-
   Binding* actual_binding = AoRTestUtils::build_binding(aor_id, time(NULL));
   std::string uri = actual_binding->_uri;
-
   Bindings bindings;
   bindings[binding_id] = actual_binding;
 
+  // Set up subscriber_manager expectations
   EXPECT_CALL(*sm, get_bindings(aor_id, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
   EXPECT_CALL(*stack, send_reply(_, 200, _));
 
+  // Run the task
   task->run();
 
   // Check that the JSON document is correct.
@@ -504,6 +504,39 @@ TEST_F(GetBindingsTest, OneBinding)
   // Do check the binding ID and URI as a representative test.
   EXPECT_EQ(binding_id, binding_name.GetString());
   EXPECT_EQ(uri, binding["uri"].GetString());
+}
+
+// Test getting an IMPU with two bindings.
+TEST_F(GetBindingsTest, TwoBindings)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
+  GetBindingsTask::Config config(sm);
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  // Build two bindings
+  std::string aor_id = "sip:6505550231@homedomain";
+  Binding* binding_1 = AoRTestUtils::build_binding(aor_id, time(NULL), "123");
+  Binding* binding_2 = AoRTestUtils::build_binding(aor_id, time(NULL), "456");
+  Bindings bindings;
+  bindings["123"] = binding_1;
+  bindings["456"] = binding_2;
+
+  // Set up subscriber_data_manager expectations
+  EXPECT_CALL(*sm, get_bindings(aor_id, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(bindings),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+
+  // Run the task
+  task->run();
+
+  // Check that the JSON document has two bindings.
+  rapidjson::Document document;
+  document.Parse(req.content().c_str());
+  EXPECT_EQ(2, document["bindings"].MemberCount());
+  EXPECT_TRUE(document["bindings"].HasMember("123"));
+  EXPECT_TRUE(document["bindings"].HasMember("456"));
 }
 
 // Test getting an IMPU when the local store is down.
@@ -557,7 +590,7 @@ TEST_F(GetSubscriptionsTest, NoSubscriptions)
   GetSubscriptionsTask::Config config(sm);
   GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
 
-  // Set up subscriber_data_manager expectations
+  // Set up subscriber manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
 
   {
@@ -577,7 +610,7 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
   GetSubscriptionsTask::Config config(sm);
   GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
 
-  // Set up subscriber_manager expectations
+  // Set up subscriber manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   Subscription* actual_subscription = AoRTestUtils::build_subscription("1234", time(NULL));
   std::string to_tag = actual_subscription->_to_tag;
@@ -634,7 +667,7 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
   GetSubscriptionsTask::Config config(sm);
   GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
 
-  // Set up subscriber_manager expectations
+  // Build two subscriptions
   std::string aor_id = "sip:6505550231@homedomain";
   Subscription* subscription_1 = AoRTestUtils::build_subscription("456", time(NULL));
   Subscription* subscription_2 = AoRTestUtils::build_subscription("789", time(NULL));
@@ -645,14 +678,13 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
   subscriptions[to_tag_1] = subscription_1;
   subscriptions[to_tag_2] = subscription_2;
 
-  {
-    InSequence s;
-      EXPECT_CALL(*sm, get_subscriptions(aor_id, _, _))
-        .WillOnce(DoAll(SetArgReferee<1>(subscriptions),
-                        Return(HTTP_OK)));
-      EXPECT_CALL(*stack, send_reply(_, 200, _));
-  }
+  // Set up subscriber manager expectations
+  EXPECT_CALL(*sm, get_subscriptions(aor_id, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(subscriptions),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
 
+  // Run the task
   task->run();
 
   // Check that the JSON document has two bindings.
@@ -661,6 +693,24 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
   EXPECT_EQ(2, document["subscriptions"].MemberCount());
   EXPECT_TRUE(document["subscriptions"].HasMember("456"));
   EXPECT_TRUE(document["subscriptions"].HasMember("789"));
+}
+
+// Test getting an IMPU when the local store is down.
+TEST_F(GetSubscriptionsTest, LocalStoreDown)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
+  GetSubscriptionsTask::Config config(sm);
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
+
+  // Set up subscriber manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  Subscriptions subscriptions;
+  EXPECT_CALL(*sm, get_subscriptions(aor_id, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+  EXPECT_CALL(*stack, send_reply(_, 500, _));
+
+  task->run();
 }
 
 // Test that a get subscription request with PUT method gets rejected.
@@ -728,7 +778,7 @@ MATCHER(EmptyAoR, "")
   return !arg->current_contains_bindings();
 }
 
-// Mainline test
+// Mainline test for DeleteImpuTask
 TEST_F(DeleteImpuTaskTest, Mainline)
 {
   std::string impu = "sip:6505550231@homedomain";
@@ -740,6 +790,24 @@ TEST_F(DeleteImpuTaskTest, Mainline)
     InSequence s;
       EXPECT_CALL(*sm, deregister_subscriber(_, _, _)).WillOnce(Return(HTTP_OK));
       EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
+  task->run();
+}
+
+// Test a Delete Impu request that encounters store failure 
+TEST_F(DeleteImpuTaskTest, StoreFailure)
+{
+  std::string impu = "sip:6505550231@homedomain";
+  std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+
+  build_task(impu_escaped);
+
+  {
+    InSequence s;
+      EXPECT_CALL(*sm, deregister_subscriber(_, _, _))
+        .WillOnce(Return(HTTP_SERVER_ERROR));
+      EXPECT_CALL(*stack, send_reply(_, 500, _));
   }
 
   task->run();
@@ -921,6 +989,23 @@ TEST_F(PushProfileTaskTest, MissingPublicIdentityXML)
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+// Subscriber manager fails with SERVER ERROR
+TEST_F(PushProfileTaskTest, SubscriberManagerFails)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*sm, update_associated_uris(default_uri, _, _))
+    .WillOnce(Return(HTTP_SERVER_ERROR));
+  EXPECT_CALL(*stack, send_reply(_, 500, _));
   task->run();
 }
 
