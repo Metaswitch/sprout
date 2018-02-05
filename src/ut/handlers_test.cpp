@@ -724,11 +724,6 @@ class DeleteImpuTaskTest : public TestWithMocks
   }
 };
 
-MATCHER(EmptyAoR, "")
-{
-  return !arg->current_contains_bindings();
-}
-
 // Mainline test
 TEST_F(DeleteImpuTaskTest, Mainline)
 {
