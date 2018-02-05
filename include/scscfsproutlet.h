@@ -147,7 +147,7 @@ private:
   /// Record the time an INVITE took to reach ringing state.
   ///
   /// @param ringing_us Time spent until a 180 Ringing, in microseconds.
-  void track_session_setup_time(uint64_t tsx_start_time_usec, bool video_call);
+  uint64_t track_session_setup_time(uint64_t tsx_start_time_usec, bool video_call);
 
   /// Translate RequestURI using ENUM service if appropriate.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);

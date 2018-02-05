@@ -378,7 +378,7 @@ void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
   }
 }
 
-void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
+uint64_t SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
                                               bool video_call)
 {
   // Calculate how long it has taken to setup the session.
@@ -394,6 +394,8 @@ void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
   {
     _audio_session_setup_time_tbl->accumulate(ringing_usec);
   }
+
+  return ringing_usec;
 }
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
@@ -884,7 +886,14 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
       ((st_code == PJSIP_SC_RINGING) ||
        PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
   {
-    _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+    uint64_t setup_time = _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+    if (setup_time > 2000000)
+    {
+      pjsip_cid_hdr* cid = PJSIP_MSG_CID_HDR(rsp);
+      TRC_WARNING("Call setup time exceeded 2 seconds for Call-ID %.*s",
+                  cid->id.slen,
+                  cid->id.ptr);
+    }
     _record_session_setup_time = false;
   }
 }
