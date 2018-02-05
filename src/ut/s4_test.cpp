@@ -751,7 +751,7 @@ TEST_F(BasicS4Test, UpdateSubscriberNotFoundOnLocalStore)
   AoR* aor = NULL;
   HTTPCode rc = this->_s4->handle_patch("aor_id", *po, &aor, 0);
 
-  EXPECT_EQ(rc, 412);
+  EXPECT_EQ(rc, 404);
 
   delete po; po = NULL;
   delete aor; aor = NULL;

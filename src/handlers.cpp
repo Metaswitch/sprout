@@ -229,7 +229,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
         impis_to_delete.insert(binding.second->_private_id);
       }
 
-      binding_ids.push_back(binding.second->get_id());
+      binding_ids.push_back(binding.first);
     }
   }
 
