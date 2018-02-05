@@ -234,12 +234,17 @@ HTTPCode DeregistrationTask::deregister_bindings(
     }
   }
 
+  bindings.clear();
+
   // Remove these bindings via subscriber manager
-  return _cfg->_sm->remove_bindings(aor_id,
-                                    binding_ids,
-                                    SubscriberDataUtils::EventTrigger::ADMIN,
-                                    unused_bindings,
-                                    trail());
+  rc = _cfg->_sm->remove_bindings(aor_id,
+                                  binding_ids,
+                                  SubscriberDataUtils::EventTrigger::ADMIN,
+                                  unused_bindings,
+                                  trail());
+  unused_bindings.clear();
+
+  return rc;
 }
 
 HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,

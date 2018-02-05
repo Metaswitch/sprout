@@ -271,6 +271,10 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
+
+  // Check the right binding was being deregistered
+  ASSERT_EQ(1u, binding_ids.size());
+  EXPECT_EQ(binding_ids[0], "");
 }
 
 // Test deregistering several IMPIs from different AoR in one request.
@@ -783,16 +787,21 @@ TEST_F(DeleteImpuTaskTest, Mainline)
 {
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+  std::string actual_impu;
 
   build_task(impu_escaped);
 
   {
     InSequence s;
-      EXPECT_CALL(*sm, deregister_subscriber(_, _, _)).WillOnce(Return(HTTP_OK));
+      EXPECT_CALL(*sm, deregister_subscriber(_, _, _))
+        .WillOnce(DoAll(SaveArg<0>(&actual_impu),
+                        Return(HTTP_OK)));
       EXPECT_CALL(*stack, send_reply(_, 200, _));
   }
 
   task->run();
+
+  ASSERT_EQ(impu, actual_impu);
 }
 
 // Test a Delete Impu request that encounters store failure 
