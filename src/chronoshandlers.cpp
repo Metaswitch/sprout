@@ -17,25 +17,6 @@
 #include "log.h"
 #include "pjutils.h"
 
-class ChronosAoRTimeoutTaskHandler : public PJUtils::Callback
-{
-private:
-  ChronosAoRTimeoutTask* _task;
-
-public:
-  ChronosAoRTimeoutTaskHandler(ChronosAoRTimeoutTask* task) :
-    _task(task)
-  {
-  }
-
-  virtual void run()
-  {
-    _task->handle_response();
-
-    delete _task;
-  }
-};
-
 void ChronosAoRTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
@@ -57,7 +38,7 @@ void ChronosAoRTimeoutTask::run()
 
   send_http_reply(HTTP_OK);
 
-  PJUtils::run_callback_on_worker_thread(new ChronosAoRTimeoutTaskHandler(this), false);
+  handle_response();
 }
 
 HTTPCode ChronosAoRTimeoutTask::parse_response(std::string body)
