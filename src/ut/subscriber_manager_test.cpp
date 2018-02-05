@@ -1211,7 +1211,7 @@ TEST_F(SubscriberManagerTest, TestHandleTimerPop)
   EXPECT_CALL(*_notify_sender, send_notifys(DEFAULT_ID,
                                             AoRsMatch(*get_aor),
                                             AoRsMatch(*empty_aor),
-                                            SubscriberDataUtils::EventTrigger::USER,
+                                            SubscriberDataUtils::EventTrigger::TIMEOUT,
                                             _,
                                             _));
   // Call handle timer pops on SM.
