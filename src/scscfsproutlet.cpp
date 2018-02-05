@@ -746,8 +746,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // This empty bindings map will be returned containing the complete set
       // of binding objects.
       Bindings bindings;
-      std::string aor_id; //SDM-REFACTOR-TODO - NEED TO SET THIS
-      _scscf->remove_binding(i->second, aor_id, bindings, trail());
+      _scscf->remove_binding(i->second, _target_aor, bindings, trail());
 
       /*
       // Delete bindings to fix memory leak - is there an easier way of doing

@@ -229,8 +229,8 @@ HTTPCode DeregistrationTask::deregister_bindings(
         impis_to_delete.insert(binding.second->_private_id);
       }
 
-      TRC_DEBUG("Binding %s needs to be removed", binding.second->get_id().c_str());
-      binding_ids.push_back(binding.second->get_id());
+      TRC_DEBUG("Binding %s needs to be removed", binding.first.c_str());
+      binding_ids.push_back(binding.first);
     }
   }
 

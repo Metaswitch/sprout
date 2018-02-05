@@ -40,7 +40,6 @@ public:
                        const std::string&,
                        std::string,
                        std::string = "",
-                       const std::string& wildcard = "",
                        std::string chargingaddrsxml = "");
 void set_impu_result_with_prev(const std::string&,
                                const std::string&,
@@ -48,7 +47,6 @@ void set_impu_result_with_prev(const std::string&,
                                const std::string&,
                                std::string,
                                std::string = "",
-                               const std::string& wildcard = "",
                                std::string chargingaddrsxml = "");
 void delete_result(const std::string& url);
   void set_rc(const std::string& url, long rc);
@@ -66,7 +64,6 @@ private:
                                 const std::string&,
                                 std::string,
                                 std::string,
-                                const std::string& wildcard,
                                 std::string chargingaddrsxml);
 
   long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);

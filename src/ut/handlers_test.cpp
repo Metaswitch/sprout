@@ -777,12 +777,6 @@ class DeleteImpuTaskTest : public TestWithMockSM
   }
 };
 
-MATCHER(EmptyAoR, "")
-{
-  return !arg->current_contains_bindings();
-}
-
-// Mainline test for DeleteImpuTask
 TEST_F(DeleteImpuTaskTest, Mainline)
 {
   std::string impu = "sip:6505550231@homedomain";
