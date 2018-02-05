@@ -259,26 +259,24 @@ private:
                                                    const Bindings& bindings_to_update,
                                                    const std::vector<std::string> binding_ids_to_remove);
 
-  void send_notifys(
-                        const std::string& aor_id,
-                        const SubscriberDataUtils::EventTrigger& event_trigger,
-                        const SubscriberDataUtils::ClassifiedBindings& classified_bindings,
-                        const SubscriberDataUtils::ClassifiedSubscriptions& classified_subscriptions,
-                        AoR* orig_aor,
-                        AoR* current_aor,
-                        int now,
-                        SAS::TrailId trail);
+  void send_notifys(const std::string& aor_id,
+                    AoR* orig_aor,
+                    AoR* updated_aor,
+                    const SubscriberDataUtils::EventTrigger& event_trigger,
+                    int now,
+                    SAS::TrailId trail);
 
-  void log_shortened_bindings(const SubscriberDataUtils::ClassifiedBindings& classified_bindings,
-                    int now);
+  void log_removed_bindings(const AoR* orig_aor,
+                            const std::vector<std::string>& binding_ids);
 
-  void log_lengthened_bindings(const SubscriberDataUtils::ClassifiedBindings& classified_bindings,
-                    int now);
+  void log_updated_bindings(const AoR* updated_aor,
+                            const Bindings& binding_pairs,
+                            int now);
 
-  void log_shortened_subscriptions(const SubscriberDataUtils::ClassifiedSubscriptions& classified_subscriptions,
-                         int now);
-
-  void log_lengthened_subscriptions(const SubscriberDataUtils::ClassifiedSubscriptions& classified_subscriptions,
+  void log_subscriptions(std::string default_impu,
+                         const AoR* orig_aor,
+                         const AoR* updated_aor,
+                         std::string subscription_id,
                          int now);
 
   HTTPCode deregister_with_hss(const std::string& aor_id,
@@ -287,11 +285,6 @@ private:
                                HSSConnection::irs_info& irs_info,
                                SAS::TrailId trail);
 
-  void delete_stuff(SubscriberDataUtils::ClassifiedBindings& classified_bindings,
-                    SubscriberDataUtils::ClassifiedSubscriptions& classified_subscriptions);
-
-  NotifyUtils::ContactEvent determine_contact_event(
-                                             const SubscriberDataUtils::EventTrigger& event_trigger);
 };
 
 #endif
