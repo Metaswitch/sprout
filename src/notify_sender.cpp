@@ -32,8 +32,8 @@ NotifySender::~NotifySender()
 }
 
 void NotifySender::send_notifys(const std::string& aor_id,
-                                const AoR* orig_aor,
-                                const AoR* updated_aor,
+                                const AoR& orig_aor,
+                                const AoR& updated_aor,
                                 SubscriberDataUtils::EventTrigger event_trigger,
                                 int now,
                                 SAS::TrailId trail)

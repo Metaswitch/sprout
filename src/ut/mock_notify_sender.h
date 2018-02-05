@@ -21,17 +21,9 @@ public:
   MockNotifySender();
   virtual ~MockNotifySender();
 
-  MOCK_METHOD7(send_notifys, void(const std::string& aor_id,
-                                  const ClassifiedBindings& classified_bindings,
-                                  const ClassifiedSubscriptions& classified_subscriptions,
-                                  AssociatedURIs& associated_uris, // EM-TODO should be condst?
-                                  int cseq,
-                                  int now,
-                                  SAS::TrailId trail));
-
   MOCK_METHOD6(send_notifys, void(const std::string& aor_id,
-                                  const AoR* orig_aor,
-                                  const AoR* updated_aor,
+                                  const AoR& orig_aor,
+                                  const AoR& updated_aor,
                                   SubscriberDataUtils::EventTrigger event_trigger,
                                   int now,
                                   SAS::TrailId trail));
