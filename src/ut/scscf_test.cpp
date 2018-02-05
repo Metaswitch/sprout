@@ -9179,9 +9179,22 @@ TEST_F(SCSCFTest, AutomaticRegistration)
   msg._route = "Route: <sip:sprout.homedomain;orig;auto-reg>";
   msg._extra = "Proxy-Authorization: Digest username=\"kermit\", realm=\"homedomain\", uri=\"sip:6505551000@homedomain\", algorithm=MD5";
 
-  // The HSS expects to be invoked with a request type of "reg" and with the
-  // right private ID.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=kermit");
+  // Set caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  // The SM should be invoked with a request type of "reg" and with the right
+  // private ID.
+  // SDM-REFACTOR-TODO - in this test and one below, see if can call with two
+  // better named matchers.
+  EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("kermit"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
+                    Return(HTTP_OK)));
+
+  // Set callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
 
   add_host_mapping("domainvalid", "10.9.8.7");
   list<HeaderMatcher> hdrs;
@@ -9190,8 +9203,6 @@ TEST_F(SCSCFTest, AutomaticRegistration)
 }
 
 
-// SDM-REFACTOR-TODO - not sure what to do about this set of tests. (Above
-// passes but I'm not sure about it.)
 TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
 {
   SCOPED_TRACE("");
@@ -9202,9 +9213,20 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
   msg._todomain = "domainvalid";
   msg._route = "Route: <sip:sprout.homedomain;orig;auto-reg>";
 
-  // The HSS expects to be invoked with a request type of "reg". No
+  // Set caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  // The SM should be invoked with a request type of "reg". No
   // Proxy-Authorization present, so derive the IMPI from the IMPU.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505551000%40homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("6505551000%40homedomain"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
+                    Return(HTTP_OK)));
+
+  // Set callee info.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  setup_all_callee_calls(irs_info_2, bindings);
 
   add_host_mapping("domainvalid", "10.9.8.7");
   list<HeaderMatcher> hdrs;
@@ -9354,26 +9376,25 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 {
   SCOPED_TRACE("");
 
-  // Setup callee info.
-  HSSConnection::irs_info irs_info;
-  Bindings bindings;
-  setup_callee_info(irs_info, bindings); // Sets up binding for "6505551234".
-  setup_callee_binding(bindings, "sip:6505551000@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  // Set up caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
   std::vector<std::string> ifc_list;
   add_ifc_info(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP");
   add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  char* ifc_str_1 = add_ifcs(irs_info, ifc_list, "sip:6505551000@homedomain");
-  char* ifc_str_2 = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_all_callee_calls(irs_info, bindings);
+  char* ifc_str = add_ifcs(irs_info_1, ifc_list, "sip:6505551000@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551000@homedomain"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
+                    Return(HTTP_OK)));
+//setup_all_caller_calls(irs_info_1);
 
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "4.2.3.4", 56788);
 
-
   // Send an INVITE
   SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._route = "Route: <sip:sprout.homedomain>";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._requri = "sip:6505551234@homedomain";
   msg._method = "INVITE";
 
@@ -9390,7 +9411,6 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 
   ASSERT_TRUE(!get_headers(out, "Record-Route").empty());
   ASSERT_TRUE(!get_headers(out, "Session-Expires").empty());
-
 
   // AS proxies INVITE back.
   const pj_str_t STR_ROUTE = pj_str("Route");
@@ -9427,21 +9447,21 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
   ASSERT_TRUE(get_headers(out, "Record-Route").empty());
   ASSERT_TRUE(get_headers(out, "Session-Expires").empty());
 
-  free(ifc_str_1);
-  free(ifc_str_2);
+  free(ifc_str);
 }
 
 
-// Test that getting a 503 error from homestead when looking up iFCs results in
-// sprout sending a 504 error.
+// Test that getting a 503 error from the subscriber manager when looking up
+// iFCs results in sprout sending a 504 error.
 TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 {
   // Send originating INVITE
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
 
-  // HSS will return a 503
-  _hss_connection->set_rc("/impu/sip%3A6505551000%40homedomain/reg-data", 503);
+  // The SM will return a 503 when looking up the iFCs.
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(Return(HTTP_SERVER_UNAVAILABLE)); //SDM-REFACTOR-TODO - 503 is actually "HTTP_SERVICE_UNAVAILABLE"??
 
   inject_msg(msg.get_request());
 
@@ -9454,11 +9474,11 @@ TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
   out = current_txdata()->msg;
   EXPECT_EQ(504, out->line.status.code);
   EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
-
-  _hss_connection->delete_rc("/impu/sip%3A6505551000%40homedomain/reg-data");
 }
 
 
+// SDM-REFACTOR-TODO - Ask AJH, don't know how to move this test across since
+// data is cached... (same for test below)
 // Test that a failure to get iFCs due to a 503 error from homestead during Call
 // Diversion results in sprout sending a 504
 TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
