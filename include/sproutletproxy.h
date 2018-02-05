@@ -31,16 +31,14 @@ class SproutletProxy : public BasicProxy, SproutletHelper
 public:
   static const int DEFAULT_MAX_SPROUTLET_DEPTH = 50;
 
-  ///
   /// @brief      Constructor
   ///
   /// @param[in]  endpt                        The pjsip endpoint to associate
   ///                                          with.
   /// @param[in]  priority                     The pjsip priority to load at.
   /// @param[in]  root_uri                     The Sprout hostname.
-  /// @param[in]  host_local_aliases           Hostnames of local Sproutlets.
-  /// @param[in]  host_remote_aliases          Hostnames of Sproutlets in remote
-  ///                                          sites.
+  /// @param[in]  host_local_aliases           Hostnames of local Sprouts.
+  /// @param[in]  host_remote_aliases          Hostnames of remote Sprouts.
   /// @param[in]  always_serve_remote_aliases  Whether requests meant for remote
   ///                                          aliases should always be handled
   ///                                          locally.
@@ -57,7 +55,6 @@ public:
   /// @param[in]  max_sproutlet_depth          The maximum number of Sproutlets
   ///                                          that can be invoked in a row
   ///                                          before we break the loop.
-  ///
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
@@ -94,10 +91,6 @@ protected:
   /// Pre-declaration
   class UASTsx;
 
-  // When a host is compared against the alias list, there are three different
-  // match possibilities.
-
-  ///
   /// @brief      When a host is compared against the alias list, there are
   ///             three different match possiblities.
   ///
@@ -109,7 +102,6 @@ protected:
   ///
   /// LOCAL represents the case that the host matches against an entry on the
   /// local alias list.
-  ///
   enum AliasMatchLocality
   {
     NO_MATCH,
@@ -117,14 +109,12 @@ protected:
     LOCAL
   };
 
-  ///
   /// @brief      Utility function that converts an AliasMatchLocality into a
   ///             bool representing whether or not any match was obtained.
   ///
   /// @param[in]  match  The match locality
   ///
   /// @return     False if the match locality is NO_MATCH, and true otherwise.
-  ///
   static bool is_alias_match(AliasMatchLocality match)
   {
     switch (match)
@@ -139,9 +129,7 @@ protected:
     }
   }
 
-  ///
   /// @brief      A pair of a Sproutlet (pointer) and a match locality.
-  ///
   struct SproutletMatch
   {
     Sproutlet* sproutlet;
@@ -159,14 +147,8 @@ protected:
   /// Registers a sproutlet.
   bool register_sproutlet(Sproutlet* sproutlet);
 
-  ///
   /// @brief      Utility method to find the appropriate Sproutlet to handle a
   ///             request.
-  ///
-  /// We first attempt to match a Sproutlet using the request URI, then the
-  /// service name, and then the port. For port matching, the caller-supplied
-  /// port parameter is used if it is non-zero, and otherwise the port supplied
-  /// on the message is used (if it is provided).
   ///
   /// @param[in]  req    The request
   /// @param[in]  port   The port on which the request was recieved
@@ -176,13 +158,11 @@ protected:
   ///
   /// @return     The matched Sproutlet or NULL if no Sproutlet was found, and
   ///             the match locality, or NO_MATCH if no Sproutlet was found.
-  ///
   SproutletMatch target_sproutlet(pjsip_msg* req,
                               int port,
                               std::string& alias,
                               SAS::TrailId trail);
 
-  ///
   /// @brief      Return the Sproutlet that matches the URI supplied along with
   ///             the locality of the match.
   ///
@@ -198,9 +178,9 @@ protected:
   ///                             matched on service name, the domain, or the
   ///                             user part.
   ///
-  /// @return     The matched Sproutlet or NULL if no Sproutlet was found, and
-  ///             the match locality, or NO_MATCH if no Sproutlet was found.
-  ///
+  /// @return     A SproutletMatch containing
+  ///               1. The matched Sproutlet or NULL if no Sproutlet was found;
+  ///               2. The match locality, or NO_MATCH if no Sproutlet was found.
   SproutletMatch match_sproutlet_from_uri(
     const pjsip_uri* uri,
     std::string& alias,
@@ -225,7 +205,6 @@ protected:
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
-  ///
   /// @brief      Compares the given URI to the alias lists, and returns the
   ///             match locality.
   ///
@@ -238,14 +217,12 @@ protected:
   ///             matched a local alias, REMOTE, indicating a remote match, or
   ///             NO_MATCH, indicating that the hostname matched neither local nor
   ///             remote aliases.
-  ///
   AliasMatchLocality get_uri_locality(const pjsip_uri* uri);
 
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
-  ///
   /// @brief      Compares the given hostname to the alias lists and returns the
   ///             match locality.
   ///
@@ -258,7 +235,6 @@ protected:
   ///             matched a local alias, REMOTE, indicating a remote match, or
   ///             NO_MATCH, indicating that the hostname matched neither local nor
   ///             remote aliases.
-  ///
   AliasMatchLocality get_host_locality(const pj_str_t* host) const;
 
   bool is_uri_reflexive(const pjsip_uri* uri,
@@ -371,12 +347,10 @@ protected:
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
 
-    ///
     /// @brief      Utility function to determine if a matched Sproutlet should
     ///             be accepted or rejected, based on its locality.
     ///
-    /// If the match is null, that is, no Sproutlet was matched, the function
-    /// always returns false.
+    /// If no Sproutlet was matched, the function always returns false.
     ///
     /// If the match is local, the function always returns true.
     ///
@@ -389,9 +363,8 @@ protected:
     ///     produced.
     ///
     /// @param[in]  match                        The match.
-    /// @param[in]  always_serve_remote_aliases  Whether or not remote alias
-    ///                                          matches should always be
-    ///                                          accepted.
+    /// @param[in]  serve_remote_aliases         Whether or not remote alias
+    ///                                          matches should be accepted.
     /// @param[in]  first_match_in_tsx           Whether this is the first
     ///                                          Sproutlet matched in the
     ///                                          transaction. Used to correctly
@@ -400,13 +373,11 @@ protected:
     ///                                          used to obtain the match.
     ///
     /// @return     True if the match should be rejected, and false otherwise.
-    ///
     bool accept_sproutlet_match(SproutletMatch match,
-                                bool always_serve_remote_aliases,
+                                bool serve_remote_aliases,
                                 bool first_match_in_tsx,
                                 std::string& alias);
 
-    ///
     /// @brief      Finds a SproutletTsx willing to handle a request.
     ///
     /// Initially attempts to match the request against a Sproutlet. If a
@@ -421,7 +392,7 @@ protected:
     ///                                          was recieved. Used to attempt
     ///                                          port matching. This can be
     ///                                          disabled by passing zero.
-    /// @param[in]  always_serve_remote_aliases  Whether or not to handle
+    /// @param[in]  serve_remote_aliases         Whether or not to handle
     ///                                          requests for remote aliases
     ///                                          locally in all cases.
     /// @param[in]  recieved_from_wire           Whether this request has been
@@ -431,7 +402,6 @@ protected:
     ///                                          matched the request.
     ///
     /// @return     The matched SproutletTsx, or NULL.
-    ///
     SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
                                     int port,
                                     bool serve_remote_aliases,

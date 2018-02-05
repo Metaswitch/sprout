@@ -248,26 +248,26 @@ SproutletProxy::SproutletMatch
     // header or the URI in the Route header corresponds to our hostname.
     TRC_DEBUG("No Sproutlet found using service name or host");
 
-    AliasMatchLocality match;
+    AliasMatchLocality match_locality;
 
     if (route == NULL)
     {
       // If there is no route header, we may assume that we can try to handle
       // the request locally.
-      match = AliasMatchLocality::LOCAL;
+      match_locality = AliasMatchLocality::LOCAL;
     }
     else if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
       // If there is a route header, check if it is local.
-      match = get_host_locality(&((pjsip_sip_uri*)route->name_addr.uri)->host);
+      match_locality = get_host_locality(&((pjsip_sip_uri*)route->name_addr.uri)->host);
     }
     else
     {
       // Otherwise, there is no way to match.
-      match = AliasMatchLocality::NO_MATCH; // LCOV_EXCL_LINE
+      match_locality = AliasMatchLocality::NO_MATCH; // LCOV_EXCL_LINE
     }
 
-    if (is_alias_match(match))
+    if (is_alias_match(match_locality))
     {
       TRC_DEBUG("Find default service for port %d", port);
       SAS::Event event(trail, SASEvent::STARTING_SPROUTLET_SELECTION_PORT, 0);
@@ -277,7 +277,7 @@ SproutletProxy::SproutletMatch
       std::map<int, Sproutlet*>::const_iterator it = _ports.find(port);
       if (it != _ports.end())
       {
-        sproutlet_match = SproutletMatch(it->second, match);
+        sproutlet_match = SproutletMatch(it->second, match_locality);
         alias = sproutlet_match.sproutlet->service_name();
         std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)uri);
         SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_PORT, 0);
@@ -287,6 +287,12 @@ SproutletProxy::SproutletMatch
         SAS::report_event(event);
       }
     }
+  }
+
+  if (sproutlet_match.sproutlet == NULL)
+  {
+    SAS::Event event(trail, SASEvent::NO_SPROUTLET_SELECTED, 0);
+    SAS::report_event(event);
   }
 
   return sproutlet_match;
@@ -499,20 +505,19 @@ SproutletProxy::AliasMatchLocality SproutletProxy::get_uri_locality(const pjsip_
       hostname.slen -= sep - hostname.ptr + 1;
       hostname.ptr = sep + 1;
 
-      AliasMatchLocality service_match = get_host_locality(&hostname);
+      AliasMatchLocality alternate_match = get_host_locality(&hostname);
 
-      // Set best_match to the 'maximum' of best_match and service_match,
+      // Set best_match to the 'maximum' of alternate_match and service_match,
       // considering NO_MATCH < REMOTE < LOCAL
-      if (service_match == AliasMatchLocality::LOCAL)
+      if (alternate_match == AliasMatchLocality::LOCAL)
       {
         best_match = AliasMatchLocality::LOCAL;
       }
-      else if (service_match == AliasMatchLocality::REMOTE &&
+      else if (alternate_match == AliasMatchLocality::REMOTE &&
                best_match == AliasMatchLocality::NO_MATCH)
       {
         best_match = AliasMatchLocality::REMOTE;
       }
-
     }
   }
   return best_match;
@@ -1332,18 +1337,13 @@ void SproutletProxy::UASTsx::check_destroy()
 }
 
 bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
-                                                    bool always_serve_remote_aliases,
+                                                    bool serve_remote_aliases,
                                                     bool first_match_in_tsx,
                                                     std::string& alias)
 {
   if (match.match_locality == AliasMatchLocality::LOCAL)
   {
     // Local matches are always accepted.
-    SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_ACCEPT, 0);
-    event.add_var_param(match.sproutlet->service_name());
-    event.add_var_param(alias);
-    event.add_static_param(match.match_locality);
-    SAS::report_event(event);
     return true;
   }
   else if (match.match_locality == AliasMatchLocality::REMOTE)
@@ -1355,12 +1355,13 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
     // boundary. If it is matched on another alias, we are attempting to route
     // to a specific Sproutlet, in which case we are not crossing such a
     // boundary.
-    if (!always_serve_remote_aliases && alias == match.sproutlet->network_function())
+    if (!serve_remote_aliases && 
+        (alias == match.sproutlet->network_function()))
     {
       // If the Sproutlet was matched on its network function, and we are not
-      // always serving remote aliases, reject it.
+      // serving remote aliases, reject it.
       TRC_DEBUG("Routing to remote alias %s", alias.c_str());
-      SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_REJECT, 0);
+      SAS::Event event(trail(), SASEvent::SPROUTLET_REMOTE_ALIAS_MATCH_REJECT, 0);
       event.add_var_param(match.sproutlet->service_name());
       event.add_var_param(alias);
 
@@ -1377,19 +1378,24 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
     {
       // Otherwise we handle the request locally.
       TRC_DEBUG("Serving remote alias %s", alias.c_str());
-      SAS::Event event(trail(), SASEvent::SPROUTLET_ALIAS_MATCH_ACCEPT, 0);
-      event.add_var_param(match.sproutlet->service_name());
-      event.add_var_param(alias);
-      event.add_static_param(match.match_locality);
-      SAS::report_event(event);
 
-      // If we've accepted a request on behalf of a remote alias from the wire,
-      // we increment the relevant statistic.
-      if (first_match_in_tsx &&
-          _sproutlet_proxy->_accept_for_remote_alias_tbl)
+      // Only log if this is the first match after pulling the request off the
+      // wire, to avoid spamming SAS.
+      if (first_match_in_tsx)
       {
-        _sproutlet_proxy->_accept_for_remote_alias_tbl->increment();
+        SAS::Event event(trail(), SASEvent::SPROUTLET_REMOTE_ALIAS_MATCH_ACCEPT, 0);
+        event.add_var_param(match.sproutlet->service_name());
+        event.add_var_param(alias);
+        SAS::report_event(event);
+
+        // If we've accepted a request on behalf of a remote alias from the wire,
+        // we increment the relevant statistic.
+        if (_sproutlet_proxy->_accept_for_remote_alias_tbl)
+        {
+          _sproutlet_proxy->_accept_for_remote_alias_tbl->increment();
+        }
       }
+
 
       return true;
     }
@@ -1416,10 +1422,7 @@ SproutletTsx*
                                                             port,
                                                             alias,
                                                             trail());
-  if (accept_sproutlet_match(match,
-                             serve_remote_aliases,
-                             recieved_from_wire,
-                             alias))
+  if (accept_sproutlet_match(match, serve_remote_aliases, recieved_from_wire, alias))
   {
     sproutlet = match.sproutlet;
   }
@@ -1479,10 +1482,7 @@ SproutletTsx*
                                                alias,
                                                trail());
 
-    if (accept_sproutlet_match(match,
-                               serve_remote_aliases,
-                               false,
-                               alias))
+    if (accept_sproutlet_match(match, serve_remote_aliases, false, alias))
     {
       sproutlet = match.sproutlet;
     }
@@ -2044,8 +2044,8 @@ bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
 {
   // Sproutlets should not distinguish between LOCAL and REMOTE matches - once a
   // message has been routed into a Sproutlet, we've already decided to accept
-    // it.
-  return (_proxy->get_uri_locality(uri) != SproutletProxy::AliasMatchLocality::NO_MATCH);
+  // it.
+  return SproutletProxy::is_alias_match(_proxy->get_uri_locality(uri));
 }
 
 pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
