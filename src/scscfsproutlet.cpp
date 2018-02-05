@@ -890,9 +890,10 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
     if (setup_time > 2000000)
     {
       pjsip_cid_hdr* cid = PJSIP_MSG_CID_HDR(rsp);
-      TRC_WARNING("Call setup time exceeded 2 seconds for Call-ID %.*s",
+      TRC_WARNING("Call setup time exceeded 2 seconds for Call-ID %.*s (was %lu us)",
                   cid->id.slen,
-                  cid->id.ptr);
+                  cid->id.ptr,
+                  setup_time);
     }
     _record_session_setup_time = false;
   }
