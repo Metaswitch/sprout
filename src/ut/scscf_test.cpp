@@ -8406,7 +8406,9 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
   set_irs_info(irs_info, "6515551000", "homedomain");
   Bindings bindings;
   setup_callee_binding(bindings, "sip:6515551000@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  setup_callee_ifc_call(irs_info, "sip:650![0-9]+!@homedomain");
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithWildcard("sip:650![0-9]+!@homedomain"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
   setup_callee_bindings_call(bindings, "sip:6515551000@homedomain"); //SDM-REFACTOR-TODO - should we also call this with the WC?
 
   SCSCFMessage msg;
