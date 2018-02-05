@@ -21,6 +21,17 @@
 #include "sproutsasevent.h"
 #include "aor_utils.h"
 
+// Print XML message body.
+static int xml_print_body(struct pjsip_msg_body *msg_body,
+                          char *buf,
+                          pj_size_t size)
+{
+  return pj_xml_print((const pj_xml_node*)msg_body->data,
+                      buf,
+                      size,
+                      PJ_TRUE);
+}
+
 // EM-TODO sort out includes
 
 NotifySender::NotifySender()
@@ -38,11 +49,37 @@ void NotifySender::send_notifys(const std::string& aor_id,
                                 int now,
                                 SAS::TrailId trail)
 {
-  // TODO = pull out cseq, associated, classify bindings and subscriptions.
+  int cseq = updated_aor.bindings().empty() ?
+             orig_aor._notify_cseq + 1 :
+             updated_aor._notify_cseq;
+
+  AssociatedURIs associated_uris = updated_aor.bindings().empty() ?
+                                   orig_aor._associated_uris :
+                                   updated_aor._associated_uris;
+
+  ClassifiedBindings classified_bindings;
+  SubscriberDataUtils::classify_bindings(aor_id,
+                                         event_trigger,
+                                         orig_aor.bindings(),
+                                         updated_aor.bindings(),
+                                         classified_bindings);
+
+  bool associated_uris_changed = (orig_aor._associated_uris !=
+                                  updated_aor._associated_uris);
+
+  ClassifiedSubscriptions classified_subscriptions;
+
+  SubscriberDataUtils::classify_subscriptions(aor_id,
+                                              event_trigger,
+                                              orig_aor.subscriptions(),
+                                              updated_aor.subscriptions(),
+                                              classified_bindings,
+                                              associated_uris_changed,
+                                              classified_subscriptions);
 
   // The registration state is ACTIVE if we have at least one active binding,
   // otherwise it is TERMINATED.
-/*  RegistrationState reg_state = RegistrationState::TERMINATED;
+  RegistrationState reg_state = RegistrationState::TERMINATED;
   for (SubscriberDataUtils::ClassifiedBinding* classified_binding : classified_bindings)
   {
     if (classified_binding->_contact_event == SubscriberDataUtils::ContactEvent::REGISTERED ||
@@ -97,7 +134,6 @@ void NotifySender::send_notifys(const std::string& aor_id,
                 classified_subscription->_id.c_str());
     }
   }
-*/
 }
 
 // Create complete XML body for a NOTIFY
@@ -372,10 +408,7 @@ pj_status_t NotifySender::notify_create_body(pjsip_msg_body* body,
   body->data = doc;
   body->len = 0;
 
-//  body->print_body = &(pj_xml_print((const pj_xml_node*)msg_body->data,
-  ///                                  buf,
-     //                               size,
-       //                             PJ_TRUE));
+  body->print_body = &xml_print_body;
 
   return PJ_SUCCESS;
 }
@@ -433,15 +466,15 @@ pj_status_t NotifySender::create_subscription_notify(
   }
 
   pj_status_t status = create_notify(tdata_notify,
-                                                  s,
-                                                  aor,
-                                                  associated_uris,
-                                                  cseq,
-                                                  bnis,
-                                                  reg_state,
-                                                  state,
-                                                  expiry,
-                                                  trail);
+                                     s,
+                                     aor,
+                                     associated_uris,
+                                     cseq,
+                                     bnis,
+                                     reg_state,
+                                     state,
+                                     expiry,
+                                     trail);
   return status;
 }
 
