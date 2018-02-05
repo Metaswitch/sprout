@@ -19,6 +19,7 @@
 #include "mock_hss_connection.h"
 #include "mock_analytics_logger.h"
 #include "mock_notify_sender.h"
+#include "mock_registration_sender.h"
 #include "rapidxml/rapidxml.hpp"
 
 using ::testing::_;
@@ -44,6 +45,7 @@ public:
     _hss_connection = new MockHSSConnection();
     _analytics_logger = new MockAnalyticsLogger();
     _notify_sender = new MockNotifySender();
+    _registration_sender = new MockRegistrationSender();
     _subscriber_manager = new SubscriberManager(_s4,
                                                 _hss_connection,
                                                 _analytics_logger,
@@ -71,6 +73,7 @@ public:
 
     delete _subscriber_manager; _subscriber_manager = NULL;
     delete _notify_sender; _notify_sender = NULL;
+    delete _registration_sender; _registration_sender = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _s4; _s4 = NULL;
@@ -102,6 +105,7 @@ private:
   MockHSSConnection* _hss_connection;
   MockAnalyticsLogger* _analytics_logger;
   MockNotifySender* _notify_sender;
+  MockRegistrationSender* _registration_sender;
 
   // Common variables used by all tests.
   AoR* _get_aor = NULL;
