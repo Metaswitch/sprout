@@ -631,7 +631,7 @@ void SubscriberManager::handle_timer_pop(const std::string& aor_id,
   send_notifys(aor_id,
                orig_aor,
                updated_aor,
-               SubscriberDataUtils::EventTrigger::USER,
+               SubscriberDataUtils::EventTrigger::TIMEOUT,
                now,
                trail);
 
