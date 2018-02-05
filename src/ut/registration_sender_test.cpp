@@ -20,8 +20,8 @@ class RegistrationSenderTest : public SipTest
 public:
   RegistrationSenderTest()
   {
-    // TODO fill in parameters.
-    _registration_sender = new RegistrationSender({}, NULL);
+    // TODO fill in parameters properly.
+    _registration_sender = new RegistrationSender(NULL, {}, NULL, NULL, true);
   }
 
   virtual ~RegistrationSenderTest()

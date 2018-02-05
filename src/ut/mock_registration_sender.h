@@ -19,7 +19,7 @@ class MockRegistrationSender : public RegistrationSender
 {
 public:
   MockRegistrationSender() :
-    RegistrationSender({}, NULL) {};
+    RegistrationSender(NULL, {}, NULL, NULL, true) {}; // TODO sort out parameters.
 
   virtual ~MockRegistrationSender() {};
 };
