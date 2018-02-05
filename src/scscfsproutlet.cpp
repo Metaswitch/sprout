@@ -1358,7 +1358,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
 
       TRC_DEBUG("The URI %s of the %s user is not locally hosted.", uri_str.c_str(), session_case_str.c_str());
       SAS::Event event(trail(), SASEvent::NO_SERVED_USER_URI_NOT_LOCAL, 0);
-      event.add_static_param(!_session_case->is_originating());
+      event.add_static_param(_session_case->is_originating() ? 0 : 1);
       event.add_var_param(uri_str);
       SAS::report_event(event);
     }
