@@ -1033,9 +1033,6 @@ void SCSCFTestBase::doSuccessfulFlow(SCSCFMessage& msg,
                                      list<HeaderMatcher> rsp_headers,
                                      string body_regex)
 {
-  //SDM-REFACTOR-TODO - try to get rid of include_ack_and_bye bool, since we do
-  //care about them they should just be in every flow.
-
   SCOPED_TRACE("");
   pjsip_msg* out;
 
@@ -1883,10 +1880,9 @@ TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
 
 TEST_F(SCSCFTest, TestGRUUFailure)
 {
-  // Identical to TestNoEnumWhenGRUU, except that the registered
-  // binding in this test has a different instance-id ("abcde" nor
-  // "abcd"), so the GRUU doesn't match and the call should fail with
-  // a 480 error.
+  // Identical to TestNoEnumWhenGRUU, except that the registered binding in this
+  // test has a different instance-id ("abcde" not "abcd"), so the GRUU doesn't
+  // match and the call should fail with a 480 error.
   SCOPED_TRACE("");
 
   HSSConnection::irs_info irs_info_1;
@@ -1905,7 +1901,6 @@ TEST_F(SCSCFTest, TestGRUUFailure)
                                                  time(NULL),
                                                  "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob",
                                                  30);
-  // SDM-REFACTOR-TODO - Is this actually going to work? Or will the first setting stop it....
   binding->_params["+sip.instance"] = "abcde";
   bindings.insert(std::make_pair("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", binding));
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
@@ -6369,7 +6364,6 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
 }
 
 
-//SDM-REFACTOR-TODO - Another uninteresting gmock call, unexpected, look into
 // Test that ENUM lookups and appropriate URI translation is done before any
 // terminating services are applied.
 TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
@@ -6457,11 +6451,6 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
   // test.
   char* ifc_str = add_single_ifc(irs_info, "sip:1115551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP", 0, "1");
   setup_callee_ifc_call(irs_info, "sip:1115551234@homedomain");
-  Bindings bindings;
-  setup_callee_binding(bindings, "sip:1115551234@homedomain");
-  //setup_all_callee_calls(irs_info, bindings, "sip:1115551234@homedomain");
-  // SDM-REFACTOR-TODO - signal 11 when called, gmock call when not called - ask
-  // AJH
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -6680,7 +6669,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   setup_callee_binding(bindings, "sip:6505559012@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   setup_all_callee_calls(irs_info_3, bindings, "sip:6505559012@homedomain");
 
-  //SDM-REFACTOR-TODO - WHAT ARE THESE???
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -8864,7 +8852,6 @@ TEST_F(SCSCFTest, FlowFailedResponse)
 }
 
 
-// SDM-REFACTOR-TODO - random comment? what does it belong to?
 // Check that if an AS supplies a preloaded route when routing back to the
 // S-CSCF, we follow the route and record route ourselves. This is needed for
 // routing to non-registering PBXs, where the AS preloads the path to the PBX.
@@ -9480,8 +9467,6 @@ TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 }
 
 
-// SDM-REFACTOR-TODO - Ask AJH, don't know how to move this test across since
-// data is cached... (same for test below)
 // Test that a failure to get iFCs due to a 503 error from homestead during Call
 // Diversion results in sprout sending a 504
 TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
@@ -9684,8 +9669,6 @@ TEST_F(SCSCFTest, TestCallerNotBarred)
 }
 
 
-// SDM-REFACTOR-TODO - I think 1235 is default since it's what I set first, but
-// it's not what's being called?? Do I need to edit this test?
 TEST_F(SCSCFTest, TestCalleeNotBarred)
 {
   SCOPED_TRACE("");
@@ -9693,7 +9676,6 @@ TEST_F(SCSCFTest, TestCalleeNotBarred)
   // Set up callee info.
   // Include barred primary IMPU ("6505551235"), and another unbarred IMPU
   // ("6505551234").
-  // SDM-REFACTOR-TODO - does this also need to be tested as overall UT?
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   set_irs_info(irs_info, "6505551235", "homedomain", true);
@@ -10101,15 +10083,11 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
 // servers are triggered.
 TEST_F(SCSCFTest, OnlyDummyApplicationServers)
 {
-  // SDM-REFACTOR-TODO - Change from two dummy iFCs to one dummy and one actual,
-  // which match on the same thing. Then can check that we only invoke the
-  // actual one. This will guard against the case where our matching criteria is
-  // wrong, etc.
-
+  // Set up callee info, which includes two dummy iFCS - these shouldn't trigger
+  // any AS.
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  // Setup two dummy iFCs - these shouldn't trigger any AS.
   std::vector<std::string> ifc_list;
   add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
   add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
