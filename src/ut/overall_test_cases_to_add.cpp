@@ -429,3 +429,7 @@ TEST_F(SCSCFTest, URINotIncludedInUserData)
 // that should be tested.
 
 // Probs also good to put one mainline with iFCs in here.
+
+// Should also cover failed flow (see SCSCFTest.FlowFailedResponse) for details,
+// and check that between sproutlet and SM, third party dereg is sent to AS, and
+// dereg is sent to HSS.

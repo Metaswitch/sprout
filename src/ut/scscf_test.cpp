@@ -9,7 +9,7 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-
+/*
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -5005,6 +5005,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   free(ifc_str);
 }
 
+
 TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
 {
   // Set the session continue timer to 0 to disable it.
@@ -5079,6 +5080,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   free(ifc_str);
 }
 
+
 // Test DefaultHandling attribute missing.
 TEST_F(SCSCFTest, DefaultHandlingMissing)
 {
@@ -5126,6 +5128,7 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
   free(ifc_str);
 }
 
+
 // Test DefaultHandling attribute malformed.
 TEST_F(SCSCFTest, DefaultHandlingMalformed)
 {
@@ -5172,6 +5175,7 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
 
   free(ifc_str);
 }
+
 
 // Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
 //
@@ -5239,6 +5243,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
 
   free(ifc_str);
 }
+
 
 // Test DefaultHandling=CONTINUE for an unresponsive AS.
 //
@@ -5384,6 +5389,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   free(ifc_str);
 }
 
+
 // Test DefaultHandling=CONTINUE for non-existent AS.
 //
 // This test configures two ASs for the terminating subscriber, and checks that
@@ -5466,6 +5472,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   stack_data.record_route_on_completion_of_originating = old_rr_on_comp_of_orig;
   free(ifc_str);
 }
+
 
 // Test that if AS1 times out, then AS2 rejects an INVITE, the rejection is
 // immediately sent on, without waiting for all retries to AS1 to take place.
@@ -5587,6 +5594,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   free(ifc_str);
 }
 
+
 // Test that if AS1 times out, then AS2 rejects an INVITE, and the rejection is
 // sent upstream, if AS1 then replies with an error, the error is handled.
 TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
@@ -5702,6 +5710,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
 
   free(ifc_str);
 }
+
 
 // Test that if AS1 times out, then AS2 rejects an MESSAGE, and the rejection is
 // sent upstream, if AS1 then replies with an error, the error is handled.
@@ -5819,6 +5828,7 @@ TEST_F(SCSCFTest, RecordRoutingTest)
   free_txdata();
 }
 
+
 // Test that when Sprout is configured to Record-Route itself at
 // the start and end of terminating and originating processing, it does.
 TEST_F(SCSCFTest, RecordRoutingTestStartAndEnd)
@@ -5898,6 +5908,7 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
   stack_data.record_route_on_every_hop = false;
 }
 
+
 // Test that Sprout only adds a single Record-Route if none of the Ases
 // Record-Route themselves.
 TEST_F(SCSCFTest, RecordRoutingTestCollapse)
@@ -5909,6 +5920,7 @@ TEST_F(SCSCFTest, RecordRoutingTestCollapse)
   doFourAppServerFlow("Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-orig>", false);
 }
+
 
 // Test that even when Sprout is configured to Record-Route itself on each
 // hop, it only adds a single Record-Route if none of the Ases
@@ -6101,6 +6113,7 @@ TEST_F(SCSCFTest, AsOriginatedTerm)
   doAsOriginated(msg, false);
 }
 
+
 // Test call-diversion AS flow.
 TEST_F(SCSCFTest, Cdiv)
 {
@@ -6242,6 +6255,7 @@ TEST_F(SCSCFTest, Cdiv)
   free(ifc_str);
 }
 
+
 // Test call-diversion AS flow where the AS diverts to a different domain.
 TEST_F(SCSCFTest, CdivToDifferentDomain)
 {
@@ -6354,6 +6368,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   free(ifc_str);
 }
 
+
 //SDM-REFACTOR-TODO - Another uninteresting gmock call, unexpected, look into
 // Test that ENUM lookups and appropriate URI translation is done before any
 // terminating services are applied.
@@ -6429,6 +6444,7 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
 
   free(ifc_str);
 }
+
 
 // Test that ENUM lookups are not done if we are only doing terminating
 // processing.
@@ -6814,6 +6830,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   free(ifc_str_2);
 }
 
+
 // Test a simple MMTEL flow.
 TEST_F(SCSCFTest, MmtelFlow)
 {
@@ -6918,6 +6935,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   free(ifc_str_1);
   free(ifc_str_2);
 }
+
 
 /// Test MMTEL-then-external-AS flows (both orig and term).
 //
@@ -8782,13 +8800,11 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   Bindings bindings;
   set_irs_info(irs_info, "6505550231", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505550231@homedomain", 1, {"<Method>REGISTER</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
-  setup_all_callee_calls(irs_info, bindings);
-
-  // WHAT TO DO WITH THIS 30 HERE - think unimportant and plan to ignore
-//  register_uri(_sdm, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
+  setup_callee_binding(bindings, "sip:6505550231@homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213");
+  setup_all_callee_calls(irs_info, bindings, "sip:6505550231@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
-  //TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
+  TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
@@ -8814,6 +8830,12 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   // INVITE passed externally
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
+  tpExternal.expect_target(current_txdata(), false);
+
+  // Expect the SCSCF sproutlet to delete the binding after receiving the 430
+  // response.
+  EXPECT_CALL(*_sm, remove_bindings("sip:6505550231@homedomain", _, _, _, _))
+    .WillOnce(Return(HTTP_OK));
 
   // Send 430 Flow Failed response.
   string fresp = respond_to_current_txdata(430);
@@ -8821,30 +8843,12 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   inject_msg(fresp);
 
   // Sprout ACKs the response.
-  ASSERT_EQ(3, txdata_count());
+  ASSERT_EQ(2, txdata_count());
   ReqMatcher("ACK").matches(current_txdata()->msg);
   free_txdata();
 
-  // Sprout deletes the binding.
-  EXPECT_CALL(*_sm, remove_bindings(_, _, _, _, _))
-    .WillOnce(Return(HTTP_OK));
-// Have I moved this across to the new framework right??
-//  AoRPair* aor_data = _sdm->get_aor_data(user, 0);
-//  ASSERT_TRUE(aor_data != NULL);
-//  EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
-//  delete aor_data; aor_data = NULL;
-
-  // Because there are no remaining bindings, Sprout sends a deregister to the
-  // HSS and a third-party deREGISTER to the AS.
-  ASSERT_EQ(2, txdata_count());
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(ReqMatcher("REGISTER").matches(out));
-  EXPECT_EQ(NULL, out->body);
-
-  // Send a 200 OK response from the AS.
-  fresp = respond_to_current_txdata(200);
-  //free_txdata();
-  inject_msg(fresp, &tpAS);
+  // The subscriber manager (which is mocked out in this test) would cover
+  // sending a third-party deREGISTER to AS, and deregister to the HSS.
 
   // Catch the forwarded 430 response.
   ASSERT_EQ(1, txdata_count());
@@ -9258,7 +9262,6 @@ TEST_F(SCSCFTest, TestSessionExpires)
   list<HeaderMatcher> rsp_hdrs;
   rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires: .*"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false, rsp_hdrs);
-
 }
 
 
@@ -9667,9 +9670,9 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  //add this to bindings, and remove path header
   bindings.find("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob")->second->_path_uris.push_back(std::string("sip:abcdefgh@ut.cw-ngv.com;lr"));
   bindings.find("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob")->second->_path_headers.clear();
+  setup_all_callee_calls(irs_info, bindings);
 
   // Check that the Route header contains the URI part of the path header.
   SCSCFMessage msg;
@@ -10010,7 +10013,10 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  setup_all_callee_calls(irs_info_2, bindings);
+  // Fallback iFCs should be applied, so we expect two "get_subscriber_state"
+  // calls - one to look up the iFCs originally, and one to check the returned
+  // message from the AS hasn't been retargeted.
+  setup_all_callee_calls(irs_info_2, bindings, "sip:6505551234@homedomain", true);
 
   _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
 
@@ -10884,4 +10890,4 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   delete ralf_request_4; ralf_request_4 = NULL;
   free(ifc_str);
 }
-
+*/
