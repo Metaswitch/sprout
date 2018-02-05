@@ -9,7 +9,7 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-/*
+
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -1451,7 +1451,7 @@ TEST_F(SCSCFTest, ReqURIMatchesSproutletPort)
   msg._requri = "sip:254.253.252.251:5058";
   msg._route = "Route: <sip:sprout.homedomain;transport=tcp;lr;billing-role=charge-term>";
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex("sip:254.253.252.251:5058"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:254.253.252.251:5058"), hdrs);
 }
 
 
@@ -1714,7 +1714,7 @@ TEST_F(SCSCFTest, TestStrictRouteThrough)
   msg._requri = "sip:6505551234@nonlocaldomain";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", ".*lasthop@destination.com.*", ".*6505551234@nonlocaldomain.*"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs);
 }
 
 
@@ -1877,7 +1877,7 @@ TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
   // of a GRUU parameter should indicate to Sprout that this wasn't
   // a string of dialled digits - so we won't do an ENUM lookup and
   // will route to the local subscriber.
-  doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs);
 }
 
 
@@ -1967,7 +1967,7 @@ TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
   list<HeaderMatcher> hdrs;
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
 
@@ -2125,7 +2125,7 @@ TEST_F(SCSCFTest, TestEnumNPData)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs);
 }
 
 
@@ -2147,7 +2147,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*15108580401;rn.*+16;npdi@homedomain"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*15108580401;rn.*+16;npdi@homedomain"), hdrs);
 }
 
 
@@ -2171,7 +2171,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs);
 }
 
 
@@ -2196,7 +2196,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580272@ut.cw-ngv.com"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580272@ut.cw-ngv.com"), hdrs);
 }
 
 
@@ -2220,7 +2220,7 @@ TEST_F(SCSCFTest, DISABLED_TestEnumToCIC)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580501;cic=12345@homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580501;cic=12345@homedomain.*"), hdrs);
 }
 
 
@@ -2244,7 +2244,7 @@ TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs);
 }
 
 
@@ -2270,7 +2270,7 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs);
 }
 
 
@@ -2318,7 +2318,7 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@10.114.61.213:5061;transport=tcp;.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@10.114.61.213:5061;transport=tcp;.*"), hdrs);
 }
 
 /// Test a forked flow - setup phase.
@@ -8499,7 +8499,7 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
   msg._to = "6515551000";
   msg._requri = "sip:6515551000@homedomain";
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8527,7 +8527,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551000>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8557,7 +8557,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrWithAlias)
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551001>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8589,7 +8589,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliasesNoMatch)
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551003>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8621,7 +8621,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliases)
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551000>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8649,7 +8649,7 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
   msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <tel:6505551000>", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain;user=phone>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8678,7 +8678,7 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdrNoSIPUri)
   msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <tel:6505551000>", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain;user=phone>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8706,7 +8706,7 @@ TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>\nP-Asserted-Identity: Andy <tel:6505551111>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551111>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8736,7 +8736,7 @@ TEST_F(SCSCFTest, TestNoPAIHdrs)
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8764,7 +8764,7 @@ TEST_F(SCSCFTest, TestPAIHdrODIToken)
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -8788,7 +8788,7 @@ TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
@@ -9261,7 +9261,7 @@ TEST_F(SCSCFTest, TestSessionExpires)
   hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
   list<HeaderMatcher> rsp_hdrs;
   rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires: .*"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false, rsp_hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, true, rsp_hdrs);
 }
 
 
@@ -9290,7 +9290,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialog)
   rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*;refresher=uac"));
   rsp_hdrs.push_back(HeaderMatcher("Record-Route"));
 
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, true, rsp_hdrs);
 }
 
 
@@ -9305,7 +9305,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingTerm)
   list<HeaderMatcher> hdrs;
   CapturingTestLogger log;
 
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs);
   EXPECT_TRUE(log.contains("Charging role is terminating"));
 }
 
@@ -9318,7 +9318,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingOrig)
   list<HeaderMatcher> hdrs;
   CapturingTestLogger log;
 
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs);
   EXPECT_TRUE(log.contains("Charging role is originating"));
 }
 
@@ -9331,7 +9331,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNone)
   list<HeaderMatcher> hdrs;
   CapturingTestLogger log;
 
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs);
   EXPECT_TRUE(log.contains("Charging role is none"));
 }
 
@@ -9344,7 +9344,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingUnknown)
   list<HeaderMatcher> hdrs;
   CapturingTestLogger log;
 
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs);
   EXPECT_TRUE(log.contains("Unknown charging role"));
 }
 
@@ -9357,7 +9357,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNotFound)
   list<HeaderMatcher> hdrs;
   CapturingTestLogger log;
 
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs);
   EXPECT_TRUE(log.contains("No charging role in Route header, assume originating"));
 }
 
@@ -9370,7 +9370,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogRouteHeaderEmpty)
   list<HeaderMatcher> hdrs;
   CapturingTestLogger log;
 
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs);
   EXPECT_TRUE(log.contains("Cannot determine charging role as no Route header, assume originating"));
 }
 
@@ -9658,30 +9658,6 @@ TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
 }
 
 
-//SDM-REFACTOR-TODO - kept this test for now... may not need it but sounds like
-//a weak area to me.
-TEST_F(SCSCFTest, TestAddStoredPathURI)
-{
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7"); //Needed? I have no idea...
-  SCOPED_TRACE("");
-
-  // Setup callee info. Its binding will have only the path uri set, and no path
-  // headers.
-  HSSConnection::irs_info irs_info;
-  Bindings bindings;
-  setup_callee_info(irs_info, bindings);
-  bindings.find("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob")->second->_path_uris.push_back(std::string("sip:abcdefgh@ut.cw-ngv.com;lr"));
-  bindings.find("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob")->second->_path_headers.clear();
-  setup_all_callee_calls(irs_info, bindings);
-
-  // Check that the Route header contains the URI part of the path header.
-  SCSCFMessage msg;
-  list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:abcdefgh@ut.cw-ngv.com;lr>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
-}
-
-
 TEST_F(SCSCFTest, TestCallerNotBarred)
 {
   SCOPED_TRACE("");
@@ -9721,8 +9697,8 @@ TEST_F(SCSCFTest, TestCalleeNotBarred)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   set_irs_info(irs_info, "6505551235", "homedomain", true);
-  setup_callee_binding(bindings, "sip:6505551235@homedomain", "sip:fowertreetoowun@10.114.61.213:5061;transport=tcp;ob");
-  setup_callee_binding(bindings, "sip:6505551234@homedomain"); // Second unbarred IMPU
+  add_sp_identity(irs_info, "sip:6505551234@homedomain", false);
+  setup_callee_binding(bindings, "sip:6505551235@homedomain");
   char* ifc_str_1 = add_single_ifc(irs_info, "sip:6505551235@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
   char* ifc_str_2 = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
   setup_all_callee_calls(irs_info, bindings);
@@ -9898,7 +9874,10 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  setup_all_callee_calls(irs_info_2, bindings);
+  // Fallback iFCs should be applied, so we expect two "get_subscriber_state"
+  // calls - one to look up the iFCs originally, and one to check the returned
+  // message from the AS hasn't been retargeted.
+  setup_all_callee_calls(irs_info_2, bindings, "sip:6505551234@homedomain", true);
 
    _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -10502,17 +10481,22 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
 };
 
 
-// SDM-REFACTOR-TODO - get this to pass
-// Test routing directly to local SCSCF when ICSCF is disabled
+// Test routing directly to local SCSCF when ICSCF is disabled.
+// This call will fail as there is no data for the callee.
 TEST_F(SCSCFTestWithoutICSCF, TestRouteWithoutICSCF)
 {
   SCOPED_TRACE("");
 
+  // Set up caller info.
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "+16505551000", "homedomain");
-  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:+16505551000@homedomain"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
+
+  // Expect a call looking for iFCs for the callee - return a 404.
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:+15108580271@homedomain"), _, _))
+    .WillOnce(Return(HTTP_NOT_FOUND));
 
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
@@ -10757,7 +10741,7 @@ TEST_F(SCSCFTestWithRalf, MainlineBilling)
 
   // Second ACR is sent for ACK and is EVENT_RECORD
   EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"SIP-Method\":\"ACK\".*"));
-  EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"Accounting-Record-Type\":1.*"));
+  EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"Accounting-Record-Type\":3.*"));
 
   // Third request is sent for BYE and has STOP_RECORD
   EXPECT_THAT(ralf_request_3->message,MatchesRegex(".*\"SIP-Method\":\"BYE\".*"));
@@ -10773,13 +10757,16 @@ TEST_F(SCSCFTestWithRalf, MainlineBilling)
 // that ralf processor is sending ACR request with right cause code.
 TEST_F(SCSCFTestWithRalf, ExpiredChain)
 {
+  // Set up caller info.
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  char* ifc_str = add_single_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
 
+  // Set LIA to find callee - this will be needed in "doAsOriginated", which is
+  // called later in this test.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10805,8 +10792,6 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   // We're within the trust boundary, so no stripping should occur.
   SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain";
-  msg._todomain = "";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._requri = "sip:6505551234@homedomain";
 
@@ -10890,4 +10875,4 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   delete ralf_request_4; ralf_request_4 = NULL;
   free(ifc_str);
 }
-*/
+
