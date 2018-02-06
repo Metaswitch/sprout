@@ -90,6 +90,7 @@ extern "C" {
 #include "sproutlet_options.h"
 #include "astaire_impistore.h"
 
+
 enum OptionTypes
 {
   OPT_DEFAULT_SESSION_EXPIRES=256+1,
@@ -1385,6 +1386,45 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
   }
 }
 
+
+/// @brief An HTTP handler that runs all work received on a PJSIP worker thread.
+///
+/// This works by wrapping another handler. The wrapper ensures that the wrapped
+/// handler is executed on the thread pool.
+class RunOnPJSIPThreadPoolHandler : public HttpStack::HandlerInterface
+{
+public:
+  /// Constructor.
+  ///
+  /// @param [in] handler - The handler to execute on the thread pool.
+  RunOnPJSIPThreadPoolHandler(HttpStack::HandlerInterface* handler) : _handler(handler) {}
+
+  /// Process a single HTTP request by running it on the thread pool.
+  ///
+  /// @param [in] req   - The received request.
+  /// @param [in] trail - The SAS trail ID.
+  void process_request(HttpStack::Request& req, SAS::TrailId trail)
+  {
+    PJUtils::run_callback_on_worker_thread(
+      [this, req, trail] () mutable {
+        _handler->process_request(req, trail);
+      },
+      false);
+  }
+
+  /// Get the SAS logger for this request. This is just passed through to the
+  /// underlying handler.
+  HttpStack::SasLogger* sas_logger(HttpStack::Request& req)
+  {
+    return _handler->sas_logger(req);
+  }
+
+private:
+  /// The underlying handler that this handler wraps.
+  HttpStack::HandlerInterface* _handler;
+};
+
+
 // Objects that must be shared with dynamically linked sproutlets must be
 // globally scoped.
 LoadMonitor* load_monitor = NULL;
@@ -2366,6 +2406,7 @@ int main(int argc, char* argv[])
   GetSubscriptionsTask::Config get_subscriptions_config(subscriber_manager);
 
   HttpStackUtils::TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  RunOnPJSIPThreadPoolHandler aor_timeout_handler_with_thread_pool(&aor_timeout_handler);
   HttpStackUtils::TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
@@ -2383,7 +2424,7 @@ int main(int argc, char* argv[])
       http_stack_sig->register_handler("^/ping$",
                                        &ping_handler);
       http_stack_sig->register_handler("^/timers$",
-                                       &aor_timeout_handler);
+                                       &aor_timeout_handler_with_thread_pool);
       http_stack_sig->register_handler("^/authentication-timeout$",
                                        &auth_timeout_handler);
       http_stack_sig->register_handler("^/registrations?*$",

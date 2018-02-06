@@ -17,6 +17,69 @@
 #include "log.h"
 #include "pjutils.h"
 
+void ChronosAoRTimeoutTask::run()
+{
+  if (_req.method() != htp_method_POST)
+  {
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  HTTPCode rc = parse_response(_req.get_rx_body());
+
+  if (rc != HTTP_OK)
+  {
+    TRC_DEBUG("Unable to parse response from Chronos");
+    send_http_reply(rc);
+    delete this;
+    return;
+  }
+
+  send_http_reply(HTTP_OK);
+
+  handle_response();
+}
+
+HTTPCode ChronosAoRTimeoutTask::parse_response(std::string body)
+{
+  rapidjson::Document doc;
+  std::string json_str = body;
+  doc.Parse<0>(json_str.c_str());
+
+  if (doc.HasParseError())
+  {
+    TRC_DEBUG("Failed to parse opaque data as JSON: %s\nError: %s",
+              json_str.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
+    return HTTP_BAD_REQUEST;
+  }
+
+  try
+  {
+    JSON_GET_STRING_MEMBER(doc, "aor_id", _aor_id);
+  }
+  catch (JsonFormatError err)
+  {
+    TRC_DEBUG("Badly formed opaque data (missing aor_id)");
+    return HTTP_BAD_REQUEST;
+  }
+
+
+  return HTTP_OK;
+}
+
+void ChronosAoRTimeoutTask::handle_response()
+{
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+
+  process_aor_timeout(_aor_id);
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+}
+
 void ChronosAuthTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
