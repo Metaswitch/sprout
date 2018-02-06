@@ -9393,19 +9393,35 @@ TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 }
 
 
-// Test that a failure to get iFCs due to a 503 error from homestead during Call
-// Diversion results in sprout sending a 504
+// Test that a failure to get iFCs due to a 503 error from the subscriber
+// manager during Call Diversion results in sprout sending a 504 to the Call
+// Diversion AS.
+//
+// The calls to the HSS, and the returned codes, are:
+//  - query HSS for term. iFCs for orig. callee - returns 200 OK
+//  - no need to query HSS for orig. iFCs for orig. callee, as they are cached
+//  - query HSS for orig. iFCs for diverted to callee - returns 503 error
+//
 TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 {
   // Set up callee info.
-  HSSConnection::irs_info irs_info;
-  Bindings bindings;
-  setup_callee_info(irs_info, bindings);
-  std::vector<std::string> ifc_list;
-  add_ifc_info(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_all_callee_calls(irs_info, bindings);
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551234", "homedomain");
+  char* ifc_str_1 = add_single_ifc(irs_info_1, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  setup_callee_ifc_call(irs_info_1, "sip:6505551234@homedomain", true);
+
+  // Set up diverted-to callee info.
+  // The call to get this info should return an error, but still set up the info
+  // to include an iFC for AS2, to test if we will still attempt to go to this AS.
+  HSSConnection::irs_info irs_info_2;
+  set_irs_info(irs_info_2, "6505555678", "homedomain");
+  char* ifc_str_2 = add_single_ifc(irs_info_2, "sip:6505555678@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505555678@homedomain"), _, _))
+    .WillOnce(Return(HTTP_SERVER_UNAVAILABLE));  //SDM-REFACTOR-TODO - right again??
+
+  _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9446,10 +9462,6 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   string fresp1 = respond_to_txdata(current_txdata(), 100);
   inject_msg(fresp1, &tpAS1);
 
-  // The next request to the HSS will get a 503 response
-  _hss_connection->delete_result("sip:6505551234@homedomain");
-  _hss_connection->set_rc("/impu/sip%3A6505551234%40homedomain/reg-data", 503);
-
   // ---------- AS1 turns it around (acting as routing B2BUA by changing the target)
   const pj_str_t STR_ROUTE = pj_str("Route");
   pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
@@ -9468,31 +9480,47 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   msg.convert_routeset(out);
   free_txdata();
 
-  // Followed by a 504 (since the iFC lookup has got a 503)
+  // Followed by a 504 (since the iFC lookup set up at the start of the test has
+  // returned a 503).
   out = current_txdata()->msg;
   RespMatcher(504).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
 
-  _hss_connection->delete_rc("/impu/sip%3A6505551000%40homedomain/reg-data");
-
-  free(ifc_str);
+  free(ifc_str_1);
+  free(ifc_str_2);
 }
 
 
-// Test that a failure to get iFCs due to a 404 error from homestead during Call
-// Diversion result in AS sending a 404 error
+// Test that a failure to get iFCs due to a 404 error from the subscriber
+// manager during Call Diversion results in sprout sending a 404 to the Call
+// Diverstion AS.
+//
+// The calls to the HSS, and the returned codes, are:
+//  - query HSS for term. iFCs for orig. callee - returns 200 OK
+//  - no need to query HSS for orig. iFCs for orig. callee, as they are cached
+//  - query HSS for orig. iFCs for diverted to callee - returns 404 error
+//
 TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
 {
   // Set up callee info.
-  HSSConnection::irs_info irs_info;
-  Bindings bindings;
-  setup_callee_info(irs_info, bindings);
-  std::vector<std::string> ifc_list;
-  add_ifc_info(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_all_callee_calls(irs_info, bindings);
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551234", "homedomain");
+  char* ifc_str_1 = add_single_ifc(irs_info_1, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  setup_callee_ifc_call(irs_info_1, "sip:6505551234@homedomain", true);
+
+  // Set up diverted-to callee info.
+  // The call to get this info should return an error, but still set up the info
+  // to include an iFC for AS2, to test if we will still attempt to go to this AS.
+  HSSConnection::irs_info irs_info_2;
+  set_irs_info(irs_info_2, "6505555678", "homedomain");
+  char* ifc_str_2 = add_single_ifc(irs_info_2, "sip:6505555678@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505555678@homedomain"), _, _))
+    .WillOnce(Return(HTTP_NOT_FOUND));
+
+  _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9535,10 +9563,6 @@ TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
   string fresp1 = respond_to_txdata(current_txdata(), 100);
   inject_msg(fresp1, &tpAS1);
 
-  // The next request to the HSS will get a 404 response
-  _hss_connection->delete_result("sip:6505551234@homedomain");
-  _hss_connection->set_rc("/impu/sip%3A6505551234%40homedomain/reg-data", 404);
-
   // ---------- AS1 turns it around (acting as routing B2BUA by changing the target)
   const pj_str_t STR_ROUTE = pj_str("Route");
   pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
@@ -9557,15 +9581,15 @@ TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
   msg.convert_routeset(out);
   free_txdata();
 
-  // Followed by a 404 due to the iFC lookup
+  // Followed by a 404 due to the iFC lookup returning an error (set up early in
+  // the test).
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
 
-  _hss_connection->delete_rc("/impu/sip%3A6505551000%40homedomain/reg-data");
-
-  free(ifc_str);
+  free(ifc_str_1);
+  free(ifc_str_2);
 }
 
 
