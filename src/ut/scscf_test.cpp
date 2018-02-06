@@ -91,7 +91,6 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sm = new StrictMock<MockSubscriberManager>();
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -117,7 +116,6 @@ public:
     pjsip_tsx_layer_destroy();
     delete _fifc_service; _fifc_service = NULL;
     delete _acr_factory; _acr_factory = NULL;
-    delete _sm; _sm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
@@ -132,6 +130,9 @@ public:
 
   SCSCFTestBase()
   {
+
+    _sm = new StrictMock<MockSubscriberManager>();
+
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
 
@@ -200,6 +201,7 @@ public:
     URIClassifier::enforce_global = false;
     ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->reset_count();
 
+    delete _sm; _sm = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _hss_connection_observer; _hss_connection_observer = NULL;
     delete _proxy; _proxy = NULL;
@@ -331,12 +333,12 @@ protected:
                     int cond_neg = 0,
                     std::string default_handling = "0");
   char* add_single_ifc(HSSConnection::irs_info& irs_info,
-                      std::string uri,
-                      int priority,
-                      std::vector<std::string> triggers,
-                      std::string app_serv_name,
-                      int cond_neg = 0,
-                      std::string default_handling = "0");
+                       std::string uri,
+                       int priority,
+                       std::vector<std::string> triggers,
+                       std::string app_serv_name,
+                       int cond_neg = 0,
+                       std::string default_handling = "0");
   void add_sp_identity(HSSConnection::irs_info& irs_info,
                        std::string uri,
                        bool barring = false);
@@ -1545,7 +1547,8 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   set_irs_info(irs_info, "6505551000", "homedomain");
   setup_all_caller_calls(irs_info);
 
-  //SDM-REFACTOR-TODO - where is callee info? LIR/LIA??
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   SCSCFMessage msg;
   msg._toscheme = "tel";
@@ -1574,7 +1577,8 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
   set_irs_info(irs_info, "6505551000", "homedomain");
   setup_all_caller_calls(irs_info);
 
-//SDM-REFACTOR-TODO - where is callee/Lia/Lir?
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   SCSCFMessage msg;
   msg._toscheme = "tel";
@@ -1809,8 +1813,6 @@ TEST_F(SCSCFTest, TestEnumExternalSuccess)
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "sip:+16505551000@homedomain");
 
-//SDM-REFACTOR-TODO - callee? lia/lir?
-
   SCSCFMessage msg;
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
@@ -1918,16 +1920,8 @@ TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
   set_irs_info(irs_info_1, "+15108581234", "homedomain");
   setup_all_caller_calls(irs_info_1, "sip:+15108581234@homedomain");
 
-  // Set up callee info.
-  HSSConnection::irs_info irs_info_2;
-  set_irs_info(irs_info_2, "+15108580271", "homedomain");
-  Bindings bindings;
-  setup_callee_binding(bindings, "sip:+15108580271@homedomain");
-  setup_all_callee_calls(irs_info_2, bindings, "sip:+15108580271@homedomain");
-
-  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": 2001,"
-                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   SCSCFMessage msg;
   msg._to = "+15108580271";
@@ -1938,8 +1932,6 @@ TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
@@ -1949,8 +1941,12 @@ TEST_F(SCSCFTest, TestEnumExternalOffNetDialingAllowed)
   SCOPED_TRACE("");
   SCSCFMessage msg;
 
+  // Set up caller info.
   HSSConnection::irs_info irs_info;
   setup_caller_info(irs_info);
+
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
@@ -1970,6 +1966,9 @@ TEST_F(SCSCFTest, TestEnumUserPhone)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "sip:+16505551000@homedomain");
+
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
@@ -2086,6 +2085,9 @@ TEST_F(SCSCFTest, TestEnumNPData)
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "sip:+16505551000@homedomain");
 
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
+
   SCSCFMessage msg;
   msg._to = "+15108580401";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -2106,6 +2108,9 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "sip:+16505551000@homedomain");
+
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   SCSCFMessage msg;
   msg._to = "+15108580401;npdi;rn=+16";
@@ -2130,8 +2135,8 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "sip:+16505551000@homedomain");
 
-  // SDM-REFACTOR-TODO - no callee setup?? Not going to keep commenting all of
-  // these. If there's a problem, will need to go hunt it down.
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   SCSCFMessage msg;
   msg._to = "+15108580401;npdi;rn=+16";
@@ -2154,6 +2159,9 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "sip:+16505551000@homedomain");
+
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
@@ -2179,6 +2187,9 @@ TEST_F(SCSCFTest, DISABLED_TestEnumToCIC)
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "+16505551000");
 
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
+
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
   msg._to = "+15108580501";
@@ -2203,6 +2214,9 @@ TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "sip:+16505551000@homedomain");
 
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
+
   SCSCFMessage msg;
   msg._to = "+15108580401";
   msg._requri = "sip:+15108580401@homedomain;user=phone";
@@ -2225,6 +2239,9 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "+16505551000", "homedomain");
   setup_all_caller_calls(irs_info, "sip:+16505551000@homedomain");
+
+  // No callee info needed, as ENUM service resolves tel URI to sip URI that is
+  // not in home domain, so is routed externally by the BGCF.
 
   SCSCFMessage msg;
   msg._to = "+15108580401";
@@ -2631,6 +2648,8 @@ TEST_F(SCSCFTest, TestSIPMessageSupport)
   free_txdata();
 }
 
+// SDM-REFACTOR-TODO - up to here when it comes to checking doSuccessfulFlow
+
 
 // Test that a multipart message can be parsed successfully
 TEST_F(SCSCFTest, TestSimpleMultipart)
@@ -2673,14 +2692,7 @@ TEST_F(SCSCFTest, TestReceiveCallToEmergencyBinding)
   Bindings bindings;
   setup_callee_info(irs_info, bindings); // This adds the non emergency binding.
   setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", true);
-  setup_callee_ifc_call(irs_info);
-  // Expect two calls to get bindings, one to check for any emergency
-  // registrations after it is realised the served user is barred, and one to
-  // find the target to route to.
-  EXPECT_CALL(*_sm, get_bindings("sip:6505551234@homedomain", _, _))
-    .Times(2)
-    .WillRepeatedly(DoAll(SetArgReferee<1>(bindings),
-                          Return(HTTP_OK)));
+  setup_all_callee_calls(irs_info, bindings);
 
   SCSCFMessage msg;
   pjsip_msg* out;
@@ -9129,6 +9141,8 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
   SCOPED_TRACE("");
 
   // Create an originating request that requires automatic registration.
+  // To domain is not homedomain, so no terminating services will be applied, as
+  // the BGCF will route off of sprout.
   SCSCFMessage msg;
   msg._to = "newuser";
   msg._todomain = "domainvalid";
@@ -9139,15 +9153,9 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
   set_irs_info(irs_info_1, "6505551000", "homedomain");
   // The SM should be invoked with a request type of "reg". No
   // Proxy-Authorization present, so derive the IMPI from the IMPU.
-  EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("6505551000%40homedomain"), _, _))
+  EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("6505551000@homedomain"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
                     Return(HTTP_OK)));
-
-  // Set callee info.
-  HSSConnection::irs_info irs_info_2;
-  Bindings bindings;
-  setup_callee_info(irs_info_2, bindings);
-  setup_all_callee_calls(irs_info_2, bindings);
 
   add_host_mapping("domainvalid", "10.9.8.7");
   list<HeaderMatcher> hdrs;
