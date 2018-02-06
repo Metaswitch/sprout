@@ -32,11 +32,6 @@ public:
 
   virtual ~RegistrationSender();
 
-  /// TODO - is this the right interface?
-  ///      - Should we pass the IRS info?
-  ///      - Do we need to pass back whether to deregister the subscriber?
-  ///        e.g. if the _reject_if_no_matching_ifcs flag is set.
-  ///
   /// Registers a subscriber with its application servers.
   ///
   /// @param[in]  received_register_message
@@ -53,6 +48,9 @@ public:
   /// @param[in]  is_initial_registration
   ///                           Whether or not the received registraion is an
   ///                           initial registration
+  /// @param[out] deregister_subscriber
+  ///                           Whether to deregister the subscriber after this
+  ///                           call.
   /// @param[in]  trail         The SAS trail ID
   void register_with_application_servers(pjsip_msg* received_register_message,
                                          pjsip_msg* ok_response_msg,
@@ -60,6 +58,7 @@ public:
                                          const Ifcs& ifcs,
                                          int expires,
                                          bool is_initial_registration,
+                                         bool& deregister_subscriber,
                                          SAS::TrailId trail);
 
   void deregister_with_application_servers(const std::string& served_user,

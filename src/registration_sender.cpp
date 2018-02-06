@@ -39,11 +39,13 @@ void RegistrationSender::register_with_application_servers(pjsip_msg* received_r
                                                            const Ifcs& ifcs,
                                                            int expires,
                                                            bool is_initial_registration,
+                                                           bool& deregister_subscriber,
                                                            SAS::TrailId trail)
 {
   TRC_DEBUG("Registering %s with application servers", served_user.c_str());
 
   bool matched_dummy_as;
+  deregister_subscriber = false;
 
   std::vector<Ifc> fallback_ifcs;
   rapidxml::xml_document<>* root = NULL;
@@ -106,19 +108,9 @@ void RegistrationSender::register_with_application_servers(pjsip_msg* received_r
 
     if (_ifc_configuration._reject_if_no_matching_ifcs)
     {
-      TRC_DEBUG("Deregistering the subscriber as no matching iFCs were found");
-      // TODO Deal with deregistration. Probably by passing back a boolean back
-      // to SM.
-      /*RegistrationUtils::remove_bindings(sdm,
-                                         remote_sdms,
-                                         hss,
-                                         fifc_service,
-                                         ifc_configuration,
-                                         served_user,
-                                         "*",
-                                         HSSConnection::DEREG_ADMIN,
-                                         SubscriberDataManager::EventTrigger::ADMIN,
-                                         trail);*/
+      TRC_DEBUG("No matching iFCs were found for %s - the subscriber should be deregistered",
+                served_user.c_str());
+      deregister_subscriber = true;
     }
   }
 
@@ -155,21 +147,25 @@ void RegistrationSender::deregister_with_application_servers(const std::string& 
 
   if (status != PJ_SUCCESS)
   {
+    //LCOV_EXCL_START
     TRC_DEBUG("Unable to create third party registration for %s",
               served_user.c_str());
     SAS::Event event(trail, SASEvent::DEREGISTER_AS_FAILED, 0);
     event.add_var_param(served_user);
     SAS::report_event(event);
+    //LCOV_EXCL_STOP
   }
   else
   {
     TRC_DEBUG("Creating third party deregistration for %s", served_user.c_str());
+    bool deregister_subscriber;
     register_with_application_servers(tdata->msg,
                                       NULL,
                                       served_user,
                                       ifcs,
                                       0,
                                       false,
+                                      deregister_subscriber,
                                       trail);
   }
 }
@@ -492,6 +488,8 @@ void RegistrationSender::RegisterCallback::run()
     // TODO can this call result in a loop of 3rdPartyReg callbacks if the AS
     // is unreachable? Should we deregister the sub if this is a 3rd party
     // deregister since they will already be deregisterd??
+    //
+    // TODO error handling
     //
     // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
     // where SESSION_TERMINATED is set means that we should deregister "the
