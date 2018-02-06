@@ -10,18 +10,27 @@
  */
 
 #include "gtest/gtest.h"
-
-#include "registration_sender.h"
+#include "test_utils.hpp"
 #include "siptest.hpp"
 #include "test_interposer.hpp"
+#include "testingcommon.h"
+
+#include "registration_sender.h"
+#include "mock_subscriber_manager.h"
 
 class RegistrationSenderTest : public SipTest
 {
 public:
   RegistrationSenderTest()
   {
-    // TODO fill in parameters properly.
-    _registration_sender = new RegistrationSender(NULL, {}, NULL, NULL, true);
+    IFCConfiguration ifc_configuration(false, false, "", NULL, NULL); // TODO fake snmp tables.
+    _subscriber_manager = new MockSubscriberManager();
+    _fifc_service = new FIFCService(NULL, string(UT_DIR).append("/test_fifc.xml")); // TODO mock this out?
+    _registration_sender = new RegistrationSender(_subscriber_manager,
+                                                  ifc_configuration,
+                                                  NULL,
+                                                  &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES,
+                                                  true);
   }
 
   virtual ~RegistrationSenderTest()
@@ -40,6 +49,8 @@ public:
     cwtest_advance_time_ms(33000L);
     poll();
 
+    delete _subscriber_manager; _subscriber_manager = NULL;
+    delete _fifc_service; _fifc_service = NULL;
     delete _registration_sender; _registration_sender = NULL;
   }
 
@@ -62,8 +73,77 @@ public:
 
 private:
   RegistrationSender* _registration_sender;
+  FIFCService* _fifc_service;
+  MockSubscriberManager* _subscriber_manager;
+
+  char* build_ifcs(Ifcs& ifcs);
+
+  // Set up a base message that looks more like a register.
+  class RegisterMessage : public TestingCommon::Message
+  {
+  public:
+    RegisterMessage()
+    {
+      Message::_method = "REGISTER";
+      Message::_to = Message::_from;
+    };
+
+    ~RegisterMessage() {};
+  };
 };
 
-TEST_F(RegistrationSenderTest, TestTest)
+char* RegistrationSenderTest::build_ifcs(Ifcs& ifcs)
 {
+  // Create a service profile with a single iFC.
+  TestingCommon::ServiceProfileBuilder sp = TestingCommon::ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>REGISTER</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  std::string sp_str = sp.return_profile();
+
+  // Convert the service profile to XML.
+  std::shared_ptr<rapidxml::xml_document<>> root (new rapidxml::xml_document<>);
+  char* sp_cstr = strdup(sp_str.c_str());
+  root->parse<0>(sp_cstr);
+
+  // Parse out the Ifcs struct from the XML.
+  ifcs = Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
+
+  return sp_cstr;
+}
+
+TEST_F(RegistrationSenderTest, 3rdPartyRegisterMainline)
+{
+  RegisterMessage msg;
+  pjsip_msg* received_register = parse_msg(msg.get_request());
+  pjsip_msg* sent_response = parse_msg(msg.get_response());
+
+  Ifcs ifcs;
+  char* cstr = build_ifcs(ifcs);
+
+  _registration_sender->register_with_application_servers(received_register,
+                                                          sent_response,
+                                                          "sip:6505551000@homedomain",
+                                                          ifcs,
+                                                          300,
+                                                          true,
+                                                          0);
+
+  ASSERT_EQ(1, txdata_count());
+  inject_msg(respond_to_current_txdata(200));
+
+  free(cstr);
+}
+
+TEST_F(RegistrationSenderTest, 3rdPartyDeregisterMainline)
+{
+  Ifcs ifcs;
+  char* cstr = build_ifcs(ifcs);
+  _registration_sender->deregister_with_application_servers("sip:6505551000@homedomain",
+                                                            ifcs,
+                                                            0);
+
+  ASSERT_EQ(1, txdata_count());
+  inject_msg(respond_to_current_txdata(200));
+
+  free(cstr);
 }

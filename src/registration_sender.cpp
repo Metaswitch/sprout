@@ -41,7 +41,9 @@ void RegistrationSender::register_with_application_servers(pjsip_msg* received_r
                                                            bool is_initial_registration,
                                                            SAS::TrailId trail)
 {
-  bool found_match;
+  TRC_DEBUG("Registering %s with application servers", served_user.c_str());
+
+  bool matched_dummy_as;
 
   std::vector<Ifc> fallback_ifcs;
   rapidxml::xml_document<>* root = NULL;
@@ -53,13 +55,13 @@ void RegistrationSender::register_with_application_servers(pjsip_msg* received_r
   }
 
   std::vector<AsInvocation> as_list;
-  interpret_ifcs(received_register_message,
-                 ifcs,
-                 fallback_ifcs,
-                 is_initial_registration,
-                 as_list,
-                 found_match,
-                 trail);
+  match_application_servers(received_register_message,
+                            ifcs,
+                            fallback_ifcs,
+                            is_initial_registration,
+                            as_list,
+                            matched_dummy_as,
+                            trail);
 
   // Loop through the application servers and send the registers.
   for (AsInvocation as : as_list)
@@ -94,7 +96,7 @@ void RegistrationSender::register_with_application_servers(pjsip_msg* received_r
   //  - Update a statistic.
   //  - May trigger the subscriber to be dereigstered if we should reject if
   //    there are no matching application servers.
-  if (((as_list.empty()) && (!found_match)) &&
+  if (((as_list.empty()) && (!matched_dummy_as)) &&
       (is_initial_registration))
   {
     if (_ifc_configuration._no_matching_ifcs_tbl)
@@ -139,6 +141,7 @@ void RegistrationSender::deregister_with_application_servers(const std::string& 
   event.add_var_param(served_user);
   SAS::report_event(event);
 
+  // Create a fake register to use as a base for the 3rd party deregisters.
   status = pjsip_endpt_create_request(stack_data.endpt,
                                       &method,                   // Method
                                       &stack_data.scscf_uri_str, // Target
@@ -171,16 +174,19 @@ void RegistrationSender::deregister_with_application_servers(const std::string& 
   }
 }
 
-void RegistrationSender::interpret_ifcs(pjsip_msg* received_register_msg,
-                                        const Ifcs& ifcs,
-                                        const std::vector<Ifc>& fallback_ifcs,
-                                        bool is_initial_registration,
-                                        std::vector<AsInvocation>& application_servers,
-                                        bool& found_match,
-                                        SAS::TrailId trail)
+void RegistrationSender::match_application_servers(pjsip_msg* received_register_msg,
+                                                   const Ifcs& ifcs,
+                                                   const std::vector<Ifc>& fallback_ifcs,
+                                                   bool is_initial_registration,
+                                                   std::vector<AsInvocation>& application_servers,
+                                                   bool& matched_dummy_as,
+                                                   SAS::TrailId trail)
 {
-  found_match = false;
+  matched_dummy_as = false;
 
+  // Go through the list of iFCs and find which application servers should be
+  // invoked for this request. Save off any application servers that do not
+  // match a dummy AS.
   for (Ifc ifc : ifcs.ifcs_list())
   {
     if (ifc.filter_matches(SessionCase::Originating,
@@ -197,11 +203,10 @@ void RegistrationSender::interpret_ifcs(pjsip_msg* received_register_msg,
         SAS::Event event(trail, SASEvent::IFC_MATCHED_DUMMY_AS, 1);
         event.add_var_param(_ifc_configuration._dummy_as);
         SAS::report_event(event);
-        found_match = true;
+        matched_dummy_as = true;
       }
       else
       {
-        // TODO should found_match be true here?
         application_servers.push_back(ifc.as_invocation());
       }
     }
@@ -212,12 +217,15 @@ void RegistrationSender::interpret_ifcs(pjsip_msg* received_register_msg,
   //  - We haven't found any matching iFCs (true if application_servers is empty
   //    and we didn't find a dummy AS).
   if ((_ifc_configuration._apply_fallback_ifcs) &&
-      ((application_servers.empty()) && (!found_match)))
+      ((application_servers.empty()) && (!matched_dummy_as)))
   {
     TRC_DEBUG("No iFCs apply to this message; looking up fallback iFCs");
     SAS::Event event(trail, SASEvent::STARTING_FALLBACK_IFCS_LOOKUP, 1);
     SAS::report_event(event);
 
+    // Go though the list of fallback iFCs and find which application servers
+    // should be invoked for this request. Save off any application servers that
+    // do match a dummy AS.
     for (Ifc ifc : fallback_ifcs)
     {
       if (ifc.filter_matches(SessionCase::Originating,
@@ -233,7 +241,7 @@ void RegistrationSender::interpret_ifcs(pjsip_msg* received_register_msg,
           SAS::Event event(trail, SASEvent::IFC_MATCHED_DUMMY_AS, 2);
           event.add_var_param(_ifc_configuration._dummy_as);
           SAS::report_event(event);
-          found_match = true;
+          matched_dummy_as = true;
         }
         else
         {
@@ -254,7 +262,7 @@ void RegistrationSender::interpret_ifcs(pjsip_msg* received_register_msg,
     // Check if we didn't find any fallback iFCs. This is true if we haven't
     // found any matching iFCs (true if application_servers is empty and we
     // didn't find a dummy AS). We SAS log this, and increment a statistic.
-    if ((application_servers.empty()) && (!found_match))
+    if ((application_servers.empty()) && (!matched_dummy_as))
     {
       if (_ifc_configuration._no_matching_fallback_ifcs_tbl)
       {
@@ -424,8 +432,8 @@ void RegistrationSender::send_register_to_as(pjsip_msg* received_register_msg,
                 buf);
   }
 
-  // Allocate a temporary structure to record the default handling for this
-  // REGISTER, and send it statefully.
+  // Save off the third party registration data that we may need when we the
+  // register callback is triggered.
   ThirdPartyRegData* tsxdata = new ThirdPartyRegData;
   tsxdata->registration_sender = this;
   tsxdata->subscriber_manager = _subscriber_manager;
@@ -434,9 +442,11 @@ void RegistrationSender::send_register_to_as(pjsip_msg* received_register_msg,
   tsxdata->public_id = served_user;
   tsxdata->expires = expires;
   tsxdata->is_initial_registration = is_initial_registration;
-  pj_status_t resolv_status = PJUtils::send_request(tdata, 0, tsxdata, &build_register_cb);
 
-  if (resolv_status != PJ_SUCCESS)
+  // Build the register callback and send the request statefully.
+  status = PJUtils::send_request(tdata, 0, tsxdata, &build_register_cb);
+
+  if (status != PJ_SUCCESS)
   {
     delete tsxdata; tsxdata = NULL; // LCOV_EXCL_LINE
   }
@@ -467,6 +477,8 @@ RegistrationSender::RegisterCallback::~RegisterCallback()
 
 void RegistrationSender::RegisterCallback::run()
 {
+  TRC_DEBUG("Handling 3rd party register callback for %s", _reg_data->public_id.c_str());
+
   if ((_reg_data->default_handling == SESSION_TERMINATED) &&
       ((_status_code == 408) ||
        (PJSIP_IS_STATUS_IN_CLASS(_status_code, 500))))
@@ -478,8 +490,8 @@ void RegistrationSender::RegisterCallback::run()
     SAS::report_event(event);
 
     // TODO can this call result in a loop of 3rdPartyReg callbacks if the AS
-    // is unreachable? Should we run deregister the sub if this is a 3rd party
-    // deregister??
+    // is unreachable? Should we deregister the sub if this is a 3rd party
+    // deregister since they will already be deregisterd??
     //
     // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
     // where SESSION_TERMINATED is set means that we should deregister "the

@@ -73,8 +73,6 @@ private:
   SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
   bool _force_third_party_register_body;
 
-  /// TODO better method name.
-  ///
   /// Works out which iFCs apply to the received register message and returns a
   /// list of matched application servers.
   ///
@@ -89,18 +87,17 @@ private:
   ///                           initial registration
   /// @param[out] application_servers
   ///                           The matched application servers. Does not
-  ///                           include any dummy application servers.
-  /// @param[out] found_match   Whether we found any matching application
-  ///                           servers. TODO is this needed? This is actually
-  ///                           talking about dummy iFCs - rename to reflect that.
+  ///                           include any dummy application servers
+  /// @param[out] matched_dummy_as
+  ///                           Whether we mathed a dummy application server
   /// @param[in]  trail         The SAS trail ID
-  void interpret_ifcs(pjsip_msg* received_register_msg,
-                      const Ifcs& ifcs,
-                      const std::vector<Ifc>& fallback_ifcs,
-                      bool is_initial_registration,
-                      std::vector<AsInvocation>& application_servers,
-                      bool& found_match,
-                      SAS::TrailId trail);
+  void match_application_servers(pjsip_msg* received_register_msg,
+                                 const Ifcs& ifcs,
+                                 const std::vector<Ifc>& fallback_ifcs,
+                                 bool is_initial_registration,
+                                 std::vector<AsInvocation>& application_servers,
+                                 bool& match_dummy_as,
+                                 SAS::TrailId trail);
 
   /// Sends a 3rd party register to an application server.
   ///
