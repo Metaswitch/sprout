@@ -26,6 +26,7 @@
 #include "fakechronosconnection.hpp"
 #include "mock_store.h"
 #include "rapidxml/rapidxml.hpp"
+#include "mock_snmp_counter_table.hpp"
 
 using ::testing::MatchesRegex;
 using ::testing::HasSubstr;
@@ -102,8 +103,12 @@ public:
                                              PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                              "homedomain",
                                              std::unordered_set<std::string>(),
+                                             std::unordered_set<std::string>(),
+                                             true,
                                              sproutlets,
-                                             std::set<std::string>());
+                                             std::set<std::string>(),
+                                             nullptr,
+                                             nullptr);
 
     std::string aor = "sip:6505550231@homedomain";
     // Get an initial empty AoR record and add a binding.
@@ -874,7 +879,7 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
-// Check data contention in a remote store 
+// Check data contention in a remote store
 TEST_F(SubscriptionTest, SubscriptionWitihRemoteDataContention)
 {
   // Add the base AoR to the remote store
@@ -1694,8 +1699,12 @@ public:
                                              PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                              "homedomain",
                                              std::unordered_set<std::string>(),
+                                             std::unordered_set<std::string>(),
+                                             true,
                                              sproutlets,
-                                             std::set<std::string>());
+                                             std::set<std::string>(),
+                                             nullptr,
+                                             nullptr);
   }
 
   static void TearDownTestCase()

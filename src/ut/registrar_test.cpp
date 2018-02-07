@@ -28,6 +28,7 @@
 #include "rapidxml/rapidxml.hpp"
 #include "mock_hss_connection.h"
 #include "hssconnection.h"
+#include "mock_snmp_counter_table.hpp"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
@@ -264,8 +265,12 @@ public:
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "homedomain",
                                           additional_home_domains,
+                                          std::unordered_set<std::string>(),
+                                          true,
                                           sproutlets,
-                                          std::set<std::string>());
+                                          std::set<std::string>(),
+                                          nullptr,
+                                          nullptr);
   }
 
   ~RegistrarTest()
@@ -3388,8 +3393,12 @@ public:
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "homedomain",
                                           additional_home_domains,
+                                          std::unordered_set<std::string>(),
+                                          true,
                                           sproutlets,
-                                          std::set<std::string>());
+                                          std::set<std::string>(),
+                                          nullptr,
+                                          nullptr);
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
