@@ -1,5 +1,5 @@
 /**
- * @file subscriber_manager.cpp
+ * @file notify_sender.cpp
  *
  * Copyright (C) Metaswitch Networks 2018
  * If license terms are provided to you in a COPYING file in the root directory
@@ -32,8 +32,6 @@ static int xml_print_body(struct pjsip_msg_body *msg_body,
                       PJ_TRUE);
 }
 
-// EM-TODO sort out includes
-
 NotifySender::NotifySender()
 {
 }
@@ -57,11 +55,34 @@ void NotifySender::send_notifys(const std::string& aor_id,
                                    orig_aor._associated_uris :
                                    updated_aor._associated_uris;
 
+
+  // Don't include any emergency registrations in the NOTIFYs - TS specs
+  // say that they shouldn't be present.
+  Bindings orig_bindings;
+
+  for (BindingPair binding_pair : orig_aor.bindings())
+  {
+    if (!binding_pair.second->_emergency_registration)
+    {
+      orig_bindings.insert(binding_pair);
+    }
+  }
+
+  Bindings updated_bindings;
+
+  for (BindingPair binding_pair : updated_aor.bindings())
+  {
+    if (!binding_pair.second->_emergency_registration)
+    {
+      updated_bindings.insert(binding_pair);
+    }
+  }
+
   ClassifiedBindings classified_bindings;
   SubscriberDataUtils::classify_bindings(aor_id,
                                          event_trigger,
-                                         orig_aor.bindings(),
-                                         updated_aor.bindings(),
+                                         orig_bindings,
+                                         updated_bindings,
                                          classified_bindings);
 
   bool associated_uris_changed = (orig_aor._associated_uris !=
@@ -80,12 +101,18 @@ void NotifySender::send_notifys(const std::string& aor_id,
   // The registration state is ACTIVE if we have at least one active binding,
   // otherwise it is TERMINATED.
   RegistrationState reg_state = RegistrationState::TERMINATED;
-  for (SubscriberDataUtils::ClassifiedBinding* classified_binding : classified_bindings)
+
+  for (SubscriberDataUtils::ClassifiedBinding* classified_binding :
+                                                            classified_bindings)
   {
-    if (classified_binding->_contact_event == SubscriberDataUtils::ContactEvent::REGISTERED ||
-        classified_binding->_contact_event == SubscriberDataUtils::ContactEvent::CREATED ||
-        classified_binding->_contact_event == SubscriberDataUtils::ContactEvent::REFRESHED ||
-        classified_binding->_contact_event == SubscriberDataUtils::ContactEvent::SHORTENED)
+    if ((classified_binding->_contact_event ==
+                               SubscriberDataUtils::ContactEvent::REGISTERED) ||
+        (classified_binding->_contact_event ==
+                               SubscriberDataUtils::ContactEvent::CREATED) ||
+        (classified_binding->_contact_event ==
+                               SubscriberDataUtils::ContactEvent::REFRESHED) ||
+        (classified_binding->_contact_event ==
+                               SubscriberDataUtils::ContactEvent::SHORTENED))
     {
       TRC_DEBUG("Registration state ACTIVE on NOTIFY");
       reg_state = RegistrationState::ACTIVE;
@@ -94,12 +121,10 @@ void NotifySender::send_notifys(const std::string& aor_id,
   }
 
   for (SubscriberDataUtils::ClassifiedSubscription* classified_subscription :
-       classified_subscriptions)
+                                                       classified_subscriptions)
   {
     if (classified_subscription->_notify_required)
     {
-      // TODO NotifyUtils needs to use make sure it doesn't send the emergency
-      // bindings in its NOTIFYs.
       TRC_DEBUG("Sending NOTIFY for subscription %s: %s",
                 classified_subscription->_id.c_str(),
                 classified_subscription->_reasons.c_str());
@@ -134,28 +159,28 @@ void NotifySender::send_notifys(const std::string& aor_id,
                 classified_subscription->_id.c_str());
     }
   }
+
+  delete_bindings(classified_bindings);
+  delete_subscriptions(classified_subscriptions);
 }
 
 // Create complete XML body for a NOTIFY
 pj_xml_node* NotifySender::notify_create_reg_state_xml(
-                         pj_pool_t *pool,
-                         std::string& aor,
-                         AssociatedURIs& associated_uris,
-                         Subscription* subscription,
-                         ClassifiedBindings bnis,
-                         RegistrationState reg_state,
-                         SAS::TrailId trail)
+                                  pj_pool_t* pool,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  Subscription* subscription,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  SAS::TrailId trail)
 {
   TRC_DEBUG("Create the XML body for a SIP NOTIFY");
 
-  pj_xml_node *doc, *reg_node, *contact_node, *uri_node;
-  pj_xml_attr *attr;
-
   // Create the root document
-  doc = pj_xml_node_new(pool, &STR_REGINFO);
+  pj_xml_node* doc = pj_xml_node_new(pool, &STR_REGINFO);
 
   // Add attributes to the doc
-  attr = pj_xml_attr_new(pool, &STR_XMLNS_NAME, &STR_XMLNS_VAL);
+  pj_xml_attr* attr = pj_xml_attr_new(pool, &STR_XMLNS_NAME, &STR_XMLNS_VAL);
   pj_xml_add_attr(doc, attr);
   attr = pj_xml_attr_new(pool, &STR_XMLNS_GRUU_NAME, &STR_XMLNS_GRUU_VAL);
   pj_xml_add_attr(doc, attr);
@@ -166,7 +191,9 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
   attr = pj_xml_attr_new(pool, &STR_VERSION, &STR_VERSION_VAL);
   pj_xml_add_attr(doc, attr);
 
-  // Add the state - this will be partial except on an initial subscription
+  // Add the state - this will always be FULL (the subscription RFC says it
+  // should be partial except on an initial subscriptions, but the TS specs
+  // say it should always be full).
   const pj_str_t* state_str = &STR_FULL;
   attr = pj_xml_attr_new(pool, &STR_STATE, state_str);
   pj_xml_add_attr(doc, attr);
@@ -178,17 +205,17 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
   // IRS should be reported (see 5.4.2.1.2 4) e) IV) ).  For now, Clearwater
   // assumes that the same binding/contact data needs to be reported for each
   // IMPU.
-  pj_str_t reg_aor;
-  pj_str_t reg_id;
-  pj_str_t reg_state_str;
 
   // Log any URIs that have been left out of the P-Associated-URI because they
   // are barred.
   std::vector<std::string> barred_uris = associated_uris.get_barred_uris();
+
   if (!barred_uris.empty())
   {
     std::stringstream ss;
-    std::copy(barred_uris.begin(), barred_uris.end(), std::ostream_iterator<std::string>(ss, ","));
+    std::copy(barred_uris.begin(),
+              barred_uris.end(),
+              std::ostream_iterator<std::string>(ss, ","));
     std::string list = ss.str();
     if (!list.empty())
     {
@@ -208,9 +235,9 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
        impu != irs_impus.end();
        ++impu)
   {
-    bool is_wildcard_impu = WildcardUtils::is_wildcard_uri(*impu);
     TRC_DEBUG("Insert registration element for one IRS");
-    // Escape the IMPU as an aor
+
+    bool is_wildcard_impu = WildcardUtils::is_wildcard_uri(*impu);
     std::string unescaped_aor = *impu;
 
     // For each wildcarded identity, the TS specs (24.229) say that the aor
@@ -233,26 +260,31 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
       unescaped_aor = "sip:wildcardimpu@wildcard";
     }
 
+    pj_str_t reg_aor;
     pj_strdup2(pool, &reg_aor, Utils::xml_escape(unescaped_aor).c_str());
     std::string unescaped_reg_id = subscription->_to_tag;
+    pj_str_t reg_id;
     pj_strdup2(pool, &reg_id, Utils::xml_escape(unescaped_reg_id).c_str());
-    reg_state_str = (reg_state == RegistrationState::ACTIVE)
-                                                    ? STR_ACTIVE : STR_TERMINATED;
-    reg_node = create_reg_node(pool, &reg_aor, &reg_id, &reg_state_str);
+    pj_str_t reg_state_str;
+    reg_state_str = (reg_state == RegistrationState::ACTIVE) ? STR_ACTIVE :
+                                                               STR_TERMINATED;
+    pj_xml_node* reg_node = create_reg_node(pool,
+                                            &reg_aor,
+                                            &reg_id,
+                                            &reg_state_str);
 
     // Create the contact nodes
     // For each binding, add a contact node to the registration node
-    for (SubscriberDataUtils::ClassifiedBinding* bni : bnis)
+    for (SubscriberDataUtils::ClassifiedBinding* classified_binding :
+                                                            classified_bindings)
     {
-      // for each attribute, correctly populate
+      std::string unescaped_c_id = classified_binding->_id;
       pj_str_t c_id;
-      pj_str_t c_state;
-      pj_str_t c_event;
-
-      std::string unescaped_c_id = bni->_id;
       pj_strdup2(pool, &c_id, Utils::xml_escape(unescaped_c_id).c_str());
 
-      switch (bni->_contact_event)
+      pj_str_t c_state;
+      pj_str_t c_event;
+      switch (classified_binding->_contact_event)
       {
         case SubscriberDataUtils::ContactEvent::REGISTERED:
           c_event = STR_REGISTERED;
@@ -284,28 +316,23 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
           break;
       }
 
-      contact_node = create_contact_node(pool,
-                                         &c_id,
-                                         &c_state,
-                                         &c_event);
+      pj_xml_node* contact_node = create_contact_node(pool,
+                                                      &c_id,
+                                                      &c_state,
+                                                      &c_event);
 
-      // Create and add URI element
+      // Create and add the URI element.
       pj_str_t c_uri;
 
-      if (bni->_binding->_uri.size() > 0)
+      if (classified_binding->_binding->_uri.size() > 0)
       {
-        std::string unescaped_c_uri = bni->_binding->_uri;
+        std::string unescaped_c_uri = classified_binding->_binding->_uri;
         pj_strdup2(pool, &c_uri, Utils::xml_escape(unescaped_c_uri).c_str());
       }
 
-      uri_node = pj_xml_node_new(pool, &STR_URI);
+      pj_xml_node* uri_node = pj_xml_node_new(pool, &STR_URI);
       pj_strdup(pool, &uri_node->content, &c_uri);
       pj_xml_add_node(contact_node, uri_node);
-
-      pj_str_t gruu;
-      pj_strdup2(pool,
-                 &gruu,
-                 Utils::xml_escape(AoRUtils::pub_gruu_str(bni->_binding, pool)).c_str());
 
       // Add all 'unknown parameters' from the contact header into the contact
       // element as <unknown-param> elements. For example, a contact header that
@@ -320,7 +347,8 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
       //
       // Note that p1 is not included (as it's a URI parameter) and expires is
       // not included (as it is defined in RFC 3261 so is a 'known' parameter).
-      for (const std::pair<std::string, std::string>& param: bni->_binding->_params)
+      for (const std::pair<std::string, std::string>& param :
+                                          classified_binding->_binding->_params)
       {
         // RFC 3680 defines unknown parameters as any parameter not defined in
         // RFC 3261. RFC 3261 defines 'q' and 'expires' so don't add these.
@@ -328,23 +356,31 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
         {
           // Add the parameter value as the element content, and the parameter
           // name as the 'name' attribute.
-          pj_xml_node* unknown_param_node = pj_xml_node_new(pool, &STR_UNKNOWN_PARAM);
+          pj_xml_node* unknown_param_node =
+                                      pj_xml_node_new(pool, &STR_UNKNOWN_PARAM);
           std::string escaped_value = Utils::xml_check_escape(param.second);
           pj_strdup2(pool, &unknown_param_node->content, escaped_value.c_str());
 
           pj_str_t param_name;
           pj_strdup2(pool, &param_name, param.first.c_str());
-          pj_xml_attr* name_attr = pj_xml_attr_new(pool, &STR_NAME, &param_name);
+          pj_xml_attr* name_attr =
+                                  pj_xml_attr_new(pool, &STR_NAME, &param_name);
           pj_xml_add_attr(unknown_param_node, name_attr);
 
           pj_xml_add_node(contact_node, unknown_param_node);
         }
       }
 
+      pj_str_t gruu;
+      pj_strdup2(pool,
+                 &gruu,
+                 Utils::xml_escape(AoRUtils::pub_gruu_str(classified_binding->_binding,
+                                                          pool))
+                                  .c_str());
+
       if (gruu.slen != 0)
       {
         TRC_DEBUG("Create pub-gruu node");
-
         pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_XML_PUB_GRUU);
         attr = pj_xml_attr_new(pool, &STR_URI, &gruu);
         pj_xml_add_attr(gruu_node, attr);
@@ -374,25 +410,25 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
 }
 
 // Create the body of a SIP NOTIFY
-pj_status_t NotifySender::notify_create_body(pjsip_msg_body* body,
-                               pj_pool_t *pool,
-                               std::string& aor,
-                               AssociatedURIs& associated_uris,
-                               Subscription* subscription,
-                               ClassifiedBindings bnis,
-                               RegistrationState reg_state,
-                               SAS::TrailId trail)
+pj_status_t NotifySender::notify_create_body(
+                                  pjsip_msg_body* body,
+                                  pj_pool_t *pool,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  Subscription* subscription,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  SAS::TrailId trail)
 {
   TRC_DEBUG("Create body of a SIP NOTIFY");
 
-  pj_xml_node *doc;
-  doc = notify_create_reg_state_xml(pool,
-                                    aor,
-                                    associated_uris,
-                                    subscription,
-                                    bnis,
-                                    reg_state,
-                                    trail);
+  pj_xml_node* doc = notify_create_reg_state_xml(pool,
+                                                 aor,
+                                                 associated_uris,
+                                                 subscription,
+                                                 classified_bindings,
+                                                 reg_state,
+                                                 trail);
 
   if (doc == NULL)
   {
@@ -445,15 +481,15 @@ pj_status_t NotifySender::create_request_from_subscription(
 
 // Pass the correct subscription parameters in to create_notify
 pj_status_t NotifySender::create_subscription_notify(
-                                    pjsip_tx_data** tdata_notify,
-                                    Subscription* s,
-                                    std::string aor,
-                                    AssociatedURIs& associated_uris,
-                                    int cseq,
-                                    ClassifiedBindings bnis,
-                                    RegistrationState reg_state,
-                                    int now,
-                                    SAS::TrailId trail)
+                                  pjsip_tx_data** tdata_notify,
+                                  Subscription* s,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  int cseq,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  int now,
+                                  SAS::TrailId trail)
 {
   // Set the correct subscription state header
   SubscriptionState state = SubscriptionState::ACTIVE;
@@ -470,7 +506,7 @@ pj_status_t NotifySender::create_subscription_notify(
                                      aor,
                                      associated_uris,
                                      cseq,
-                                     bnis,
+                                     classified_bindings,
                                      reg_state,
                                      state,
                                      expiry,
@@ -478,16 +514,17 @@ pj_status_t NotifySender::create_subscription_notify(
   return status;
 }
 
-// Create the request with to and from headers and a null body string, then add the body.
+// Create the request with to and from headers and a null body string, then add
+// the body.
 pj_status_t NotifySender::create_notify(
                                     pjsip_tx_data** tdata_notify,
                                     Subscription* subscription,
-                                    std::string aor,
-                                    AssociatedURIs& associated_uris,
+                                    const std::string& aor,
+                                    const AssociatedURIs& associated_uris,
                                     int cseq,
-                                    ClassifiedBindings bnis,
-                                    RegistrationState reg_state,
-                                    SubscriptionState subscription_state,
+                                    const ClassifiedBindings& classified_bindings,
+                                    const RegistrationState& reg_state,
+                                    const SubscriptionState& subscription_state,
                                     int expiry,
                                     SAS::TrailId trail)
 {
@@ -498,7 +535,7 @@ pj_status_t NotifySender::create_notify(
   if (status == PJ_SUCCESS)
   {
 
-    // write tags to to and from headers
+    // Write tags for the to and from headers
     pjsip_to_hdr *to;
     to = (pjsip_to_hdr*) pjsip_msg_find_hdr((*tdata_notify)->msg,
                                             PJSIP_H_TO,
@@ -516,17 +553,15 @@ pj_status_t NotifySender::create_notify(
     pj_strdup((*tdata_notify)->pool, &from->tag, &from_tag);
 
 
-    // populate route headers
-    for (std::list<std::string>::const_iterator i = subscription->_route_uris.begin();
-         i != subscription->_route_uris.end();
-         ++i)
+    // Populate route headers
+    for (std::string route : subscription->_route_uris)
     {
       pjsip_route_hdr* route_hdr;
       route_hdr = pjsip_route_hdr_create((*tdata_notify)->pool);
-      // SDM-REFACTOR-TODO We should call pjsip_parse_hdr here like in the contact
+      // TECH-DEBT-TODO We should call pjsip_parse_hdr here like in the contact
       // filtering class.
-      route_hdr->name_addr.uri = PJUtils::uri_from_string(*i,
-                                                          (*tdata_notify)->pool);
+      route_hdr->name_addr.uri =
+                         PJUtils::uri_from_string(route, (*tdata_notify)->pool);
       pj_list_push_back( &(*tdata_notify)->msg->hdr, route_hdr);
     }
 
@@ -536,8 +571,8 @@ pj_status_t NotifySender::create_notify(
     pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
 
     // Add the Subscription-State header
-    pjsip_sub_state_hdr* sub_state_hdr = pjsip_sub_state_hdr_create((*tdata_notify)->pool);
-
+    pjsip_sub_state_hdr* sub_state_hdr =
+                             pjsip_sub_state_hdr_create((*tdata_notify)->pool);
 
     if (subscription_state == SubscriptionState::TERMINATED)
     {
@@ -563,7 +598,7 @@ pj_status_t NotifySender::create_notify(
 
     pj_list_push_back( &(*tdata_notify)->msg->hdr, sub_state_hdr);
 
-    // complete body
+    // Complete body
     pjsip_msg_body *body2;
     body2 = PJ_POOL_ZALLOC_T((*tdata_notify)->pool, pjsip_msg_body);
     status = notify_create_body(body2,
@@ -571,7 +606,7 @@ pj_status_t NotifySender::create_notify(
                                 aor,
                                 associated_uris,
                                 subscription,
-                                bnis,
+                                classified_bindings,
                                 reg_state,
                                 trail);
     (*tdata_notify)->msg->body = body2;

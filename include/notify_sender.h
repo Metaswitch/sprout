@@ -38,7 +38,6 @@ public:
   virtual ~NotifySender();
 
   // See RFC 3265
-  // EM-TODO: Combine into one state?
   enum class RegistrationState
   {
     ACTIVE,
@@ -57,7 +56,6 @@ public:
     TERMINATED
   };
 
-  // TODO: Do we send the correct events always?
   enum class ContactEvent
   {
     REGISTERED,
@@ -69,14 +67,19 @@ public:
     UNREGISTERED
   };
 
-  /// Create and send any appropriate NOTIFYs
+  /// This compares the original and updated AoRs and sends any NOTIFYs.
   ///
-  /// @param aor_id       The AoR ID
-  /// @param associated_uris
-  ///                     The IMPUs associated with this IRS
-  /// @param aor_pair     The AoR pair to send NOTIFYs for
-  /// @param now          The current time
-  /// @param trail        SAS trail
+  /// @param aor_id[in]        - The AoR ID.
+  /// @param orig_aor[in]      - The original AoR.
+  /// @param updated_aor[in]   - The updated AoR.
+  /// @param event_trigger[in] - What action triggered this call (can be USER,
+  ///                            ADMIN, or TIMEOUT)
+  /// @param now[in]           - The current time (used for calculating expiry
+  ///                            timers - we want the NotifySender to use the
+  ///                            same time as the other components so this is
+  ///                            passed in rather than being calculated within
+  ///                            the function).
+  /// @param trail[in]         - The SAS trail ID.
   virtual void send_notifys(const std::string& aor_id,
                             const AoR& orig_aor,
                             const AoR& updated_aor,
@@ -97,51 +100,49 @@ private:
                                    pj_str_t* event);
 
   pj_xml_node* notify_create_reg_state_xml(
-                           pj_pool_t *pool,
-                           std::string& aor,
-                           AssociatedURIs& associated_uris,
-                           Subscription* subscription,
-                           ClassifiedBindings bnis,
-                           RegistrationState reg_state,
-                           SAS::TrailId trail);
+                                  pj_pool_t *pool,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  Subscription* subscription,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  SAS::TrailId trail);
 
   pj_status_t notify_create_body(pjsip_msg_body* body,
-                                 pj_pool_t *pool,
-                                 std::string& aor,
-                                 AssociatedURIs& associated_uris,
-                                 Subscription* subscription,
-                                 ClassifiedBindings bnis,
-                                 RegistrationState reg_state,
-                                 SAS::TrailId trail);
+                                  pj_pool_t *pool,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  Subscription* subscription,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  SAS::TrailId trail);
 
-  pj_status_t create_request_from_subscription(
-                                       pjsip_tx_data** p_tdata,
-                                       Subscription* subscription,
-                                       int cseq,
-                                       pj_str_t* body);
-
+  pj_status_t create_request_from_subscription(pjsip_tx_data** p_tdata,
+                                               Subscription* subscription,
+                                               int cseq,
+                                               pj_str_t* body);
 
   pj_status_t create_subscription_notify(
-                        pjsip_tx_data** tdata_notify,
-                        Subscription* s,
-                        std::string aor,
-                        AssociatedURIs& associated_uris,
-                        int cseq,
-                        ClassifiedBindings bnis,
-                        RegistrationState reg_state,
-                        int now,
-                        SAS::TrailId trail);
-  pj_status_t create_notify(
-                        pjsip_tx_data** tdata_notify,
-                        Subscription* subscription,
-                        std::string aor,
-                        AssociatedURIs& associated_uris,
-                        int cseq,
-                        ClassifiedBindings bnis,
-                        RegistrationState reg_state,
-                        SubscriptionState subscription_state,
-                        int expiry,
-                        SAS::TrailId trail);
+                                  pjsip_tx_data** tdata_notify,
+                                  Subscription* s,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  int cseq,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  int now,
+                                  SAS::TrailId trail);
+
+  pj_status_t create_notify(pjsip_tx_data** tdata_notify,
+                            Subscription* subscription,
+                            const std::string& aor,
+                            const AssociatedURIs& associated_uris,
+                            int cseq,
+                            const ClassifiedBindings& classified_bindings,
+                            const RegistrationState& reg_state,
+                            const SubscriptionState& subscription_state,
+                            int expiry,
+                            SAS::TrailId trail);
 
 };
 

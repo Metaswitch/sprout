@@ -206,6 +206,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_s4.cpp \
                        s4_chronoshandlers_test.cpp \
                        sprout_xml_utils_test.cpp \
+                       notify_sender_test.cpp \
                        mock_notify_sender.cpp
 
 COVERAGE_ROOT := ..
