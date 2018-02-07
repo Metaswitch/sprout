@@ -19,6 +19,7 @@
 #include "pjsip.h"
 #include "pjsip_simple.h"
 #include "boost/algorithm/string_regex.hpp"
+#include "mock_snmp_counter_table.hpp"
 
 #include <mutex>
 
@@ -28,6 +29,7 @@ using testing::DoAll;
 using testing::Invoke;
 using testing::Return;
 using testing::WithArg;
+using testing::Expectation;
 using testing::_;
 
 #define NUM_FORKS 3
@@ -60,6 +62,89 @@ public:
   const std::string _next_hop;
 };
 
+// A SproutletTsx that routes the message to the specified forwarding URI.
+class FakeForwarderTsx: public SproutletTsx
+{
+public:
+  FakeForwarderTsx(Sproutlet* sproutlet,
+                   std::string forwarding_uri) :
+   SproutletTsx(sproutlet),
+   forwarding_uri(forwarding_uri)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    TRC_DEBUG("FakeForwarderTsx routing to URI: %s", forwarding_uri.c_str());
+    pj_pool_t* pool = get_pool(req);
+    pjsip_route_hdr* route = pjsip_route_hdr_create(pool);
+    route->name_addr.uri = PJUtils::uri_from_string(forwarding_uri, pool, PJ_FALSE);
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)route);
+
+    send_request(req);
+  }
+
+  std::string forwarding_uri;
+};
+
+// A Sproutlet that routes the message to a forwarding URI specified by a mock
+// function call. Mock functions also determine whether the Sproutlet is
+// interested, and if not, its next hop.
+class MockForwarderSproutlet : public Sproutlet
+{
+public:
+  MockForwarderSproutlet(const std::string& service_name,
+                         int port,
+                         const std::string& uri,
+                         const std::string& service_host,
+                         const std::list<std::string> aliases={},
+                         SNMP::FakeSuccessFailCountByRequestTypeTable* fake_inc_tbl = NULL,
+                         SNMP::FakeSuccessFailCountByRequestTypeTable* fake_out_tbl = NULL,
+                         const std::string& network_function="") :
+    Sproutlet(service_name,
+              port,
+              uri,
+              service_host,
+              aliases,
+              fake_inc_tbl,
+              fake_out_tbl,
+              network_function)
+  {
+  }
+
+  MOCK_METHOD0(get_next_hop, std::string());
+  MOCK_METHOD0(is_interested, bool());
+  MOCK_METHOD0(get_forwarding_uri, std::string());
+
+  SproutletTsx* get_tsx(SproutletHelper* helper,
+                        const std::string& alias,
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail)
+  {
+    if (is_interested())
+    {
+      std::string forwarding_uri = get_forwarding_uri();
+      TRC_DEBUG("MockForwarderSproutlet interested, returning FakeForwarderTsx for URI %s",
+                forwarding_uri.c_str());
+      return (SproutletTsx*)new FakeForwarderTsx(this,
+                                                 forwarding_uri);
+    }
+    else
+    {
+      std::string _next_hop = get_next_hop();
+      TRC_DEBUG("MockForwarderSproutlet uninterested, returning NULL with next hop %s",
+                _next_hop.c_str());
+      pjsip_sip_uri* base_uri = helper->get_routing_uri(req, this);
+      next_hop = helper->next_hop_uri(_next_hop,
+                                      base_uri,
+                                      pool);
+      return NULL;
+    }
+  }
+};
+
 template <class T>
 class UninterestedSproutlet : public Sproutlet
 {
@@ -84,6 +169,7 @@ public:
     next_hop = helper->next_hop_uri(_next_hop,
                                     base_uri,
                                     pool);
+    TRC_DEBUG("UninterestedSproutlet returning NULL Tsx");
     return NULL;
   }
 
@@ -633,7 +719,7 @@ public:
 
   void on_rx_initial_request(pjsip_msg* req)
   {
-    // Regardless of what we receive, forward the request on using a Route
+    // Regardless of what we receive, forward the request on using a Route 
     // header to route the message to the specified (external) URI.  This is
     // used to test Tel URIs, which are not themselves routable.
     string forwarding_uri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
@@ -805,6 +891,7 @@ public:
     add_host_mapping("proxy2.awaydomain", "10.10.20.2");
     add_host_mapping("node1.awaydomain", "10.10.28.1");
     add_host_mapping("node2.awaydomain", "10.10.28.2");
+    add_host_mapping("mock-fwd-nf-2.proxy1.remotedomain", "10.10.30.1");
 
     // Create the Test Sproutlets.
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, "sip:fwd.homedomain;transport=tcp", ""));
@@ -835,21 +922,49 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxNextHop>("teltest1", 44555, "sip:teltest1.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", "teltest2"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletURIForwarder>("teltest2", 0, "sip:teltest2.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", ""));
     _sproutlets.push_back(new UninterestedSproutlet<FakeSproutletTsxNextHop>("teltest3", 44666, "sip:teltest3.homedomain;transport=tcp", "", "", NULL, NULL, "teltest-nf", "teltest2"));
+    _mock_forwarder_sproutlet_nf_1 = new MockForwarderSproutlet("mock-fwd-1",
+                                                                0,
+                                                                "sip:mocksproutlet-1.homedomain;transport=tcp",
+                                                                "",
+                                                                { "mock-fwd-1", "mock-fwd-nf-1" },
+                                                                NULL,
+                                                                NULL,
+                                                                "mock-fwd-nf-1");
+    _sproutlets.push_back(_mock_forwarder_sproutlet_nf_1);
+    _mock_forwarder_sproutlet_nf_2 = new MockForwarderSproutlet("mock-fwd-2",
+                                                                0,
+                                                                "sip:mocksproutlet-2.homedomain;transport=tcp",
+                                                                "",
+                                                                { "mock-fwd-2" , "mock-fwd-nf-2" },
+                                                                NULL,
+                                                                NULL,
+                                                                "mock-fwd-nf-2");
+    _sproutlets.push_back(_mock_forwarder_sproutlet_nf_2);
 
-    // Create a host alias.
-    std::unordered_set<std::string> host_aliases;
-    host_aliases.insert("proxy1.homedomain-alias");
+    // Create local aliases.
+    std::unordered_set<std::string> host_local_aliases;
+    host_local_aliases.insert("proxy1.homedomain-alias");
+    host_local_aliases.insert("scscf.proxy1.homedomain");
 
-    // We need to add this one for a UT.
-    host_aliases.insert("scscf.proxy1.homedomain");
+    // Create a remote alias.
+    std::unordered_set<std::string> host_remote_aliases;
+    host_remote_aliases.insert("proxy1.remotedomain");
+
+    // Create mock SNMP counters.
+    _mock_route_to_remote_alias_counter = new MockSnmpCounterTable();
+    _mock_accept_for_remote_alias_counter = new MockSnmpCounterTable();
 
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "proxy1.homedomain",
-                                host_aliases,
+                                host_local_aliases,
+                                host_remote_aliases,
+                                false,
                                 _sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                _mock_route_to_remote_alias_counter,
+                                _mock_accept_for_remote_alias_counter);
 
     // Schedule timers.
     SipTest::poll();
@@ -862,6 +977,9 @@ public:
     pjsip_tsx_layer_destroy();
 
     delete _proxy;
+
+    delete _mock_route_to_remote_alias_counter;
+    delete _mock_accept_for_remote_alias_counter;
 
     for (std::list<Sproutlet*>::iterator i = _sproutlets.begin();
          i != _sproutlets.end();
@@ -910,7 +1028,7 @@ public:
     Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
                                                             unused_alias,
                                                             unused_local_hostname,
-                                                            unused_selection_type);
+                                                            unused_selection_type).sproutlet;
     if (sproutlet != NULL)
     {
       service_name = sproutlet->service_name();
@@ -1080,10 +1198,18 @@ protected:
 
   static SproutletProxy* _proxy;
   static std::list<Sproutlet*> _sproutlets;
+  static MockSnmpCounterTable* _mock_route_to_remote_alias_counter;
+  static MockSnmpCounterTable* _mock_accept_for_remote_alias_counter;
+  static MockForwarderSproutlet* _mock_forwarder_sproutlet_nf_1;
+  static MockForwarderSproutlet* _mock_forwarder_sproutlet_nf_2;
 };
 
+MockSnmpCounterTable* SproutletProxyTest::_mock_route_to_remote_alias_counter;
+MockSnmpCounterTable* SproutletProxyTest::_mock_accept_for_remote_alias_counter;
 SproutletProxy* SproutletProxyTest::_proxy;
 std::list<Sproutlet*> SproutletProxyTest::_sproutlets;
+MockForwarderSproutlet* SproutletProxyTest::_mock_forwarder_sproutlet_nf_1;
+MockForwarderSproutlet* SproutletProxyTest::_mock_forwarder_sproutlet_nf_2;
 
 TEST_F(SproutletProxyTest, NullSproutlet)
 {
@@ -3299,7 +3425,7 @@ TEST_F(SproutletProxyTest, SproutletSelection)
   std::string uri_str = "sip:b2bua@scscf.proxy1.homedomain:44444;service=fwd";
   pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri_str, stack_data.pool, PJ_FALSE);
 
-  // Shoud match fwd.
+  // Should match fwd.
   service_name = match_sproutlet_from_uri((pjsip_uri*)uri);
   ASSERT_EQ("fwd", service_name);
 
@@ -3398,4 +3524,365 @@ TEST_F(SproutletProxyTest, SproutletCopiesOriginalTransport)
 
   delete tp1;
   delete tp2;
+}
+
+// Test that requests recieved off the wire for a remote alias are handled
+// locally.
+TEST_F(SproutletProxyTest, ServeRemoteAliasFromWire)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing a remote alias of this node.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@awaydomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:mock-fwd-nf-1.proxy1.remotedomain;transport=TCP;lr>";
+
+  // We expect the statistic for requests accepted on behalf of remote aliases
+  // to be incremented.
+  EXPECT_CALL(*_mock_accept_for_remote_alias_counter, increment());
+
+  // We expect the relevant Sproutlet to be invoked.
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, is_interested()).WillOnce(Return(true));
+
+  //  The Sproutlet forwards the request to a 'remote' node.
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_forwarding_uri()).WillOnce(Return("sip:proxy1.awaydomain;transport=TCP;lr"));
+
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting a 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
+  free_txdata();
+
+  // Check the INVITE
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that the route header is correct.
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+// Test that requests for a remote alias are forwarded to that alias when
+// transitioning a network function boundary.
+TEST_F(SproutletProxyTest, ForwardRemoteAliasOnNfBoundary)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, is_interested())
+    .WillOnce(Return(true));
+
+  // The Sproutlet should forward the request to a remote alias of this node
+  // that is part of a different network function.
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_forwarding_uri())
+    .WillOnce(Return("sip:mock-fwd-nf-2.proxy1.remotedomain;transport=TCP;lr"));
+
+  // The statistic for the number of requests routed to a remote alias should
+  // be incremented.
+  EXPECT_CALL(*_mock_route_to_remote_alias_counter, increment());
+
+  // Inject the message with a route header referencing our mock Sproutlet.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@awaydomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:mock-fwd-nf-1.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+
+  // Expecting a 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
+  free_txdata();
+
+  // Check the INVITE
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.30.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that the route header is correct
+  EXPECT_EQ("Route: <sip:mock-fwd-nf-2.proxy1.remotedomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+// Test that requests for a remote Sproutlet are handled locally if they do not
+// cross a network function boundary.
+TEST_F(SproutletProxyTest, ServeRemoteAliasWithinNf)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, is_interested())
+    .Times(2).WillRepeatedly(Return(true));
+
+  // The mock Sproutlet will first attempt to forward the request to a remote
+  // Sproutlet.
+  Expectation first = EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_forwarding_uri())
+                        .WillOnce(Return("sip:mock-fwd-1.proxy1.remotedomain;transport=TCP;lr"));
+
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_forwarding_uri())
+    .After(first).WillOnce(Return("sip:proxy1.awaydomain;transport=TCP;lr"));
+
+  // Inject a message with the URI of our mock Sproutlet.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@awaydomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:mock-fwd-nf-1.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+
+  // Expecting a 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
+  free_txdata();
+
+  // Check the INVITE
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that the route header is correct
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+// Test that requests for remote aliases off the wire are handled locally,
+// even if an uninterested Sproutlet is encountered first.
+TEST_F(SproutletProxyTest, ServeRemoteAliasFromWireUninterested)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing a remote alias of this node.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@awaydomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:mock-fwd-nf-1.proxy1.remotedomain;transport=TCP;lr>";
+
+  EXPECT_CALL(*_mock_accept_for_remote_alias_counter, increment());
+
+  // First the mock Sproutlet will be uninterested.
+  Expectation first = EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, is_interested())
+                        .WillOnce(Return(false));
+
+  // The Sproutlet will provide a next hop, of the mock again.
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_next_hop())
+    .WillOnce(Return("mock-fwd-1"));
+
+  // On the next call it will be interested.
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, is_interested())
+              .After(first).WillOnce(Return(true));
+
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_forwarding_uri())
+    .WillOnce(Return("sip:proxy1.awaydomain;transport=TCP;lr"));
+
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting a 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
+  free_txdata();
+
+  // Check the INVITE
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that the first Route header has been removed.
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+// Test that requests for a remote Sproutlet are handled locally if they do not
+// cross a network function boundary, even if they encounter an uninterested
+// Sproutlet.
+TEST_F(SproutletProxyTest, ServeRemoteAliasWithinNfUninterested)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Initially the mock Sproutlet is uninterested, and will provide a next hop
+  // of its own name.
+  Expectation first = EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, is_interested())
+                        .WillOnce(Return(false));
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_next_hop())
+    .WillOnce(Return("mock-fwd-1"));
+
+  // Next time round the mock Sproutlet is interested, and will attempt to
+  // forward the request to a remote alias.
+  Expectation second = EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, is_interested())
+                         .After(first).WillOnce(Return(true));
+  Expectation third = EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_forwarding_uri())
+                        .After(second).WillOnce(Return("sip:mock-fwd-1.proxy1.remotedomain;transport=TCP;lr"));
+
+  // We expect the request to be handled locally.
+  Expectation fourth = EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, is_interested())
+                                   .After(third).WillOnce(Return(true));
+  EXPECT_CALL(*_mock_forwarder_sproutlet_nf_1, get_forwarding_uri())
+    .After(fourth).WillOnce(Return("sip:proxy1.awaydomain;transport=TCP;lr"));
+
+  // Inject a message with the URI of our mock Sproutlet.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@awaydomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:mock-fwd-nf-1.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+
+  // Expecting a 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To"));
+  free_txdata();
+
+  // Check the INVITE
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check that the route header is correct
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
 }

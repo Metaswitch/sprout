@@ -22,6 +22,7 @@
 #include "test_interposer.hpp"
 #include "mock_subscriber_manager.h"
 #include "rapidxml/rapidxml.hpp"
+#include "mock_snmp_counter_table.hpp"
 
 using ::testing::MatchesRegex;
 using ::testing::HasSubstr;
@@ -239,8 +240,12 @@ public:
                                              PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                              "homedomain",
                                              std::unordered_set<std::string>(),
+                                             std::unordered_set<std::string>(),
+                                             true,
                                              sproutlets,
-                                             std::set<std::string>());
+                                             std::set<std::string>(),
+                                             NULL,
+                                             NULL);
   }
 
   static void TearDownTestCase()

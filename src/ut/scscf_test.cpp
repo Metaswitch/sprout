@@ -40,6 +40,7 @@
 #include "testingcommon.h"
 #include "mock_subscriber_manager.h"
 #include "aor_test_utils.h"
+#include "mock_snmp_counter_table.hpp"
 
 using namespace std;
 using namespace TestingCommon;
@@ -445,8 +446,12 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
                                 additional_home_domains,
+                                std::unordered_set<std::string>(),
+                                true,
                                 sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                nullptr,
+                                nullptr);
   }
 
   ~SCSCFTest()
@@ -10492,8 +10497,12 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
                                 additional_home_domains,
+                                std::unordered_set<std::string>(),
+                                true,
                                 sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                nullptr,
+                                nullptr);
   }
 
   ~SCSCFTestWithoutICSCF()
@@ -10606,8 +10615,12 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
                                 additional_home_domains,
+                                std::unordered_set<std::string>(),
+                                true,
                                 sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                nullptr,
+                                nullptr);
   }
 
   ~SCSCFTestWithRemoteSDM()
@@ -10703,8 +10716,12 @@ class SCSCFTestWithRalf : public SCSCFTestBase
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
                                 additional_home_domains,
+                                std::unordered_set<std::string>(),
+                                true,
                                 sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                nullptr,
+                                nullptr);
   }
 
   ~SCSCFTestWithRalf()
