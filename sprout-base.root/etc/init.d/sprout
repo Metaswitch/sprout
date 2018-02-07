@@ -83,7 +83,9 @@ get_settings()
         scscf=5054
         mmtel=5055
 
-        alias_list=""
+        local_alias_list=""
+        remote_alias_list=""
+        always_serve_remote_aliases="Y"
         default_session_expires=600
         signaling_dns_server=127.0.0.1
         blacklisted_scscf_uris=""
@@ -187,6 +189,8 @@ get_daemon_args()
         [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
         [ -z "$dummy_app_server" ] || dummy_app_server_arg="--dummy-app-server=$dummy_app_server"
         [ -z "$sprout_request_on_queue_timeout" ] || request_on_queue_timeout_arg="--request-on-queue-timeout=$sprout_request_on_queue_timeout"
+        [ -z "$alias_list" ] || deprecated_alias_list_arg="--alias=$alias_list"
+        [ "$always_serve_remote_aliases" != "Y" ] || always_serve_remote_aliases_arg="--always-serve-remote-aliases"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -237,7 +241,10 @@ get_daemon_args()
                      --analytics=$log_directory
                      --log-file=$log_directory
                      --log-level=$log_level
-                     --alias=$public_ip,$public_hostname,$alias_list
+                     $deprecated_alias_list_arg
+                     --local-alias-list=$public_ip,$public_hostname,$local_alias_list
+                     --remote-alias-list=$remote_alias_list
+                     $always_serve_remote_aliases_arg
                      --homestead-timeout=$sprout_homestead_timeout_ms"
 
         if [ -n "$reg_max_expires" ]

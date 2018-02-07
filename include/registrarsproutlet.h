@@ -130,28 +130,29 @@ protected:
                                                  int& num_contact_headers);
 
   void get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
-                             std::string private_id, ///<private ID that the request refers to
+                             const std::string& private_id, ///<private ID that the request refers to
+                             const std::string& aor_id,
                              const int& now,
                              Bindings& updated_bindings,
                              std::vector<std::string>& binding_ids_to_remove);
 
   bool get_private_id(pjsip_msg* req, std::string& id);
-  std::string get_binding_id(pjsip_contact_hdr *contact);
+  std::string get_binding_id(pjsip_contact_hdr* contact);
 
   void add_contact_headers(pjsip_msg* rsp,
                            pjsip_msg* req,
-                           Bindings all_bindings,
+                           const Bindings& all_bindings,
                            int now,
-                           std::string public_id,
+                           const std::string& public_id,
                            SAS::TrailId trail);
   void handle_path_headers(pjsip_msg* rsp,
                            pjsip_msg* req,
-                           Bindings bindings);
+                           const Bindings& bindings);
   void add_service_route_header(pjsip_msg* rsp,
                                 pjsip_msg* req);
   void add_p_associated_uri_headers(pjsip_msg* rsp,
                                     HSSConnection::irs_info& irs_info,
-                                    std::string aor,
+                                    const std::string& aor,
                                     SAS::TrailId trail);
 
   /// Get what type of registration this is.
@@ -161,9 +162,9 @@ protected:
                          const std::vector<std::string>& binding_ids_to_remove);
 
   /// Track the register statistics
-  void track_register_attempts_statistics(RegisterType rt);
-  void track_register_successes_statistics(RegisterType rt);
-  void track_register_failures_statistics(RegisterType rt);
+  void track_register_attempts_statistics(const RegisterType& rt);
+  void track_register_successes_statistics(const RegisterType& rt);
+  void track_register_failures_statistics(const RegisterType& rt);
 
   RegistrarSproutlet* _registrar;
 
