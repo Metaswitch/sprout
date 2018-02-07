@@ -18,6 +18,7 @@ namespace AoRTestUtils
   const std::string BINDING_ID = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1";
   const std::string SUBSCRIPTION_ID = "1234";
   const std::string TIMER_ID = "123";
+  const std::string SUBSCRIPTION_URI = "<sip:5102175698@cw-ngv.com>";
 
   inline Binding*
     build_binding(std::string aor_id,
