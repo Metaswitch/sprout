@@ -549,18 +549,10 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           }
         }
 
-        /*
-        // Delete bindings to fix memory leak - is there an easier way of doing
-        // this? SDM-REFACTOR-TODO
-        for (std::map<std::string, Binding*>::iterator binding = bindings.begin();
-             binding != bindings.end();
-             binding++)
+        for (BindingPair binding : bindings)
         {
-          delete binding->second;
-          binding->second = NULL;
+          delete binding.second;
         }
-        */
-
       }
 
       if (!emergency)
@@ -748,18 +740,10 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       Bindings bindings;
       _scscf->remove_binding(i->second, _target_aor, bindings, trail());
 
-      /*
-      // Delete bindings to fix memory leak - is there an easier way of doing
-      // this? SDM-REFACTOR-TODO
-      for (std::map<std::string, Binding*>::iterator binding = bindings.begin();
-           binding != bindings.end();
-           binding++)
+      for (BindingPair binding : bindings)
       {
-        delete binding->second;
-        binding->second = NULL;
+        delete binding.second;
       }
-      */
-
     }
   }
 
@@ -1851,18 +1835,10 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       SAS::report_event(event);
     }
 
-    /*
-    // Delete bindings to fix memory leak - is there an easier way of doing
-    // this? Also signal 11 when I include this. SDM-REFACTOR-TODO
-    for (std::map<std::string, Binding*>::iterator binding = bindings.begin();
-         binding != bindings.end();
-         binding++)
+    for (BindingPair binding : bindings)
     {
-      delete binding->second;
-      binding->second = NULL;
+      delete binding.second;
     }
-    */
-
   }
   else
   {
