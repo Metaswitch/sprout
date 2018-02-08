@@ -469,12 +469,31 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Pass the response to the ACR.
   acr->tx_response(rsp);
 
-  // Send the response
-  send_response(rsp);
-
   // Send the ACR and delete it.
   acr->send();
   delete acr; acr = NULL;
+
+  if (!AoRUtils::contains_emergency_binding(all_bindings))
+  {
+    int max_expiry = AoRUtils::get_max_expiry(all_bindings, now);
+
+    std::string as_reg_id = public_id;
+    if (irs_info._associated_uris.is_impu_barred(public_id))
+    {
+      as_reg_id = default_impu;
+    }
+
+    _registrar->_sm->register_with_application_servers(req,
+                                                       rsp,
+                                                       as_reg_id,
+                                                       irs_info._service_profiles[public_id],
+                                                       max_expiry,
+                                                       (rt == RegisterType::INITIAL),
+                                                       trail());
+  }
+
+  // Send the response
+  send_response(rsp);
 
   // Tidy up memory.
   for (BindingPair bindings : all_bindings)
