@@ -57,6 +57,7 @@ using ::testing::SaveArg;
 using ::testing::SetArgReferee;
 using ::testing::DoAll;
 using ::testing::StrictMock;
+using ::testing::InSequence;
 
 // TODO - make this class more consistent with the
 // TestingCommon::SubscriptionBuilder class (ie. have function "set_route",
@@ -9488,31 +9489,34 @@ TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 // manager during Call Diversion results in sprout sending a 504 to the Call
 // Diversion AS.
 //
-// The calls to the HSS, and the returned codes, are:
-//  - query HSS for term. iFCs for orig. callee - returns 200 OK
-//  - no need to query HSS for orig. iFCs for orig. callee, as they are cached
-//  - query HSS for orig. iFCs for diverted to callee - returns 503 error
+// The calls to the subscriber manager, and the returned codes, are:
+//  - SM queries HSS for term. iFCs for orig. callee - returns 200 OK
+//               -- ISSUE TAKES DOWN HSS --
+//  - SM queries the HSS to determine if the call was retargeted - returns 503
+//    error. Without anything to prove otherwise, scscf assumes retarget happened
+//  - query HSS for orig. iFCs for orig. callee - returns 503
 //
 TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 {
+  InSequence s;
+
   // Set up callee info.
-  HSSConnection::irs_info irs_info_1;
-  set_irs_info(irs_info_1, "6505551234", "homedomain");
-  char* ifc_str_1 = add_single_ifc(irs_info_1, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  setup_callee_ifc_call(irs_info_1, "sip:6505551234@homedomain", true);
-
-  // Set up diverted-to callee info.
-  // The call to get this info should return an error, but still set up the info
-  // to include an iFC for AS2, to test if we will still attempt to go to this AS.
-  HSSConnection::irs_info irs_info_2;
-  set_irs_info(irs_info_2, "6505555678", "homedomain");
-  char* ifc_str_2 = add_single_ifc(irs_info_2, "sip:6505555678@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
-  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505555678@homedomain"), _, _))
-    .WillOnce(Return(HTTP_SERVER_UNAVAILABLE));  //SDM-REFACTOR-TODO - right again??
-
-  _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
-                              "{\"result-code\": 2001,"
-                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
+  // First call succeeds.
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551234@homedomain"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)))
+    .RetiresOnSaturation();
+  // Second and third calls fail.
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551234@homedomain"), _, _))
+    .Times(2)
+    .WillRepeatedly(Return(HTTP_SERVER_UNAVAILABLE))
+    .RetiresOnSaturation();
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9578,8 +9582,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
 
-  free(ifc_str_1);
-  free(ifc_str_2);
+  free(ifc_str);
 }
 
 
@@ -9587,27 +9590,34 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 // manager during Call Diversion results in sprout sending a 404 to the Call
 // Diverstion AS.
 //
-// The calls to the HSS, and the returned codes, are:
-//  - query HSS for term. iFCs for orig. callee - returns 200 OK
-//  - no need to query HSS for orig. iFCs for orig. callee, as they are cached
-//  - query HSS for orig. iFCs for diverted to callee - returns 404 error
+// The calls to the subscriber manager, and the returned codes, are:
+//  - SM queries HSS for term. iFCs for orig. callee - returns 200 OK
+//               -- ISSUE TAKES DOWN HSS --
+//  - SM queries the HSS to determine if the call was retargeted - returns 404
+//    error. Without anything to prove otherwise, scscf assumes retarget happened
+//  - query HSS for orig. iFCs for orig. callee - returns 404
 //
 TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
 {
-  // Set up callee info.
-  HSSConnection::irs_info irs_info_1;
-  set_irs_info(irs_info_1, "6505551234", "homedomain");
-  char* ifc_str_1 = add_single_ifc(irs_info_1, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  setup_callee_ifc_call(irs_info_1, "sip:6505551234@homedomain", true);
+  InSequence s;
 
-  // Set up diverted-to callee info.
-  // The call to get this info should return an error, but still set up the info
-  // to include an iFC for AS2, to test if we will still attempt to go to this AS.
-  HSSConnection::irs_info irs_info_2;
-  set_irs_info(irs_info_2, "6505555678", "homedomain");
-  char* ifc_str_2 = add_single_ifc(irs_info_2, "sip:6505555678@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
-  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505555678@homedomain"), _, _))
-    .WillOnce(Return(HTTP_NOT_FOUND));
+  // Set up callee info.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain");
+  std::vector<std::string> ifc_list;
+  add_ifc_info(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
+  // First call succeeds.
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551234@homedomain"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)))
+    .RetiresOnSaturation();
+  // Second and third calls fail.
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551234@homedomain"), _, _))
+    .Times(2)
+    .WillRepeatedly(Return(HTTP_NOT_FOUND))
+    .RetiresOnSaturation();
 
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -9679,8 +9689,7 @@ TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
 
-  free(ifc_str_1);
-  free(ifc_str_2);
+  free(ifc_str);
 }
 
 
