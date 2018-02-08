@@ -32,11 +32,11 @@ public:
                                        &SNMP::FAKE_NO_MATCHING_FALLBACK_IFCS_TABLE);
     _subscriber_manager = new MockSubscriberManager();
     _fifc_service = new FIFCService(NULL, string(UT_DIR).append("/test_registrar_fifc.xml"));
-    _registration_sender = new RegistrationSender(_subscriber_manager,
-                                                  ifc_configuration,
+    _registration_sender = new RegistrationSender(ifc_configuration,
                                                   _fifc_service,
                                                   &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES,
                                                   true);
+    _registration_sender->initialize(_subscriber_manager);
   }
 
   virtual ~RegistrationSenderTest()
@@ -354,11 +354,6 @@ TEST_F(RegistrationSenderTest, 3rdPartyDeregisterMainlineErrorResponse)
 {
   Ifcs ifcs;
   char* cstr = build_ifcs(ifcs);
-
-  // Expect the subscriber to be dergistered.
-  EXPECT_CALL(*_subscriber_manager, deregister_subscriber("sip:6505551000@homedomain",
-                                                          SubscriberDataUtils::EventTrigger::ADMIN,
-                                                          _));
 
   _registration_sender->deregister_with_application_servers("sip:6505551000@homedomain",
                                                             ifcs,

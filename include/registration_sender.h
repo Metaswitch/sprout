@@ -15,24 +15,43 @@
 #include "ifc.h"
 #include "ifchandler.h"
 #include "fifcservice.h"
-#include "subscriber_manager.h"
+#include "base_subscriber_manager.h"
 #include "pjutils.h"
 #include "snmp_success_fail_count_table.h"
 
-// TODO Doxygen comments.
-
+/// Registration sender class.
+///
+/// This class is responsible for sending 3rd party (de)registrations to
+/// application servers and running callbacks based on the success or failure
+/// of this registrations.
 class RegistrationSender
 {
 public:
-  RegistrationSender(SubscriberManager* subscriber_manager,
-                     IFCConfiguration ifc_configuration,
+  /// Registrat sender constructor
+  ///
+  /// @param  ifc_configuration iFC configuration for fallback and dummy iFCs
+  /// @param  fifc_service      Service to lookup fallback iFCs
+  /// @param  third_party_reg_stats_tbls
+  ///                           Statistics for thrid party registers
+  /// @param  force_third_party_register_body
+  ///                           Whether the thrid party register body should
+  ///                           contain the received register and its response
+  RegistrationSender(IFCConfiguration ifc_configuration,
                      FIFCService* fifc_service,
                      SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                      bool force_third_party_register_body);
 
+  /// Registration sender destructor
   virtual ~RegistrationSender();
 
-  /// Registers a subscriber with its application servers.
+  /// Initializes the registration sender with a reference to the subscriber
+  /// manager
+  ///
+  /// @param[in]  subscriber_manager
+  ///                           The subscriber manager
+  void initialize(BaseSubscriberManager* subscriber_manager);
+
+  /// Registers a subscriber with its application servers
   ///
   /// @param[in]  received_register_message
   ///                           The received register message. This may be
@@ -43,8 +62,7 @@ public:
   /// @param[in]  served_user   The IMPU we are sending 3rd party registers for
   /// @param[in]  ifcs          The iFCs to parse to determine the 3rd party
   ///                           application servers
-  /// @param[in]  expires       The expiry of the received register TODO should
-  ///                           this be the max or min expiry?
+  /// @param[in]  expires       The expiry of the received register
   /// @param[in]  is_initial_registration
   ///                           Whether or not the received registraion is an
   ///                           initial registration
@@ -52,28 +70,35 @@ public:
   ///                           Whether to deregister the subscriber after this
   ///                           call.
   /// @param[in]  trail         The SAS trail ID
-  void register_with_application_servers(pjsip_msg* received_register_message,
-                                         pjsip_msg* ok_response_msg,
-                                         const std::string& served_user,
-                                         const Ifcs& ifcs,
-                                         int expires,
-                                         bool is_initial_registration,
-                                         bool& deregister_subscriber,
-                                         SAS::TrailId trail);
+  virtual void register_with_application_servers(pjsip_msg* received_register_message,
+                                                 pjsip_msg* ok_response_msg,
+                                                 const std::string& served_user,
+                                                 const Ifcs& ifcs,
+                                                 int expires,
+                                                 bool is_initial_registration,
+                                                 bool& deregister_subscriber,
+                                                 SAS::TrailId trail);
 
-  void deregister_with_application_servers(const std::string& served_user,
-                                           const Ifcs& ifcs,
-                                           SAS::TrailId trail);
+  /// Deregister a subscriber with its application servers
+  ///
+  /// @param[in]  served_user   The IMPU we are sending 3rd party deregisters for
+  ///
+  /// @param[in]  ifcs          The iFCs to parse to determine the 3rd party
+  ///                           application servers.
+  /// @param[in]  trail         The SAS trail ID
+  virtual void deregister_with_application_servers(const std::string& served_user,
+                                                   const Ifcs& ifcs,
+                                                   SAS::TrailId trail);
 
 private:
-  SubscriberManager* _subscriber_manager;
+  BaseSubscriberManager* _subscriber_manager;
   IFCConfiguration _ifc_configuration;
   FIFCService* _fifc_service;
   SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
   bool _force_third_party_register_body;
 
   /// Works out which iFCs apply to the received register message and returns a
-  /// list of matched application servers.
+  /// list of matched application servers
   ///
   /// @param[in]  received_register_message
   ///                           The received register message
@@ -98,7 +123,7 @@ private:
                                  bool& match_dummy_as,
                                  SAS::TrailId trail);
 
-  /// Sends a 3rd party register to an application server.
+  /// Sends a 3rd party register to an application server
   ///
   /// @param[in]  received_register_message
   ///                           The received register message. This may be
@@ -109,8 +134,7 @@ private:
   /// @param[in]  served_user   The IMPU we are sending 3rd party registers for
   /// @param[in]  as            The application server we are sending a 3rd
   ///                           party register to
-  /// @param[in]  expires       The expiry of the received register TODO should
-  ///                           this be the max or min expiry?
+  /// @param[in]  expires       The expiry of the received register
   /// @param[in]  is_initial_registration
   ///                           Whether or not the received registraion is an
   ///                           initial registration
@@ -123,23 +147,28 @@ private:
                            bool is_initial_registration,
                            SAS::TrailId trail);
 
+
+  /// Builds a PJSIP callback for when the 3rd party register completes
+  ///
+  /// @param[in]  token         Token containing the stored ThirdPartyRegData
+  /// @param[in]  event         The SIP event that triggered the callback.
   static PJUtils::Callback* build_register_cb(void* token,
                                               pjsip_event* event);
 
-  /// TODO update comment.
-  /// Temporary data structure maintained while transmitting a third-party
-  /// REGISTER to an application server.
+  /// Data structure used to store data that is needed on a third party
+  /// register callack
   struct ThirdPartyRegData
   {
     RegistrationSender* registration_sender;
-    SubscriberManager* subscriber_manager;
-    std::string public_id; // TODO rename to served_user?
+    BaseSubscriberManager* subscriber_manager;
+    std::string served_user;
     DefaultHandling default_handling;
     int expires;
     bool is_initial_registration;
     SAS::TrailId trail;
   };
 
+  /// The PJSIP callback that is run when a 3rd party register completes.
   class RegisterCallback : public PJUtils::Callback
   {
     int _status_code;
@@ -147,10 +176,16 @@ private:
     std::function<void(ThirdPartyRegData*, int)> _send_register_callback;
 
   public:
+    /// The PJSIP callback for when a 3rd party register completes
+    ///
+    /// @param[in]  token         Token containing the stored ThirdPartyRegData
+    /// @param[in]  event         The SIP event that triggered the callback.
     RegisterCallback(void* token, pjsip_event* event);
 
+    /// Callback destructor
     ~RegisterCallback() override;
 
+    /// Run the callback
     void run() override;
   };
 };

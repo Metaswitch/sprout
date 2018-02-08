@@ -167,5 +167,6 @@ extern AlarmManager* alarm_manager;
 extern AnalyticsLogger* analytics_logger;
 extern ChronosConnection* chronos_connection;
 extern FIFCService* fifc_service;
+extern IFCConfiguration ifc_configuration;
 
 #endif

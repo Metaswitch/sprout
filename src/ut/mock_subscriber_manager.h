@@ -78,6 +78,14 @@ public:
 
   MOCK_METHOD2(handle_timer_pop, void(const std::string& aor_id,
                                       SAS::TrailId trail));
+
+  MOCK_METHOD7(register_with_application_servers, void(pjsip_msg* received_register_message,
+                                                       pjsip_msg* ok_response_msg,
+                                                       const std::string& served_user,
+                                                       const Ifcs& ifcs,
+                                                       int expires,
+                                                       bool is_initial_registration,
+                                                       SAS::TrailId trail));
 };
 
 // Custom matchers to see what public identity or wildcard was on the irs_query

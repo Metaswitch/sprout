@@ -11,17 +11,16 @@
 
 #include "constants.h"
 #include "sproutsasevent.h"
+#include "subscriber_data_utils.h"
 #include "registration_sender.h"
 #include "stack.h"
 
-#define MAX_SIP_MSG_SIZE 65535 // TODO move to constants.h
+#define MAX_SIP_MSG_SIZE 65535
 
-RegistrationSender::RegistrationSender(SubscriberManager* subscriber_manager,
-                                       IFCConfiguration ifc_configuration,
+RegistrationSender::RegistrationSender(IFCConfiguration ifc_configuration,
                                        FIFCService* fifc_service,
                                        SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                                        bool force_third_party_register_body) :
-  _subscriber_manager(subscriber_manager),
   _ifc_configuration(ifc_configuration),
   _fifc_service(fifc_service),
   _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
@@ -31,6 +30,12 @@ RegistrationSender::RegistrationSender(SubscriberManager* subscriber_manager,
 
 RegistrationSender::~RegistrationSender()
 {
+}
+
+void RegistrationSender::initialize(BaseSubscriberManager* subscriber_manager)
+{
+  TRC_DEBUG("Initializing RegistrationSender with reference to this subscriber manager");
+  _subscriber_manager = subscriber_manager;
 }
 
 void RegistrationSender::register_with_application_servers(pjsip_msg* received_register_message,
@@ -108,9 +113,12 @@ void RegistrationSender::register_with_application_servers(pjsip_msg* received_r
 
     if (_ifc_configuration._reject_if_no_matching_ifcs)
     {
-      TRC_DEBUG("No matching iFCs were found for %s - the subscriber should be deregistered",
-                served_user.c_str());
-      deregister_subscriber = true;
+      if (expires > 0)
+      {
+        TRC_DEBUG("No matching iFCs were found for %s - the subscriber should be deregistered",
+                  served_user.c_str());
+        deregister_subscriber = true;
+      }
     }
   }
 
@@ -158,14 +166,14 @@ void RegistrationSender::deregister_with_application_servers(const std::string& 
   else
   {
     TRC_DEBUG("Creating third party deregistration for %s", served_user.c_str());
-    bool deregister_subscriber;
+    bool unused_deregister_subscriber;
     register_with_application_servers(tdata->msg,
                                       NULL,
                                       served_user,
                                       ifcs,
                                       0,
                                       false,
-                                      deregister_subscriber,
+                                      unused_deregister_subscriber,
                                       trail);
   }
 }
@@ -435,7 +443,7 @@ void RegistrationSender::send_register_to_as(pjsip_msg* received_register_msg,
   tsxdata->subscriber_manager = _subscriber_manager;
   tsxdata->default_handling = as.default_handling;
   tsxdata->trail = trail;
-  tsxdata->public_id = served_user;
+  tsxdata->served_user = served_user;
   tsxdata->expires = expires;
   tsxdata->is_initial_registration = is_initial_registration;
 
@@ -473,7 +481,7 @@ RegistrationSender::RegisterCallback::~RegisterCallback()
 
 void RegistrationSender::RegisterCallback::run()
 {
-  TRC_DEBUG("Handling 3rd party register callback for %s", _reg_data->public_id.c_str());
+  TRC_DEBUG("Handling 3rd party register callback for %s", _reg_data->served_user.c_str());
 
   if ((_reg_data->default_handling == SESSION_TERMINATED) &&
       ((_status_code == 408) ||
@@ -482,21 +490,18 @@ void RegistrationSender::RegisterCallback::run()
     TRC_INFO("Third-party REGISTER transaction failed with code %d", _status_code);
 
     SAS::Event event(_reg_data->trail, SASEvent::REGISTER_AS_FAILED, 0);
-    event.add_var_param(""); // TODO fix this up to send a status code only.
+    event.add_static_param(_status_code);
     SAS::report_event(event);
 
-    // TODO can this call result in a loop of 3rdPartyReg callbacks if the AS
-    // is unreachable? Should we deregister the sub if this is a 3rd party
-    // deregister since they will already be deregisterd??
-    //
-    // TODO error handling
-    //
     // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
     // where SESSION_TERMINATED is set means that we should deregister "the
     // currently registered public user identity" - i.e. all bindings
-    _reg_data->subscriber_manager->deregister_subscriber(_reg_data->public_id,
-                                                         SubscriberDataUtils::EventTrigger::ADMIN,
-                                                         _reg_data->trail);
+    if (_reg_data->expires > 0)
+    {
+      _reg_data->subscriber_manager->deregister_subscriber(_reg_data->served_user,
+                                                           SubscriberDataUtils::EventTrigger::ADMIN,
+                                                           _reg_data->trail);
+    }
   }
 
   if (_reg_data->registration_sender->_third_party_reg_stats_tbls != NULL)

@@ -49,7 +49,8 @@ public:
     _subscriber_manager = new SubscriberManager(_s4,
                                                 _hss_connection,
                                                 _analytics_logger,
-                                                _notify_sender);
+                                                _notify_sender,
+                                                _registration_sender);
 
     // Log all traffic
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();

@@ -42,6 +42,13 @@ Bindings copy_bindings(Bindings bindings);
 // Copies a Subscriptions object to return to the caller.
 Subscriptions copy_subscriptions(Subscriptions subscriptions);
 
+// Gets the maximum expiry from the bindings provided.
+int get_max_expiry(Bindings bindings,
+                   int now);
+
+// Works out if there are an emergency bindings in the bindings provided.
+bool contains_emergency_binding(Bindings bindings);
+
 };
 
 #endif

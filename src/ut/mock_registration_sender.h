@@ -19,9 +19,22 @@ class MockRegistrationSender : public RegistrationSender
 {
 public:
   MockRegistrationSender() :
-    RegistrationSender(NULL, {}, NULL, NULL, true) {}; // TODO sort out parameters.
+    RegistrationSender({}, NULL, NULL, false) {}; // TODO sort out parameters.
 
   virtual ~MockRegistrationSender() {};
+
+  MOCK_METHOD8(register_with_application_servers, void(pjsip_msg* received_register_message,
+                                                       pjsip_msg* ok_response_msg,
+                                                       const std::string& served_user,
+                                                       const Ifcs& ifcs,
+                                                       int expires,
+                                                       bool is_initial_registration,
+                                                       bool& deregister_subscriber,
+                                                       SAS::TrailId trail));
+
+  MOCK_METHOD3(deregister_with_application_servers, void(const std::string& served_user,
+                                                         const Ifcs& ifcs,
+                                                         SAS::TrailId trail));
 };
 
 #endif

@@ -236,7 +236,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
   Bindings unused_bindings;
   return _cfg->_sm->remove_bindings(aor_id,
                                     binding_ids,
-                                    SubscriberDataUtils::EventTrigger::ADMIN,
+                                    SubscriberDataUtils::EventTrigger::HSS,
                                     unused_bindings,
                                     trail());
 }
