@@ -36,7 +36,7 @@ public:
                                                   _fifc_service,
                                                   &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES,
                                                   true);
-    _registration_sender->initialize(_subscriber_manager);
+    _registration_sender->register_dereg_event_consumer(_subscriber_manager);
   }
 
   virtual ~RegistrationSenderTest()

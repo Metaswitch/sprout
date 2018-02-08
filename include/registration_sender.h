@@ -15,7 +15,6 @@
 #include "ifc.h"
 #include "ifchandler.h"
 #include "fifcservice.h"
-#include "base_subscriber_manager.h"
 #include "pjutils.h"
 #include "snmp_success_fail_count_table.h"
 
@@ -27,6 +26,30 @@
 class RegistrationSender
 {
 public:
+  /// If 3rd party registrations fail the user of the RegistrationSender may
+  /// need to take action to deregister some associated identities. This class
+  /// defines the interface that the user of the RegistrationSender must
+  /// implement in order to receive this notification.
+  class DeregistrationEventConsumer
+  {
+  public:
+    /// Called to notify the consumer that a subscriber must be de-registered.
+    ///
+    /// @todo SS5 to fill in the return value.
+    ///
+    /// @param [in] public_id     - The public identity to deregister. This is
+    ///                             not necessarily a primary IMPU.
+    /// @param [in] event_trigger - The type of event that has occurred.
+    /// @param [in] trail         - SAS trail ID to use for logging.
+    ///
+    /// @return
+    virtual HTTPCode deregister_subscriber(const std::string& public_id,
+                                           const SubscriberDataUtils::EventTrigger& event_trigger,
+                                           SAS::TrailId trail) = 0;
+
+    virtual ~DeregistrationEventConsumer() {}
+  };
+
   /// Registrat sender constructor
   ///
   /// @param  ifc_configuration iFC configuration for fallback and dummy iFCs
@@ -49,7 +72,7 @@ public:
   ///
   /// @param[in]  subscriber_manager
   ///                           The subscriber manager
-  void initialize(BaseSubscriberManager* subscriber_manager);
+  void register_dereg_event_consumer(DeregistrationEventConsumer* dereg_event_consumer);
 
   /// Registers a subscriber with its application servers
   ///
@@ -91,7 +114,7 @@ public:
                                                    SAS::TrailId trail);
 
 private:
-  BaseSubscriberManager* _subscriber_manager;
+  DeregistrationEventConsumer* _dereg_event_consumer;
   IFCConfiguration _ifc_configuration;
   FIFCService* _fifc_service;
   SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
@@ -160,7 +183,7 @@ private:
   struct ThirdPartyRegData
   {
     RegistrationSender* registration_sender;
-    BaseSubscriberManager* subscriber_manager;
+    DeregistrationEventConsumer* dereg_event_consumer;
     std::string served_user;
     DefaultHandling default_handling;
     int expires;
