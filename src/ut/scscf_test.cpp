@@ -8909,97 +8909,97 @@ TEST_F(SCSCFTest, FlowFailedResponseBindingRemovalFails)
 // request URI.
 TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
 {
-HSSConnection::irs_info irs_info;
-set_irs_info(irs_info, "6505551234", "homedomain");
-char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-setup_callee_ifc_call(irs_info, "sip:6505551234@homedomain", true, 1);
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain");
+  char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  setup_callee_ifc_call(irs_info, "sip:6505551234@homedomain", true, 1);
 
-TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
-TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
-// ---------- Send INVITE
-// We're within the trust boundary, so no stripping should occur.
-SCSCFMessage msg;
-msg._via = "10.99.88.11:12345;transport=TCP";
-msg._to = "6505551234@homedomain";
-msg._todomain = "";
-msg._route = "Route: <sip:sprout.homedomain>";
-msg._requri = "sip:6505551234@homedomain";
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:sprout.homedomain>";
+  msg._requri = "sip:6505551234@homedomain";
 
-msg._method = "INVITE";
-inject_msg(msg.get_request(), &tpBono);
-poll();
-ASSERT_EQ(2, txdata_count());
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
 
-// 100 Trying goes back to bono
-pjsip_msg* out = current_txdata()->msg;
-RespMatcher(100).matches(out);
-tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-msg.convert_routeset(out);
-free_txdata();
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
 
-// INVITE passed on to AS1 (as terminating AS for Bob)
-SCOPED_TRACE("INVITE (S)");
-out = current_txdata()->msg;
-ReqMatcher r1("INVITE");
-ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  // INVITE passed on to AS1 (as terminating AS for Bob)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-tpAS1.expect_target(current_txdata(), false);
-EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
 
-// ---------- AS1 sends a 100 Trying to indicate it has received the request.
-string fresp1 = respond_to_txdata(current_txdata(), 100);
-inject_msg(fresp1, &tpAS1);
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string fresp1 = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp1, &tpAS1);
 
-// ---------- AS1 sends the request back to the S-CSCF. It changes the
-// request URI and pre-loads a route.
-const pj_str_t STR_ROUTE = pj_str("Route");
-pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-if (hdr)
-{
-  pj_list_erase(hdr);
-}
+  // ---------- AS1 sends the request back to the S-CSCF. It changes the
+  // request URI and pre-loads a route.
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
 
-char preloaded_route[80] = "sip:3.3.3.3:5060;transport=TCP;lr";
-pjsip_route_hdr* hroute = pjsip_route_hdr_create(current_txdata()->pool);
-hroute->name_addr.uri =
-  (pjsip_uri*)pjsip_parse_uri(current_txdata()->pool,
-                              preloaded_route,
-                              strlen(preloaded_route),
-                              0);
-pjsip_msg_add_hdr(out, (pjsip_hdr*)hroute);
+  char preloaded_route[80] = "sip:3.3.3.3:5060;transport=TCP;lr";
+  pjsip_route_hdr* hroute = pjsip_route_hdr_create(current_txdata()->pool);
+  hroute->name_addr.uri =
+    (pjsip_uri*)pjsip_parse_uri(current_txdata()->pool,
+                                preloaded_route,
+                                strlen(preloaded_route),
+                                0);
+  pjsip_msg_add_hdr(out, (pjsip_hdr*)hroute);
 
-((pjsip_sip_uri*)out->line.req.uri)->user = pj_str("newtarget");
-((pjsip_sip_uri*)out->line.req.uri)->host = pj_str("2.2.2.2");
+  ((pjsip_sip_uri*)out->line.req.uri)->user = pj_str("newtarget");
+  ((pjsip_sip_uri*)out->line.req.uri)->host = pj_str("2.2.2.2");
 
-inject_msg(out, &tpAS1);
-free_txdata();
+  inject_msg(out, &tpAS1);
+  free_txdata();
 
-// 100 Trying goes back to AS1
-out = current_txdata()->msg;
-RespMatcher(100).matches(out);
-tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-msg.convert_routeset(out);
-free_txdata();
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
 
-// INVITE passed on to final destination
-SCOPED_TRACE("INVITE (4)");
-out = current_txdata()->msg;
-ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (4)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-tpBono.expect_target(current_txdata(), false);
-// Sprout has preserved the target and route.
-EXPECT_EQ("sip:newtarget@2.2.2.2", r1.uri());
-EXPECT_EQ(get_headers(out, "Route"),
-          "Route: <sip:3.3.3.3:5060;transport=TCP;lr>");
-// Sprout has also record-routed itself.
-EXPECT_THAT(get_headers(out, "Record-Route"),
-            MatchesRegex("Record-Route: <sip:scscf.sprout.homedomain:5058;.*billing-role=charge-term.*>"));
+  tpBono.expect_target(current_txdata(), false);
+  // Sprout has preserved the target and route.
+  EXPECT_EQ("sip:newtarget@2.2.2.2", r1.uri());
+  EXPECT_EQ(get_headers(out, "Route"),
+            "Route: <sip:3.3.3.3:5060;transport=TCP;lr>");
+  // Sprout has also record-routed itself.
+  EXPECT_THAT(get_headers(out, "Record-Route"),
+              MatchesRegex("Record-Route: <sip:scscf.sprout.homedomain:5058;.*billing-role=charge-term.*>"));
 
-EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
-free_txdata();
+  EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
+  free_txdata();
 
-free(ifc_str);
+  free(ifc_str);
 }
 
 
