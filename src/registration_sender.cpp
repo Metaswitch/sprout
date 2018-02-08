@@ -32,10 +32,10 @@ RegistrationSender::~RegistrationSender()
 {
 }
 
-void RegistrationSender::initialize(BaseSubscriberManager* subscriber_manager)
+void RegistrationSender::register_dereg_event_consumer(DeregistrationEventConsumer* dereg_event_consumer)
 {
   TRC_DEBUG("Initializing RegistrationSender with reference to this subscriber manager");
-  _subscriber_manager = subscriber_manager;
+  _dereg_event_consumer = dereg_event_consumer;
 }
 
 void RegistrationSender::register_with_application_servers(pjsip_msg* received_register_message,
@@ -440,7 +440,7 @@ void RegistrationSender::send_register_to_as(pjsip_msg* received_register_msg,
   // register callback is triggered.
   ThirdPartyRegData* tsxdata = new ThirdPartyRegData;
   tsxdata->registration_sender = this;
-  tsxdata->subscriber_manager = _subscriber_manager;
+  tsxdata->dereg_event_consumer = _dereg_event_consumer;
   tsxdata->default_handling = as.default_handling;
   tsxdata->trail = trail;
   tsxdata->served_user = served_user;
@@ -498,9 +498,9 @@ void RegistrationSender::RegisterCallback::run()
     // currently registered public user identity" - i.e. all bindings
     if (_reg_data->expires > 0)
     {
-      _reg_data->subscriber_manager->deregister_subscriber(_reg_data->served_user,
-                                                           SubscriberDataUtils::EventTrigger::ADMIN,
-                                                           _reg_data->trail);
+      _reg_data->dereg_event_consumer->deregister_subscriber(_reg_data->served_user,
+                                                             SubscriberDataUtils::EventTrigger::ADMIN,
+                                                             _reg_data->trail);
     }
   }
 

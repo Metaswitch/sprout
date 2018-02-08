@@ -9,7 +9,6 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#include "base_subscriber_manager.h"
 #include "subscriber_manager.h"
 #include "aor_utils.h"
 #include "pjutils.h"
@@ -27,12 +26,12 @@ SubscriberManager::SubscriberManager(S4* s4,
 {
   if (_s4 != NULL)
   {
-    _s4->initialize(this);
+    _s4->register_timer_pop_consumer(this);
   }
 
   if (_registration_sender != NULL)
   {
-    _registration_sender->initialize(this);
+    _registration_sender->register_dereg_event_consumer(this);
   }
 }
 

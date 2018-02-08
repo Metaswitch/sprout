@@ -30,13 +30,13 @@ extern "C" {
 #include "ifchandler.h"
 #include "aor.h"
 #include "s4.h"
-#include "base_subscriber_manager.h"
 #include "notify_sender.h"
 #include "registration_sender.h"
 #include "subscriber_data_utils.h"
 
 // SDM-REFACTOR-TODO: Add Doxygen comments.
-class SubscriberManager : public BaseSubscriberManager
+class SubscriberManager : public S4::TimerPopConsumer,
+                          public RegistrationSender::DeregistrationEventConsumer
 {
 public:
   /// SubscriberManager constructor. It calls the S4 to store a reference to
