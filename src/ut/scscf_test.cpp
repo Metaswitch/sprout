@@ -9209,26 +9209,26 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
 
 TEST_F(SCSCFTest, AutomaticRegistration)
 {
-SCOPED_TRACE("");
+  SCOPED_TRACE("");
 
-// Create an originating request that has a proxy-authorization header and
-// requires automatic registration. To domain is not homedomain, so no
-// terminating services will be applied, as the BGCF will route off of sprout.
-SCSCFMessage msg;
-msg._to = "newuser";
-msg._todomain = "domainvalid";
-msg._route = "Route: <sip:sprout.homedomain;orig;auto-reg>";
-msg._extra = "Proxy-Authorization: Digest username=\"kermit\", realm=\"homedomain\", uri=\"sip:6505551000@homedomain\", algorithm=MD5";
+  // Create an originating request that has a proxy-authorization header and
+  // requires automatic registration. To domain is not homedomain, so no
+  // terminating services will be applied, as the BGCF will route off of sprout.
+  SCSCFMessage msg;
+  msg._to = "newuser";
+  msg._todomain = "domainvalid";
+  msg._route = "Route: <sip:sprout.homedomain;orig;auto-reg>";
+  msg._extra = "Proxy-Authorization: Digest username=\"kermit\", realm=\"homedomain\", uri=\"sip:6505551000@homedomain\", algorithm=MD5";
 
-// Set caller info.
-HSSConnection::irs_info irs_info_1;
-set_irs_info(irs_info_1, "6505551000", "homedomain");
-// The SM should be invoked with a request type of "reg" and with the right
-// private ID.
-// SDM-REFACTOR-TODO - in this test and one below, see if can call with two
-// better named matchers.
-EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("kermit"), _, _))
-  .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
+  // Set caller info.
+  HSSConnection::irs_info irs_info_1;
+  set_irs_info(irs_info_1, "6505551000", "homedomain");
+  // The SM should be invoked with a request type of "reg" and with the right
+  // private ID.
+  // SDM-REFACTOR-TODO - in this test and one below, see if can call with two
+  // better named matchers.
+  EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("kermit"), _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
                     Return(HTTP_OK)));
 
   add_host_mapping("domainvalid", "10.9.8.7");
