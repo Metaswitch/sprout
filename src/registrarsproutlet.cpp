@@ -362,7 +362,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   Bindings bindings_to_update;
   std::vector<std::string> binding_ids_to_remove = {};
   get_bindings_from_req(req,
-                        private_id,
+                        private_id_for_binding,
                         default_impu,
                         now,
                         bindings_to_update,
@@ -497,6 +497,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Tidy up memory.
   for (BindingPair bindings : all_bindings)
+  {
+    delete bindings.second;
+  }
+
+  for (BindingPair bindings : current_bindings)
   {
     delete bindings.second;
   }
@@ -671,9 +676,7 @@ void RegistrarSproutletTsx::get_bindings_from_req(
         // "path" entry in the Supported header but we don't do so on the
         // assumption that the edge proxy knows what it's doing.
         //
-        // We store the full path header in the _path_headers field. For
-        // backwards compatibility, we also store the URI part of the path
-        // header in the _path_uris field.
+        // We store the full path header in the _path_headers field.
         binding->_path_headers.clear();
         pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
                             pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);

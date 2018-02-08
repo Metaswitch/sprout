@@ -24,6 +24,7 @@
 #include "sproutletappserver.h"
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
+#include "mock_snmp_counter_table.hpp"
 
 using namespace std;
 using testing::StrEq;
@@ -197,8 +198,12 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
                                 aliases,
+                                std::unordered_set<std::string>(),
+                                true,
                                 sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                nullptr,
+                                nullptr);
 
     // Schedule timers.
     SipTest::poll();

@@ -141,7 +141,10 @@ enum OptionTypes
   OPT_HOMESTEAD_TIMEOUT,
   OPT_ORIG_SIP_TO_TEL_COERCE,
   OPT_REQUEST_ON_QUEUE_TIMEOUT,
-  OPT_BLACKLISTED_SCSCFS
+  OPT_BLACKLISTED_SCSCFS,
+  OPT_LOCAL_ALIASES,
+  OPT_REMOTE_ALIASES,
+  OPT_ALWAYS_SERVE_REMOTE_ALIASES
 };
 
 
@@ -153,6 +156,9 @@ const static struct pj_getopt_option long_opt[] =
   { "domain",                       required_argument, 0, 'D'},
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
   { "alias",                        required_argument, 0, 'n'},
+  { "local-alias-list",             required_argument, 0, OPT_LOCAL_ALIASES},
+  { "remote-alias-list",            required_argument, 0, OPT_REMOTE_ALIASES},
+  { "always-serve-remote-aliases",  no_argument,       0, OPT_ALWAYS_SERVE_REMOTE_ALIASES},
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},
@@ -265,7 +271,13 @@ static void usage(void)
        " -D, --domain <name>        The home domain name\n"
        "     --additional-domains <names>\n"
        "                            Comma-separated list of additional home domain names\n"
-       " -n, --alias <names>        Optional list of alias host names\n"
+       " -n, --alias <names>        (DEPRECATED) Optional list of alias host names\n"
+       "     --local-alias-list     List of hostnames corresponding to services provided by this node\n"
+       "     --remote-alias-list    List of hostnames corresponding to services provided by remote\n"
+       "                            nodes for which this node can accept traffic.\n"
+       "     --always-serve-remote-aliases\n"
+       "                            If set to Y, requests for hostnames on the remote alias list will\n"
+       "                            always be handled locally.\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
        "                            as the upstream routing proxy.  Optionally specifies the port,\n"
@@ -684,9 +696,25 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'n':
-      options->alias_hosts = std::string(pj_optarg);
-      TRC_INFO("Alias host names = %s", pj_optarg);
+      options->deprecated_alias_hosts = std::string(pj_optarg);
+      TRC_WARNING("Deprecated --alias (-n) used. Alias host names = %s", pj_optarg);
       break;
+
+    case OPT_LOCAL_ALIASES:
+      options->local_alias_hosts = std::string(pj_optarg);
+      TRC_INFO("Local alias host names = %s", pj_optarg);
+      break;
+
+    case OPT_REMOTE_ALIASES:
+      options->remote_alias_hosts = std::string(pj_optarg);
+      TRC_INFO("Remote alias host names = %s", pj_optarg);
+      break;
+
+    case OPT_ALWAYS_SERVE_REMOTE_ALIASES:
+      options->always_serve_remote_aliases = true;
+      TRC_INFO("Always serving remote aliases.");
+      break;
+
 
     case 'r':
       {
@@ -1912,6 +1940,9 @@ int main(int argc, char* argv[])
   SNMP::CounterTable* no_matching_ifcs_tbl = NULL;
   SNMP::CounterTable* no_matching_fallback_ifcs_tbl = NULL;
 
+  SNMP::CounterTable* route_to_remote_alias_tbl = NULL;
+  SNMP::CounterTable* accept_for_remote_alias_tbl = NULL;
+
   if (opt.pcscf_enabled)
   {
     latency_table = SNMP::EventAccumulatorByScopeTable::create("bono_latency",
@@ -1973,6 +2004,11 @@ int main(int argc, char* argv[])
                                                                "1.2.826.0.1.1578918.9.3.39");
     no_matching_ifcs_tbl = SNMP::CounterTable::create("no_matching_ifcs",
                                                       "1.2.826.0.1.1578918.9.3.41");
+
+    route_to_remote_alias_tbl = SNMP::CounterTable::create("route_to_remote_alias",
+                                                           "1.2.826.0.1.1578918.9.3.44");
+    accept_for_remote_alias_tbl = SNMP::CounterTable::create("accept_for_remote_alias",
+                                                           "1.2.826.0.1.1578918.9.3.45");
   }
 
   // Create Sprout's alarm objects.
@@ -2051,7 +2087,9 @@ int main(int argc, char* argv[])
                       opt.additional_home_domains,
                       opt.uri_scscf,
                       opt.sprout_hostname,
-                      opt.alias_hosts,
+                      opt.deprecated_alias_hosts,
+                      opt.local_alias_hosts,
+                      opt.remote_alias_hosts,
                       sip_resolver,
                       opt.record_routing_model,
                       opt.default_session_expires,
@@ -2319,21 +2357,29 @@ int main(int argc, char* argv[])
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
-    std::unordered_set<std::string> host_aliases;
-    host_aliases.insert(opt.local_host);
-    host_aliases.insert(opt.public_host);
-    host_aliases.insert(opt.home_domain);
-    host_aliases.insert(stack_data.home_domains.begin(),
-                        stack_data.home_domains.end());
-    host_aliases.insert(stack_data.aliases.begin(),
-                        stack_data.aliases.end());
+    std::unordered_set<std::string> host_local_aliases;
+    host_local_aliases.insert(opt.local_host);
+    host_local_aliases.insert(opt.public_host);
+    host_local_aliases.insert(opt.home_domain);
+    host_local_aliases.insert(stack_data.home_domains.begin(),
+                              stack_data.home_domains.end());
+    host_local_aliases.insert(stack_data.local_aliases.begin(),
+                              stack_data.local_aliases.end());
+
+    std::unordered_set<std::string> host_remote_aliases;
+    host_remote_aliases.insert(stack_data.remote_aliases.begin(),
+                               stack_data.remote_aliases.end());
 
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
                                          opt.sprout_hostname,
-                                         host_aliases,
+                                         host_local_aliases,
+                                         host_remote_aliases,
+                                         opt.always_serve_remote_aliases,
                                          sproutlets,
                                          opt.stateless_proxies,
+                                         route_to_remote_alias_tbl,
+                                         accept_for_remote_alias_tbl,
                                          opt.max_sproutlet_depth);
     if (sproutlet_proxy == NULL)
     {
@@ -2616,6 +2662,9 @@ int main(int argc, char* argv[])
   delete third_party_reg_stats_tbls.de_reg_tbl;
   delete no_matching_ifcs_tbl;
   delete no_matching_fallback_ifcs_tbl;
+
+  delete route_to_remote_alias_tbl;
+  delete accept_for_remote_alias_tbl;
 
   hc->stop_thread();
   delete hc;

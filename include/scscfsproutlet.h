@@ -37,7 +37,9 @@ extern "C" {
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
 #include "compositesproutlet.h"
-#include "hss_cache_helper.h"
+#include "sas.h" // Do I need this?? SDM-REFACTOR-TODO
+#include "subscriber_manager.h"
+#include "httpclient.h" // Do I need this?  SDM-REFACTOR-TODO
 
 class SCSCFSproutletTsx;
 
@@ -228,8 +230,6 @@ public:
   virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
   virtual void on_timer_expiry(void* context) override;
 
-  HssCacheHelper* _hss_cache_helper;
-
 private:
   /// Examines the top route header to determine the relevant AS chain
   /// (from the ODI token) and the session case (based on the presence of
@@ -287,6 +287,49 @@ private:
   /// per-transaction cache if possible (and caching them and the iFC otherwise).
   bool is_user_registered(std::string public_id);
 
+  /// Look up the associated URIs for the given public ID, using the cache if
+  /// possible (and caching them and the iFC otherwise).
+  /// The uris parameter is only filled in correctly if this function
+  /// returns true.
+  bool get_associated_uris(std::string public_id,
+                           std::vector<std::string>& uris,
+                           SubscriberManager* sm,
+                           SAS::TrailId trail);
+
+  /// Look up the aliases for the given public ID, using the cache if
+  /// possible (and caching them and the iFC otherwise).
+  /// The aliases parameter is only filled in correctly if this function
+  /// returns true.
+  bool get_aliases(std::string public_id,
+                   std::vector<std::string>& aliases,
+                   SubscriberManager* sm,
+                   SAS::TrailId trail);
+
+  /// Look up the Ifcs for the given public ID, using the cache if possible
+  /// (and caching them and the associated URIs otherwise).
+  /// Returns the HTTP result code obtained from homestead.
+  /// The ifcs parameter is only filled in correctly if this function
+  /// returns HTTP_OK.
+  HTTPCode lookup_ifcs(std::string public_id,
+                       Ifcs& ifcs,
+                       SubscriberManager* sm,
+                       SAS::TrailId trail);
+
+  /// Gets the subscriber's associated URIs and iFCs for each URI from
+  /// the HSS and stores cached values.
+  /// Returns the HTTP result code obtained from the SM.
+  HTTPCode get_data_from_hss(std::string public_id,
+                             SubscriberManager* sm,
+                             SAS::TrailId trail);
+
+  /// Reads data for a public user identity from the HSS, and stores it in
+  /// member fields for the sproutlet.
+  /// Returns the HTTP result code obtained from the SM.
+  HTTPCode read_hss_data(std::string public_id,
+                         const HSSConnection::irs_query& irs_query,
+                         SubscriberManager* sm,
+                         SAS::TrailId trail);
+
   /// Add the S-CSCF sproutlet into a dialog.  The third parameter
   /// passed may be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.
@@ -339,6 +382,14 @@ private:
   /// The link in the owning AsChain for this service hop.
   AsChainLink _as_chain_link;
 
+  // Data received from HSS for this service hop.
+  bool _hss_data_cached;
+  bool _registered;
+  bool _barred;
+  std::string _default_uri;
+  Ifcs _ifcs;
+  HSSConnection::irs_info _irs_info;
+
   /// ACRs used where the S-CSCF will only process a single transaction (no
   /// AsChain is created).  There are two cases where this might be true:
   ///
@@ -387,6 +438,26 @@ private:
 
   static const int MAX_FORKING = 10;
 
+  /// The private identity associated with the request. Empty unless the
+  /// request had a Proxy-Authorization header.
+  std::string _impi;
+
+  /// Whether this request should cause the user to be automatically
+  /// registered in the HSS. This is set if there is an `auto-reg` parameter
+  /// in the S-CSCF's route header.
+  ///
+  /// This has the following impacts:
+  /// - It causes registration state updates to have a type of REG rather than
+  ///   CALL.
+  ///   - If there is a real HSS it forces registration state updates to flow all
+  ///   the way to the HSS (i.e. Homestead may not answer the response solely
+  ///   from its cache).
+  bool _auto_reg;
+
+  /// The wildcarded public identity associated with the requestee. This is
+  /// pulled from the P-Profile-Key header (RFC 5002).
+  std::string _wildcard;
+
   /// Class to handle session-expires processing.
   SessionExpiresHelper _se_helper;
 
@@ -408,6 +479,11 @@ private:
   /// @param req     The request to rejet
   /// @param uri_str The URI string to add to the SAS log
   void reject_invalid_uri(pjsip_msg* req, const std::string& uri_str);
+
+  /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
+  /// HSS. This field should not be changed once it has been set by the
+  /// on_rx_intial_request() call.
+  std::string _scscf_uri;
 };
 
 #endif

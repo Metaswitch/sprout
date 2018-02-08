@@ -87,7 +87,7 @@ std::string pub_gruu_quoted_string(const Binding* binding, pj_pool_t* pool)
   return ret;
 }
 
-Bindings copy_bindings(Bindings bindings)
+Bindings copy_bindings(const Bindings& bindings)
 {
   Bindings copy_bindings;
   for (BindingPair b : bindings)
@@ -99,7 +99,7 @@ Bindings copy_bindings(Bindings bindings)
   return copy_bindings;
 }
 
-Subscriptions copy_subscriptions(Subscriptions subscriptions)
+Subscriptions copy_subscriptions(const Subscriptions& subscriptions)
 {
   Subscriptions copy_subscriptions;
   for (SubscriptionPair s :subscriptions)
