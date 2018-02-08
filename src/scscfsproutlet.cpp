@@ -243,20 +243,21 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
 {
   // Look up the target in the subscriber manager.
   TRC_INFO("Look up bindings for %s in subscriber manager", aor.c_str());
-  bool rc = _sm->get_bindings(aor,
+  long http_code = _sm->get_bindings(aor,
                               bindings,
                               trail);
 
-  if (!rc)
+  if (http_code !=  HTTP_OK)
   {
-    // Error getting bindings from SM. Wipe bindings since this shows they can't
-    // be trusted.
-    // Is this the right this to do? Is there anything else I need to do here?
-    bindings.clear();
-    // Do I need this log? Presumably already logged where error occurred?
-    TRC_INFO("Error looking up bindings for %s in subscriber manager",
+    // If the rc isn't HTTP_OK, the SM will log the rc, and return an empty
+    // bindings object.
+    TRC_INFO("Error looking up bindings for %s, no bindings returned",
              aor.c_str());
   }
+
+  //SDM-REFACTOR-TODO - no matter what http rc was, will always just "find 0
+  //bindings", since the error isn't returned. is this ok? am I doing the right
+  //thing here?
 
   // TODO - Log bindings to SAS
 }
@@ -272,9 +273,6 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
   std::vector<std::string> binding_ids;
   binding_ids.push_back(binding_id);
 
-  // SDM-REFACTOR-TODO
-  // HSSConnection::DEREG_TIMEOUT was dereg_type, should make it
-  // HSSConnection::DEREG_USER if need to pass it through in future.
   long http_code = _sm->remove_bindings(aor_id,
                                         binding_ids,
                                         SubscriberDataUtils::EventTrigger::USER,
@@ -283,11 +281,11 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
 
  if (http_code != HTTP_OK)
  {
-   // SDM-REFACTOR-TODO
-   // What to do here?? Just log? (surely that was done already?)
-   TRC_INFO("Error removing binding with id %s in subscriber manager",
-            binding_id.c_str());
+   TRC_INFO("Error removing binding with id %s, with HTTP error %lu. The "
+            "binding may still be present.", binding_id.c_str(), http_code);
  }
+
+ // SDM-REFACTOR-TODO - is it enough just to log and plow on?
 
 }
 
