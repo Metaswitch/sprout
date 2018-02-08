@@ -865,9 +865,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // ID). hss->get_subscription_data should be enhanced to provide an
   // appropriate data structure (representing the ServiceProfile
   // nodes) and we should loop through that. Don't send any register that
-  // contained emergency registrations to the application servers.
+  // contained emergency registrations to the application servers, or that
+  // is a 'fetch binding' REGISTER (i.e. a query for the current bindings,
+  // not an attempt to change registration state).
 
-  if (num_emergency_bindings == 0)
+  if ((num_emergency_bindings == 0) && (num_contacts > 0))
   {
     // If the public ID is unbarred, we use that for third party registers. If
     // it is barred, we use the default URI.
