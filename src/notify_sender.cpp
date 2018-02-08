@@ -150,7 +150,36 @@ void NotifySender::send_notifys(const std::string& aor_id,
 
       if (status == PJ_SUCCESS)
       {
+        set_trail(tdata_notify, trail);
+
+        SAS::Event event(trail, SASEvent::SENDING_NOTIFICATION, 0);
+        event.add_var_param(classified_subscription->_subscription->_req_uri);
+        event.add_var_param(classified_subscription->_reasons);
+        SAS::report_event(event);
+
         status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
+
+        if (status == PJ_SUCCESS)
+        {
+          classified_subscription->_subscription->_refreshed = false;
+        }
+        else
+        {
+          // LCOV_EXCL_START
+          SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
+          std::string error_msg = "Failed to send NOTIFY - error: " +
+                                        PJUtils::pj_status_to_string(status);
+          event.add_var_param(error_msg);
+          SAS::report_event(event);
+          // LCOV_EXCL_STOP
+        }
+      }
+      else
+      {
+        // LCOV_EXCL_START
+        TRC_DEBUG("Failed to send notify: %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+        // LCOV_EXCL_STOP
       }
     }
     else

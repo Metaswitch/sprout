@@ -87,7 +87,7 @@ std::string pub_gruu_quoted_string(const Binding* binding, pj_pool_t* pool)
   return ret;
 }
 
-Bindings copy_bindings(Bindings bindings)
+Bindings copy_bindings(const Bindings& bindings)
 {
   Bindings copy_bindings;
   for (BindingPair b : bindings)
@@ -99,7 +99,7 @@ Bindings copy_bindings(Bindings bindings)
   return copy_bindings;
 }
 
-Subscriptions copy_subscriptions(Subscriptions subscriptions)
+Subscriptions copy_subscriptions(const Subscriptions& subscriptions)
 {
   Subscriptions copy_subscriptions;
   for (SubscriptionPair s :subscriptions)
@@ -109,6 +109,34 @@ Subscriptions copy_subscriptions(Subscriptions subscriptions)
   }
 
   return copy_subscriptions;
+}
+
+int get_max_expiry(Bindings bindings,
+                   int now)
+{
+  int max_expiry = 0;
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_expires - now > max_expiry)
+    {
+      max_expiry = b.second->_expires - now;
+    }
+  }
+
+  return max_expiry;
+}
+
+bool contains_emergency_binding(Bindings bindings)
+{
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_emergency_registration)
+    {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 }; // namespace AoRUtils

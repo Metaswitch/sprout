@@ -9,7 +9,6 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#include "base_subscriber_manager.h"
 #include "subscriber_manager.h"
 #include "aor_utils.h"
 #include "pjutils.h"
@@ -17,16 +16,22 @@
 SubscriberManager::SubscriberManager(S4* s4,
                                      HSSConnection* hss_connection,
                                      AnalyticsLogger* analytics_logger,
-                                     NotifySender* notify_sender) :
+                                     NotifySender* notify_sender,
+                                     RegistrationSender* registration_sender) :
   _s4(s4),
   _hss_connection(hss_connection),
   _analytics(analytics_logger),
-  _notify_sender(notify_sender)
+  _notify_sender(notify_sender),
+  _registration_sender(registration_sender)
 {
   if (_s4 != NULL)
   {
-    TRC_DEBUG("Initialising S4 with reference to this subscriber manager");
-    _s4->initialise(this);
+    _s4->register_timer_pop_consumer(this);
+  }
+
+  if (_registration_sender != NULL)
+  {
+    _registration_sender->register_dereg_event_consumer(this);
   }
 }
 
@@ -91,8 +96,6 @@ HTTPCode SubscriberManager::register_subscriber(const std::string& aor_id,
                              irs_info,
                              trail);
   }*/
-
-  // Send 3rd party REGISTERs.
 
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
@@ -186,8 +189,6 @@ HTTPCode SubscriberManager::reregister_subscriber(const std::string& aor_id,
                              trail);
   }
 
-  // Send 3rd party REGISTERs.
-
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
 
@@ -279,19 +280,24 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
   // Update HSS if all bindings expired.
   if (bindings.empty())
   {
-    std::string dereg_reason = (event_trigger == SubscriberDataUtils::EventTrigger::USER) ?
-                                 HSSConnection::DEREG_USER : HSSConnection::DEREG_ADMIN;
-    rc = deregister_with_hss(aor_id,
-                             dereg_reason,
-                             updated_aor->_scscf_uri,
-                             irs_info,
-                             trail);
+    // If this action was not triggered by the HSS e.g. because of an RTR, we
+    // should dergister with the HSS.
+    if (event_trigger != SubscriberDataUtils::EventTrigger::HSS)
+    {
+      std::string dereg_reason = (event_trigger == SubscriberDataUtils::EventTrigger::USER) ?
+                                   HSSConnection::DEREG_USER : HSSConnection::DEREG_ADMIN;
+      rc = deregister_with_hss(aor_id,
+                               dereg_reason,
+                               updated_aor->_scscf_uri,
+                               irs_info,
+                               trail);
+    }
 
     // Send 3rd party deREGISTERs.
-  }
-  else
-  {
-    // Send 3rd party REGISTERs
+    // TODO does IRS info from dergister with HSS contain the service profiles?
+    _registration_sender->deregister_with_application_servers(public_id,
+                                                              irs_info._service_profiles[public_id],
+                                                              trail);
   }
 
   delete orig_aor; orig_aor = NULL;
@@ -414,6 +420,9 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
                            trail);
 
   // Send 3rd party deREGISTERs.
+  _registration_sender->deregister_with_application_servers(public_id,
+                                                            irs_info._service_profiles[public_id],
+                                                            trail);
 
   delete orig_aor; orig_aor = NULL;
 
@@ -635,10 +644,51 @@ void SubscriberManager::handle_timer_pop(const std::string& aor_id,
                now,
                trail);
 
-  // TODO NOTIFYs, 3rd party (de)registrations, update HSS.
+  if ((updated_aor != NULL) &&
+      (updated_aor->bindings().empty()))
+  {
+    HSSConnection::irs_info irs_info;
+    rc = deregister_with_hss(aor_id,
+                             HSSConnection::DEREG_TIMEOUT,
+                             updated_aor->_scscf_uri,
+                             irs_info,
+                             trail);
+
+    // Send 3rd party deREGISTERs.
+    _registration_sender->deregister_with_application_servers(aor_id,
+                                                              irs_info._service_profiles[aor_id],
+                                                              trail);
+  }
+
 
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
+}
+
+void SubscriberManager::register_with_application_servers(pjsip_msg* received_register_message,
+                                                          pjsip_msg* ok_response_msg,
+                                                          const std::string& served_user,
+                                                          const Ifcs& ifcs,
+                                                          int expires,
+                                                          bool is_initial_registration,
+                                                          SAS::TrailId trail)
+{
+  bool dereg_subscriber;
+  _registration_sender->register_with_application_servers(received_register_message,
+                                                          ok_response_msg,
+                                                          served_user,
+                                                          ifcs,
+                                                          expires,
+                                                          is_initial_registration,
+                                                          dereg_subscriber,
+                                                          trail);
+
+  if (dereg_subscriber)
+  {
+    deregister_subscriber(served_user,
+                          SubscriberDataUtils::EventTrigger::ADMIN,
+                          trail);
+  }
 }
 
 HTTPCode SubscriberManager::modify_subscription(

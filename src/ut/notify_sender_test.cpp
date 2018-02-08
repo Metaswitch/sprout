@@ -293,7 +293,7 @@ TEST_F(NotifySenderTest, NotifyCheckInDetails)
   params.insert(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   params.insert(std::make_pair("reg-id", "1"));
   params.insert(std::make_pair("unknown1", "test1"));
-  check_notify_contact_nodes(doc, "<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>", "sip:1234567890@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b4dd32817622", params);
+  check_notify_contact_nodes(doc, "sip:6505550231@192.91.191.29:59934;transport=tcp;ob", "sip:1234567890@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b4dd32817622", params);
 
   // Tidy up
   inject_msg(respond_to_current_txdata(200));

@@ -22,6 +22,7 @@ namespace SubscriberDataUtils
 enum class EventTrigger
 {
   USER,
+  HSS,
   ADMIN,
   TIMEOUT // EM-TODO ???
 };

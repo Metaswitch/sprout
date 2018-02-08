@@ -1277,6 +1277,13 @@ void PJUtils::run_callback_on_worker_thread(PJUtils::Callback* cb,
   }
 }
 
+void PJUtils::run_callback_on_worker_thread(std::function<void()>&& fn,
+                                            bool is_pjsip_thread)
+{
+  Callback* cb = new FunctorCallback(std::move(fn));
+  run_callback_on_worker_thread(cb, is_pjsip_thread);
+}
+
 /// This provides function similar to the pjsip_endpt_send_request method
 /// but includes setting the SAS trail.
 pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,

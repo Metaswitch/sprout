@@ -77,7 +77,7 @@ class BasicS4Test : public ::testing::Test
                  _aor_store,
                  {_remote_s4_1, _remote_s4_2});
     _mock_sm = new MockSubscriberManager();
-    _s4->initialise(_mock_sm);
+    _s4->register_timer_pop_consumer(_mock_sm);
 
     cwtest_completely_control_time();
   }
