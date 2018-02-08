@@ -2754,6 +2754,20 @@ TEST_F(SCSCFTest, TestReceiveCallToEmergencyBinding)
 }
 
 
+// Test call to unregistered user is rejected.
+TEST_F(SCSCFTest, UnregisteredCallee)
+{
+  // Set up callee info.
+  HSSConnection::irs_info irs_info;
+  set_irs_info(irs_info, "6505551234", "homedomain");
+  irs_info._regstate = "UNREGISTERED";
+  setup_callee_ifc_call(irs_info);
+
+  SCSCFMessage msg;
+  doSlowFailureFlow(msg, 480);
+}
+
+
 // Test basic ISC (AS) flow.
 TEST_F(SCSCFTest, SimpleISCMainline)
 {
