@@ -1193,6 +1193,7 @@ void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
 
   irs_info._aliases.push_back(uri);
 
+  // SDM-REFACTOR-TODO
   // Are these set in the right format?? - look in subscriber sproutlet tests
   // where they are set correctly!!
   irs_info._ccfs = {"priority=\"1\">ccf1"};
