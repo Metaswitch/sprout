@@ -1645,7 +1645,7 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
   setup_callee_info(irs_info, bindings);
   add_sp_identity(irs_info, "tel:6505551235", false);
   setup_callee_irs_info_calls(irs_info, "tel:6505551235");
-  setup_callee_bindings_call(bindings); //SDM-REFACTOR-TODO - why are these called with dif things??
+  setup_callee_bindings_call(bindings); //SDM-REFACTOR-TODO - why are these called with dif things?? K to check
 
   // Send a terminating INVITE for a subscriber with a tel: URI
   SCSCFMessage msg;
@@ -8454,7 +8454,7 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
   EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithWildcard("sip:650![0-9]+!@homedomain"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
-  setup_callee_bindings_call(bindings, "sip:6515551000@homedomain"); //SDM-REFACTOR-TODO - should we also call this with the WC?
+  setup_callee_bindings_call(bindings, "sip:6515551000@homedomain"); //SDM-REFACTOR-TODO - should we also call this with the WC?  K to check
 
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain>";
@@ -9224,8 +9224,6 @@ TEST_F(SCSCFTest, AutomaticRegistration)
   set_irs_info(irs_info_1, "6505551000", "homedomain");
   // The SM should be invoked with a request type of "reg" and with the right
   // private ID.
-  // SDM-REFACTOR-TODO - in this test and one below, see if can call with two
-  // better named matchers.
   EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("kermit"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
                     Return(HTTP_OK)));
@@ -9482,7 +9480,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 
   // The SM will return a 503 when looking up the iFCs.
   EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
-    .WillOnce(Return(HTTP_SERVER_UNAVAILABLE)); //SDM-REFACTOR-TODO - 503 is actually "HTTP_SERVICE_UNAVAILABLE"??
+    .WillOnce(Return(HTTP_SERVER_UNAVAILABLE));
 
   inject_msg(msg.get_request());
 
