@@ -253,11 +253,6 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
     TRC_INFO("Error looking up bindings for %s, no bindings returned",
              aor.c_str());
   }
-
-  //SDM-REFACTOR-TODO - no matter what http rc was, will always just "find 0
-  //bindings", since the error isn't returned. is this ok? am I doing the right
-  //thing here?
-
   // TODO - Log bindings to SAS
 }
 
@@ -283,9 +278,6 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
    TRC_INFO("Error removing binding with id %s, with HTTP error %lu. The "
             "binding may still be present.", binding_id.c_str(), http_code);
  }
-
- // SDM-REFACTOR-TODO - is it enough just to log and plow on?
-
 }
 
 

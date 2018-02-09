@@ -309,7 +309,7 @@ protected:
                               std::string uri = "sip:6505551000@homedomain");
   void setup_callee_info(HSSConnection::irs_info& irs_info,
                          Bindings& bindings);
-  void setup_callee_ifcs(HSSConnection::irs_info& irs_info);
+  void setup_callee_irs_info(HSSConnection::irs_info& irs_info);
   void setup_callee_binding(Bindings& bindings,
                             std::string uri = "sip:6505551234@homedomain",
                             std::string contact = "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob",
@@ -319,10 +319,10 @@ protected:
                               std::string uri = "sip:6505551234@homedomain",
                               bool check_retarget = false,
                               int num_matching_ifcs = 1);
-  void setup_callee_ifc_call(HSSConnection::irs_info& irs_info,
-                             std::string uri = "sip:6505551234@homedomain",
-                             bool check_retarget = false,
-                             int num_matching_ifcs = 1);
+  void setup_callee_irs_info_calls(HSSConnection::irs_info& irs_info,
+                                   std::string uri = "sip:6505551234@homedomain",
+                                   bool check_retarget = false,
+                                   int num_matching_ifcs = 1);
   void setup_callee_bindings_call(Bindings& bindings,
                                   std::string uri = "sip:6505551234@homedomain");
   char* add_ifcs(HSSConnection::irs_info& irs_info,
@@ -1161,7 +1161,6 @@ void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
   free_txdata();
 }
 
-// SDM-REFACTOR-TODO: move this to common code to be used by other sproutlets?
 // Create the irs info to be returned by the mock subscriber manager.
 void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
                                  std::string user,
@@ -1193,11 +1192,8 @@ void SCSCFTestBase::set_irs_info(HSSConnection::irs_info& irs_info,
 
   irs_info._aliases.push_back(uri);
 
-  // SDM-REFACTOR-TODO
-  // Are these set in the right format?? - look in subscriber sproutlet tests
-  // where they are set correctly!!
-  irs_info._ccfs = {"priority=\"1\">ccf1"};
-  irs_info._ecfs = {"priority=\"1\">ecf1", "priority=\"2\">ecf2"};
+  irs_info._ccfs = {"CCF TEST"};
+  irs_info._ecfs = {"ECF TEST 1", "ECF TEST 2"};
 }
 
 // Set up the irs info that is used for most callers.
@@ -1208,6 +1204,8 @@ void SCSCFTestBase::setup_caller_info(HSSConnection::irs_info& irs_info)
   setup_all_caller_calls(irs_info);
 }
 
+// Set up the expected calls to the SM for the caller - the only call we
+// typically expect is one to look up the originating iFCs.
 void SCSCFTestBase::setup_all_caller_calls(HSSConnection::irs_info& irs_info,
                                            std::string uri)
 {
@@ -1216,23 +1214,25 @@ void SCSCFTestBase::setup_all_caller_calls(HSSConnection::irs_info& irs_info,
                     Return(HTTP_OK)));
 }
 
-// Set up the irs info that is used for most callees.
+// Set up the irs info and bindings that are used for most callees.
 void SCSCFTestBase::setup_callee_info(HSSConnection::irs_info& irs_info,
                                       Bindings& bindings)
 {
-  setup_callee_ifcs(irs_info);
+  setup_callee_irs_info(irs_info);
   setup_callee_binding(bindings);
 }
 
-void SCSCFTestBase::setup_callee_ifcs(HSSConnection::irs_info& irs_info)
+// Set up only the irs info for most callees.
+void SCSCFTestBase::setup_callee_irs_info(HSSConnection::irs_info& irs_info)
 {
   set_irs_info(irs_info, "6505551234", "homedomain");
 }
 
+// Set up only the bindings info for most callees.
 void SCSCFTestBase::setup_callee_binding(Bindings& bindings,
-                                          std::string uri,
-                                          std::string contact,
-                                          bool emergency)
+                                         std::string uri,
+                                         std::string contact,
+                                         bool emergency)
 {
   Binding* binding = AoRTestUtils::build_binding(uri,
                                                  time(NULL),
@@ -1246,20 +1246,24 @@ void SCSCFTestBase::setup_callee_binding(Bindings& bindings,
 
 // Set up the expected calls to the SM relating to the callee.
 // There should be one call to get the iFCs, and one to get the bindings.
+// Also, for every matched on AS, there should be a call to the SM to check that
+// the returned INVITE has not been retargeted.
 void SCSCFTestBase::setup_all_callee_calls(HSSConnection::irs_info& irs_info,
                                            Bindings& bindings,
                                            std::string uri,
                                            bool check_retarget,
                                            int num_matching_ifcs)
 {
-  setup_callee_ifc_call(irs_info, uri, check_retarget, num_matching_ifcs);
+  setup_callee_irs_info_calls(irs_info, uri, check_retarget, num_matching_ifcs);
   setup_callee_bindings_call(bindings, uri);
 }
 
-void SCSCFTestBase::setup_callee_ifc_call(HSSConnection::irs_info& irs_info,
-                                          std::string uri,
-                                          bool check_retarget,
-                                          int num_matching_ifcs)
+// Set up the expected calls to the SM relating to fetching the irs info for the
+// callee.
+void SCSCFTestBase::setup_callee_irs_info_calls(HSSConnection::irs_info& irs_info,
+                                                std::string uri,
+                                                bool check_retarget,
+                                                int num_matching_ifcs)
 {
   if (check_retarget)
   {
@@ -1279,6 +1283,7 @@ void SCSCFTestBase::setup_callee_ifc_call(HSSConnection::irs_info& irs_info,
   }
 }
 
+// Set up the expected call to the SM to fetch the bindings for the callee.
 void SCSCFTestBase::setup_callee_bindings_call(Bindings& bindings,
                                                std::string uri)
 {
@@ -1287,6 +1292,7 @@ void SCSCFTestBase::setup_callee_bindings_call(Bindings& bindings,
                     Return(HTTP_OK)));
 }
 
+// Add a list of iFCs (as string), to the irs info passed in.
 char* SCSCFTestBase::add_ifcs(HSSConnection::irs_info& irs_info,
                              std::vector<std::string> ifc_list,
                              std::string uri)
@@ -1305,7 +1311,6 @@ char* SCSCFTestBase::add_ifcs(HSSConnection::irs_info& irs_info,
   std::shared_ptr<rapidxml::xml_document<>> root (new rapidxml::xml_document<>);
   char* cstr_ifcs = strdup(ifcs_text.c_str());
   root->parse<0>(cstr_ifcs);
-// NULL is SIFCService*
   Ifcs ifcs = Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
   irs_info._service_profiles.insert(std::make_pair(uri, ifcs));
 
@@ -1319,7 +1324,7 @@ char* SCSCFTestBase::add_ifcs(HSSConnection::irs_info& irs_info,
   return cstr_ifcs;
 }
 
-// Adds a string continaing an iFC to the vector passed in.
+// Adds an iFC (as string) to the vector of iFCs passed in.
 void SCSCFTestBase::add_ifc_info(std::vector<std::string>& ifc_list,
                                  int priority,
                                  std::vector<std::string> triggers,
@@ -1362,6 +1367,7 @@ void SCSCFTestBase::add_ifc_info(std::vector<std::string>& ifc_list,
   ifc_list.push_back(ifc);
 }
 
+// Adds a single iFC to the irs_info passed in.
 char* SCSCFTestBase::add_single_ifc(HSSConnection::irs_info& irs_info,
                                     std::string uri,
                                     int priority,
@@ -1377,7 +1383,7 @@ char* SCSCFTestBase::add_single_ifc(HSSConnection::irs_info& irs_info,
 }
 
 // Add the details to irs_info about an identity that is in the same profile as
-// the default.
+// the default identity.
 void SCSCFTestBase::add_sp_identity(HSSConnection::irs_info& irs_info,
                                     std::string uri,
                                     bool barring)
@@ -1418,7 +1424,7 @@ TEST_F(SCSCFTest, TestSimpleMainlineMaddr)
   // Set up callee info.
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   SCSCFMessage msg;
   msg._requri = "sip:6505551234@homedomain;maddr=1.2.3.4";
@@ -1504,7 +1510,7 @@ TEST_F(SCSCFTest, GetBindingsFails)
   // lookup of bindings is set up to fail.
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
   EXPECT_CALL(*_sm, get_bindings("sip:6505551234@homedomain", _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
 
@@ -1559,7 +1565,7 @@ TEST_F(SCSCFTest, TestBarredCallee)
   // Set up info to be returned about the callee, showing they are barred.
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain", true);
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   // We look up the bindings before we reject the call due to the callee being
   // barred, so expect a call to get_bindings (but no need to bother to return
@@ -1638,7 +1644,7 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
   add_sp_identity(irs_info, "tel:6505551235", false);
-  setup_callee_ifc_call(irs_info, "tel:6505551235");
+  setup_callee_irs_info_calls(irs_info, "tel:6505551235");
   setup_callee_bindings_call(bindings); //SDM-REFACTOR-TODO - why are these called with dif things??
 
   // Send a terminating INVITE for a subscriber with a tel: URI
@@ -1658,7 +1664,7 @@ TEST_F(SCSCFTest, TestEmptyBinding)
   // Setup irs_info (for uri that is not the one that is called).
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "1234567", "homedomain");
-  setup_callee_ifc_call(irs_info, "tel:6505551235");
+  setup_callee_irs_info_calls(irs_info, "tel:6505551235");
 
   // Return empty list of bindings.
   EXPECT_CALL(*_sm, get_bindings("tel:6505551235", _, _))
@@ -2762,7 +2768,7 @@ TEST_F(SCSCFTest, UnregisteredCallee)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   irs_info._regstate = "UNREGISTERED";
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   SCSCFMessage msg;
   doSlowFailureFlow(msg, 480);
@@ -3319,7 +3325,7 @@ TEST_F(SCSCFTest, SimpleReject)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3391,7 +3397,7 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3462,9 +3468,9 @@ TEST_F(SCSCFTest, SimpleAccept)
 {
   // Set up callee info.
   HSSConnection::irs_info irs_info;
-  setup_callee_ifcs(irs_info);
+  setup_callee_irs_info(irs_info);
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3537,7 +3543,7 @@ TEST_F(SCSCFTest, SimpleRedirect)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3611,7 +3617,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("408")));
 
@@ -4705,7 +4711,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   // This flow counts as a successful AS communication, as it sent back a 1xx
   // response.
@@ -5384,7 +5390,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp");
   add_ifc_info(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
   char* ifc_str = add_ifcs(irs_info_2, ifc_list, "sip:6505551234@homedomain");
-  setup_callee_ifc_call(irs_info_2, "sip:6505551234@homedomain");
+  setup_callee_irs_info_calls(irs_info_2, "sip:6505551234@homedomain");
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -5456,7 +5462,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   add_ifc_info(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=TCP");
   char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
@@ -5576,7 +5582,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   add_ifc_info(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56789;transport=TCP");
   char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
@@ -5693,7 +5699,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueMessageErrorTimeoutThenResp)
   add_ifc_info(ifc_list, 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   add_ifc_info(ifc_list, 2, {"<Method>MESSAGE</Method>"}, "sip:4.2.3.4:56789;transport=TCP");
   char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
@@ -6092,14 +6098,14 @@ TEST_F(SCSCFTest, Cdiv)
   add_ifc_info(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
   char* ifc_str = add_ifcs(irs_info_1, ifc_list, "sip:6505551234@homedomain");
-  setup_callee_ifc_call(irs_info_1, "sip:6505551234@homedomain", true);
+  setup_callee_irs_info_calls(irs_info_1, "sip:6505551234@homedomain", true);
 
   // The call is diverted to "sip:6505555678@homedomain". Set up its info.
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "6505555678", "homedomain");
   Bindings bindings;
   setup_callee_binding(bindings, "sip:6505555678@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  setup_callee_ifc_call(irs_info_2, "sip:6505555678@homedomain");
+  setup_callee_irs_info_calls(irs_info_2, "sip:6505555678@homedomain");
   setup_callee_bindings_call(bindings, "sip:6505555678@homedomain");
 
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
@@ -6234,7 +6240,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   add_ifc_info(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787");
   char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_callee_ifc_call(irs_info, "sip:6505551234@homedomain", true);
+  setup_callee_irs_info_calls(irs_info, "sip:6505551234@homedomain", true);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -6353,7 +6359,7 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   // Set default handling to terminate to prevent clean up issues at end of
   // test.
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP", 0, "1");
-  setup_callee_ifc_call(irs_info_2);
+  setup_callee_irs_info_calls(irs_info_2);
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6423,7 +6429,7 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
   // Set default handling to terminate to prevent clean up issues at end of
   // test.
   char* ifc_str = add_single_ifc(irs_info, "sip:1115551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP", 0, "1");
-  setup_callee_ifc_call(irs_info, "sip:1115551234@homedomain");
+  setup_callee_irs_info_calls(irs_info, "sip:1115551234@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -6489,14 +6495,14 @@ TEST_F(SCSCFTest, MmtelCdiv)
   char* ifc_str = add_ifcs(irs_info_1, ifc_list, "sip:6505551234@homedomain");
   // Lookup iFCs on orig and term (but they are cached so only need one lookup
   // here), and lookup if retarget. So overall expect two lookups.
-  setup_callee_ifc_call(irs_info_1, "sip:6505551234@homedomain", true);
+  setup_callee_irs_info_calls(irs_info_1, "sip:6505551234@homedomain", true);
 
   // Setup info about forwarded callee.
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "6505555678", "homedomain");
   Bindings bindings;
   setup_callee_binding(bindings, "sip:6505555678@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  setup_callee_ifc_call(irs_info_2, "sip:6505555678@homedomain");
+  setup_callee_irs_info_calls(irs_info_2, "sip:6505555678@homedomain");
   setup_callee_bindings_call(bindings, "sip:6505555678@homedomain");
 
   _xdm_connection->put("sip:6505551234@homedomain",
@@ -6623,7 +6629,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   set_irs_info(irs_info_1, "6505551234", "homedomain");
   char* ifc_str_1 = add_single_ifc(irs_info_1, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>2</SessionCase><!-- terminating-unregistered -->"}, "sip:mmtel.homedomain");
   irs_info_1._regstate = "UNREGISTERED";
-  setup_callee_ifc_call(irs_info_1, "sip:6505551234@homedomain", true, 1);
+  setup_callee_irs_info_calls(irs_info_1, "sip:6505551234@homedomain", true, 1);
 
   // Set up info about the forwarded callee.
   HSSConnection::irs_info irs_info_2;
@@ -6633,7 +6639,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>2</SessionCase><!-- terminating-unregistered -->"}, "sip:mmtel.homedomain");
   char* ifc_str_2 = add_ifcs(irs_info_2, ifc_list, "sip:6505555678@homedomain");
   irs_info_2._regstate = "UNREGISTERED";
-  setup_callee_ifc_call(irs_info_2, "sip:6505555678@homedomain", true, 1);
+  setup_callee_irs_info_calls(irs_info_2, "sip:6505555678@homedomain", true, 1);
 
   // Set up info about the second forwarded callee.
   HSSConnection::irs_info irs_info_3;
@@ -7217,7 +7223,7 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>OPTIONS</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info_2);
+  setup_callee_irs_info_calls(irs_info_2);
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -7281,7 +7287,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "6505501234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505501234@homedomain", 1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info_2, "sip:6505501234@homedomain", true, 1);
+  setup_callee_irs_info_calls(irs_info_2, "sip:6505501234@homedomain", true, 1);
 
   _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -7413,7 +7419,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551000", "", false, true);
   char* ifc_str = add_single_ifc(irs_info, "tel:6505551000", 1, {"<Method>INVITE</Method>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info, "tel:6505551000");
+  setup_callee_irs_info_calls(irs_info, "tel:6505551000");
 
   // When the P-Asserted-Identity doesn't include "user=phone", expect the
   // lookup to fail.
@@ -8247,7 +8253,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "6505501234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info_2, "sip:6505501234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  setup_callee_ifc_call(irs_info_2, "sip:6505501234@homedomain", true, 1);
+  setup_callee_irs_info_calls(irs_info_2, "sip:6505501234@homedomain", true, 1);
 
   _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -8910,7 +8916,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  setup_callee_ifc_call(irs_info, "sip:6505551234@homedomain", true, 1);
+  setup_callee_irs_info_calls(irs_info, "sip:6505551234@homedomain", true, 1);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9009,7 +9015,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  setup_callee_ifc_call(irs_info, "sip:6505551234@homedomain", true, 1);
+  setup_callee_irs_info_calls(irs_info, "sip:6505551234@homedomain", true, 1);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9108,7 +9114,7 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
   add_ifc_info(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
   add_ifc_info(ifc_list, 1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56787;transport=UDP");
   char* ifc_str = add_ifcs(irs_info, ifc_list, "sip:6505551234@homedomain");
-  setup_callee_ifc_call(irs_info, "sip:6505551234@homedomain", true, 1);
+  setup_callee_irs_info_calls(irs_info, "sip:6505551234@homedomain", true, 1);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9758,7 +9764,7 @@ TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain", true); // This IMPU is barred.
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
   Bindings bindings;
   Bindings bindings_2; // Sproutlet owns the bindings, so we need multiple objects to pass in.
   setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", true); // Add an emergency binding.
@@ -9797,7 +9803,7 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
   setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:fowertreetoowun@10.114.61.213:5061;transport=tcp;ob");
   setup_callee_binding(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", true); // Add an emergency binding.
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
   // Expect two calls to get bindings, one to check for any emergency
   // registrations after it is realised the served user is barred, and one to
   // find the target to route to.
@@ -9873,7 +9879,7 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectTerm)
   HSSConnection::irs_info irs_info;
   set_irs_info(irs_info, "6505551234", "homedomain");
   char* ifc_str = add_single_ifc(irs_info, "sip:6505551234@homedomain", 0, {"<Method>PUBLISH</Method>"}, "sip:DUMMY_AS");
-  setup_callee_ifc_call(irs_info);
+  setup_callee_irs_info_calls(irs_info);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
