@@ -2305,8 +2305,8 @@ TEST_F(SCSCFTest, TestWithoutEnum)
   // Set up callee info.
   HSSConnection::irs_info irs_info_2;
   set_irs_info(irs_info_2, "+15108580271", "homedomain");
+  add_sp_identity(irs_info_2, "sip:+15108580271@homedomain");
   Bindings bindings;
-  setup_callee_binding(bindings, "sip:+15108580271@homedomain", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
   setup_callee_binding(bindings, "tel:+15108580271", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
   setup_all_callee_calls(irs_info_2, bindings, "tel:+15108580271");
 
@@ -8673,9 +8673,6 @@ TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
 }
 
 
-// SDM-REFACTOR-TODO - for this, and all other PAI, haven't cared what we're
-// expecting to call the HSS with (regarding the caller). Check that doesn't
-// matter.
 TEST_F(SCSCFTest, TestNoPAIHdrs)
 {
   SCOPED_TRACE("");
@@ -9059,11 +9056,6 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
     pj_list_erase(hdr);
   }
 
-  //SDM-REFACTOR-TODO - confirm that when AS loads route, we don't need to look
-  //up bindings, since we know where to send the INVITE to. This is what I have
-  //done to make this test, and PreloadedRouteChangedReqUri and
-  //PreloadedRouteNotLastAs, pass. They need changing if this assumption isn't
-  //correct.
   char preloaded_route[80] = "sip:3.3.3.3:5060;transport=TCP;lr";
   pjsip_route_hdr* hroute = pjsip_route_hdr_create(current_txdata()->pool);
   hroute->name_addr.uri =
