@@ -175,7 +175,6 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterIFCErrorResponse)
 
   // Expect the subscriber to be dergistered.
   EXPECT_CALL(*_subscriber_manager, deregister_subscriber("sip:6505551000@homedomain",
-                                                          SubscriberDataUtils::EventTrigger::ADMIN,
                                                           _));
 
   bool unused_deregister_subscriber;
@@ -233,7 +232,6 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterFallbackIFCErrorResponse)
 
   // Expect the subscriber to be dergistered.
   EXPECT_CALL(*_subscriber_manager, deregister_subscriber("sip:6505551000@homedomain",
-                                                          SubscriberDataUtils::EventTrigger::ADMIN,
                                                           _));
 
   bool unused_deregister_subscriber;
@@ -350,7 +348,7 @@ TEST_F(RegistrationSenderTest, 3rdPartyDeregister)
 }
 
 // Check that a 3rd party deregister is triggered.
-TEST_F(RegistrationSenderTest, 3rdPartyDeregisterMainlineErrorResponse)
+TEST_F(RegistrationSenderTest, 3rdPartyDeregisterErrorResponse)
 {
   Ifcs ifcs;
   char* cstr = build_ifcs(ifcs);

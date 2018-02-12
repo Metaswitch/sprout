@@ -99,6 +99,23 @@ Bindings copy_bindings(const Bindings& bindings)
   return copy_bindings;
 }
 
+Bindings copy_active_bindings(const Bindings& bindings,
+                              int now)
+{
+  Bindings copy_bindings;
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_expires - now > 0)
+    {
+      Binding* copy_b = new Binding(*(b.second));
+      copy_bindings.insert(std::make_pair(b.first, copy_b));
+    }
+  }
+
+  return copy_bindings;
+
+}
+
 Subscriptions copy_subscriptions(const Subscriptions& subscriptions)
 {
   Subscriptions copy_subscriptions;
@@ -106,6 +123,22 @@ Subscriptions copy_subscriptions(const Subscriptions& subscriptions)
   {
     Subscription* copy_s = new Subscription(*(s.second));
     copy_subscriptions.insert(std::make_pair(s.first, copy_s));
+  }
+
+  return copy_subscriptions;
+}
+
+Subscriptions copy_active_subscriptions(const Subscriptions& subscriptions,
+                                        int now)
+{
+  Subscriptions copy_subscriptions;
+  for (SubscriptionPair s :subscriptions)
+  {
+    if (s.second->_expires - now > 0)
+    {
+      Subscription* copy_s = new Subscription(*(s.second));
+      copy_subscriptions.insert(std::make_pair(s.first, copy_s));
+    }
   }
 
   return copy_subscriptions;

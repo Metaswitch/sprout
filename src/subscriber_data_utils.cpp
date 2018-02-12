@@ -27,6 +27,7 @@ SubscriberDataUtils::ContactEvent
       contact_event = ContactEvent::UNREGISTERED;
       break;
     case EventTrigger::ADMIN:
+    case EventTrigger::HSS:
       contact_event = ContactEvent::DEACTIVATED;
       break;
     // LCOV_EXCL_START - not hittable as all cases of event_trigger are covered

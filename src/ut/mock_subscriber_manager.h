@@ -52,8 +52,7 @@ public:
                                              HSSConnection::irs_info& irs_info,
                                              SAS::TrailId trail));
 
-  MOCK_METHOD3(deregister_subscriber, HTTPCode(const std::string& public_id,
-                                               const SubscriberDataUtils::EventTrigger& event_trigger,
+  MOCK_METHOD2(deregister_subscriber, HTTPCode(const std::string& public_id,
                                                SAS::TrailId trail));
 
   MOCK_METHOD3(get_bindings, HTTPCode(const std::string& public_id,
