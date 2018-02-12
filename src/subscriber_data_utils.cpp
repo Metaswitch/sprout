@@ -196,10 +196,11 @@ void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
     std::string reasons = base_reasons;
     if ((missing_binding_uris.find(subscription->_req_uri) !=
          missing_binding_uris.end()) &&
-        (event_trigger != SubscriberDataUtils::EventTrigger::ADMIN))
+        (event_trigger != SubscriberDataUtils::EventTrigger::ADMIN &&
+         event_trigger != SubscriberDataUtils::EventTrigger::HSS))
     {
-      // Binding is missing, and this event is not triggered by admin. The
-      // binding no longer exists due to user deregestration or timeout, so
+      // Binding is missing, and this event is not triggered by admin or hss. 
+      // The binding no longer exists due to user deregestration or timeout, so
       // classify the subscription as EXPIRED.
       TRC_DEBUG("Subscription %s in AoR %s has been expired since the binding that"
                 " shares its contact URI %s has expired or changed contact URI",

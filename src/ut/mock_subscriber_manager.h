@@ -87,7 +87,8 @@ public:
                                                        SAS::TrailId trail));
 };
 
-// Custom matchers to see what public identity or wildcard was on the irs_query
+// Custom matchers to see what public identity, wildcard or private identity and
+// registration state  was on the irs_query.
 // that the mock subscriber manager was called with.
 MATCHER_P(IrsQueryWithPublicId, pub_id, "") { return (arg._public_id == pub_id); }
 MATCHER_P(IrsQueryWithWildcard, wildcard, "") { return (arg._wildcard == wildcard); }
