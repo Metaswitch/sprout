@@ -615,6 +615,14 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
 void SubscriberManager::handle_timer_pop(const std::string& aor_id,
                                          SAS::TrailId trail)
 {
+  PJUtils::run_callback_on_worker_thread([this, aor_id, trail]() {
+    return handle_timer_pop_internal(aor_id, trail);
+  });
+}
+
+void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
+                                                  SAS::TrailId trail)
+{
   TRC_DEBUG("Handling a timer pop for AoR %s", aor_id.c_str());
 
   // Get the original AoR from S4.
