@@ -543,17 +543,16 @@ TEST_F(GetBindingsTest, TwoBindings)
   EXPECT_TRUE(document["bindings"].HasMember("456"));
 }
 
-// Test getting an IMPU when the local store is down.
-TEST_F(GetBindingsTest, LocalStoreDown)
+// Test the flow when subscriber manager returns a server error.
+TEST_F(GetBindingsTest, SubscriberManagerFail)
 {
   // Build request
   MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
   GetBindingsTask::Config config(sm);
   GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
 
-  // Set up subscriber_data_manager expectations
+  // Expect a server error at subscriber manager
   std::string aor_id = "sip:6505550231@homedomain";
-
   EXPECT_CALL(*sm, get_bindings(aor_id, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
   EXPECT_CALL(*stack, send_reply(_, 500, _));

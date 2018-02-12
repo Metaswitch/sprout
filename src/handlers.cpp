@@ -234,7 +234,10 @@ HTTPCode DeregistrationTask::deregister_bindings(
     }
   }
 
-  bindings.clear();
+  for (BindingPair binding : bindings)
+  {
+      delete binding.second; binding.second = NULL;
+  }
 
   // Remove these bindings via subscriber manager
   rc = _cfg->_sm->remove_bindings(aor_id,
@@ -242,7 +245,11 @@ HTTPCode DeregistrationTask::deregister_bindings(
                                   SubscriberDataUtils::EventTrigger::ADMIN,
                                   unused_bindings,
                                   trail());
-  unused_bindings.clear();
+
+  for (BindingPair binding : unused_bindings)
+  {
+      delete binding.second; binding.second = NULL;
+  }
 
   return rc;
 }

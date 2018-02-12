@@ -27,7 +27,7 @@
 #include "gtest/gtest.h"
 
 
-// Base class used for testing handlers with Mock SDMs.
+// Base class used for testing handlers with Mock Subscriber Manager.
 class TestWithMockSM : public BaseTest
 {
   MockSubscriberManager* sm;
