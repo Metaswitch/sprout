@@ -30,12 +30,13 @@ extern "C" {
 #include "ifchandler.h"
 #include "aor.h"
 #include "s4.h"
-#include "base_subscriber_manager.h"
 #include "notify_sender.h"
+#include "registration_sender.h"
 #include "subscriber_data_utils.h"
 
-// SDM-REFACTOR-TODO: Add Doxygen comments.
-class SubscriberManager : public BaseSubscriberManager
+// SDM-REFACTOR-TODO: Add Doxygen return parameters.
+class SubscriberManager : public S4::TimerPopConsumer,
+                          public RegistrationSender::DeregistrationEventConsumer
 {
 public:
   /// SubscriberManager constructor. It calls the S4 to store a reference to
@@ -45,10 +46,14 @@ public:
   /// @param hss_connection     - Sprout's HSS connection (via homestead)
   /// @param analytics_logger   - AnalyticsLogger for reporting registration events
   /// @param notify_sender      - NotifySender class that knows how to send NOTIFYs
+  /// @param registration_sender
+  ///                           - RegistrationSender class that knows how to send
+  ///                             3rd party REGISTERs.
   SubscriberManager(S4* s4,
                     HSSConnection* hss_connection,
                     AnalyticsLogger* analytics_logger,
-                    NotifySender* notify_sender);
+                    NotifySender* notify_sender,
+                    RegistrationSender* registration_sender);
 
   /// Destructor.
   virtual ~SubscriberManager();
@@ -131,10 +136,8 @@ public:
   /// Deregisters a subscriber completely.
   ///
   /// @param[in]  public_id     The public ID to deregister
-  /// @param[in]  event_trigger The reason for deregistering the subscriber
   /// @param[in]  trail         The SAS trail ID
   virtual HTTPCode deregister_subscriber(const std::string& public_id,
-                                         const SubscriberDataUtils::EventTrigger& event_trigger,
                                          SAS::TrailId trail);
 
   /// Gets all bindings stored for a given AoR ID.
@@ -186,6 +189,7 @@ public:
                                         SAS::TrailId trail);
 
   /// Update the associated URIs stored in an AoR.
+  ///
   /// @param[in]  aor_id        The AoR ID to lookup in the store. It is the
   ///                           client's responsibilty to provide an ID that
   ///                           will be found in the store i.e. a default public
@@ -205,11 +209,37 @@ public:
   /// @param[in]  trail         The SAS trail ID
   virtual void handle_timer_pop(const std::string& aor_id,
                                 SAS::TrailId trail);
+
+  /// Register a subscriber with its application servers
+  ///
+  /// @param[in]  received_register_message
+  ///                           The received register message. This may be
+  ///                           included in the body of 3rd party registers
+  /// @param[in]  ok_response_msg
+  ///                           The response to the REGISTER message. This may
+  ///                           be included in teh body of 3rd party registers
+  /// @param[in]  served_user   The IMPU we are sending 3rd party registers for
+  /// @param[in]  ifcs          The iFCs to parse to determine the 3rd party
+  ///                           application servers
+  /// @param[in]  expires       The expiry of the received register
+  /// @param[in]  is_initial_registration
+  ///                           Whether or not the received registraion is an
+  ///                           initial registration
+  /// @param[in]  trail         The SAS trail ID
+  virtual void register_with_application_servers(pjsip_msg* received_register_message,
+                                                 pjsip_msg* ok_response_msg,
+                                                 const std::string& served_user,
+                                                 const Ifcs& ifcs,
+                                                 int expires,
+                                                 bool is_initial_registration,
+                                                 SAS::TrailId trail);
+
 private:
   S4* _s4;
   HSSConnection* _hss_connection;
   AnalyticsLogger* _analytics;
   NotifySender* _notify_sender;
+  RegistrationSender* _registration_sender;
 
   HTTPCode modify_subscription(const std::string& public_id,
                                const SubscriptionPair& update_subscription,
@@ -284,6 +314,9 @@ private:
                                const std::string& server_name,
                                HSSConnection::irs_info& irs_info,
                                SAS::TrailId trail);
+
+  void handle_timer_pop_internal(const std::string& aor_id,
+                                 SAS::TrailId trail);
 
 };
 

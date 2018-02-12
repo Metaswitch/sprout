@@ -9,7 +9,6 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#include "base_subscriber_manager.h"
 #include "subscriber_manager.h"
 #include "aor_utils.h"
 #include "pjutils.h"
@@ -17,16 +16,22 @@
 SubscriberManager::SubscriberManager(S4* s4,
                                      HSSConnection* hss_connection,
                                      AnalyticsLogger* analytics_logger,
-                                     NotifySender* notify_sender) :
+                                     NotifySender* notify_sender,
+                                     RegistrationSender* registration_sender) :
   _s4(s4),
   _hss_connection(hss_connection),
   _analytics(analytics_logger),
-  _notify_sender(notify_sender)
+  _notify_sender(notify_sender),
+  _registration_sender(registration_sender)
 {
   if (_s4 != NULL)
   {
-    TRC_DEBUG("Initialising S4 with reference to this subscriber manager");
-    _s4->initialise(this);
+    _s4->register_timer_pop_consumer(this);
+  }
+
+  if (_registration_sender != NULL)
+  {
+    _registration_sender->register_dereg_event_consumer(this);
   }
 }
 
@@ -44,55 +49,74 @@ HTTPCode SubscriberManager::register_subscriber(const std::string& aor_id,
 {
   TRC_DEBUG("Registering AoR %s for the first time", aor_id.c_str());
 
+  int now = time(NULL);
+
   // We are registering a subscriber for the first time, so there is no stored
   // AoR. PUT the new bindings to S4.
   AoR* orig_aor = NULL;
   AoR* updated_aor = NULL;
 
-  HTTPCode rc = put_bindings(aor_id,
-                             add_bindings,
-                             associated_uris,
-                             server_name,
-                             updated_aor,
-                             trail);
-
-  // The PUT failed, so return.
-  if (rc != HTTP_OK)
+  // We may have been called with no bindings to update. In that case do not PUT
+  // any data to S4.
+  if (!add_bindings.empty())
   {
-    TRC_DEBUG("Registering AoR %s failed with return code %d",
-              aor_id.c_str(),
-              rc);
+    HTTPCode rc = put_bindings(aor_id,
+                               add_bindings,
+                               associated_uris,
+                               server_name,
+                               updated_aor,
+                               trail);
 
-    delete orig_aor; orig_aor = NULL;
-    delete updated_aor; updated_aor = NULL;
-    return rc;
+    // The PUT failed, so return.
+    if (rc != HTTP_OK)
+    {
+      TRC_DEBUG("Registering AoR %s failed with return code %d",
+                aor_id.c_str(),
+                rc);
+
+      delete orig_aor; orig_aor = NULL;
+      delete updated_aor; updated_aor = NULL;
+      return rc;
+    }
+
+    // Get all bindings to return to the caller
+    all_bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
+                                                  now);
+
+    // Send any NOTIFYs. Normally we expect no NOTIFYs to be sent, as this was
+    // triggered by an initial register. However, there's a chance if we had to
+    // retry the write to S4. Either way, we let the Notify Sender decide.
+    send_notifys(aor_id,
+                 orig_aor,
+                 updated_aor,
+                 SubscriberDataUtils::EventTrigger::USER,
+                 now,
+                 trail);
   }
-
-  // Get all bindings to return to the caller
-  all_bindings = AoRUtils::copy_bindings(updated_aor->bindings());
-
-  // Send any NOTIFYs. Normally we expect no NOTIFYs to be sent, as this was
-  // triggered by an initial register. However, there's a chance if we had to
-  // retry the write to S4. Either way, we let the Notify Sender decide.
-  send_notifys(aor_id,
-               orig_aor,
-               updated_aor,
-               SubscriberDataUtils::EventTrigger::USER,
-               time(NULL),
-               trail);
-
-  // Update HSS if all bindings expired.
-  // TODO make sure this is impossible before deleting.
-  /*if (all_bindings.empty())
+  else
   {
-    rc = deregister_with_hss(aor_id,
-                             HSSConnection::DEREG_USER,
-                             irs_query._server_name,
-                             irs_info,
-                             trail);
-  }*/
-
-  // Send 3rd party REGISTERs.
+    // The was nothing to store for this subscriber so we should deregister the
+    // subscriber with the HSS since they will have previously been registered
+    // incorrectly.
+    if (all_bindings.empty())
+    {
+      // TODO should IRS info be returned to client??
+      HSSConnection::irs_info irs_info;
+      HTTPCode rc = deregister_with_hss(aor_id,
+                                        HSSConnection::DEREG_USER,
+                                        server_name,
+                                        irs_info,
+                                        trail);
+      if (rc != HTTP_OK)
+      {
+        TRC_DEBUG("Failed to deregister subscriber %s with HSS",
+                  aor_id.c_str());
+        delete orig_aor; orig_aor = NULL;
+        delete updated_aor; updated_aor = NULL;
+        return rc;
+      }
+    }
+  }
 
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
@@ -122,7 +146,7 @@ HTTPCode SubscriberManager::reregister_subscriber(const std::string& aor_id,
 
   // We are reregistering a subscriber, so there must be an existing AoR in the
   // store.
-  // TODO retry with PUT if GET returns 404 Not Found
+  // TODO retry with PUT if GET or PATCH returns 404 Not Found
   if (rc != HTTP_OK)
   {
     TRC_DEBUG("Reregistering AoR %s failed during GET with return code %d",
@@ -165,7 +189,8 @@ HTTPCode SubscriberManager::reregister_subscriber(const std::string& aor_id,
   }
 
   // Get all bindings to return to the caller
-  all_bindings = AoRUtils::copy_bindings(updated_aor->bindings());
+  all_bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
+                                                now);
 
   log_updated_bindings(updated_aor, updated_bindings, now);
 
@@ -184,9 +209,20 @@ HTTPCode SubscriberManager::reregister_subscriber(const std::string& aor_id,
                              updated_aor->_scscf_uri,
                              irs_info,
                              trail);
-  }
+    if (rc != HTTP_OK)
+    {
+      TRC_DEBUG("Failed to deregister subscriber %s with HSS",
+                aor_id.c_str());
+      delete orig_aor; orig_aor = NULL;
+      delete updated_aor; updated_aor = NULL;
+      return rc;
+    }
 
-  // Send 3rd party REGISTERs.
+    // Send 3rd party deREGISTERs.
+    _registration_sender->deregister_with_application_servers(aor_id,
+                                                              irs_info._service_profiles[aor_id],
+                                                              trail);
+  }
 
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
@@ -201,6 +237,8 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
                                             SAS::TrailId trail)
 {
   TRC_DEBUG("Removing bindings from IMPU %s", public_id.c_str());
+
+  int now = time(NULL);
 
   // Get cached subscriber information from the HSS.
   std::string aor_id;
@@ -267,31 +305,44 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
   }
 
   // Get all bindings to return to the caller
-  bindings = AoRUtils::copy_bindings(updated_aor->bindings());
+  bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
+                                            now);
 
   send_notifys(aor_id,
                orig_aor,
                updated_aor,
                event_trigger,
-               time(NULL),
+               now,
                trail);
 
   // Update HSS if all bindings expired.
   if (bindings.empty())
   {
-    std::string dereg_reason = (event_trigger == SubscriberDataUtils::EventTrigger::USER) ?
-                                 HSSConnection::DEREG_USER : HSSConnection::DEREG_ADMIN;
-    rc = deregister_with_hss(aor_id,
-                             dereg_reason,
-                             updated_aor->_scscf_uri,
-                             irs_info,
-                             trail);
+    // If this action was not triggered by the HSS e.g. because of an RTR, we
+    // should dergister with the HSS.
+    if (event_trigger != SubscriberDataUtils::EventTrigger::HSS)
+    {
+      std::string dereg_reason = (event_trigger == SubscriberDataUtils::EventTrigger::USER) ?
+                                   HSSConnection::DEREG_USER : HSSConnection::DEREG_ADMIN;
+      rc = deregister_with_hss(aor_id,
+                               dereg_reason,
+                               updated_aor->_scscf_uri,
+                               irs_info,
+                               trail);
+      if (rc != HTTP_OK)
+      {
+        TRC_DEBUG("Failed to deregister subscriber %s with HSS",
+                  aor_id.c_str());
+        delete orig_aor; orig_aor = NULL;
+        delete updated_aor; updated_aor = NULL;
+        return rc;
+      }
+    }
 
     // Send 3rd party deREGISTERs.
-  }
-  else
-  {
-    // Send 3rd party REGISTERs
+    _registration_sender->deregister_with_application_servers(public_id,
+                                                              irs_info._service_profiles[public_id],
+                                                              trail);
   }
 
   delete orig_aor; orig_aor = NULL;
@@ -331,7 +382,6 @@ HTTPCode SubscriberManager::remove_subscription(
 }
 
 HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
-                                                  const SubscriberDataUtils::EventTrigger& event_trigger,
                                                   SAS::TrailId trail)
 {
   TRC_DEBUG("Deregistering subscriber with IMPU %s", public_id.c_str());
@@ -405,15 +455,24 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
                trail);
 
   // Deregister with HSS.
-  std::string dereg_reason = (event_trigger == SubscriberDataUtils::EventTrigger::USER) ?
-                               HSSConnection::DEREG_USER : HSSConnection::DEREG_ADMIN;
   rc = deregister_with_hss(aor_id,
-                           dereg_reason,
+                           HSSConnection::DEREG_ADMIN,
                            orig_aor->_scscf_uri,
                            irs_info,
                            trail);
 
+  if (rc != HTTP_OK)
+  {
+    TRC_DEBUG("Failed to deregister subscriber %s with HSS",
+              aor_id.c_str());
+    delete orig_aor; orig_aor = NULL;
+    return rc;
+  }
+
   // Send 3rd party deREGISTERs.
+  _registration_sender->deregister_with_application_servers(public_id,
+                                                            irs_info._service_profiles[public_id],
+                                                            trail);
 
   delete orig_aor; orig_aor = NULL;
 
@@ -427,10 +486,7 @@ HTTPCode SubscriberManager::get_bindings(const std::string& aor_id,
   TRC_DEBUG("Retrieving bindings for AoR %s",
             aor_id.c_str());
 
-  // TODO make sure all client call this function with the AoR ID.
-
   // Get the current AoR from S4.
-  // TODO make sure this only returns not expired bindings.
   AoR* aor = NULL;
   uint64_t unused_version;
   HTTPCode rc = _s4->handle_get(aor_id,
@@ -446,7 +502,8 @@ HTTPCode SubscriberManager::get_bindings(const std::string& aor_id,
   }
 
   // Set the bindings to return to the caller.
-  bindings = AoRUtils::copy_bindings(aor->bindings());
+  bindings = AoRUtils::copy_active_bindings(aor->bindings(),
+                                            time(NULL));
 
   delete aor; aor = NULL;
   return HTTP_OK;
@@ -460,7 +517,6 @@ HTTPCode SubscriberManager::get_subscriptions(const std::string& aor_id,
             aor_id.c_str());
 
   // Get the current AoR from S4.
-  // TODO make sure this only returns not expired subscriptions.
   AoR* aor = NULL;
   uint64_t unused_version;
   HTTPCode rc = _s4->handle_get(aor_id,
@@ -476,7 +532,8 @@ HTTPCode SubscriberManager::get_subscriptions(const std::string& aor_id,
   }
 
   // Set the subscriptions to return to the caller.
-  subscriptions = AoRUtils::copy_subscriptions(aor->subscriptions());
+  subscriptions = AoRUtils::copy_active_subscriptions(aor->subscriptions(),
+                                                      time(NULL));
 
   delete aor; aor = NULL;
   return HTTP_OK;
@@ -558,6 +615,14 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
 void SubscriberManager::handle_timer_pop(const std::string& aor_id,
                                          SAS::TrailId trail)
 {
+  PJUtils::run_callback_on_worker_thread([this, aor_id, trail]() {
+    return handle_timer_pop_internal(aor_id, trail);
+  });
+}
+
+void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
+                                                  SAS::TrailId trail)
+{
   TRC_DEBUG("Handling a timer pop for AoR %s", aor_id.c_str());
 
   // Get the original AoR from S4.
@@ -631,14 +696,63 @@ void SubscriberManager::handle_timer_pop(const std::string& aor_id,
   send_notifys(aor_id,
                orig_aor,
                updated_aor,
-               SubscriberDataUtils::EventTrigger::USER,
+               SubscriberDataUtils::EventTrigger::TIMEOUT,
                now,
                trail);
 
-  // TODO NOTIFYs, 3rd party (de)registrations, update HSS.
+  if ((updated_aor != NULL) &&
+      (updated_aor->bindings().empty()))
+  {
+    HSSConnection::irs_info irs_info;
+    rc = deregister_with_hss(aor_id,
+                             HSSConnection::DEREG_TIMEOUT,
+                             updated_aor->_scscf_uri,
+                             irs_info,
+                             trail);
+
+    if (rc != HTTP_OK)
+    {
+      TRC_DEBUG("Failed to deregister subscriber %s with HSS",
+                aor_id.c_str());
+      delete orig_aor; orig_aor = NULL;
+      delete updated_aor; updated_aor = NULL;
+      return;
+    }
+
+    // Send 3rd party deREGISTERs.
+    _registration_sender->deregister_with_application_servers(aor_id,
+                                                              irs_info._service_profiles[aor_id],
+                                                              trail);
+  }
+
 
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
+}
+
+void SubscriberManager::register_with_application_servers(pjsip_msg* received_register_message,
+                                                          pjsip_msg* ok_response_msg,
+                                                          const std::string& served_user,
+                                                          const Ifcs& ifcs,
+                                                          int expires,
+                                                          bool is_initial_registration,
+                                                          SAS::TrailId trail)
+{
+  bool dereg_subscriber;
+  _registration_sender->register_with_application_servers(received_register_message,
+                                                          ok_response_msg,
+                                                          served_user,
+                                                          ifcs,
+                                                          expires,
+                                                          is_initial_registration,
+                                                          dereg_subscriber,
+                                                          trail);
+
+  if (dereg_subscriber)
+  {
+    deregister_subscriber(served_user,
+                          trail);
+  }
 }
 
 HTTPCode SubscriberManager::modify_subscription(
@@ -745,7 +859,6 @@ HTTPCode SubscriberManager::get_cached_default_id(const std::string& public_id,
   // Get the aor_id from the associated URIs.
   if (!irs_info._associated_uris.get_default_impu(aor_id, false))
   {
-    // TODO No default IMPU - what should we do here? Probably bail out.
     TRC_ERROR("No Default ID in IRS for IMPU %s", public_id.c_str());
     return HTTP_BAD_REQUEST;
   }
@@ -764,7 +877,7 @@ HTTPCode SubscriberManager::put_bindings(const std::string& aor_id,
   PatchObject patch_object;
   patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
   patch_object.set_associated_uris(associated_uris);
-  patch_object.set_increment_cseq(true);
+  patch_object.set_minimum_cseq(1); // TODO is this right??
 
   aor = new AoR(aor_id);
   aor->patch_aor(patch_object);

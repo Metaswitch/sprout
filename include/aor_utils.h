@@ -37,10 +37,25 @@ std::string pub_gruu_str(const Binding* binding, pj_pool_t* pool);
 std::string pub_gruu_quoted_string(const Binding* binding, pj_pool_t* pool);
 
 // Copies a Bindings object to return to the caller.
-Bindings copy_bindings(Bindings bindings);
+Bindings copy_bindings(const Bindings& bindings);
+
+// Copies any active bindings to return to the caller.
+Bindings copy_active_bindings(const Bindings& bindings,
+                              int now);
 
 // Copies a Subscriptions object to return to the caller.
-Subscriptions copy_subscriptions(Subscriptions subscriptions);
+Subscriptions copy_subscriptions(const Subscriptions& subscriptions);
+
+// Copies any active subscriptions to return to the caller.
+Subscriptions copy_active_subscriptions(const Subscriptions& subscriptions,
+                                        int now);
+
+// Gets the maximum expiry from the bindings provided.
+int get_max_expiry(Bindings bindings,
+                   int now);
+
+// Works out if there are an emergency bindings in the bindings provided.
+bool contains_emergency_binding(Bindings bindings);
 
 };
 

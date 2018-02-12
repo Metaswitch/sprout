@@ -483,7 +483,6 @@ void DeleteImpuTask::run()
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
   HTTPCode sc = _cfg->_sm->deregister_subscriber(impu,
-                                                 SubscriberDataUtils::EventTrigger::ADMIN,
                                                  trail());
 
   send_http_reply(sc);

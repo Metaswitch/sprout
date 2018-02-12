@@ -362,7 +362,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   Bindings bindings_to_update;
   std::vector<std::string> binding_ids_to_remove = {};
   get_bindings_from_req(req,
-                        private_id,
+                        private_id_for_binding,
+                        default_impu,
                         now,
                         bindings_to_update,
                         binding_ids_to_remove);
@@ -468,15 +469,39 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Pass the response to the ACR.
   acr->tx_response(rsp);
 
-  // Send the response
-  send_response(rsp);
-
   // Send the ACR and delete it.
   acr->send();
   delete acr; acr = NULL;
 
+  if (!AoRUtils::contains_emergency_binding(all_bindings))
+  {
+    int max_expiry = AoRUtils::get_max_expiry(all_bindings, now);
+
+    std::string as_reg_id = public_id;
+    if (irs_info._associated_uris.is_impu_barred(public_id))
+    {
+      as_reg_id = default_impu;
+    }
+
+    _registrar->_sm->register_with_application_servers(req,
+                                                       rsp,
+                                                       as_reg_id,
+                                                       irs_info._service_profiles[public_id],
+                                                       max_expiry,
+                                                       (rt == RegisterType::INITIAL),
+                                                       trail());
+  }
+
+  // Send the response
+  send_response(rsp);
+
   // Tidy up memory.
   for (BindingPair bindings : all_bindings)
+  {
+    delete bindings.second;
+  }
+
+  for (BindingPair bindings : current_bindings)
   {
     delete bindings.second;
   }
@@ -579,7 +604,8 @@ pjsip_status_code
 /// AoR store), with updated binding information from a REGISTER request.
 void RegistrarSproutletTsx::get_bindings_from_req(
                              pjsip_msg* req,
-                             std::string private_id,
+                             const std::string& private_id,
+                             const std::string& aor_id,
                              const int& now,
                              Bindings& updated_bindings,
                              std::vector<std::string>& binding_ids_to_remove)
@@ -632,7 +658,7 @@ void RegistrarSproutletTsx::get_bindings_from_req(
       }
       else
       {
-        Binding* binding = new Binding("TODO AOR ID");
+        Binding* binding = new Binding(aor_id);
 
         // Either this is a new binding, has come from a restarted device, or
         // is an update to an existing binding.
@@ -650,9 +676,7 @@ void RegistrarSproutletTsx::get_bindings_from_req(
         // "path" entry in the Supported header but we don't do so on the
         // assumption that the edge proxy knows what it's doing.
         //
-        // We store the full path header in the _path_headers field. For
-        // backwards compatibility, we also store the URI part of the path
-        // header in the _path_uris field.
+        // We store the full path header in the _path_headers field.
         binding->_path_headers.clear();
         pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
                             pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
@@ -750,7 +774,7 @@ bool RegistrarSproutletTsx::get_private_id(pjsip_msg* req, std::string& id)
   return success;
 }
 
-std::string RegistrarSproutletTsx::get_binding_id(pjsip_contact_hdr *contact)
+std::string RegistrarSproutletTsx::get_binding_id(pjsip_contact_hdr* contact)
 {
   // Get a suitable binding string from +sip.instance and reg_id parameters
   // if they are supplied.
@@ -813,7 +837,7 @@ RegisterType RegistrarSproutletTsx::get_register_type(
   return rt;
 }
 
-void RegistrarSproutletTsx::track_register_attempts_statistics(RegisterType rt)
+void RegistrarSproutletTsx::track_register_attempts_statistics(const RegisterType& rt)
 {
   if (rt == RegisterType::INITIAL)
   {
@@ -829,7 +853,7 @@ void RegistrarSproutletTsx::track_register_attempts_statistics(RegisterType rt)
   }
 }
 
-void RegistrarSproutletTsx::track_register_successes_statistics(RegisterType rt)
+void RegistrarSproutletTsx::track_register_successes_statistics(const RegisterType& rt)
 {
   if (rt == RegisterType::INITIAL)
   {
@@ -845,7 +869,7 @@ void RegistrarSproutletTsx::track_register_successes_statistics(RegisterType rt)
   }
 }
 
-void RegistrarSproutletTsx::track_register_failures_statistics(RegisterType rt)
+void RegistrarSproutletTsx::track_register_failures_statistics(const RegisterType& rt)
 {
   if (rt == RegisterType::INITIAL)
   {
@@ -863,9 +887,9 @@ void RegistrarSproutletTsx::track_register_failures_statistics(RegisterType rt)
 
 void RegistrarSproutletTsx::add_contact_headers(pjsip_msg* rsp,
                                                 pjsip_msg* req,
-                                                Bindings all_bindings,
+                                                const Bindings& all_bindings,
                                                 int now,
-                                                std::string public_id,
+                                                const std::string& public_id,
                                                 SAS::TrailId trail)
 {
   // Add contact headers for all active bindings.
@@ -942,7 +966,7 @@ void RegistrarSproutletTsx::add_contact_headers(pjsip_msg* rsp,
 void RegistrarSproutletTsx::handle_path_headers(
                                        pjsip_msg* rsp,
                                        pjsip_msg* req,
-                                       Bindings bindings)
+                                       const Bindings& bindings)
 {
   // Deal with path header related fields in the response.
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
@@ -999,7 +1023,7 @@ void RegistrarSproutletTsx::add_service_route_header(pjsip_msg* rsp,
 void RegistrarSproutletTsx::add_p_associated_uri_headers(
                                         pjsip_msg* rsp,
                                         HSSConnection::irs_info& irs_info,
-                                        std::string aor,
+                                        const std::string& aor,
                                         SAS::TrailId trail)
 {
   // Log any URIs that have been left out of the P-Associated-URI because they

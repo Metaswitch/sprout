@@ -103,7 +103,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          rphservice.cpp \
                          s4.cpp \
                          s4_handlers.cpp \
-                         s4_chronoshandlers.cpp
+                         s4_chronoshandlers.cpp \
+                         registration_sender.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -126,7 +127,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        subscriptionsproutlet.cpp \
                        registrarsproutlet.cpp \
                        sproutletappserver.cpp \
-                       hss_cache_helper.cpp \
                        mmtel.cpp \
                        test_main.cpp \
                        fakecurl.cpp \
@@ -206,7 +206,9 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_s4.cpp \
                        s4_chronoshandlers_test.cpp \
                        sprout_xml_utils_test.cpp \
-                       mock_notify_sender.cpp
+                       notify_sender_test.cpp \
+                       mock_notify_sender.cpp \
+                       registration_sender_test.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/clearwater-s4/src/ut
@@ -298,7 +300,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp scscf_utils.cpp hss_cache_helper.cpp
+sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp scscf_utils.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 

@@ -87,7 +87,7 @@ std::string pub_gruu_quoted_string(const Binding* binding, pj_pool_t* pool)
   return ret;
 }
 
-Bindings copy_bindings(Bindings bindings)
+Bindings copy_bindings(const Bindings& bindings)
 {
   Bindings copy_bindings;
   for (BindingPair b : bindings)
@@ -99,7 +99,24 @@ Bindings copy_bindings(Bindings bindings)
   return copy_bindings;
 }
 
-Subscriptions copy_subscriptions(Subscriptions subscriptions)
+Bindings copy_active_bindings(const Bindings& bindings,
+                              int now)
+{
+  Bindings copy_bindings;
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_expires - now > 0)
+    {
+      Binding* copy_b = new Binding(*(b.second));
+      copy_bindings.insert(std::make_pair(b.first, copy_b));
+    }
+  }
+
+  return copy_bindings;
+
+}
+
+Subscriptions copy_subscriptions(const Subscriptions& subscriptions)
 {
   Subscriptions copy_subscriptions;
   for (SubscriptionPair s :subscriptions)
@@ -109,6 +126,50 @@ Subscriptions copy_subscriptions(Subscriptions subscriptions)
   }
 
   return copy_subscriptions;
+}
+
+Subscriptions copy_active_subscriptions(const Subscriptions& subscriptions,
+                                        int now)
+{
+  Subscriptions copy_subscriptions;
+  for (SubscriptionPair s :subscriptions)
+  {
+    if (s.second->_expires - now > 0)
+    {
+      Subscription* copy_s = new Subscription(*(s.second));
+      copy_subscriptions.insert(std::make_pair(s.first, copy_s));
+    }
+  }
+
+  return copy_subscriptions;
+}
+
+int get_max_expiry(Bindings bindings,
+                   int now)
+{
+  int max_expiry = 0;
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_expires - now > max_expiry)
+    {
+      max_expiry = b.second->_expires - now;
+    }
+  }
+
+  return max_expiry;
+}
+
+bool contains_emergency_binding(Bindings bindings)
+{
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_emergency_registration)
+    {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 }; // namespace AoRUtils

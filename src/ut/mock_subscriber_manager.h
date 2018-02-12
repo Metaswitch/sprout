@@ -52,8 +52,7 @@ public:
                                              HSSConnection::irs_info& irs_info,
                                              SAS::TrailId trail));
 
-  MOCK_METHOD3(deregister_subscriber, HTTPCode(const std::string& public_id,
-                                               const SubscriberDataUtils::EventTrigger& event_trigger,
+  MOCK_METHOD2(deregister_subscriber, HTTPCode(const std::string& public_id,
                                                SAS::TrailId trail));
 
   MOCK_METHOD3(get_bindings, HTTPCode(const std::string& public_id,
@@ -78,9 +77,18 @@ public:
 
   MOCK_METHOD2(handle_timer_pop, void(const std::string& aor_id,
                                       SAS::TrailId trail));
+
+  MOCK_METHOD7(register_with_application_servers, void(pjsip_msg* received_register_message,
+                                                       pjsip_msg* ok_response_msg,
+                                                       const std::string& served_user,
+                                                       const Ifcs& ifcs,
+                                                       int expires,
+                                                       bool is_initial_registration,
+                                                       SAS::TrailId trail));
 };
 
-// Custom matchers to see what public identity or wildcard was on the irs_query
+// Custom matchers to see what public identity, wildcard or private identity and
+// registration state  was on the irs_query.
 // that the mock subscriber manager was called with.
 MATCHER_P(IrsQueryWithPublicId, pub_id, "") { return (arg._public_id == pub_id); }
 MATCHER_P(IrsQueryWithWildcard, wildcard, "") { return (arg._wildcard == wildcard); }
