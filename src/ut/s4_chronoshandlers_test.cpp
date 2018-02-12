@@ -13,10 +13,7 @@
 
 #include "mockhttpstack.hpp"
 #include "gtest/gtest.h"
-#include "basetest.hpp"
 #include "siptest.hpp"
-#include "test_interposer.hpp"
-#include "rapidjson/document.h"
 #include "s4_chronoshandlers.h"
 #include "subscriber_manager.h"
 #include "mock_s4.h"
@@ -29,8 +26,8 @@ using ::testing::Return;
 using ::testing::InSequence;
 using ::testing::SaveArg;
 
-// Test that S4 handles request from Chronos about AoRTimeout, by sending back
-// response and calling into SM.
+// Test that ChronosAorTimeoutTasks handles request from Chronos about AoR 
+// timeout, by sending back response and calling into S4.
 class ChronosAoRTimeoutTasksTest : public SipTest
 {
 public:
