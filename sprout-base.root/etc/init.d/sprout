@@ -182,7 +182,6 @@ get_daemon_args()
         [ -z "$sprout_min_token_rate" ] || min_token_rate_arg="--min-token-rate=$sprout_min_token_rate"
         [ -z "$sprout_max_token_rate" ] || max_token_rate_arg="--max-token-rate=$sprout_max_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
-        [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
         [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
         [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
@@ -216,7 +215,6 @@ get_daemon_args()
                      --http-threads=$num_http_threads
                      --record-routing-model=$sprout_rr_level
                      --default-session-expires=$default_session_expires
-                     $max_session_expires_arg
                      $target_latency_us_arg
                      $max_tokens_arg
                      $init_token_rate_arg
