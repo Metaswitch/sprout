@@ -193,6 +193,218 @@ void NotifySender::send_notifys(const std::string& aor_id,
   delete_subscriptions(classified_subscriptions);
 }
 
+// Pass the correct subscription parameters in to create_notify
+pj_status_t NotifySender::create_subscription_notify(
+                                  pjsip_tx_data** tdata_notify,
+                                  Subscription* s,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  int cseq,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  int now,
+                                  SAS::TrailId trail)
+{
+  // Set the correct subscription state header
+  SubscriptionState state = SubscriptionState::ACTIVE;
+
+  int expiry = (s->_expires > now) ? (s->_expires - now) : 0;
+
+  if (expiry == 0)
+  {
+    state = SubscriptionState::TERMINATED;
+  }
+
+  pj_status_t status = create_notify(tdata_notify,
+                                     s,
+                                     aor,
+                                     associated_uris,
+                                     cseq,
+                                     classified_bindings,
+                                     reg_state,
+                                     state,
+                                     expiry,
+                                     trail);
+  return status;
+}
+
+// Create the request with to and from headers and a null body string, then add
+// the body.
+pj_status_t NotifySender::create_notify(
+                                    pjsip_tx_data** tdata_notify,
+                                    Subscription* subscription,
+                                    const std::string& aor,
+                                    const AssociatedURIs& associated_uris,
+                                    int cseq,
+                                    const ClassifiedBindings& classified_bindings,
+                                    const RegistrationState& reg_state,
+                                    const SubscriptionState& subscription_state,
+                                    int expiry,
+                                    SAS::TrailId trail)
+{
+  pj_status_t status = create_request_from_subscription(tdata_notify,
+                                                        subscription,
+                                                        cseq,
+                                                        NULL);
+  if (status == PJ_SUCCESS)
+  {
+
+    // Write tags for the to and from headers
+    pjsip_to_hdr *to;
+    to = (pjsip_to_hdr*) pjsip_msg_find_hdr((*tdata_notify)->msg,
+                                            PJSIP_H_TO,
+                                            NULL);
+    pj_str_t to_tag;
+    pj_cstr(&to_tag, subscription->_from_tag.c_str());
+    pj_strdup((*tdata_notify)->pool, &to->tag, &to_tag);
+
+    pjsip_to_hdr *from;
+    from = (pjsip_from_hdr*) pjsip_msg_find_hdr((*tdata_notify)->msg,
+                                                PJSIP_H_FROM,
+                                                NULL);
+    pj_str_t from_tag;
+    pj_cstr(&from_tag, subscription->_to_tag.c_str());
+    pj_strdup((*tdata_notify)->pool, &from->tag, &from_tag);
+
+
+    // Populate route headers
+    for (std::string route : subscription->_route_uris)
+    {
+      pjsip_route_hdr* route_hdr;
+      route_hdr = pjsip_route_hdr_create((*tdata_notify)->pool);
+      // TECH-DEBT-TODO We should call pjsip_parse_hdr here like in the contact
+      // filtering class.
+      route_hdr->name_addr.uri =
+                         PJUtils::uri_from_string(route, (*tdata_notify)->pool);
+      pj_list_push_back( &(*tdata_notify)->msg->hdr, route_hdr);
+    }
+
+    // Add the Event header
+    pjsip_event_hdr* event_hdr = pjsip_event_hdr_create((*tdata_notify)->pool);
+    event_hdr->event_type = STR_REG;
+    pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
+
+    // Add the Subscription-State header
+    pjsip_sub_state_hdr* sub_state_hdr =
+                             pjsip_sub_state_hdr_create((*tdata_notify)->pool);
+
+    if (subscription_state == SubscriptionState::TERMINATED)
+    {
+      // If there are any bindings remaining (e.g. the registration state isn't
+      // terminated) set the reason to timeout. Otherwise set it to deactivated
+      sub_state_hdr->sub_state = STR_TERMINATED;
+
+      if (reg_state == RegistrationState::TERMINATED)
+      {
+        sub_state_hdr->reason_param = STR_DEACTIVATED;
+      }
+      else
+      {
+        sub_state_hdr->reason_param = STR_TIMEOUT;
+      }
+    }
+    else
+    {
+      // If the subscription is active add the expiry parameter
+      sub_state_hdr->sub_state = STR_ACTIVE;
+      sub_state_hdr->expires_param = expiry;
+    }
+
+    pj_list_push_back( &(*tdata_notify)->msg->hdr, sub_state_hdr);
+
+    // Complete body
+    pjsip_msg_body *body2;
+    body2 = PJ_POOL_ZALLOC_T((*tdata_notify)->pool, pjsip_msg_body);
+    status = notify_create_body(body2,
+                               (*tdata_notify)->pool,
+                                aor,
+                                associated_uris,
+                                subscription,
+                                classified_bindings,
+                                reg_state,
+                                trail);
+    (*tdata_notify)->msg->body = body2;
+  }
+  else
+  {
+   // LCOV_EXCL_START
+    status = PJ_FALSE;
+   // LCOV_EXCL_STOP
+  }
+
+  return status;
+}
+
+pj_status_t NotifySender::create_request_from_subscription(
+                                                     pjsip_tx_data** p_tdata,
+                                                     Subscription* subscription,
+                                                     int cseq,
+                                                     pj_str_t* body)
+{
+  pj_str_t from;
+  pj_str_t to;
+  pj_str_t uri;
+  pj_str_t cid;
+  pj_cstr(&from, subscription->_to_uri.c_str());
+  pj_cstr(&to, subscription->_from_uri.c_str());
+  pj_cstr(&uri, subscription->_req_uri.c_str());
+  pj_cstr(&cid, subscription->_cid.c_str());
+
+  TRC_DEBUG("Create NOTIFY request");
+  pj_status_t status = pjsip_endpt_create_request(stack_data.endpt,
+                                                  pjsip_get_notify_method(),
+                                                  &uri,
+                                                  &from,
+                                                  &to,
+                                                  &stack_data.scscf_contact,
+                                                  &cid,
+                                                  cseq,
+                                                  body,
+                                                  p_tdata);
+
+  return status;
+}
+
+// Create the body of a SIP NOTIFY
+pj_status_t NotifySender::notify_create_body(
+                                  pjsip_msg_body* body,
+                                  pj_pool_t *pool,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  Subscription* subscription,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  SAS::TrailId trail)
+{
+  TRC_DEBUG("Create body of a SIP NOTIFY");
+
+  pj_xml_node* doc = notify_create_reg_state_xml(pool,
+                                                 aor,
+                                                 associated_uris,
+                                                 subscription,
+                                                 classified_bindings,
+                                                 reg_state,
+                                                 trail);
+
+  if (doc == NULL)
+  {
+    // LCOV_EXCL_START
+    TRC_DEBUG("Failed to create body");
+    return PJ_FALSE;
+    // LCOV_EXCL_STOP
+  }
+
+  body->content_type.type = STR_MIME_TYPE;
+  body->content_type.subtype = STR_MIME_SUBTYPE;
+
+  body->data = doc;
+  body->len = 0;
+
+  body->print_body = &xml_print_body;
+
+  return PJ_SUCCESS;
+}
+
 // Create complete XML body for a NOTIFY
 pj_xml_node* NotifySender::notify_create_reg_state_xml(
                                   pj_pool_t* pool,
@@ -436,218 +648,6 @@ pj_xml_node* NotifySender::notify_create_reg_state_xml(
   }
 
   return doc;
-}
-
-// Create the body of a SIP NOTIFY
-pj_status_t NotifySender::notify_create_body(
-                                  pjsip_msg_body* body,
-                                  pj_pool_t *pool,
-                                  const std::string& aor,
-                                  const AssociatedURIs& associated_uris,
-                                  Subscription* subscription,
-                                  const ClassifiedBindings& classified_bindings,
-                                  const RegistrationState& reg_state,
-                                  SAS::TrailId trail)
-{
-  TRC_DEBUG("Create body of a SIP NOTIFY");
-
-  pj_xml_node* doc = notify_create_reg_state_xml(pool,
-                                                 aor,
-                                                 associated_uris,
-                                                 subscription,
-                                                 classified_bindings,
-                                                 reg_state,
-                                                 trail);
-
-  if (doc == NULL)
-  {
-    // LCOV_EXCL_START
-    TRC_DEBUG("Failed to create body");
-    return PJ_FALSE;
-    // LCOV_EXCL_STOP
-  }
-
-  body->content_type.type = STR_MIME_TYPE;
-  body->content_type.subtype = STR_MIME_SUBTYPE;
-
-  body->data = doc;
-  body->len = 0;
-
-  body->print_body = &xml_print_body;
-
-  return PJ_SUCCESS;
-}
-
-pj_status_t NotifySender::create_request_from_subscription(
-                                                     pjsip_tx_data** p_tdata,
-                                                     Subscription* subscription,
-                                                     int cseq,
-                                                     pj_str_t* body)
-{
-  pj_str_t from;
-  pj_str_t to;
-  pj_str_t uri;
-  pj_str_t cid;
-  pj_cstr(&from, subscription->_to_uri.c_str());
-  pj_cstr(&to, subscription->_from_uri.c_str());
-  pj_cstr(&uri, subscription->_req_uri.c_str());
-  pj_cstr(&cid, subscription->_cid.c_str());
-
-  TRC_DEBUG("Create NOTIFY request");
-  pj_status_t status = pjsip_endpt_create_request(stack_data.endpt,
-                                                  pjsip_get_notify_method(),
-                                                  &uri,
-                                                  &from,
-                                                  &to,
-                                                  &stack_data.scscf_contact,
-                                                  &cid,
-                                                  cseq,
-                                                  body,
-                                                  p_tdata);
-
-  return status;
-}
-
-// Pass the correct subscription parameters in to create_notify
-pj_status_t NotifySender::create_subscription_notify(
-                                  pjsip_tx_data** tdata_notify,
-                                  Subscription* s,
-                                  const std::string& aor,
-                                  const AssociatedURIs& associated_uris,
-                                  int cseq,
-                                  const ClassifiedBindings& classified_bindings,
-                                  const RegistrationState& reg_state,
-                                  int now,
-                                  SAS::TrailId trail)
-{
-  // Set the correct subscription state header
-  SubscriptionState state = SubscriptionState::ACTIVE;
-
-  int expiry = (s->_expires > now) ? (s->_expires - now) : 0;
-
-  if (expiry == 0)
-  {
-    state = SubscriptionState::TERMINATED;
-  }
-
-  pj_status_t status = create_notify(tdata_notify,
-                                     s,
-                                     aor,
-                                     associated_uris,
-                                     cseq,
-                                     classified_bindings,
-                                     reg_state,
-                                     state,
-                                     expiry,
-                                     trail);
-  return status;
-}
-
-// Create the request with to and from headers and a null body string, then add
-// the body.
-pj_status_t NotifySender::create_notify(
-                                    pjsip_tx_data** tdata_notify,
-                                    Subscription* subscription,
-                                    const std::string& aor,
-                                    const AssociatedURIs& associated_uris,
-                                    int cseq,
-                                    const ClassifiedBindings& classified_bindings,
-                                    const RegistrationState& reg_state,
-                                    const SubscriptionState& subscription_state,
-                                    int expiry,
-                                    SAS::TrailId trail)
-{
-  pj_status_t status = create_request_from_subscription(tdata_notify,
-                                                        subscription,
-                                                        cseq,
-                                                        NULL);
-  if (status == PJ_SUCCESS)
-  {
-
-    // Write tags for the to and from headers
-    pjsip_to_hdr *to;
-    to = (pjsip_to_hdr*) pjsip_msg_find_hdr((*tdata_notify)->msg,
-                                            PJSIP_H_TO,
-                                            NULL);
-    pj_str_t to_tag;
-    pj_cstr(&to_tag, subscription->_from_tag.c_str());
-    pj_strdup((*tdata_notify)->pool, &to->tag, &to_tag);
-
-    pjsip_to_hdr *from;
-    from = (pjsip_from_hdr*) pjsip_msg_find_hdr((*tdata_notify)->msg,
-                                                PJSIP_H_FROM,
-                                                NULL);
-    pj_str_t from_tag;
-    pj_cstr(&from_tag, subscription->_to_tag.c_str());
-    pj_strdup((*tdata_notify)->pool, &from->tag, &from_tag);
-
-
-    // Populate route headers
-    for (std::string route : subscription->_route_uris)
-    {
-      pjsip_route_hdr* route_hdr;
-      route_hdr = pjsip_route_hdr_create((*tdata_notify)->pool);
-      // TECH-DEBT-TODO We should call pjsip_parse_hdr here like in the contact
-      // filtering class.
-      route_hdr->name_addr.uri =
-                         PJUtils::uri_from_string(route, (*tdata_notify)->pool);
-      pj_list_push_back( &(*tdata_notify)->msg->hdr, route_hdr);
-    }
-
-    // Add the Event header
-    pjsip_event_hdr* event_hdr = pjsip_event_hdr_create((*tdata_notify)->pool);
-    event_hdr->event_type = STR_REG;
-    pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
-
-    // Add the Subscription-State header
-    pjsip_sub_state_hdr* sub_state_hdr =
-                             pjsip_sub_state_hdr_create((*tdata_notify)->pool);
-
-    if (subscription_state == SubscriptionState::TERMINATED)
-    {
-      // If there are any bindings remaining (e.g. the registration state isn't
-      // terminated) set the reason to timeout. Otherwise set it to deactivated
-      sub_state_hdr->sub_state = STR_TERMINATED;
-
-      if (reg_state == RegistrationState::TERMINATED)
-      {
-        sub_state_hdr->reason_param = STR_DEACTIVATED;
-      }
-      else
-      {
-        sub_state_hdr->reason_param = STR_TIMEOUT;
-      }
-    }
-    else
-    {
-      // If the subscription is active add the expiry parameter
-      sub_state_hdr->sub_state = STR_ACTIVE;
-      sub_state_hdr->expires_param = expiry;
-    }
-
-    pj_list_push_back( &(*tdata_notify)->msg->hdr, sub_state_hdr);
-
-    // Complete body
-    pjsip_msg_body *body2;
-    body2 = PJ_POOL_ZALLOC_T((*tdata_notify)->pool, pjsip_msg_body);
-    status = notify_create_body(body2,
-                               (*tdata_notify)->pool,
-                                aor,
-                                associated_uris,
-                                subscription,
-                                classified_bindings,
-                                reg_state,
-                                trail);
-    (*tdata_notify)->msg->body = body2;
-  }
-  else
-  {
-   // LCOV_EXCL_START
-    status = PJ_FALSE;
-   // LCOV_EXCL_STOP
-  }
-
-  return status;
 }
 
 // Return a XML registration node with the attributes populated
