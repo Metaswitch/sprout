@@ -27,6 +27,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "uri_classifier.h"
 #include "sprout_xml_utils.h"
+#include "subscriber_data_utils.h"
 
 
 static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_str)
@@ -234,10 +235,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
     }
   }
 
-  for (BindingPair binding : bindings)
-  {
-    //delete binding.second; binding.second = NULL;
-  }
+  SubscriberDataUtils::delete_bindings(bindings);
 
   // Remove these bindings via subscriber manager
   rc = _cfg->_sm->remove_bindings(aor_id,
@@ -246,10 +244,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
                                   unused_bindings,
                                   trail());
 
-  for (BindingPair binding : unused_bindings)
-  {
-    //delete binding.second; binding.second = NULL;
-  }
+  SubscriberDataUtils::delete_bindings(unused_bindings);
 
   return rc;
 }

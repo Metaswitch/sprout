@@ -107,14 +107,14 @@ class DeregistrationTaskTest : public SipTest
   }
 
   void expect_sm_updates(const std::string& aor_id,
-                         Bindings bindings,
+                         const Bindings& bindings,
                          std::vector<std::string>& binding_ids)
   {
     EXPECT_CALL(*_subscriber_manager, get_bindings(aor_id, _, _))
       .WillOnce(DoAll(SetArgReferee<1>(bindings), Return(HTTP_OK)));
 
     EXPECT_CALL(*_subscriber_manager,
-                remove_bindings(aor_id, _, SubscriberDataUtils::EventTrigger::HSS, _, _))
+                remove_bindings(aor_id, _, SubscriberDataUtils::EventTrigger::ADMIN, _, _))
           .WillOnce(DoAll(SaveArg<1>(&binding_ids), 
                           SetArgReferee<3>(Bindings()),
                           Return(HTTP_OK)));
@@ -146,11 +146,11 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   std::string binding_id = "sip:6505550231@homedomain;tcp";
   std::string private_id = "6505550231";
 
-  Binding binding(aor_id);
-  binding._uri = binding_id;
-  binding._private_id = private_id;
+  Binding* binding = new Binding(aor_id);
+  binding->_uri = binding_id;
+  binding->_private_id = private_id;
   Bindings bindings;
-  bindings[binding_id] = &binding;
+  bindings[binding_id] = binding;
   std::vector<std::string> binding_ids;
 
   expect_sm_updates(aor_id, bindings, binding_ids);
@@ -231,18 +231,18 @@ TEST_F(DeregistrationTaskTest, SubscriberManagerWritesFail)
   // Set up the subscriber_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   std::string private_id = "sip:6505550231";
-  Binding binding(aor_id);
-  binding._private_id = private_id;
+  Binding* binding = new Binding(aor_id);
+  binding->_private_id = private_id;
 
   Bindings bindings;
-  bindings[""] = &binding;
+  bindings[""] = binding;
   EXPECT_CALL(*_subscriber_manager,
               get_bindings(aor_id, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(bindings),
                     Return(HTTP_OK)));
 
   EXPECT_CALL(*_subscriber_manager,
-              remove_bindings(aor_id, _, SubscriberDataUtils::EventTrigger::HSS, _, _))
+              remove_bindings(aor_id, _, SubscriberDataUtils::EventTrigger::ADMIN, _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
 
   // Run the task
@@ -259,10 +259,10 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
 
   // Set up the subscriber_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  Binding binding(aor_id);
-  binding._private_id = "impi1";
+  Binding* binding = new Binding(aor_id);
+  binding->_private_id = "impi1";
   Bindings bindings;
-  bindings[""] = &binding;
+  bindings[""] = binding;
   std::vector<std::string> binding_ids;
 
   expect_sm_updates(aor_id, bindings, binding_ids);
@@ -289,15 +289,15 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   // Create an AoR with two bindings.
   std::string aor_id = "sip:6505550231@homedomain";
 
-  Binding binding(aor_id);
-  binding._uri = "binding_id";
-  binding._private_id = "impi1";
-  Binding binding2(aor_id);
-  binding2._uri = "binding_id2";
-  binding2._private_id = "impi2";
+  Binding* binding = new Binding(aor_id);
+  binding->_uri = "binding_id";
+  binding->_private_id = "impi1";
+  Binding* binding2 = new Binding(aor_id);
+  binding2->_uri = "binding_id2";
+  binding2->_private_id = "impi2";
   Bindings bindings;
-  bindings["binding_id"] = &binding;
-  bindings["binding_id2"] = &binding2;
+  bindings["binding_id"] = binding;
+  bindings["binding_id2"] = binding2;
 
   // Set up corresponding subscriber_manager expectations
   std::vector<std::string> binding_ids;
@@ -305,11 +305,11 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 
   // create another AoR with one binding.
   std::string aor_id2 = "sip:6505550232@homedomain";
-  Binding binding3(aor_id2);
-  binding3._uri = "binding_id3";
-  binding3._private_id = "impi3";
+  Binding* binding3 = new Binding(aor_id2);
+  binding3->_uri = "binding_id3";
+  binding3->_private_id = "impi3";
   Bindings bindings2;
-  bindings2["binding_id3"] = &binding3;
+  bindings2["binding_id3"] = binding3;
 
   // Set up corresponding subscriber_manager expectations
   std::vector<std::string> binding_ids_2;
@@ -342,10 +342,10 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  Binding binding(aor_id);
-  binding._private_id = "impi1";
+  Binding* binding = new Binding(aor_id);
+  binding->_private_id = "impi1";
   Bindings bindings;
-  bindings[""] = &binding;
+  bindings[""] = binding;
 
   std::vector<std::string> binding_ids;
 
@@ -371,10 +371,10 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  Binding binding(aor_id);
-  binding._private_id = "impi1";
+  Binding* binding = new Binding(aor_id);
+  binding->_private_id = "impi1";
   Bindings bindings;
-  bindings[""] = &binding;
+  bindings[""] = binding;
 
   std::vector<std::string> binding_ids;
 
@@ -402,10 +402,10 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  Binding binding(aor_id);
-  binding._private_id = "impi1";
+  Binding* binding = new Binding(aor_id);
+  binding->_private_id = "impi1";
   Bindings bindings;
-  bindings[""] = &binding;
+  bindings[""] = binding;
 
   std::vector<std::string> binding_ids;
 
