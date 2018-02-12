@@ -30,6 +30,11 @@ extern "C" {
 #include "associated_uris.h"
 #include "subscriber_data_utils.h"
 
+/// Notification sender class.
+///
+/// This class is responsible for sending NOTIFYs to subscribers to reg event
+/// state. It understands how to construct valid NOTIFYs, and what NOTIFYs it
+/// should send based on how the subscriber reg data has changed.
 class NotifySender
 {
 public:
@@ -88,40 +93,6 @@ public:
                             SAS::TrailId trail);
 
 private:
-  pj_xml_node* create_reg_node(pj_pool_t* pool,
-                               pj_str_t* aor,
-                               pj_str_t* id,
-                               pj_str_t* state);
-
-
-  pj_xml_node* create_contact_node(pj_pool_t* pool,
-                                   pj_str_t* id,
-                                   pj_str_t* state,
-                                   pj_str_t* event);
-
-  pj_xml_node* notify_create_reg_state_xml(
-                                  pj_pool_t *pool,
-                                  const std::string& aor,
-                                  const AssociatedURIs& associated_uris,
-                                  Subscription* subscription,
-                                  const ClassifiedBindings& classified_bindings,
-                                  const RegistrationState& reg_state,
-                                  SAS::TrailId trail);
-
-  pj_status_t notify_create_body(pjsip_msg_body* body,
-                                  pj_pool_t *pool,
-                                  const std::string& aor,
-                                  const AssociatedURIs& associated_uris,
-                                  Subscription* subscription,
-                                  const ClassifiedBindings& classified_bindings,
-                                  const RegistrationState& reg_state,
-                                  SAS::TrailId trail);
-
-  pj_status_t create_request_from_subscription(pjsip_tx_data** p_tdata,
-                                               Subscription* subscription,
-                                               int cseq,
-                                               pj_str_t* body);
-
   pj_status_t create_subscription_notify(
                                   pjsip_tx_data** tdata_notify,
                                   Subscription* s,
@@ -143,6 +114,40 @@ private:
                             const SubscriptionState& subscription_state,
                             int expiry,
                             SAS::TrailId trail);
+
+  pj_status_t create_request_from_subscription(pjsip_tx_data** p_tdata,
+                                               Subscription* subscription,
+                                               int cseq,
+                                               pj_str_t* body);
+
+  pj_status_t notify_create_body(pjsip_msg_body* body,
+                                  pj_pool_t *pool,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  Subscription* subscription,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  SAS::TrailId trail);
+
+  pj_xml_node* notify_create_reg_state_xml(
+                                  pj_pool_t *pool,
+                                  const std::string& aor,
+                                  const AssociatedURIs& associated_uris,
+                                  Subscription* subscription,
+                                  const ClassifiedBindings& classified_bindings,
+                                  const RegistrationState& reg_state,
+                                  SAS::TrailId trail);
+
+  pj_xml_node* create_reg_node(pj_pool_t* pool,
+                               pj_str_t* aor,
+                               pj_str_t* id,
+                               pj_str_t* state);
+
+
+  pj_xml_node* create_contact_node(pj_pool_t* pool,
+                                   pj_str_t* id,
+                                   pj_str_t* state,
+                                   pj_str_t* event);
 
 };
 
