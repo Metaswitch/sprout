@@ -131,7 +131,7 @@ private:
   FIFCService* fifcservice() const;
 
   /// Returns a structure containing details of the iFC configuration
-  /// (ie. should fallback iFCs be applied?).
+  /// (ie. whether or not fallback iFCs be applied).
   IFCConfiguration ifc_configuration() const;
 
   /// Gets all bindings for the specified public ID from the Subscriber Manager.
@@ -142,6 +142,12 @@ private:
   void get_bindings(const std::string& public_id,
                     Bindings& bindings,
                     SAS::TrailId trail);
+
+  /// Freed the bindings object, which was returned by the subscriber manager,
+  /// as this object is owned by the sproutlet.
+  ///
+  /// @param bindings[in]  - The bindings object to free.
+  void free_bindings(Bindings& bindings);
 
   /// Removes the binding, specified by its binding ID, using the Subscriber
   /// Manager.
@@ -184,7 +190,9 @@ private:
   /// @param req    - The request containing the RequestURI.
   /// @param pool   - The pool correspnding to the request.
   /// @param trail  - The SAS trail ID.
-  void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
+  void translate_request_uri(pjsip_msg* req,
+                             pj_pool_t* pool,
+                             SAS::TrailId trail);
 
   /// Get an ACR instance from the factory.
   ///
@@ -192,7 +200,9 @@ private:
   /// @param initiator  - The initiator of the SIP transaction (calling or
   ///                     called party).
   /// @param role       - Node role (originating or terminating).
-  ACR* get_acr(SAS::TrailId trail, ACR::Initiator initiator, ACR::NodeRole role);
+  ACR* get_acr(SAS::TrailId trail,
+               ACR::Initiator initiator,
+               ACR::NodeRole role);
 
   friend class SCSCFSproutletTsx;
 
@@ -234,8 +244,8 @@ private:
   /// the S-CSCF should apply.
   FIFCService* _fifcservice;
 
-  /// Structure containing details of the iFC configuration (ie. should fallback
-  /// iFCs be applied?).
+  /// Structure containing details of the iFC configuration (ie. whether or not
+  /// fallback iFCs be applied).
   IFCConfiguration _ifc_configuration;
 
   /// Timeouts related to default handling of unresponsive application servers.
@@ -301,8 +311,6 @@ private:
   pjsip_status_code determine_served_user(pjsip_msg* req);
 
   /// Gets the served user indicated in the message.
-  ///
-  /// @param msg  - The message to find the served user from.
   std::string served_user_from_msg(pjsip_msg* msg);
 
   /// Creates an AS chain for this service role and links this service hop to
@@ -357,7 +365,7 @@ private:
   void uri_translation(pjsip_msg* req);
 
   /// Look up the registration state for the given public ID, using the
-  /// per-transaction cache if possible (and caching them and the iFC otherwise).
+  /// per-transaction cache, which will be present at this point.
   bool is_user_registered(std::string public_id);
 
   /// Look up the associated URIs for the given public ID, using the cache if
@@ -447,14 +455,17 @@ private:
                          SubscriberManager* sm,
                          SAS::TrailId trail);
 
-  /// Add the S-CSCF sproutlet into a dialog.  The third parameter
-  /// passed may be attached to the Record-Route and can be used to recover the
-  /// billing role that is in use on subsequent in-dialog messages.
+  /// Add the S-CSCF sproutlet into a dialog.
+  /// The third parameter passed may be attached to the Record-Route and can be
+  /// used to recover the billing role that is in use on subsequent in-dialog
+  /// messages.
   ///
-  /// @param msg           - The message to modify
-  /// @param billing_rr    - Whether to add a `billing-role` parameter to the RR
+  /// @param msg           - The message that we are currently processing.
+  /// @param billing_rr    - Whether to add a `billing-role` parameter to the
+  ///                        RR.
   /// @param billing_role  - The contents of the `billing-role` (ignored if
-  ///                        `billing_rr` is false)
+  ///                        `billing_rr` is false). This should be used when
+  ///                        generating future ACRs.
   void add_to_dialog(pjsip_msg* msg,
                      bool billing_rr,
                      ACR::NodeRole billing_role);
@@ -463,9 +474,23 @@ private:
   // to determine whether this is a transaction that we should generate an ACR
   // for. If it is then it returns true and sets role to one of ACR::NodeRole.
   // Otherwise it returns false.
+  //
+  // @return          - True is we should generate an ACR for this transaction,
+  //                    false otherwise.
+  // @param role[in]  - The billing role. Only set if true is returned.
   bool get_billing_role(ACR::NodeRole& role);
 
   /// Adds a second P-Asserted-Identity header to a message when required.
+  ///
+  /// We only add the header to messages for which all of the following is true:
+  ///  - We can't find our Route header or our Route header doesn't contain an
+  ///    ODI token.
+  ///  - There is exactly one P-Asserted-Identity header on the message already.
+  ///  - If that header contains a SIP URI sip:user@example.com, that SIP URI is
+  ///    an alias of the tel URI tel:user. That tel URI is used in the new
+  ///    header.
+  ///    If that header contains a tel URI tel:user, we use the SIP URI
+  ///    sip:user@<homedomain> in the new header.
   void add_second_p_a_i_hdr(pjsip_msg* msg);
 
   /// Raise a SAS log at the start of originating, terminating, or orig-cdiv
@@ -500,7 +525,8 @@ private:
   /// The link in the owning AsChain for this service hop.
   AsChainLink _as_chain_link;
 
-  /// Flag indicating if data has already been fetched from the HSS and cached.
+  /// Flag indicating if data has already been fetched from the HSS and cached
+  /// for this transaction.
   bool _hss_data_cached;
 
   /// Data received from HSS for this service hop.
@@ -539,17 +565,17 @@ private:
 
   /// Track various properties of the transaction / transaction state so that
   /// we can generate the correct stats:
-  /// - _req_type:   the type of the request, e.g. INVITE, REGISTER etc.
-  /// - _seen_1xx:   whether we've seen a 1xx response to this transaction.
-  /// - _record_session_setup_time:
-  ///                whether we should record session setup time for this
-  ///                transaction.  Set to false if this is a transaction that we
-  ///                shouldn't track, or if we have already tracked it.
-  /// - _tsx_start_time_usec:
-  ///                the time that the session started -- only valid if
-  ///                _record_session_setup_time is true.
-  /// - _video_call: whether this is a video call -- only valid if
-  ///                _record_session_setup_time is true.
+  ///  - _req_type:   the type of the request, e.g. INVITE, REGISTER etc.
+  ///  - _seen_1xx:   whether we've seen a 1xx response to this transaction.
+  ///  - _record_session_setup_time:
+  ///                 whether we should record session setup time for this
+  ///                 transaction.  Set to false if this is a transaction that
+  ///                 we shouldn't track, or if we have already tracked it.
+  ///  - _tsx_start_time_usec:
+  ///                 the time that the session started -- only valid if
+  ///                 _record_session_setup_time is true.
+  ///  - _video_call: whether this is a video call -- only valid if
+  ///                 _record_session_setup_time is true.
   pjsip_method_e _req_type;
   bool _seen_1xx;
   bool _record_session_setup_time;
@@ -567,11 +593,11 @@ private:
   /// in the S-CSCF's route header.
   ///
   /// This has the following impacts:
-  ///   - It causes registration state updates to have a type of REG rather than
-  ///     CALL.
-  ///   - If there is a real HSS it forces registration state updates to flow
-  ///     all the way to the HSS (i.e. Homestead may not answer the response
-  ///     solely from its cache).
+  ///  - It causes registration state updates to have a type of REG rather than
+  ///    CALL.
+  ///  - If there is a real HSS it forces registration state updates to flow all
+  ///    the way to the HSS (i.e. Homestead may not answer the response solely
+  ///    from its cache).
   bool _auto_reg;
 
   /// The wildcarded public identity associated with the requestee. This is
