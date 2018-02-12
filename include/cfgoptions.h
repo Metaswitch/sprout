@@ -60,14 +60,16 @@ struct options
   std::string                          external_icscf_uri;
   int                                  record_routing_model;
   int                                  default_session_expires;
-  int                                  max_session_expires;
   int                                  target_latency_us;
   std::string                          local_host;
   std::string                          public_host;
   std::string                          home_domain;
   std::string                          sprout_hostname;
   std::string                          additional_home_domains;
-  std::string                          alias_hosts;
+  std::string                          deprecated_alias_hosts;
+  std::string                          local_alias_hosts;
+  std::string                          remote_alias_hosts;
+  bool                                 always_serve_remote_aliases;
   std::string                          trusted_hosts;
   bool                                 auth_enabled;
   std::string                          auth_realm;

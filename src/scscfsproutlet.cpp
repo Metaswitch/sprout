@@ -1321,9 +1321,19 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   {
     // We only consider a terminating request to be destined for a served user
     // if it doesn't have a route header.
-    if (pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL) == NULL)
+    pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
+    if (route_hdr == NULL)
     {
       uri = PJUtils::term_served_user(msg);
+    }
+    else
+    {
+      std::string route_hdr_str = PJUtils::hdr_to_string(route_hdr);
+
+      TRC_DEBUG("Session case is terminating, but the request contains an overriding route header - %s", route_hdr_str.c_str());
+      SAS::Event event(trail(), SASEvent::NO_SERVED_USER_OVERRIDING_ROUTE, 0);
+      event.add_var_param(route_hdr_str);
+      SAS::report_event(event);   
     }
   }
 
@@ -1343,7 +1353,14 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
     }
     else
     {
-      TRC_DEBUG("URI is not locally hosted");
+      std::string session_case_str = _session_case->is_originating() ? "originating" : "terminating";
+      std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_OTHER, uri);
+
+      TRC_DEBUG("The URI %s of the %s user is not locally hosted.", uri_str.c_str(), session_case_str.c_str());
+      SAS::Event event(trail(), SASEvent::NO_SERVED_USER_URI_NOT_LOCAL, 0);
+      event.add_static_param(_session_case->is_originating() ? 0 : 1);
+      event.add_var_param(uri_str);
+      SAS::report_event(event);
     }
   }
 

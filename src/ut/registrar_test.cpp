@@ -28,6 +28,7 @@
 #include "rapidxml/rapidxml.hpp"
 #include "mock_hss_connection.h"
 #include "hssconnection.h"
+#include "mock_snmp_counter_table.hpp"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
@@ -267,8 +268,12 @@ public:
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "homedomain",
                                           additional_home_domains,
+                                          std::unordered_set<std::string>(),
+                                          true,
                                           sproutlets,
-                                          std::set<std::string>());
+                                          std::set<std::string>(),
+                                          nullptr,
+                                          nullptr);
   }
 
   ~RegistrarTest()
@@ -1252,6 +1257,32 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+
+  free_txdata();
+
+  // Repeat the test for a 'fetch bindings' REGISTER (i.e. one with no Contact header).  Verify that no
+  // 3rd party REGISTER is sent in this case.
+  SCOPED_TRACE("REGISTER (2)");
+  Message msg2;
+  msg2._contact = "";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg2.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(1, txdata_count());
+  
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+
   free_txdata();
 }
 
@@ -3488,8 +3519,12 @@ public:
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "homedomain",
                                           additional_home_domains,
+                                          std::unordered_set<std::string>(),
+                                          true,
                                           sproutlets,
-                                          std::set<std::string>());
+                                          std::set<std::string>(),
+                                          nullptr,
+                                          nullptr);
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
