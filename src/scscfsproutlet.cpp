@@ -26,7 +26,7 @@
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
 
-/// SCSCFSproutlet constructor.
+// SCSCFSproutlet constructor.
 SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                const std::string& scscf_name,
                                const std::string& scscf_cluster_uri,
@@ -94,8 +94,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                                  "1.2.826.0.1.1578918.9.3.42");
 }
 
-
-/// SCSCFSproutlet destructor.
+// SCSCFSproutlet destructor.
 SCSCFSproutlet::~SCSCFSproutlet()
 {
   delete _as_chain_table;
@@ -170,8 +169,8 @@ bool SCSCFSproutlet::init()
   return init_success;
 }
 
-/// Creates a SCSCFSproutletTsx instance for performing S-CSCF service processing
-/// on a request.
+// Creates a SCSCFSproutletTsx instance for performing S-CSCF service processing
+// on a request.
 SproutletTsx* SCSCFSproutlet::get_tsx(SproutletHelper* helper,
                                       const std::string& alias,
                                       pjsip_msg* req,
@@ -184,43 +183,43 @@ SproutletTsx* SCSCFSproutlet::get_tsx(SproutletHelper* helper,
 }
 
 
-/// Returns the service name of the entire S-CSCF.
+// Returns the service name of the entire S-CSCF.
 const std::string SCSCFSproutlet::scscf_service_name() const
 {
   return _scscf_name;
 }
 
 
-/// Returns the configured S-CSCF cluster URI for this system.
+// Returns the configured S-CSCF cluster URI for this system.
 const pjsip_uri* SCSCFSproutlet::scscf_cluster_uri() const
 {
   return _scscf_cluster_uri;
 }
 
 
-/// Returns the configured S-CSCF node URI for this system.
+// Returns the configured S-CSCF node URI for this system.
 const pjsip_uri* SCSCFSproutlet::scscf_node_uri() const
 {
   return _scscf_node_uri;
 }
 
 
-/// Returns the configured I-CSCF URI for this system.
+// Returns the configured I-CSCF URI for this system.
 const pjsip_uri* SCSCFSproutlet::icscf_uri() const
 {
   return _icscf_uri;
 }
 
 
-/// Returns the configured BGCF URI for this system.
+// Returns the configured BGCF URI for this system.
 const pjsip_uri* SCSCFSproutlet::bgcf_uri() const
 {
   return _bgcf_uri;
 }
 
 
-/// Returns the AS chain table object used to manage AS chains and the
-/// associated ODI tokens.
+// Returns the AS chain table object used to manage AS chains and the
+// associated ODI tokens.
 AsChainTable* SCSCFSproutlet::as_chain_table() const
 {
   return _as_chain_table;
@@ -254,11 +253,6 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
     TRC_INFO("Error looking up bindings for %s, no bindings returned",
              aor.c_str());
   }
-
-  //SDM-REFACTOR-TODO - no matter what http rc was, will always just "find 0
-  //bindings", since the error isn't returned. is this ok? am I doing the right
-  //thing here?
-
   // TODO - Log bindings to SAS
 }
 
@@ -284,9 +278,6 @@ void SCSCFSproutlet::remove_binding(const std::string& binding_id,
    TRC_INFO("Error removing binding with id %s, with HTTP error %lu. The "
             "binding may still be present.", binding_id.c_str(), http_code);
  }
-
- // SDM-REFACTOR-TODO - is it enough just to log and plow on?
-
 }
 
 
@@ -304,9 +295,6 @@ void SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
 
 
 /// Get an ACR instance from the factory.
-/// @param trail                SAS trail identifier to use for the ACR.
-/// @param initiator            The initiator of the SIP transaction (calling
-///                             or called party).
 ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail,
                              ACR::Initiator initiator,
                              ACR::NodeRole role)
@@ -1077,7 +1065,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         _session_case = &SessionCase::OriginatingCdiv;
         served_user = _as_chain_link.served_user();
 
-        sas_log_start_of_sesion_case(req, _session_case, served_user);
+        sas_log_start_of_session_case(req, _session_case, served_user);
 
         // We might not be the terminating server any more, so we
         // should blank out the term_ioi parameter. If we are still
@@ -1178,7 +1166,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     if (!served_user.empty())
     {
       // SAS log the start of originating or terminating processing.
-      sas_log_start_of_sesion_case(req, _session_case, served_user);
+      sas_log_start_of_session_case(req, _session_case, served_user);
 
       if (_session_case->is_terminating())
       {
@@ -1911,9 +1899,9 @@ bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 
 
 bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
-                                         std::vector<std::string>& uris,
-                                         SubscriberManager* sm,
-                                         SAS::TrailId trail)
+                                            std::vector<std::string>& uris,
+                                            SubscriberManager* sm,
+                                            SAS::TrailId trail)
 {
   long http_code = get_data_from_hss(public_id, sm, trail);
   if (http_code == HTTP_OK)
@@ -2321,7 +2309,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
   }
 }
 
-void SCSCFSproutletTsx::sas_log_start_of_sesion_case(pjsip_msg* req,
+void SCSCFSproutletTsx::sas_log_start_of_session_case(pjsip_msg* req,
                                                      const SessionCase* session_case,
                                                      const std::string& served_user)
 {

@@ -37,18 +37,24 @@ extern "C" {
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
 #include "compositesproutlet.h"
-#include "sas.h" // Do I need this?? SDM-REFACTOR-TODO
 #include "subscriber_manager.h"
-#include "httpclient.h" // Do I need this?  SDM-REFACTOR-TODO
+#include "httpclient.h"
 
 class SCSCFSproutletTsx;
 
+/// @class SCSCFSproutlet
+///
+/// The S-CSCF sproutlet class, built off the base sproutlet class.
+/// This contains the functionality for the S-CSCF sproutlet.
 class SCSCFSproutlet : public Sproutlet
 {
 public:
+  /// Default timeouts for waiting for a response from an AS with its default
+  /// handling set to session continued and session terminated.
   static const int DEFAULT_SESSION_CONTINUED_TIMEOUT = 2000;
   static const int DEFAULT_SESSION_TERMINATED_TIMEOUT = 4000;
 
+  /// SCSCFSproutlet constructor.
   SCSCFSproutlet(const std::string& name,
                  const std::string& scscf_name,
                  const std::string& scscf_cluster_uri,
@@ -71,9 +77,17 @@ public:
                  int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT,
                  AsCommunicationTracker* sess_term_as_tracker = NULL,
                  AsCommunicationTracker* sess_cont_as_tracker = NULL);
+
+  /// SCSCFSproutlet destructor.
   ~SCSCFSproutlet();
 
+  /// Creates the S-CSCF sproutlet.
+  ///
+  /// @return - True if creation was successful, false otherwise.
   bool init();
+
+  /// Creates a SCSCFSproutletTsx instance for performing S-SCSCF serive
+  /// processing on a request.
   SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
@@ -112,16 +126,30 @@ private:
   /// Returns the configured BGCF URI for this system.
   const pjsip_uri* bgcf_uri() const;
 
+  /// Returns an instance of the fallback iFC class, which contains any fallback
+  /// iFCs that the S-CSCF should apply.
   FIFCService* fifcservice() const;
+
+  /// Returns a structure containing details of the iFC configuration
+  /// (ie. should fallback iFCs be applied?).
   IFCConfiguration ifc_configuration() const;
 
-  /// Gets all bindings for the specified public id from the Subscriber Manager.
+  /// Gets all bindings for the specified public ID from the Subscriber Manager.
+  ///
+  /// @param public_id[in]  - The public ID of the subscriber.
+  /// @param bindings[out]  - The bindings stored for this subscriber.
+  /// @param trail[in]      - The SAS trail ID.
   void get_bindings(const std::string& public_id,
                     Bindings& bindings,
                     SAS::TrailId trail);
 
-  /// Removes the binding, specified by it's binding id, using the Subscriber
+  /// Removes the binding, specified by its binding ID, using the Subscriber
   /// Manager.
+  ///
+  /// @param[in]   - The ID of the binding to remove.
+  /// @param[in]   - The public ID of the subscriber to remove bindings from.
+  /// @param[out]  - The bindings stored for this subscriber (after removal).
+  /// @param[in]   - The SAS trail ID.
   void remove_binding(const std::string& binding_id,
                       const std::string& aor_id,
                       Bindings& bindings,
@@ -146,16 +174,24 @@ private:
 
   /// Record the time an INVITE took to reach ringing state.
   ///
-  /// @param ringing_us Time spent until a 180 Ringing, in microseconds.
+  /// @param tsx_start_time_usec  - The time the request was received.
+  /// @param video_call           - True if INVITE was for a video session,
+  ///                               false otherwise.
   void track_session_setup_time(uint64_t tsx_start_time_usec, bool video_call);
 
   /// Translate RequestURI using ENUM service if appropriate.
+  ///
+  /// @param req    - The request containing the RequestURI.
+  /// @param pool   - The pool correspnding to the request.
+  /// @param trail  - The SAS trail ID.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
   /// Get an ACR instance from the factory.
-  /// @param trail                SAS trail identifier to use for the ACR.
-  /// @param initiator            The initiator of the SIP transaction (calling
-  ///                             or called party).
+  ///
+  /// @param trail      - The SAS trail ID.
+  /// @param initiator  - The initiator of the SIP transaction (calling or
+  ///                     called party).
+  /// @param role       - Node role (originating or terminating).
   ACR* get_acr(SAS::TrailId trail, ACR::Initiator initiator, ACR::NodeRole role);
 
   friend class SCSCFSproutletTsx;
@@ -166,9 +202,9 @@ private:
   /// A URI which routes to the S-CSCF cluster.
   pjsip_uri* _scscf_cluster_uri;
 
-  /// A URI which routes to this particular S-CSCF node.  This must be
-  /// constructed using an IP address or a domain name which resolves to this
-  /// Sprout node only.
+  /// A URI which routes to this particular S-CSCF node.
+  /// This must be constructed using an IP address or a domain name which
+  /// resolves to this Sprout node only.
   pjsip_uri* _scscf_node_uri;
 
   /// A URI which routes to the URI cluster.
@@ -179,28 +215,40 @@ private:
 
   std::string _next_hop_service;
 
+  /// The subscriber manager class instance used by the S-CSCF.
   SubscriberManager* _sm;
 
+  /// The enum service class instance used by the S-CSCF.
   EnumService* _enum_service;
 
+  /// Instance of class used for creating null ACR instances.
   ACRFactory* _acr_factory;
 
+  /// The AS chain table object used to manage AS chains and the associated ODI
+  /// tokens.
   AsChainTable* _as_chain_table;
 
   bool _override_npdi;
+
+  /// Instance of the fallback iFC class, which contains any fallback iFCs that
+  /// the S-CSCF should apply.
   FIFCService* _fifcservice;
+
+  /// Structure containing details of the iFC configuration (ie. should fallback
+  /// iFCs be applied?).
   IFCConfiguration _ifc_configuration;
 
   /// Timeouts related to default handling of unresponsive application servers.
   int _session_continued_timeout_ms;
   int _session_terminated_timeout_ms;
 
-  /// String versions of the cluster URIs
+  /// String versions of the cluster URIs.
   std::string _scscf_cluster_uri_str;
   std::string _scscf_node_uri_str;
   std::string _icscf_uri_str;
   std::string _bgcf_uri_str;
 
+  /// String tables to be used by the S-CSCF sproutlet.
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
@@ -209,17 +257,26 @@ private:
   SNMP::CounterTable* _forked_invite_tbl = NULL;
   SNMP::CounterTable* _barred_calls_tbl = NULL;
 
+  // AS communication trackers, to keep track of number of successful/failed
+  // communications with ASs.
   AsCommunicationTracker* _sess_term_as_tracker;
   AsCommunicationTracker* _sess_cont_as_tracker;
 };
 
 
+/// @class SCSCFSproutletTsx
+///
+/// S-SCSCF sproutlet transaction class. Used to perform S-CSCF processing on a
+/// single request.
 class SCSCFSproutletTsx : public CompositeSproutletTsx
 {
 public:
+  /// SCSCFSproutletTsx constructor.
   SCSCFSproutletTsx(SCSCFSproutlet* scscf,
                     const std::string& next_hop_service,
                     pjsip_method_e req_type);
+
+  /// SCSCFSproutletTsx destructor.
   ~SCSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
@@ -234,22 +291,38 @@ private:
   /// Examines the top route header to determine the relevant AS chain
   /// (from the ODI token) and the session case (based on the presence of
   /// the 'orig' param), and sets those as member variables.
+  ///
+  /// @param req  - The request being handled.
   void retrieve_odi_and_sesscase(pjsip_msg* req);
 
   /// Determines the served user for the request.
+  ///
+  /// @param req  - The request being handled.
   pjsip_status_code determine_served_user(pjsip_msg* req);
 
   /// Gets the served user indicated in the message.
+  ///
+  /// @param msg  - The message to find the served user from.
   std::string served_user_from_msg(pjsip_msg* msg);
 
   /// Creates an AS chain for this service role and links this service hop to
-  /// it.
+  /// it. The AS chain must be released once it has been used.
+  ///
+  /// @param ifcs[in]         - iFCs belonging to the served user.
+  /// @param served_user[in]  - The served user for the request.
+  /// @param acr[in]          - The ACR object associated with the AS chain.
+  /// @param chain_trail[in]  - The SAS trail ID.
   AsChainLink create_as_chain(Ifcs ifcs,
                               std::string served_user,
                               ACR*& acr,
                               SAS::TrailId chain_trail);
 
   /// Check whether the request has been retargeted, given the updated URI.
+  ///
+  /// @return                     - True if a retarget has taken place, false
+  ///                               otherwise.
+  /// @param new_served_user[in]  - The new served user, from a request returned
+  ///                               by an AS.
   bool is_retarget(std::string new_served_user);
 
   /// Apply originating services for this request.
@@ -288,43 +361,87 @@ private:
   bool is_user_registered(std::string public_id);
 
   /// Look up the associated URIs for the given public ID, using the cache if
-  /// possible (and caching them and the iFC otherwise).
+  /// possible (and caching the subscriber data otherwise).
+  ///
   /// The uris parameter is only filled in correctly if this function
   /// returns true.
+  ///
+  /// @return               - True if the associated uris have been correctly
+  ///                         returned, false otherwise.
+  /// @param public_id[in]  - The public ID whose associated URIs are being
+  ///                         looked up.
+  /// @param uris[out]      - The associated uris for the public ID passed in.
+  /// @param sm[in]         - The subscriber manager instance that handles
+  ///                         looking up the subscriber info from homestead.
+  /// @param trail[in]      - The SAS trail ID.
   bool get_associated_uris(std::string public_id,
                            std::vector<std::string>& uris,
                            SubscriberManager* sm,
                            SAS::TrailId trail);
 
   /// Look up the aliases for the given public ID, using the cache if
-  /// possible (and caching them and the iFC otherwise).
+  /// possible (and caching the subscriber data otherwise).
+  ///
   /// The aliases parameter is only filled in correctly if this function
   /// returns true.
+  ///
+  /// @return               - True if the aliases have been correctly returned,
+  ///                         false otherwise.
+  /// @param public_id[in]  - The public ID whose aliases are being looked up.
+  /// @param uris[out]      - The associated uris for the public ID passed in.
+  /// @param sm[in]         - The subscriber manager instance that handles
+  ///                         looking up the subscriber info from homestead.
+  /// @param trail[in]      - The SAS trail ID.
   bool get_aliases(std::string public_id,
                    std::vector<std::string>& aliases,
                    SubscriberManager* sm,
                    SAS::TrailId trail);
 
-  /// Look up the Ifcs for the given public ID, using the cache if possible
-  /// (and caching them and the associated URIs otherwise).
-  /// Returns the HTTP result code obtained from homestead.
+  /// Look up the iFCs for the given public ID, using the cache if possible
+  /// (and caching the subscriber data otherwise).
+  ///
+  /// Returns the HTTP result code obtained from homestead (passed through the
+  /// subscriber manager).
   /// The ifcs parameter is only filled in correctly if this function
   /// returns HTTP_OK.
+  ///
+  /// @return               - The HTTP result code from homestead (passed
+  ///                         through the subscriber manager).
+  /// @param[in] public_id  - The public ID whose iFCs are being looked up.
+  /// @param[out] ifcs      - The iFCs for the public ID passed in.
+  /// @param[in]            - The subscriber manager instance that handles
+  ///                         looking up subscriber info from homestead.
+  /// @param[in] trail      - The SAS trail ID.
   HTTPCode lookup_ifcs(std::string public_id,
                        Ifcs& ifcs,
                        SubscriberManager* sm,
                        SAS::TrailId trail);
 
-  /// Gets the subscriber's associated URIs and iFCs for each URI from
-  /// the HSS and stores cached values.
-  /// Returns the HTTP result code obtained from the SM.
+  /// Gets the subscriber's data (associated URIs, iFCs...) from the cache if
+  /// possible, or from the subscriber manager (which talk to homestead, which
+  /// talks to the HSS) if the data isn't cached, and then caches the data.
+  ///
+  /// @return           - The HTTP result code from the subscriber manager.
+  /// @param public_id  - The public ID of the subscriber whose info is being
+  ///                     looked up.
+  /// @param sm         - The subscriber manager instance that handles looking
+  ///                     up subscriber info from homestead.
+  /// @param trail      - The SAS trail ID.
   HTTPCode get_data_from_hss(std::string public_id,
                              SubscriberManager* sm,
                              SAS::TrailId trail);
 
-  /// Reads data for a public user identity from the HSS, and stores it in
-  /// member fields for the sproutlet.
-  /// Returns the HTTP result code obtained from the SM.
+  /// Askss the subscriber manager to fetch the subscriber's data (associated
+  /// URIs, iFCs...) from homestead (which talks to the HSS).
+  ///
+  /// @return           - The HTTP result code from the subscriber manager.
+  /// @param public_id  - The public ID of the subscriber whose info is being
+  ///                     looked up.
+  /// @param irs_query  - IRS query containing details about the subscriber, to
+  ///                     allow them to be found.
+  /// @param sm         - The subscriber manager instance that handles looking
+  ///                     up subscriber info from homestead.
+  /// @param trail      - The SAS trail ID.
   HTTPCode read_hss_data(std::string public_id,
                          const HSSConnection::irs_query& irs_query,
                          SubscriberManager* sm,
@@ -334,10 +451,10 @@ private:
   /// passed may be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.
   ///
-  /// @param msg          - The message to modify
-  /// @param billing_rr   - Whether to add a `billing-role` parameter to the RR
-  /// @param billing_role - The contents of the `billing-role` (ignored if
-  ///                       `billing_rr` is false)
+  /// @param msg           - The message to modify
+  /// @param billing_rr    - Whether to add a `billing-role` parameter to the RR
+  /// @param billing_role  - The contents of the `billing-role` (ignored if
+  ///                        `billing_rr` is false)
   void add_to_dialog(pjsip_msg* msg,
                      bool billing_rr,
                      ACR::NodeRole billing_role);
@@ -353,19 +470,20 @@ private:
 
   /// Raise a SAS log at the start of originating, terminating, or orig-cdiv
   /// processing.
-  void sas_log_start_of_sesion_case(pjsip_msg* req,
-                                    const SessionCase* session_case,
-                                    const std::string& served_user);
+  void sas_log_start_of_session_case(pjsip_msg* req,
+                                     const SessionCase* session_case,
+                                     const std::string& served_user);
 
-  /// Fetch the ACR for the current transaction, ACRs should always be retrived
+  /// Fetch the ACR for the current transaction, ACRs should always be retrieved
   /// through this API, not by inspecting _acr directly, since the ACR may be
   /// owned by the AsChain as a whole.  May return NULL in some cases.
   ACR* get_acr();
 
   /// Get a string representation of why a fork failed.
   ///
-  /// @param fork_id  - The fork's number.
-  /// @param sip_code - The reported SIP return code
+  /// @return          - The failure reason for the fork.
+  /// @param fork_id   - The fork's number.
+  /// @param sip_code  - The reported SIP return code.
   std::string fork_failure_reason_as_string(int fork_id, int sip_code);
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
@@ -382,8 +500,10 @@ private:
   /// The link in the owning AsChain for this service hop.
   AsChainLink _as_chain_link;
 
-  // Data received from HSS for this service hop.
+  /// Flag indicating if data has already been fetched from the HSS and cached.
   bool _hss_data_cached;
+
+  /// Data received from HSS for this service hop.
   bool _registered;
   bool _barred;
   std::string _default_uri;
@@ -447,11 +567,11 @@ private:
   /// in the S-CSCF's route header.
   ///
   /// This has the following impacts:
-  /// - It causes registration state updates to have a type of REG rather than
-  ///   CALL.
-  ///   - If there is a real HSS it forces registration state updates to flow all
-  ///   the way to the HSS (i.e. Homestead may not answer the response solely
-  ///   from its cache).
+  ///   - It causes registration state updates to have a type of REG rather than
+  ///     CALL.
+  ///   - If there is a real HSS it forces registration state updates to flow
+  ///     all the way to the HSS (i.e. Homestead may not answer the response
+  ///     solely from its cache).
   bool _auto_reg;
 
   /// The wildcarded public identity associated with the requestee. This is
@@ -476,8 +596,9 @@ private:
 
   /// SAS logs that the next hop URI is invalid and rejects the request with a
   /// 400 Bad Request error (which also frees the request).
-  /// @param req     The request to rejet
-  /// @param uri_str The URI string to add to the SAS log
+  ///
+  /// @param req      - The request to rejet
+  /// @param uri_str  - The URI string to add to the SAS log
   void reject_invalid_uri(pjsip_msg* req, const std::string& uri_str);
 
   /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
