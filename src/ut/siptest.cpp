@@ -116,7 +116,6 @@ void SipTest::SetUpTestCase()
   stack_data.record_route_on_initiation_of_originating = true;
   stack_data.record_route_on_completion_of_terminating = true;
   stack_data.default_session_expires = 60 * 10;
-  stack_data.max_session_expires = 90 * 10;
   stack_data.addr_family = AF_INET;
   stack_data.sipresolver = new SIPResolver(&_dnsresolver);
   stack_data.sprout_hostname = "sprout.homedomain";
