@@ -1229,9 +1229,9 @@ void SCSCFTestBase::setup_callee_ifcs(HSSConnection::irs_info& irs_info)
 }
 
 void SCSCFTestBase::setup_callee_binding(Bindings& bindings,
-                                          std::string uri,
-                                          std::string contact,
-                                          bool emergency)
+                                         std::string uri,
+                                         std::string contact,
+                                         bool emergency)
 {
   Binding* binding = AoRTestUtils::build_binding(uri,
                                                  time(NULL),
