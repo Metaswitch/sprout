@@ -236,7 +236,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
 
   for (BindingPair binding : bindings)
   {
-      delete binding.second; binding.second = NULL;
+    //delete binding.second; binding.second = NULL;
   }
 
   // Remove these bindings via subscriber manager
@@ -248,7 +248,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
 
   for (BindingPair binding : unused_bindings)
   {
-      delete binding.second; binding.second = NULL;
+    //delete binding.second; binding.second = NULL;
   }
 
   return rc;

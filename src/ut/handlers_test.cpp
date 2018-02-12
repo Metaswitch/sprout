@@ -115,7 +115,9 @@ class DeregistrationTaskTest : public SipTest
 
     EXPECT_CALL(*_subscriber_manager,
                 remove_bindings(aor_id, _, SubscriberDataUtils::EventTrigger::HSS, _, _))
-          .WillOnce(DoAll(SaveArg<1>(&binding_ids), Return(HTTP_OK)));
+          .WillOnce(DoAll(SaveArg<1>(&binding_ids), 
+                          SetArgReferee<3>(Bindings()),
+                          Return(HTTP_OK)));
   }
 
   void expect_impi_deletes(std::string private_id, MockImpiStore* impi_store)
@@ -786,7 +788,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
 
   {
     InSequence s;
-      EXPECT_CALL(*sm, deregister_subscriber(_, _, _))
+      EXPECT_CALL(*sm, deregister_subscriber(_, _))
         .WillOnce(DoAll(SaveArg<0>(&actual_impu),
                         Return(HTTP_OK)));
       EXPECT_CALL(*stack, send_reply(_, 200, _));
@@ -807,7 +809,7 @@ TEST_F(DeleteImpuTaskTest, StoreFailure)
 
   {
     InSequence s;
-      EXPECT_CALL(*sm, deregister_subscriber(_, _, _))
+      EXPECT_CALL(*sm, deregister_subscriber(_, _))
         .WillOnce(Return(HTTP_SERVER_ERROR));
       EXPECT_CALL(*stack, send_reply(_, 500, _));
   }
