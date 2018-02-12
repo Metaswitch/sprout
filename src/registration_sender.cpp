@@ -495,11 +495,15 @@ void RegistrationSender::RegisterCallback::run()
 
     // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
     // where SESSION_TERMINATED is set means that we should deregister "the
-    // currently registered public user identity" - i.e. all bindings
+    // currently registered public user identity" - i.e. all bindings.
+    //
+    // We only do this when this callback has been triggered by a 3rd party
+    // register, not a 3rd party deregister. In that situation, the subscriber
+    // should already be dergistered and this avoids us getting into a loop of
+    // deregistering a subscriber when an AS is unreachable.
     if (_reg_data->expires > 0)
     {
       _reg_data->dereg_event_consumer->deregister_subscriber(_reg_data->served_user,
-                                                             SubscriberDataUtils::EventTrigger::ADMIN,
                                                              _reg_data->trail);
     }
   }

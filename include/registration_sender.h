@@ -39,12 +39,10 @@ public:
     ///
     /// @param [in] public_id     - The public identity to deregister. This is
     ///                             not necessarily a primary IMPU.
-    /// @param [in] event_trigger - The type of event that has occurred.
     /// @param [in] trail         - SAS trail ID to use for logging.
     ///
     /// @return
     virtual HTTPCode deregister_subscriber(const std::string& public_id,
-                                           const SubscriberDataUtils::EventTrigger& event_trigger,
                                            SAS::TrailId trail) = 0;
 
     virtual ~DeregistrationEventConsumer() {}
