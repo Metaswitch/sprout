@@ -2846,19 +2846,14 @@ bool PJUtils::is_param_in_generic_array_hdr(pjsip_msg* msg, pjsip_hdr_e htype, c
   return found;
 }
 
-pjsip_routing_hdr* PJUtils::msg_get_first_routing_hdr_by_name(pjsip_msg* msg, const pj_str_t* name)
+pjsip_routing_hdr* PJUtils::msg_get_last_routing_hdr_by_name(pjsip_msg* msg, const pj_str_t* name)
 {
-  pjsip_routing_hdr* h;
-  pjsip_routing_hdr* hdr;
-  h = hdr = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg,
-                                name, NULL);
-  if (h != NULL)
+  pjsip_routing_hdr* hdr = NULL;
+  for (pjsip_routing_hdr* h = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, name, NULL);
+       h != NULL;
+       h = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, name, h->next))
   {
-    while ( (h=(pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, 
-                                  name, h->next)) != NULL )
-    {
-        hdr = h;
-    }
+    hdr = h;
   }
   return hdr;
 }

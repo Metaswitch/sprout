@@ -398,13 +398,13 @@ void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
 /// @return          boolean indicating whether the parameter was found (true if found)
 bool is_param_in_generic_array_hdr(pjsip_msg* msg, pjsip_hdr_e htype, const pj_str_t* param_name);
 
-/// Get the first (as added to the message) pjsip_routing_hdr header from a message
+/// Get the last occurence of a pjsip_routing_hdr header from a message
 ///
 /// @param msg       the message to be searched
 /// @param name      name of the header
 ///
 /// @return          a pointer to the header, NULL pointer if not found          
-pjsip_routing_hdr* msg_get_first_routing_hdr_by_name(pjsip_msg* msg, const pj_str_t* name);
+pjsip_routing_hdr* msg_get_last_routing_hdr_by_name(pjsip_msg* msg, const pj_str_t* name);
 
 /// Gets the priority of a message, based on the Resource-Priority headers.
 /// The priority is an integer between 0 and 15, where 0 is the default

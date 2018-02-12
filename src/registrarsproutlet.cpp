@@ -744,21 +744,24 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   }
 
   // We check if the UE that sent this REGISTER supports "outbound" (RFC5626)
-  bool supported_outbound = PJUtils::is_param_in_generic_array_hdr(req,
-                          PJSIP_H_SUPPORTED, &STR_OUTBOUND);
+  bool supported_outbound = PJUtils::is_param_in_generic_array_hdr(req, 
+                                                                   PJSIP_H_SUPPORTED,
+                                                                   &STR_OUTBOUND);
 
-  // Deal with path header related fields in the response
-  // Find the first (as added to the message) path header
+  /// Deal with path header related fields in the response
+  // Find the first path header as added to the message. We do this using the function
+  // msg_get_last_routing_hdr_by_name which itterates through the headers of the message
+  // and returns the last one (which will be the first one added)
   pjsip_routing_hdr* first_path_hdr = 
-                     PJUtils::msg_get_first_routing_hdr_by_name(req, &STR_PATH);
+                     PJUtils::msg_get_last_routing_hdr_by_name(req, &STR_PATH);
 
   if (first_path_hdr != NULL)
   {
     // Check for the presence of an "ob" parameter in the URI of the first path header
     pjsip_sip_uri* uri = (first_path_hdr->name_addr.uri != NULL) ? 
                        (pjsip_sip_uri*)pjsip_uri_get_uri(first_path_hdr->name_addr.uri) : NULL; 
-    bool contains_ob = ( (uri != NULL) && 
-                         (pjsip_param_find(&uri->other_param, &STR_OB) != NULL) );
+    bool contains_ob = ((uri != NULL) && 
+                        (pjsip_param_find(&uri->other_param, &STR_OB) != NULL));
 
     if (supported_outbound && contains_reg_id && contains_ob &&
        !aor_pair->get_current()->bindings().empty())
