@@ -163,6 +163,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
+                       registrar_test.cpp \
                        subscription_test.cpp \
                        handlers_test.cpp \
                        chronoshandlers_test.cpp \
