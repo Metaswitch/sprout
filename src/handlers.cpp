@@ -240,7 +240,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
   // Remove these bindings via subscriber manager
   rc = _cfg->_sm->remove_bindings(aor_id,
                                   binding_ids,
-                                  SubscriberDataUtils::EventTrigger::ADMIN,
+                                  SubscriberDataUtils::EventTrigger::HSS,
                                   unused_bindings,
                                   trail());
 
