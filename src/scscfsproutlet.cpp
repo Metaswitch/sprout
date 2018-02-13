@@ -736,9 +736,9 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // calling code doesn't care about this, so just free it once it is
       // received.
       Bindings bindings;
-      _scscf->remove_binding(i->second, bindings, _target_aor, trail());
+      _scscf->remove_binding(i->second,  _target_aor, bindings, trail());
 
-      free_bindings(bindings);
+      _scscf->free_bindings(bindings);
     }
   }
 
