@@ -273,17 +273,21 @@ void SCSCFSproutlet::free_bindings(Bindings& bindings)
 // SM does this.
 void SCSCFSproutlet::remove_binding(const std::string& binding_id,
                                     const std::string& aor_id,
-                                    Bindings& bindings,
                                     SAS::TrailId trail)
 {
   std::vector<std::string> binding_ids;
   binding_ids.push_back(binding_id);
 
+  // This empty bindings map will be returned containing the complete set of
+  // binding objects present after the specified bindings is removed. The
+  // calling code doesn't care about this, so just free it once it is received.
+  Bindings bindings;
   long http_code = _sm->remove_bindings(aor_id,
                                         binding_ids,
                                         SubscriberDataUtils::EventTrigger::USER,
                                         bindings,
                                         trail);
+  _scscf->free_bindings(bindings);
 
  if (http_code != HTTP_OK)
  {
@@ -731,12 +735,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     {
       // We're the auth proxy and the flow we used failed, so delete the binding
       // corresponding to this flow.
-      // This empty bindings map will be returned containing the complete set
-      // of binding objects present after the specified binding is removed.
-      Bindings bindings;
-      _scscf->remove_binding(i->second, _target_aor, bindings, trail());
-
-      _scscf->free_bindings(bindings);
+      _scscf->remove_binding(i->second, _target_aor, trail());
     }
   }
 
@@ -1978,9 +1977,9 @@ HTTPCode SCSCFSproutletTsx::read_hss_data(std::string public_id,
                                           const HSSConnection::irs_query& irs_query,
                                           SAS::TrailId trail)
 {
-  HTTPCode http_code = _scscf->sm->get_subscriber_state(irs_query,
-                                                        _irs_info,
-                                                        trail);
+  HTTPCode http_code = _scscf->_sm->get_subscriber_state(irs_query,
+                                                         _irs_info,
+                                                         trail);
 
   if (http_code == HTTP_OK)
   {

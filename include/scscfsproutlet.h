@@ -152,15 +152,12 @@ private:
   /// Removes the binding, specified by its binding ID, using the Subscriber
   /// Manager.
   ///
-  /// @param[in]  binding_id  - The ID of the binding to remove.
-  /// @param[in]  aor_id      - The public ID of the subscriber to remove
-  ///                           bindings from.
-  /// @param[out] bindings    - The bindings stored for this subscriber (after
-  ///                           removal).
-  /// @param[in]  trail       - The SAS trail ID.
+  /// @param[in] binding_id  - The ID of the binding to remove.
+  /// @param[in] aor_id      - The public ID of the subscriber to remove the
+  ///                          binding from.
+  /// @param[in] trail       - The SAS trail ID.
   void remove_binding(const std::string& binding_id,
                       const std::string& aor_id,
-                      Bindings& bindings,
                       SAS::TrailId trail);
 
   /// Record that communication with an AS failed.
@@ -620,7 +617,7 @@ private:
   /// SAS logs that the next hop URI is invalid and rejects the request with a
   /// 400 Bad Request error (which also frees the request).
   ///
-  /// @param req      - The request to rejet
+  /// @param req      - The request to reject
   /// @param uri_str  - The URI string to add to the SAS log
   void reject_invalid_uri(pjsip_msg* req, const std::string& uri_str);
 
