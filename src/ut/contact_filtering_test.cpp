@@ -596,8 +596,6 @@ public:
     binding._cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
     binding._path_headers.push_back("\"Bob\" <sip:token@domain.com;lr>;tag=j45l");
     binding._path_headers.push_back("\"Alice\" <sip:token2@domain2.com;lr>;tag=g93s");
-    binding._path_uris.push_back("sip:token@domain.com;lr");
-    binding._path_uris.push_back("sip:token2@domain2.com;lr");
     binding._cseq = 3;
     binding._expires = 300;
     binding._priority = 1234;

@@ -315,6 +315,9 @@ private:
                                HSSConnection::irs_info& irs_info,
                                SAS::TrailId trail);
 
+  void handle_timer_pop_internal(const std::string& aor_id,
+                                 SAS::TrailId trail);
+
 };
 
 #endif

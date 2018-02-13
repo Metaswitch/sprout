@@ -199,7 +199,7 @@ void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
         (event_trigger != SubscriberDataUtils::EventTrigger::ADMIN &&
          event_trigger != SubscriberDataUtils::EventTrigger::HSS))
     {
-      // Binding is missing, and this event is not triggered by admin or hss. 
+      // Binding is missing, and this event is not triggered by admin or hss.
       // The binding no longer exists due to user deregestration or timeout, so
       // classify the subscription as EXPIRED.
       TRC_DEBUG("Subscription %s in AoR %s has been expired since the binding that"
@@ -299,7 +299,6 @@ void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
   }
 }
 
-/// Helper to delete vectors of bindings safely
 void SubscriberDataUtils::delete_bindings(ClassifiedBindings& classified_bindings)
 {
   for (ClassifiedBinding* binding : classified_bindings)
@@ -310,7 +309,14 @@ void SubscriberDataUtils::delete_bindings(ClassifiedBindings& classified_binding
   classified_bindings.clear();
 }
 
-/// Helper to delete vectors of subscriptions safely
+void SubscriberDataUtils::delete_bindings(Bindings& bindings)
+{
+  for (BindingPair binding : bindings)
+  {
+    delete binding.second;
+  }
+}
+
 void SubscriberDataUtils::delete_subscriptions(ClassifiedSubscriptions& classified_subscriptions)
 {
   for (ClassifiedSubscription* subscription : classified_subscriptions)
@@ -319,4 +325,12 @@ void SubscriberDataUtils::delete_subscriptions(ClassifiedSubscriptions& classifi
   }
 
   classified_subscriptions.clear();
+}
+
+void SubscriberDataUtils::delete_subscriptions(Subscriptions& subscriptions)
+{
+  for (SubscriptionPair subscription : subscriptions)
+  {
+    delete subscription.second;
+  }
 }
