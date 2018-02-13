@@ -60,15 +60,6 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
         break;
 
       case HTTP_SERVER_UNAVAILABLE:
-        // The HSS is unavailable - the client should retry on timeout but no
-        // other Clearwater nodes should (as Sprout will already have retried on
-        // timeout). Reject with a 504 (503 is used for overload).
-        TRC_ERROR("Rejecting %s request as unable to contact HSS: %d",
-                  sip_msg_type, http_code);
-
-        st_code = (pjsip_status_code)554;
-        break;
-
       case HTTP_GATEWAY_TIMEOUT:
         // The HSS is unavailable - the client should retry on timeout but no
         // other Clearwater nodes should (as Sprout will already have retried on
