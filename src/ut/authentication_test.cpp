@@ -40,6 +40,7 @@ using namespace std;
 using namespace std;
 using testing::StrEq;
 using testing::ElementsAre;
+using testing::Expectation;
 using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
@@ -3016,6 +3017,64 @@ TEST_F(AuthenticationTest, DigestAuthFailureWithSetError)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(500).matches(tdata->msg);
+}
+
+// Test that parameters on a Route header are copied onto the next hop URI when
+// the AuthenticationSproutlet declares itself uninterested in a request, when
+// the Route header is matched on the service name
+TEST_F(AuthenticationTest, GetTsxParamsPreservedOnNextHop)
+{
+  // Create an INVITE with a Route header specifying the "orig" param
+  AuthenticationMessage msg("INVITE");
+  msg._route_uri = "sip:authentication.sprout.homedomain:5058;transport=TCP;orig";
+  pjsip_msg* pj_msg = parse_msg(msg.get());
+
+  // Offer it to the AuthenticationSproutlet
+  pjsip_sip_uri* next_hop = NULL;
+  SproutletHelper* helper = (SproutletHelper*)_sproutlet_proxy;
+  SproutletTsx* tsx = _auth_sproutlet->get_tsx(helper,
+                                               "",
+                                               pj_msg,
+                                               next_hop,
+                                               stack_data.pool,
+                                               0L);
+
+  // Expect that the AuthenticationSprout was not interested in the message
+  EXPECT_EQ(nullptr, tsx);
+
+  // Check that the next_hop URI contains the "orig" parameter
+  bool has_orig_param = (pjsip_param_find(&next_hop->other_param, &STR_ORIG) != nullptr);
+  EXPECT_TRUE(has_orig_param);
+}
+
+// Test that parameters on a Route header are copied onto the next hop URI when
+// the AuthenticationSproutlet declares itself uninterested in a request, when
+// the Route header is not matched on the service name
+TEST_F(AuthenticationTest, GetTsxParamsPreservedOnNextHopPortMatch)
+{
+  // Create an INVITE with a Route header specifying the "orig" param, but which
+  // doesn't match the service name of the AuthenticationSproutlet (and is only
+  // matched on the port)
+  AuthenticationMessage msg("INVITE");
+  msg._route_uri = "sip:sprout.homedomain:5058;transport=TCP;orig";
+  pjsip_msg* pj_msg = parse_msg(msg.get());
+
+  // Offer it to the AuthenticationSproutlet
+  pjsip_sip_uri* next_hop = NULL;
+  SproutletHelper* helper = (SproutletHelper*)_sproutlet_proxy;
+  SproutletTsx* tsx = _auth_sproutlet->get_tsx(helper,
+                                               "",
+                                               pj_msg,
+                                               next_hop,
+                                               stack_data.pool,
+                                               0L);
+
+  // Expect that the AuthenticationSprout was not interested in the message
+  EXPECT_EQ(nullptr, tsx);
+
+  // Check that the next_hop URI contains the "orig" parameter
+  bool has_orig_param = (pjsip_param_find(&next_hop->other_param, &STR_ORIG) != nullptr);
+  EXPECT_TRUE(has_orig_param);
 }
 
 //
