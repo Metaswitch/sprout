@@ -169,6 +169,14 @@ std::string PJUtils::hdr_to_string(void* hdr)
 }
 
 
+std::string PJUtils::body_to_string(pjsip_msg_body* body)
+{
+  char buf[16384];
+  int len = body->print_body(body, buf, sizeof(buf));
+  return std::string(buf, len);
+}
+
+
 /// Returns a canonical IMS public user identity from a URI as per TS 23.003
 /// 13.4.
 std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)

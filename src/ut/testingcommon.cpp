@@ -192,7 +192,9 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfc(int priority,
                                                      std::vector<std::string> triggers,
                                                      std::string app_serv_name,
                                                      int cond_neg,
-                                                     int default_handling)
+                                                     int default_handling,
+                                                     std::string service_info,
+                                                     bool include_body)
 {
   IfcStruct new_ifc;
   new_ifc.priority = priority;
@@ -200,6 +202,8 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfc(int priority,
   new_ifc.app_server_name = app_serv_name;
   new_ifc.condition_negated = std::to_string(cond_neg);
   new_ifc.default_handling = std::to_string(default_handling);
+  new_ifc.service_info = service_info;
+  new_ifc.include_body = include_body;
 
   _ifcs.push_back(new_ifc);
   return *this;
@@ -231,6 +235,14 @@ std::string ServiceProfileBuilder::create_ifc(IfcStruct ifc_info)
   if (ifc_info.default_handling != NO_DEF_HANDLING_FIELD)
   {
     ifc += add_node(DEFAULT_HANDLING, ifc_info.default_handling);
+  }
+  if (ifc_info.service_info != "")
+  {
+    ifc += add_node(SERVICE_INFO, ifc_info.service_info);
+  }
+  if (ifc_info.include_body)
+  {
+    ifc += add_node(EXTENSION, INCLUDE_BODY);
   }
   ifc += end_node(APP_SERVER);
   ifc += end_node(IFC);

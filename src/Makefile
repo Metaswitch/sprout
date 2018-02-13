@@ -209,7 +209,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        sprout_xml_utils_test.cpp \
                        notify_sender_test.cpp \
                        mock_notify_sender.cpp \
-                       registration_sender_test.cpp
+                       registration_sender_test.cpp \
+                       mock_registration_sender.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/clearwater-s4/src/ut
