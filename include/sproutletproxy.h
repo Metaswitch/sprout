@@ -221,7 +221,8 @@ protected:
 
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const;
-  std::string get_local_hostname(const pjsip_sip_uri* uri) const;
+  std::string get_local_hostname(const pjsip_sip_uri* uri,
+                                 bool default_to_root=false) const;
 
   /// @brief      Compares the given hostname to the alias lists and returns the
   ///             match locality.

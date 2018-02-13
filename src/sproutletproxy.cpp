@@ -466,7 +466,7 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   // Replace the hostname part of the base URI with the local hostname part of
   // the URI that routed to us. If this doesn't work, then fall back to using
   // the root URI.
-  std::string local_hostname = get_local_hostname(uri);
+  std::string local_hostname = get_local_hostname(uri, true);
   pj_strdup2(pool, &uri->host, local_hostname.c_str());
 
   uri->port = 0;
@@ -533,16 +533,14 @@ pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req,
   pjsip_sip_uri* routing_uri = NULL;
   if (route != NULL)
   {
-    if ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
-        (is_uri_reflexive(route->name_addr.uri, sproutlet)))
+    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
       routing_uri = (pjsip_sip_uri*)route->name_addr.uri;
     }
   }
   else
   {
-    if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
-        (is_uri_reflexive(req->line.req.uri, sproutlet)))
+    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
       routing_uri = (pjsip_sip_uri*)req->line.req.uri;
     }
@@ -551,7 +549,8 @@ pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req,
   return routing_uri;
 }
 
-std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
+std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri,
+                                               bool default_to_root) const
 {
   std::string unused_alias, local_hostname;
   SPROUTLET_SELECTION_TYPES unused_selection_type = NONE_SELECTED;
@@ -562,10 +561,18 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
 
   if (local_hostname.empty())
   {
-    // We assume that the URI passed to this function will route back to a
-    // Sproutlet, so if we have not found a Sproutlet, default the local
-    // hostname to the hostname part of the URI's host.
-    local_hostname = PJUtils::pj_str_to_string(&uri->host);
+    if (!default_to_root)
+    {
+      // We assume that the URI passed to this function will route back to a
+      // Sproutlet, so if we have not found a Sproutlet, default the local
+      // hostname to the hostname part of the URI's host.
+      local_hostname = PJUtils::pj_str_to_string(&uri->host);
+    }
+    else
+    {
+      // Use the root_uri's hostname instead
+      local_hostname = PJUtils::pj_str_to_string(&_root_uri->host);
+    }
   }
 
   return local_hostname;
@@ -1355,7 +1362,7 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
     // boundary. If it is matched on another alias, we are attempting to route
     // to a specific Sproutlet, in which case we are not crossing such a
     // boundary.
-    if (!serve_remote_aliases && 
+    if (!serve_remote_aliases &&
         (alias == match.sproutlet->network_function()))
     {
       // If the Sproutlet was matched on its network function, and we are not
@@ -2068,16 +2075,14 @@ pjsip_sip_uri* SproutletWrapper::get_routing_uri(const pjsip_msg* req) const
   pjsip_sip_uri* routing_uri = NULL;
   if (route != NULL)
   {
-    if ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
-        (is_uri_reflexive(route->name_addr.uri)))
+    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
       routing_uri = (pjsip_sip_uri*)route->name_addr.uri;
     }
   }
   else
   {
-    if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
-        (is_uri_reflexive(req->line.req.uri)))
+    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
       routing_uri = (pjsip_sip_uri*)req->line.req.uri;
     }
