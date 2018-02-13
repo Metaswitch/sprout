@@ -989,7 +989,6 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
   std::vector<std::string> aliases;
   bool rc = get_aliases(old_served_user,
                         aliases,
-                        _scscf->_sm,
                         trail());
 
   if (new_served_user == old_served_user)
@@ -1088,7 +1087,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
         Ifcs ifcs;
         // Get the public user identity corresponding to the RequestURI.
-        long http_code = lookup_ifcs(served_user, ifcs, _scscf->_sm, trail());
+        long http_code = lookup_ifcs(served_user, ifcs, trail());
         if (http_code == HTTP_OK)
         {
           TRC_DEBUG("Creating originating CDIV AS chain");
@@ -1219,7 +1218,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
       Ifcs ifcs;
-      long http_code = lookup_ifcs(served_user, ifcs, _scscf->_sm, trail());
+      long http_code = lookup_ifcs(served_user, ifcs, trail());
 
       if (http_code == HTTP_OK)
       {
@@ -1313,7 +1312,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
       TRC_DEBUG("Session case is terminating, but the request contains an overriding route header - %s", route_hdr_str.c_str());
       SAS::Event event(trail(), SASEvent::NO_SERVED_USER_OVERRIDING_ROUTE, 0);
       event.add_var_param(route_hdr_str);
-      SAS::report_event(event);   
+      SAS::report_event(event);
     }
   }
 
@@ -1775,7 +1774,6 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     std::vector<std::string> uris;
     bool success = get_associated_uris(public_id,
                                        uris,
-                                       _scscf->_sm,
                                        trail());
 
     if ((success) && (uris.size() > 0))
@@ -1905,10 +1903,9 @@ bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 // The uris parameter is only filled in correctly if this function returns true.
 bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
                                             std::vector<std::string>& uris,
-                                            SubscriberManager* sm,
                                             SAS::TrailId trail)
 {
-  long http_code = get_data_from_hss(public_id, sm, trail);
+  long http_code = get_data_from_hss(public_id, trail);
   if (http_code == HTTP_OK)
   {
     uris = _irs_info._associated_uris.get_all_uris();
@@ -1922,10 +1919,9 @@ bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
 // true.
 bool SCSCFSproutletTsx::get_aliases(std::string public_id,
                                     std::vector<std::string>& aliases,
-                                    SubscriberManager* sm,
                                     SAS::TrailId trail)
 {
-  long http_code = get_data_from_hss(public_id, sm, trail);
+  long http_code = get_data_from_hss(public_id, trail);
   if (http_code == HTTP_OK)
   {
     aliases = _irs_info._aliases;
@@ -1939,10 +1935,9 @@ bool SCSCFSproutletTsx::get_aliases(std::string public_id,
 // HTTP_OK.
 HTTPCode SCSCFSproutletTsx::lookup_ifcs(std::string public_id,
                                         Ifcs& ifcs,
-                                        SubscriberManager* sm,
                                         SAS::TrailId trail)
 {
-  HTTPCode http_code = get_data_from_hss(public_id, sm, trail);
+  HTTPCode http_code = get_data_from_hss(public_id, trail);
   if (http_code == HTTP_OK)
   {
     ifcs = _ifcs;
@@ -1952,7 +1947,6 @@ HTTPCode SCSCFSproutletTsx::lookup_ifcs(std::string public_id,
 
 
 HTTPCode SCSCFSproutletTsx::get_data_from_hss(std::string public_id,
-                                              SubscriberManager* sm,
                                               SAS::TrailId trail)
 {
   HTTPCode http_code = HTTP_OK;
@@ -1968,7 +1962,7 @@ HTTPCode SCSCFSproutletTsx::get_data_from_hss(std::string public_id,
     irs_query._wildcard = _wildcard;
     irs_query._cache_allowed = !_auto_reg;
 
-    http_code = read_hss_data(public_id, irs_query, sm, trail);
+    http_code = read_hss_data(public_id, irs_query, trail);
 
     if (http_code == HTTP_OK)
     {
@@ -1982,12 +1976,11 @@ HTTPCode SCSCFSproutletTsx::get_data_from_hss(std::string public_id,
 
 HTTPCode SCSCFSproutletTsx::read_hss_data(std::string public_id,
                                           const HSSConnection::irs_query& irs_query,
-                                          SubscriberManager* sm,
                                           SAS::TrailId trail)
 {
-  HTTPCode http_code = sm->get_subscriber_state(irs_query,
-                                                _irs_info,
-                                                trail);
+  HTTPCode http_code = _scscf->sm->get_subscriber_state(irs_query,
+                                                        _irs_info,
+                                                        trail);
 
   if (http_code == HTTP_OK)
   {

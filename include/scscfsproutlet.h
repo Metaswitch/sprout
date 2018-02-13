@@ -86,7 +86,7 @@ public:
   /// @return - True if creation was successful, false otherwise.
   bool init();
 
-  /// Creates a SCSCFSproutletTsx instance for performing S-SCSCF serive
+  /// Creates a SCSCFSproutletTsx instance for performing S-SCSCF service
   /// processing on a request.
   SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
@@ -136,9 +136,9 @@ private:
 
   /// Gets all bindings for the specified public ID from the Subscriber Manager.
   ///
-  /// @param public_id[in]  - The public ID of the subscriber.
-  /// @param bindings[out]  - The bindings stored for this subscriber.
-  /// @param trail[in]      - The SAS trail ID.
+  /// @param[in]  public_id  - The public ID of the subscriber.
+  /// @param[out] bindings   - The bindings stored for this subscriber.
+  /// @param[in]  trail      - The SAS trail ID.
   void get_bindings(const std::string& public_id,
                     Bindings& bindings,
                     SAS::TrailId trail);
@@ -146,16 +146,18 @@ private:
   /// Freed the bindings object, which was returned by the subscriber manager,
   /// as this object is owned by the sproutlet.
   ///
-  /// @param bindings[in]  - The bindings object to free.
+  /// @param[in] bindings  - The bindings object to free.
   void free_bindings(Bindings& bindings);
 
   /// Removes the binding, specified by its binding ID, using the Subscriber
   /// Manager.
   ///
-  /// @param[in]   - The ID of the binding to remove.
-  /// @param[in]   - The public ID of the subscriber to remove bindings from.
-  /// @param[out]  - The bindings stored for this subscriber (after removal).
-  /// @param[in]   - The SAS trail ID.
+  /// @param[in]  binding_id  - The ID of the binding to remove.
+  /// @param[in]  aor_id      - The public ID of the subscriber to remove
+  ///                           bindings from.
+  /// @param[out] bindings    - The bindings stored for this subscriber (after
+  ///                           removal).
+  /// @param[in]  trail       - The SAS trail ID.
   void remove_binding(const std::string& binding_id,
                       const std::string& aor_id,
                       Bindings& bindings,
@@ -316,10 +318,10 @@ private:
   /// Creates an AS chain for this service role and links this service hop to
   /// it. The AS chain must be released once it has been used.
   ///
-  /// @param ifcs[in]         - iFCs belonging to the served user.
-  /// @param served_user[in]  - The served user for the request.
-  /// @param acr[in]          - The ACR object associated with the AS chain.
-  /// @param chain_trail[in]  - The SAS trail ID.
+  /// @param[in] ifcs         - iFCs belonging to the served user.
+  /// @param[in] served_user  - The served user for the request.
+  /// @param[in] acr          - The ACR object associated with the AS chain.
+  /// @param[in] chain_trail  - The SAS trail ID.
   AsChainLink create_as_chain(Ifcs ifcs,
                               std::string served_user,
                               ACR*& acr,
@@ -329,7 +331,7 @@ private:
   ///
   /// @return                     - True if a retarget has taken place, false
   ///                               otherwise.
-  /// @param new_served_user[in]  - The new served user, from a request returned
+  /// @param[in] new_served_user  - The new served user, from a request returned
   ///                               by an AS.
   bool is_retarget(std::string new_served_user);
 
@@ -374,17 +376,16 @@ private:
   /// The uris parameter is only filled in correctly if this function
   /// returns true.
   ///
-  /// @return               - True if the associated uris have been correctly
-  ///                         returned, false otherwise.
-  /// @param public_id[in]  - The public ID whose associated URIs are being
-  ///                         looked up.
-  /// @param uris[out]      - The associated uris for the public ID passed in.
-  /// @param sm[in]         - The subscriber manager instance that handles
-  ///                         looking up the subscriber info from homestead.
-  /// @param trail[in]      - The SAS trail ID.
+  /// @return                - True if the associated uris have been correctly
+  ///                          returned, false otherwise.
+  /// @param[in]  public_id  - The public ID whose associated URIs are being
+  ///                          looked up.
+  /// @param[out] uris       - The associated uris for the public ID passed in.
+  /// @param[in]  sm         - The subscriber manager instance that handles
+  ///                          looking up the subscriber info from homestead.
+  /// @param[in]  trail      - The SAS trail ID.
   bool get_associated_uris(std::string public_id,
                            std::vector<std::string>& uris,
-                           SubscriberManager* sm,
                            SAS::TrailId trail);
 
   /// Look up the aliases for the given public ID, using the cache if
@@ -393,16 +394,15 @@ private:
   /// The aliases parameter is only filled in correctly if this function
   /// returns true.
   ///
-  /// @return               - True if the aliases have been correctly returned,
-  ///                         false otherwise.
-  /// @param public_id[in]  - The public ID whose aliases are being looked up.
-  /// @param uris[out]      - The associated uris for the public ID passed in.
-  /// @param sm[in]         - The subscriber manager instance that handles
-  ///                         looking up the subscriber info from homestead.
-  /// @param trail[in]      - The SAS trail ID.
+  /// @return                - True if the aliases have been correctly returned,
+  ///                          false otherwise.
+  /// @param[in]  public_id  - The public ID whose aliases are being looked up.
+  /// @param[out] uris       - The associated uris for the public ID passed in.
+  /// @param[in]  sm         - The subscriber manager instance that handles
+  ///                          looking up the subscriber info from homestead.
+  /// @param[in]  trail      - The SAS trail ID.
   bool get_aliases(std::string public_id,
                    std::vector<std::string>& aliases,
-                   SubscriberManager* sm,
                    SAS::TrailId trail);
 
   /// Look up the iFCs for the given public ID, using the cache if possible
@@ -413,16 +413,15 @@ private:
   /// The ifcs parameter is only filled in correctly if this function
   /// returns HTTP_OK.
   ///
-  /// @return               - The HTTP result code from homestead (passed
-  ///                         through the subscriber manager).
-  /// @param[in] public_id  - The public ID whose iFCs are being looked up.
-  /// @param[out] ifcs      - The iFCs for the public ID passed in.
-  /// @param[in]            - The subscriber manager instance that handles
-  ///                         looking up subscriber info from homestead.
-  /// @param[in] trail      - The SAS trail ID.
+  /// @return                - The HTTP result code from homestead (passed
+  ///                          through the subscriber manager).
+  /// @param[in]  public_id  - The public ID whose iFCs are being looked up.
+  /// @param[out] ifcs       - The iFCs for the public ID passed in.
+  /// @param[in]  sm         - The subscriber manager instance that handles
+  ///                          looking up subscriber info from homestead.
+  /// @param[in]  trail      - The SAS trail ID.
   HTTPCode lookup_ifcs(std::string public_id,
                        Ifcs& ifcs,
-                       SubscriberManager* sm,
                        SAS::TrailId trail);
 
   /// Gets the subscriber's data (associated URIs, iFCs...) from the cache if
@@ -436,10 +435,9 @@ private:
   ///                     up subscriber info from homestead.
   /// @param trail      - The SAS trail ID.
   HTTPCode get_data_from_hss(std::string public_id,
-                             SubscriberManager* sm,
                              SAS::TrailId trail);
 
-  /// Askss the subscriber manager to fetch the subscriber's data (associated
+  /// Asks the subscriber manager to fetch the subscriber's data (associated
   /// URIs, iFCs...) from homestead (which talks to the HSS).
   ///
   /// @return           - The HTTP result code from the subscriber manager.
@@ -452,7 +450,6 @@ private:
   /// @param trail      - The SAS trail ID.
   HTTPCode read_hss_data(std::string public_id,
                          const HSSConnection::irs_query& irs_query,
-                         SubscriberManager* sm,
                          SAS::TrailId trail);
 
   /// Add the S-CSCF sproutlet into a dialog.
@@ -477,7 +474,7 @@ private:
   //
   // @return          - True is we should generate an ACR for this transaction,
   //                    false otherwise.
-  // @param role[in]  - The billing role. Only set if true is returned.
+  // @param[in] role  - The billing role. Only set if true is returned.
   bool get_billing_role(ACR::NodeRole& role);
 
   /// Adds a second P-Asserted-Identity header to a message when required.
