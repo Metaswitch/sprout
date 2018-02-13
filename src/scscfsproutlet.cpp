@@ -273,21 +273,17 @@ void SCSCFSproutlet::free_bindings(Bindings& bindings)
 // SM does this.
 void SCSCFSproutlet::remove_binding(const std::string& binding_id,
                                     const std::string& aor_id,
+                                    Bindings& bindings,
                                     SAS::TrailId trail)
 {
   std::vector<std::string> binding_ids;
   binding_ids.push_back(binding_id);
 
-  // This empty bindings map will be returned containing the complete set of
-  // binding objects present after the specified bindings is removed. The
-  // calling code doesn't care about this, so just free it once it is received.
-  Bindings bindings;
   long http_code = _sm->remove_bindings(aor_id,
                                         binding_ids,
                                         SubscriberDataUtils::EventTrigger::USER,
                                         bindings,
                                         trail);
-  _scscf->free_bindings(bindings);
 
  if (http_code != HTTP_OK)
  {
@@ -735,7 +731,14 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     {
       // We're the auth proxy and the flow we used failed, so delete the binding
       // corresponding to this flow.
-      _scscf->remove_binding(i->second, _target_aor, trail());
+      // This empty bindings map will be returned containing the complete set of
+      // binding objects present after the specified bindings is removed. The
+      // calling code doesn't care about this, so just free it once it is
+      // received.
+      Bindings bindings;
+      _scscf->remove_binding(i->second, bindings, _target_aor, trail());
+
+      free_bindings(bindings);
     }
   }
 
