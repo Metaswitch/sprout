@@ -18,10 +18,9 @@
 class MockRegistrationSender : public RegistrationSender
 {
 public:
-  MockRegistrationSender() :
-    RegistrationSender({}, NULL, NULL, false) {}; // TODO sort out parameters.
+  MockRegistrationSender();
 
-  virtual ~MockRegistrationSender() {};
+  virtual ~MockRegistrationSender();
 
   MOCK_METHOD8(register_with_application_servers, void(pjsip_msg* received_register_message,
                                                        pjsip_msg* ok_response_msg,
