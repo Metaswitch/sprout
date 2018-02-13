@@ -1661,8 +1661,8 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
   add_sp_identity(irs_info, "tel:6505551235", false);
-  setup_callee_irs_info_calls(irs_info, "tel:6505551235");
-  setup_callee_bindings_call(bindings); //SDM-REFACTOR-TODO - why are these called with dif things?? K to check
+  setup_callee_irs_info_calls(irs_info, "tel:6505551235"); // Expect iFCs to be looked up with tel URI (since it's the requri).
+  setup_callee_bindings_call(bindings);  // Expect bindings to be looked up with sip URI (since it's first that was set in irs_info, making it the default).
 
   // Send a terminating INVITE for a subscriber with a tel: URI
   SCSCFMessage msg;
@@ -6626,9 +6626,6 @@ TEST_F(SCSCFTest, MmtelCdiv)
 }
 
 
-//SDM-REFACTOR-TODO
-// DID I PULL THE INFO ACROSS WRONG? 1234 is meant to have orig iFC?
-// Test call-diversion AS flow, where MMTEL does the diversion - twice.
 TEST_F(SCSCFTest, MmtelDoubleCdiv)
 {
   // Set up info about the original callee.
@@ -8461,7 +8458,7 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
   EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithWildcard("sip:650![0-9]+!@homedomain"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
-  setup_callee_bindings_call(bindings, "sip:6515551000@homedomain"); //SDM-REFACTOR-TODO - should we also call this with the WC?  K to check
+  setup_callee_bindings_call(bindings, "sip:6515551000@homedomain"); // Expect bindings to be looked up with the URI set in the irs_info.
 
   SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain>";
