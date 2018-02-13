@@ -9,7 +9,6 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
