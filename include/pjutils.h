@@ -65,6 +65,8 @@ std::string pj_status_to_string(const pj_status_t status);
 
 std::string hdr_to_string(void* hdr);
 
+std::string body_to_string(pjsip_msg_body* body);
+
 std::string extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_uri* impu_uri);
 
 std::string public_id_from_uri(const pjsip_uri* uri);

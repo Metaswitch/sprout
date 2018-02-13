@@ -45,6 +45,7 @@ namespace TestingCommon
   const std::string APP_SERVER = "ApplicationServer";
   const std::string SERVER_NAME = "ServerName";
   const std::string DEFAULT_HANDLING = "DefaultHandling";
+  const std::string SERVICE_INFO = "ServiceInfo";
   const std::string BARRING_INDICATION = "BarringIndication";
   const std::string ID_TYPE = "IdentityType";
   const std::string WILDCARD_IMPU = "WildcardedIMPU";
@@ -54,6 +55,7 @@ namespace TestingCommon
   const std::string NO_DEF_HANDLING_FIELD = "none";
   const std::string NO_ID_TYPE = "none";
   const std::string NO_WILDCARD_IMPU = "none";
+  const std::string INCLUDE_BODY = "<IncludeRegisterRequest/><IncludeRegisterResponse/>";
 
   // Tools to help build XML strings.
   std::string start_node(std::string);
@@ -106,6 +108,10 @@ namespace TestingCommon
   //         <DefaultHandling>
   //           0                                 This can be 0, 1, or invalid.
   //         </DefaultHandling>
+  //         <ServiceInfo>
+  //           banana                             This value can vary.
+  //         </SerivceInfo>
+  //         <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>
   //       </ApplicationServer>
   //     </InitialFilterCriteria>
   //   </ServiceProfile>
@@ -119,7 +125,7 @@ namespace TestingCommon
     ServiceProfileBuilder& addIdentity(std::string);
     ServiceProfileBuilder& addWildcard(std::string, int, std::string);
     ServiceProfileBuilder& addBarringIndication(std::string, std::string);
-    ServiceProfileBuilder& addIfc(int, std::vector<std::string>, std::string, int=0, int=0);
+    ServiceProfileBuilder& addIfc(int, std::vector<std::string>, std::string, int=0, int=0, std::string = "", bool = false);
     ServiceProfileBuilder& addIfcNoDefHandling(int, std::vector<std::string>, std::string, int=0);
     ServiceProfileBuilder& addIfcBadDefField(int, std::vector<std::string>, std::string, int, std::string);
 
@@ -141,6 +147,8 @@ namespace TestingCommon
       std::string app_server_name;
       std::string condition_negated;
       std::string default_handling;
+      std::string service_info;
+      bool include_body;
     };
 
     std::vector<IdentityStruct> _identities;
