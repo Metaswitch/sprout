@@ -9216,7 +9216,7 @@ TEST_F(SCSCFTest, AutomaticRegistration)
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
   // The SM should be invoked with a request type of "reg" and with the right
   // private ID.
-  EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("kermit"), _, _))
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryForRegisteringPrivateId("kermit"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
                     Return(HTTP_OK)));
 
@@ -9244,7 +9244,7 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
   // The SM should be invoked with a request type of "reg". No
   // Proxy-Authorization present, so derive the IMPI from the IMPU.
-  EXPECT_CALL(*_sm, get_subscriber_state(TestAutoRegIrsQuery("6505551000@homedomain"), _, _))
+  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryForRegisteringPrivateId("6505551000@homedomain"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
                     Return(HTTP_OK)));
 
