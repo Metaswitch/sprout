@@ -198,7 +198,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     if (num_contact_headers != 0)
     {
       // We've no idea what type of registration request this was. Assume
-      // deregistration (as we want to record it somehow).
+      // deregistration (as we want to record it somehow). If this was
+      // just a fetch bindings register then don't increment any statistics.
       _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
       _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }
@@ -311,7 +312,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     if (num_contact_headers != 0)
     {
       // We've no idea what type of registration request this was. Assume
-      // deregistration (as we want to record it somehow).
+      // deregistration (as we want to record it somehow). If this was
+      // just a fetch bindings register then don't increment any statistics.
       _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
       _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }
@@ -340,7 +342,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     if (num_contact_headers != 0)
     {
       // We've no idea what type of registration request this was. Assume
-      // deregistration (as we want to record it somehow).
+      // deregistration (as we want to record it somehow). If this was
+      // just a fetch bindings register then don't increment any statistics.
       _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
       _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }

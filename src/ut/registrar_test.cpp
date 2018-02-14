@@ -23,9 +23,6 @@
 #include "mock_subscriber_manager.h"
 #include "fakesnmp.hpp"
 #include "aor_test_utils.h"
-#include "rapidxml/rapidxml.hpp"
-#include "mock_hss_connection.h"
-#include "hssconnection.h"
 #include "mock_snmp_counter_table.hpp"
 #include "aor_utils.h"
 #include "aor_test_utils.h"
@@ -406,8 +403,8 @@ TEST_F(RegistrarTest, RegisterSubscriber)
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=\"CCF reg test\";ecf=\"ECF reg test\"", get_headers(out, "P-Charging-Function-Addresses"));
   free_txdata();
 
-  // Check the created binding object is correct, and that we called subscriber
-  // state with the right parameters.
+  // Check the created binding object is correct, and that we called
+  // get_subscriber_state with the right parameters.
   ASSERT_FALSE(bindings[AoRTestUtils::BINDING_ID] == NULL);
   Binding* expected_binding = AoRTestUtils::build_binding("sip:6505550231@homedomain", time(NULL));
   expected_binding->_cid = msg._cid;
@@ -429,7 +426,7 @@ TEST_F(RegistrarTest, RegisterSubscriber)
 // Test an initial register where there's no private ID on the message. This
 // should be processed successfully, but have a different ID stored on the
 // binding.
-TEST_F(RegistrarTest, AddBindingNoPrivateID)
+TEST_F(RegistrarTest, RegisterSubscriberNoPrivateID)
 {
   Message msg;
 
