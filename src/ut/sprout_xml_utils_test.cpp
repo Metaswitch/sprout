@@ -15,128 +15,6 @@
 
 #include "sprout_xml_utils.h"
 
-//using namespace XMLUtils;
-
-/*std::string COM = ""
-     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-     "<ClearwaterRegData>"
-       "<RegistrationState>REGISTERED</RegistrationState>"
-       "<IMSSubscription>"
-         "<ServiceProfile>"
-           "<PublicIdentity>"
-              "<Identity>sip:123@example.com</Identity>"
-           "</PublicIdentity>"
-           "<InitialFilterCriteria>"
-             "<Priority>1</Priority>"
-             "<TriggerPoint>"
-               "<ConditionTypeCNF>0</ConditionTypeCNF>"
-               "<SPT>"
-                 "<ConditionNegated>0</ConditionNegated>"
-                 "<Group>0</Group>"
-                 "<Method>INVITE</Method>"
-                 "<Extension></Extension>"
-               "</SPT>"
-             "</TriggerPoint>"
-             "<ApplicationServer>"
-               "<ServerName>mmtel.narcissi.example.com</ServerName>"
-               "<DefaultHandling>0</DefaultHandling>"
-             "</ApplicationServer>"
-           "</InitialFilterCriteria>"
-           "<InitialFilterCriteria>"
-             "<Priority>1</Priority>"
-             "<TriggerPoint>"
-               "<ConditionTypeCNF>0</ConditionTypeCNF>"
-               "<SPT>"
-                 "<ConditionNegated>0</ConditionNegated>"
-                 "<Group>0</Group>"
-                 "<Method>INVITE</Method>"
-                 "<Extension></Extension>"
-               "</SPT>"
-             "</TriggerPoint>"
-             "<ApplicationServer>"
-               "<ServerName>mmtel.narcissi.example2.com</ServerName>"
-               "<DefaultHandling>0</DefaultHandling>"
-             "</ApplicationServer>"
-           "</InitialFilterCriteria>"
-           "<InitialFilterCriteria>"
-             "<Priority>2</Priority>"
-             "<TriggerPoint>"
-               "<ConditionTypeCNF>0</ConditionTypeCNF>"
-               "<SPT>"
-                 "<ConditionNegated>0</ConditionNegated>"
-                 "<Group>0</Group>"
-                 "<Method>INVITE</Method>"
-                 "<Extension></Extension>"
-               "</SPT>"
-             "</TriggerPoint>"
-             "<ApplicationServer>"
-               "<ServerName>mmtel.narcissi.example3.com</ServerName>"
-               "<DefaultHandling>0</DefaultHandling>"
-             "</ApplicationServer>"
-           "</InitialFilterCriteria>"
-           "<InitialFilterCriteria>"
-             "<Priority>3</Priority>"
-             "<TriggerPoint>"
-               "<ConditionTypeCNF>0</ConditionTypeCNF>"
-               "<SPT>"
-                 "<ConditionNegated>0</ConditionNegated>"
-                 "<Group>0</Group>"
-                 "<Method>INVITE</Method>"
-                 "<Extension></Extension>"
-               "</SPT>"
-             "</TriggerPoint>"
-             "<ApplicationServer>"
-               "<ServerName>mmtel.narcissi.example4.com</ServerName>"
-               "<DefaultHandling>0</DefaultHandling>"
-             "</ApplicationServer>"
-           "</InitialFilterCriteria>"
-           "<InitialFilterCriteria>"
-             "<Priority>3</Priority>"
-             "<TriggerPoint>"
-               "<ConditionTypeCNF>0</ConditionTypeCNF>"
-               "<SPT>"
-                 "<ConditionNegated>0</ConditionNegated>"
-                 "<Group>0</Group>"
-                 "<Method>INVITE</Method>"
-                 "<Extension></Extension>"
-               "</SPT>"
-             "</TriggerPoint>"
-             "<ApplicationServer>"
-               "<ServerName>mmtel.narcissi.example5.com</ServerName>"
-               "<DefaultHandling>0</DefaultHandling>"
-             "</ApplicationServer>"
-           "</InitialFilterCriteria>"
-           "<InitialFilterCriteria>"
-             "<Priority>4</Priority>"
-             "<TriggerPoint>"
-               "<ConditionTypeCNF>0</ConditionTypeCNF>"
-               "<SPT>"
-                 "<ConditionNegated>0</ConditionNegated>"
-                 "<Group>0</Group>"
-                 "<Method>INVITE</Method>"
-                 "<Extension></Extension>"
-               "</SPT>"
-             "</TriggerPoint>"
-             "<ApplicationServer>"
-               "<ServerName>mmtel.narcissi.example6.com</ServerName>"
-               "<DefaultHandling>0</DefaultHandling>"
-             "</ApplicationServer>"
-           "</InitialFilterCriteria>"
-           "<Extension>"
-             "<SharedIFCSetID>3</SharedIFCSetID>"
-             "<SharedIFCSetID>4</SharedIFCSetID>"
-           "</Extension>"
-         "</ServiceProfile>"
-       "</IMSSubscription>"
-       "<ChargingAddresses>"
-         "<CCF priority=\"1\">ccf1</CCF>"
-         "<CCF priority=\"2\">ccf2</CCF>"
-         "<ECF priority=\"2\">ecf2</ECF>"
-         "<ECF priority=\"1\">ecf1</ECF>"
-       "</ChargingAddresses>"
-"</ClearwaterRegData>";
-*/
-
 /// Fixture for SproutXMLUtilsTest.
 class SproutXMLUtilsTest : public ::testing::Test
 {
@@ -148,12 +26,9 @@ class SproutXMLUtilsTest : public ::testing::Test
   {
   }
 
-  // All of these tests
-
   void check_expectations(std::string xml,
                           bool successful,
                           std::string impu,
-                          std::map<std::string, Ifcs> exp_ifcs_map = {},
                           AssociatedURIs exp_associated_uris = {},
                           std::vector<std::string> exp_aliases = {})
   {
@@ -163,7 +38,7 @@ class SproutXMLUtilsTest : public ::testing::Test
     rapidxml::xml_node<>* node = root->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 
     std::map<std::string, Ifcs> ifcs_map;
-    AssociatedURIs associated_uris;
+    AssociatedURIs associated_uris = AssociatedURIs();
     std::vector<std::string> aliases;
 
     bool rc = SproutXmlUtils::parse_ims_subscription(impu,
@@ -172,16 +47,14 @@ class SproutXMLUtilsTest : public ::testing::Test
                                                      ifcs_map,
                                                      associated_uris,
                                                      aliases,
-                                                     NULL,  // TODO make mock SIFC? Prob not.
+                                                     NULL,
                                                      0);
 
     EXPECT_EQ(successful, rc);
 
     if (successful)
     {
-      // EXPECT_EQ(exp_ifcs_map, ifcs_map);
-      // EM-TODO: EXPECT_EQ(exp_associated_uris, associated_uris);
-
+      EXPECT_TRUE(exp_associated_uris == associated_uris);
       std::sort(aliases.begin(), aliases.end());
       std::sort(exp_aliases.begin(), exp_aliases.end());
       EXPECT_EQ(exp_aliases, aliases);
@@ -221,16 +94,155 @@ TEST_F(SproutXMLUtilsTest, MissingPublicIdentityIdentity)
   check_expectations(xml, false, "test");
 }
 
-TEST_F(SproutXMLUtilsTest, SimpleMainline)
+TEST_F(SproutXMLUtilsTest, AmbiguousWildcardMatch)
 {
-  std::string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+  std::string xml =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
        "<IMSSubscription>"
          "<ServiceProfile>"
            "<PublicIdentity>"
               "<Identity>sip:123@example.com</Identity>"
            "</PublicIdentity>"
            "<PublicIdentity>"
+             "<Identity>sip:12!.*!@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:1235@example.com</Identity>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
+             "<Identity>sip:123!.*!@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+       "</IMSSubscription>";
+
+  AssociatedURIs exp_associated_uris;
+  exp_associated_uris.add_uri("sip:12!.*!@example.com", false);
+  exp_associated_uris.add_uri("sip:123@example.com", false);
+  exp_associated_uris.add_uri("sip:123!.*!@example.com", false);
+  exp_associated_uris.add_uri("sip:1235@example.com", false);
+  std::vector<std::string> exp_aliases;
+  exp_aliases.push_back("sip:12!.*!@example.com");
+  exp_aliases.push_back("sip:123@example.com");
+
+  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+}
+
+TEST_F(SproutXMLUtilsTest, MultipleServiceProfiles)
+{
+  std::string xml =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
+             "<Identity>sip:124@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:1235@example.com</Identity>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
              "<Identity>sip:1234@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+       "</IMSSubscription>";
+
+  AssociatedURIs exp_associated_uris;
+  exp_associated_uris.add_uri("sip:1235@example.com", false);
+  exp_associated_uris.add_uri("sip:124@example.com", false);
+  exp_associated_uris.add_uri("sip:123@example.com", false);
+  exp_associated_uris.add_uri("sip:1234@example.com", false);
+
+  std::vector<std::string> exp_aliases;
+  exp_aliases.push_back("sip:1234@example.com");
+  exp_aliases.push_back("sip:1235@example.com");
+
+  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+}
+
+TEST_F(SproutXMLUtilsTest, MultipleServiceProfilesWildcardMatch)
+{
+  std::string xml =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
+              "<Identity>sip:11!.*!@example.com</Identity>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
+             "<Identity>sip:124@example.com</Identity>"
              "<Extension>"
                "<IdentityType>"
                  "3"
@@ -238,7 +250,7 @@ TEST_F(SproutXMLUtilsTest, SimpleMainline)
                "<Extension>"
                  "<Extension>"
                    "<WildcardedIMPU>"
-                     "sip:12!.*!@example.com"
+                     "sip:11!.*!@example.com"
                    "</WildcardedIMPU>"
                  "</Extension>"
                "</Extension>"
@@ -263,38 +275,10 @@ TEST_F(SproutXMLUtilsTest, SimpleMainline)
          "</ServiceProfile>"
          "<ServiceProfile>"
            "<PublicIdentity>"
-              "<Identity>sip:223@example.com</Identity>"
-              "<BarringIndication>0</BarringIndication>"
+              "<Identity>sip:1235@example.com</Identity>"
            "</PublicIdentity>"
            "<PublicIdentity>"
-              "<Identity>sip:2234@example.com</Identity>"
-              "<BarringIndication>1</BarringIndication>"
-           "</PublicIdentity>"
-           "<InitialFilterCriteria>"
-             "<Priority>1</Priority>"
-             "<TriggerPoint>"
-               "<ConditionTypeCNF>0</ConditionTypeCNF>"
-               "<SPT>"
-                 "<ConditionNegated>0</ConditionNegated>"
-                 "<Group>0</Group>"
-                 "<Method>INVITE</Method>"
-                 "<Extension></Extension>"
-               "</SPT>"
-             "</TriggerPoint>"
-             "<ApplicationServer>"
-               "<ServerName>mmtel.narcissi.example.com</ServerName>"
-               "<DefaultHandling>0</DefaultHandling>"
-             "</ApplicationServer>"
-           "</InitialFilterCriteria>"
-         "</ServiceProfile>"
-         "<ServiceProfile>"
-           "<PublicIdentity>"
-              "<Identity>sip:12@example.com</Identity>"
-              "<BarringIndication>0</BarringIndication>"
-           "</PublicIdentity>"
-           "<PublicIdentity>"
-              "<Identity>sip:2234@example.com</Identity>"
-              "<BarringIndication>1</BarringIndication>"
+             "<Identity>sip:123!.*!@example.com</Identity>"
            "</PublicIdentity>"
            "<InitialFilterCriteria>"
              "<Priority>1</Priority>"
@@ -315,12 +299,182 @@ TEST_F(SproutXMLUtilsTest, SimpleMainline)
          "</ServiceProfile>"
        "</IMSSubscription>";
 
-  std::map<std::string, Ifcs> exp_ifcs_map;
   AssociatedURIs exp_associated_uris;
+  exp_associated_uris.add_uri("sip:11!.*!@example.com", false);
+  exp_associated_uris.add_uri("sip:123@example.com", false);
+  exp_associated_uris.add_uri("sip:123!.*!@example.com", false);
+  exp_associated_uris.add_uri("sip:1235@example.com", false);
 
   std::vector<std::string> exp_aliases;
-  exp_aliases.push_back("sip:2234@example.com");
-  exp_aliases.push_back("sip:12@example.com");
+  exp_aliases.push_back("sip:123!.*!@example.com");
+  exp_aliases.push_back("sip:1235@example.com");
 
-  check_expectations(xml, true, "sip:12@example.com", exp_ifcs_map, exp_associated_uris, exp_aliases);
+  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+}
+
+TEST_F(SproutXMLUtilsTest, BarringStatus)
+{
+  std::string xml =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:1234@example.com</Identity>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
+             "<Identity>sip:12!.*!@example.com</Identity>"
+             "<BarringIndication>1</BarringIndication>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:1235@example.com</Identity>"
+             "<BarringIndication>1</BarringIndication>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
+             "<Identity>sip:11!.*!@example.com</Identity>"
+             "<BarringIndication>0</BarringIndication>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+       "</IMSSubscription>";
+
+  AssociatedURIs exp_associated_uris;
+  exp_associated_uris.add_uri("sip:12!.*!@example.com", true);
+  exp_associated_uris.add_uri("sip:1234@example.com", false);
+  exp_associated_uris.add_uri("sip:11!.*!@example.com", false);
+  exp_associated_uris.add_uri("sip:1235@example.com", true);
+  std::vector<std::string> exp_aliases;
+  exp_aliases.push_back("sip:12!.*!@example.com");
+  exp_aliases.push_back("sip:1234@example.com");
+
+  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+}
+
+TEST_F(SproutXMLUtilsTest, NoMatch)
+{
+  std::string xml =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
+             "<Identity>sip:124@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+       "</IMSSubscription>";
+
+  AssociatedURIs exp_associated_uris = AssociatedURIs();
+  exp_associated_uris.add_uri("sip:123@example.com", false);
+  exp_associated_uris.add_uri("sip:124@example.com", false);
+  std::vector<std::string> exp_aliases;
+
+  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+}
+
+TEST_F(SproutXMLUtilsTest, WildcardMatchOverridden)
+{
+  std::string xml =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:1!.*!@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:1234@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+         "</ServiceProfile>"
+       "</IMSSubscription>";
+
+  AssociatedURIs exp_associated_uris;
+  exp_associated_uris.add_uri("sip:1!.*!@example.com", false);
+  exp_associated_uris.add_uri("sip:1234@example.com", false);
+  std::vector<std::string> exp_aliases;
+  exp_aliases.push_back("sip:1234@example.com");
+
+  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
 }

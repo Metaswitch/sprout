@@ -219,7 +219,7 @@ HTTPCode DeregistrationTask::deregister_bindings(
   }
 
   // Go through bindings to find those to remove from database and IMPIs to
-  // delete from store 
+  // delete from store
   for (BindingPair binding : bindings)
   {
     if (private_id.empty() || private_id == binding.second->_private_id)
@@ -367,10 +367,7 @@ void GetBindingsTask::run()
 
   send_http_reply(rc);
 
-  for (BindingPair b : bindings)
-  {
-    delete b.second; b.second = NULL;
-  }
+  SubscriberDataUtils::delete_bindings(bindings);
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
@@ -426,10 +423,7 @@ void GetSubscriptionsTask::run()
 
   send_http_reply(rc);
 
-  for (SubscriptionPair s : subscriptions)
-  {
-    delete s.second; s.second = NULL;
-  }
+  SubscriberDataUtils::delete_subscriptions(subscriptions);
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
