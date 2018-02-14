@@ -34,7 +34,9 @@ extern "C" {
 #include "registration_sender.h"
 #include "subscriber_data_utils.h"
 
-// SDM-REFACTOR-TODO: Add Doxygen return parameters.
+// SDM-REFACTOR-TODO:
+//  - Add Doxygen return parameters.
+//  - Add overall comment.
 class SubscriberManager : public S4::TimerPopConsumer,
                           public RegistrationSender::DeregistrationEventConsumer
 {
@@ -243,38 +245,46 @@ private:
   NotifySender* _notify_sender;
   RegistrationSender* _registration_sender;
 
+  /// Internal functions that methods on the interface call.
+  HTTPCode register_subscriber_internal(const std::string& aor_id,
+                                        const std::string& server_name,
+                                        const AssociatedURIs& associated_uris,
+                                        const Bindings& add_bindings,
+                                        Bindings& all_bindings,
+                                        HSSConnection::irs_info& irs_info,
+                                        bool retry,
+                                        SAS::TrailId trail);
+  HTTPCode reregister_subscriber_internal(const std::string& aor_id,
+                                          const std::string& server_name,
+                                          const AssociatedURIs& associated_uris,
+                                          const Bindings& updated_bindings,
+                                          const std::vector<std::string>& binding_ids_to_remove,
+                                          Bindings& all_bindings,
+                                          HSSConnection::irs_info& irs_info,
+                                          bool retry,
+                                          SAS::TrailId trail);
   HTTPCode modify_subscription(const std::string& public_id,
-                               const SubscriptionPair& update_subscription,
+                               const Subscriptions& update_subscriptions,
                                const std::string& remove_subscription,
                                HSSConnection::irs_info& irs_info,
                                SAS::TrailId trail);
+  void handle_timer_pop_internal(const std::string& aor_id,
+                                 SAS::TrailId trail);
 
+  /// Helper function to get the default public ID from the HSS.
   HTTPCode get_cached_default_id(const std::string& public_id,
                                  std::string& aor_id,
                                  HSSConnection::irs_info& irs_info,
                                  SAS::TrailId trail);
 
-  HTTPCode send_put(const std::string& aor_id,
-                    const Bindings& update_bindings,
-                    const AssociatedURIs& associated_uris,
-                    const std::string& scscf_uri,
-                    AoR*& aor,
-                    SAS::TrailId trail);
-
-  HTTPCode send_patch(const std::string& aor_id,
-                      const Bindings& update_bindings,
-                      const std::vector<std::string>& remove_bindings,
-                      const SubscriptionPair& update_subscription,
-                      const std::vector<std::string>& remove_subscriptions,
-                      const AssociatedURIs& associated_uris,
-                      AoR*& aor,
-                      SAS::TrailId trail);
-
+  /// Helper function to determine if there are any subscriptions to remove
+  /// based on changes to bindings.
   std::vector<std::string> subscriptions_to_remove(const Bindings& orig_bindings,
                                                    const Subscriptions& orig_subscriptions,
                                                    const Bindings& bindings_to_update,
                                                    const std::vector<std::string> binding_ids_to_remove);
 
+  /// Sends NOTIFYs by looking at the original and updated AoRs.
   void send_notifys(const std::string& aor_id,
                     AoR* orig_aor,
                     AoR* updated_aor,
@@ -282,28 +292,47 @@ private:
                     int now,
                     SAS::TrailId trail);
 
-  void log_removed_bindings(const AoR* orig_aor,
-                            const std::vector<std::string>& binding_ids);
-
-  void log_updated_bindings(const AoR* updated_aor,
-                            const Bindings& binding_pairs,
-                            int now);
-
-  void log_subscriptions(std::string default_impu,
-                         const AoR* orig_aor,
-                         const AoR* updated_aor,
-                         const std::vector<std::string>& subscription_ids,
-                         int now);
-
+  /// Helper function to deregister a subscriber with the HSS.
   HTTPCode deregister_with_hss(const std::string& aor_id,
                                const std::string& dereg_reason,
                                const std::string& server_name,
                                HSSConnection::irs_info& irs_info,
                                SAS::TrailId trail);
 
-  void handle_timer_pop_internal(const std::string& aor_id,
-                                 SAS::TrailId trail);
+  // Helper functions to write audit logs.
+  void log_removed_bindings(const AoR* orig_aor,
+                            const std::vector<std::string>& binding_ids);
+  void log_updated_bindings(const AoR* updated_aor,
+                            const Bindings& binding_pairs,
+                            int now);
+  void log_subscriptions(std::string default_impu,
+                         const AoR* orig_aor,
+                         const AoR* updated_aor,
+                         const std::vector<std::string>& subscription_ids,
+                         int now);
 
+  /// Methods to build patch objects.
+  void build_patch(PatchObject& po,
+                   const Bindings& update_bindings,
+                   const std::vector<std::string>& remove_bindings,
+                   const std::vector<std::string>& remove_subscriptions,
+                   const AssociatedURIs& associated_uris);
+  void build_patch(PatchObject& po,
+                   const Bindings& update_bindings,
+                   const AssociatedURIs& associated_uris);
+  void build_patch(PatchObject& po,
+                   const Subscriptions& update_subscriptions,
+                   const std::vector<std::string>& remove_subscriptions,
+                   const AssociatedURIs& associated_uris);
+  void build_patch(PatchObject& po,
+                   const std::vector<std::string>& remove_bindings,
+                   const std::vector<std::string>& remove_subscriptions,
+                   const AssociatedURIs& associated_uris);
+  void build_patch(PatchObject& po,
+                   const std::vector<std::string>& remove_bindings,
+                   const std::vector<std::string>& remove_subscriptions);
+  void build_patch(PatchObject& po,
+                   const AssociatedURIs& associated_uris);
 };
 
 #endif
