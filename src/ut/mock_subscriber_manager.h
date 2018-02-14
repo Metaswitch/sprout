@@ -21,14 +21,16 @@ public:
   MockSubscriberManager();
   virtual ~MockSubscriberManager();
 
-  MOCK_METHOD6(register_subscriber, HTTPCode(const std::string& aor_id,
+  MOCK_METHOD7(register_subscriber, HTTPCode(const std::string& aor_id,
                                              const std::string& server_name,
                                              const AssociatedURIs& associated_uris,
                                              const Bindings& add_bindings,
                                              Bindings& all_bindings,
+                                             HSSConnection::irs_info& irs_info,
                                              SAS::TrailId trail));
 
-  MOCK_METHOD7(reregister_subscriber, HTTPCode(const std::string& aor_id,
+  MOCK_METHOD8(reregister_subscriber, HTTPCode(const std::string& aor_id,
+                                               const std::string& server_name,
                                                const AssociatedURIs& associated_uris,
                                                const Bindings& updated_bindings,
                                                const std::vector<std::string>& binding_ids_to_remove,

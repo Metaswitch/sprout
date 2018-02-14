@@ -421,12 +421,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                               irs_info._associated_uris,
                                               update_bindings,
                                               all_bindings,
+                                              irs_info,
                                               trail());
   }
   else
   {
     TRC_DEBUG("Processing a register for %s", default_impu.c_str());
     rc = _registrar->_sm->reregister_subscriber(default_impu,
+                                                _scscf_uri,
                                                 irs_info._associated_uris,
                                                 update_bindings,
                                                 binding_ids_to_remove,

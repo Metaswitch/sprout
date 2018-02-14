@@ -39,12 +39,12 @@ SubscriberManager::~SubscriberManager()
 {
 }
 
-
 HTTPCode SubscriberManager::register_subscriber(const std::string& aor_id,
                                                 const std::string& server_name,
                                                 const AssociatedURIs& associated_uris,
                                                 const Bindings& add_bindings,
                                                 Bindings& all_bindings,
+                                                HSSConnection::irs_info& irs_info,
                                                 SAS::TrailId trail)
 {
   TRC_DEBUG("Registering AoR %s for the first time", aor_id.c_str());
@@ -60,15 +60,29 @@ HTTPCode SubscriberManager::register_subscriber(const std::string& aor_id,
   // any data to S4.
   if (!add_bindings.empty())
   {
-    HTTPCode rc = put_bindings(aor_id,
-                               add_bindings,
-                               associated_uris,
-                               server_name,
-                               updated_aor,
-                               trail);
+    HTTPCode rc = send_put(aor_id,
+                           add_bindings,
+                           associated_uris,
+                           server_name,
+                           updated_aor,
+                           trail);
 
     // The PUT failed, so return.
-    if (rc != HTTP_OK)
+    if (rc == HTTP_PRECONDITION_FAILED)
+    {
+      // TODO Make sure we don't loop
+      TRC_DEBUG("Registering AoR %s failed with 412 PRECONDITION FAILED - retry with reregister",
+                aor_id.c_str());
+      return reregister_subscriber(aor_id,
+                                   server_name,
+                                   associated_uris,
+                                   add_bindings,
+                                   {},
+                                   all_bindings,
+                                   irs_info,
+                                   trail);
+    }
+    else if (rc != HTTP_OK)
     {
       TRC_DEBUG("Registering AoR %s failed with return code %d",
                 aor_id.c_str(),
@@ -78,6 +92,8 @@ HTTPCode SubscriberManager::register_subscriber(const std::string& aor_id,
       delete updated_aor; updated_aor = NULL;
       return rc;
     }
+
+    log_updated_bindings(updated_aor, add_bindings, now);
 
     // Get all bindings to return to the caller
     all_bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
@@ -100,8 +116,6 @@ HTTPCode SubscriberManager::register_subscriber(const std::string& aor_id,
     // incorrectly.
     if (all_bindings.empty())
     {
-      // TODO should IRS info be returned to client??
-      HSSConnection::irs_info irs_info;
       HTTPCode rc = deregister_with_hss(aor_id,
                                         HSSConnection::DEREG_USER,
                                         server_name,
@@ -125,6 +139,7 @@ HTTPCode SubscriberManager::register_subscriber(const std::string& aor_id,
 }
 
 HTTPCode SubscriberManager::reregister_subscriber(const std::string& aor_id,
+                                                  const std::string& server_name,
                                                   const AssociatedURIs& associated_uris,
                                                   const Bindings& updated_bindings,
                                                   const std::vector<std::string>& binding_ids_to_remove,
@@ -146,8 +161,20 @@ HTTPCode SubscriberManager::reregister_subscriber(const std::string& aor_id,
 
   // We are reregistering a subscriber, so there must be an existing AoR in the
   // store.
-  // TODO retry with PUT if GET or PATCH returns 404 Not Found
-  if (rc != HTTP_OK)
+  AoR* updated_aor = NULL;
+  if (rc == HTTP_NOT_FOUND)
+  {
+    TRC_DEBUG("Reregistering AoR %s failed with 404 NOT FOUND - retry with register",
+              aor_id.c_str());
+    return register_subscriber(aor_id,
+                               server_name,
+                               associated_uris,
+                               updated_bindings,
+                               all_bindings,
+                               irs_info,
+                               trail);
+  }
+  else if (rc != HTTP_OK)
   {
     TRC_DEBUG("Reregistering AoR %s failed during GET with return code %d",
               aor_id.c_str(),
@@ -168,17 +195,30 @@ HTTPCode SubscriberManager::reregister_subscriber(const std::string& aor_id,
                        binding_ids_to_remove);
 
   // PATCH the existing AoR.
-  AoR* updated_aor = NULL;
-  rc = patch_bindings(aor_id,
-                      updated_bindings,
-                      binding_ids_to_remove,
-                      subscription_ids_to_remove,
-                      associated_uris,
-                      updated_aor,
-                      trail);
+  rc = send_patch(aor_id,
+                  updated_bindings,
+                  binding_ids_to_remove,
+                  SubscriptionPair(),
+                  subscription_ids_to_remove,
+                  associated_uris,
+                  updated_aor,
+                  trail);
 
   // The PATCH failed, so return.
-  if (rc != HTTP_OK)
+  if (rc == HTTP_NOT_FOUND)
+  {
+    TRC_DEBUG("Reregistering AoR %s failed with 404 NOT FOUND - retry with register",
+              aor_id.c_str());
+    delete orig_aor; orig_aor = NULL;
+    return register_subscriber(aor_id,
+                               server_name,
+                               associated_uris,
+                               updated_bindings,
+                               all_bindings,
+                               irs_info,
+                               trail);
+  }
+  else if (rc != HTTP_OK)
   {
     TRC_DEBUG("Reregistering AoR %s failed during PATCH with return code %d",
               aor_id.c_str(),
@@ -188,11 +228,17 @@ HTTPCode SubscriberManager::reregister_subscriber(const std::string& aor_id,
     return rc;
   }
 
+  log_updated_bindings(updated_aor, updated_bindings, now);
+
+  log_subscriptions(aor_id,
+                    orig_aor,
+                    updated_aor,
+                    subscription_ids_to_remove,
+                    now);
+
   // Get all bindings to return to the caller
   all_bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
                                                 now);
-
-  log_updated_bindings(updated_aor, updated_bindings, now);
 
   send_notifys(aor_id,
                orig_aor,
@@ -287,13 +333,14 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
                                                      binding_ids);
 
   AoR* updated_aor = NULL;
-  rc = patch_bindings(aor_id,
-                      Bindings(),
-                      binding_ids,
-                      subscription_ids_to_remove,
-                      irs_info._associated_uris,
-                      updated_aor,
-                      trail);
+  rc = send_patch(aor_id,
+                  Bindings(),
+                  binding_ids,
+                  SubscriptionPair(),
+                  subscription_ids_to_remove,
+                  irs_info._associated_uris,
+                  updated_aor,
+                  trail);
   if (rc != HTTP_OK)
   {
     TRC_DEBUG("Removing bindings for AoR %s failed during PATCH with return code %s",
@@ -303,6 +350,12 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
     delete updated_aor; updated_aor = NULL;
     return rc;
   }
+
+  log_subscriptions(aor_id,
+                    orig_aor,
+                    updated_aor,
+                    subscription_ids_to_remove,
+                    now);
 
   // Get all bindings to return to the caller
   bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
@@ -398,7 +451,8 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
     return rc;
   }
 
-  // Get the original AoR from S4.
+  // DELETEs to S4 are CAS'd so we loop for as long as we get back
+  // HTTP_PRECONDITION_FAILED.
   AoR* orig_aor = NULL;
   do
   {
@@ -423,8 +477,8 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
       return rc;
     }
 
+    // Save off the bindings IDs we are about to remove for logging purposes.
     std::vector<std::string> binding_ids;
-
     for (BindingPair binding : orig_aor->bindings())
     {
       binding_ids.push_back(binding.first);
@@ -582,10 +636,14 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
   }
 
   AoR* updated_aor = NULL;
-  rc = patch_associated_uris(aor_id,
-                             associated_uris,
-                             updated_aor,
-                             trail);
+  rc = send_patch(aor_id,
+                  Bindings(),
+                  {},
+                  SubscriptionPair(),
+                  {},
+                  associated_uris,
+                  updated_aor,
+                  trail);
 
   if (rc != HTTP_OK)
   {
@@ -603,8 +661,6 @@ HTTPCode SubscriberManager::update_associated_uris(const std::string& aor_id,
                SubscriberDataUtils::EventTrigger::ADMIN,
                time(NULL),
                trail);
-
-  // Send 3rd party REGISTERs?
 
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
@@ -665,16 +721,20 @@ void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
   log_removed_bindings(orig_aor,
                        binding_ids_to_remove);
 
-  // Send a PATCH to remove any expired bindings and subscriptions.
+  // Send a PATCH to remove any expired bindings and subscriptions. We only do
+  // this if there any bindings or subscriptions to remove.
   AoR* updated_aor = NULL;
   if ((!binding_ids_to_remove.empty()) ||
       (!subscription_ids_to_remove.empty()))
   {
-    rc = patch_bindings_and_subscriptions(aor_id,
-                                          binding_ids_to_remove,
-                                          subscription_ids_to_remove,
-                                          updated_aor,
-                                          trail);
+    rc = send_patch(aor_id,
+                    Bindings(),
+                    binding_ids_to_remove,
+                    SubscriptionPair(),
+                    subscription_ids_to_remove,
+                    {}, // TODO deal with associated URIs being updated.
+                    updated_aor,
+                    trail);
 
     if (rc != HTTP_OK)
     {
@@ -692,6 +752,12 @@ void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
     delete orig_aor; orig_aor = NULL;
     return;
   }
+
+  log_subscriptions(aor_id,
+                    orig_aor,
+                    updated_aor,
+                    subscription_ids_to_remove,
+                    now);
 
   send_notifys(aor_id,
                orig_aor,
@@ -797,11 +863,14 @@ HTTPCode SubscriberManager::modify_subscription(
   }
 
   AoR* updated_aor = NULL;
-  rc = patch_subscription(aor_id,
-                          update_subscription,
-                          remove_subscription,
-                          updated_aor,
-                          trail);
+  rc = send_patch(aor_id,
+                  Bindings(),
+                  {},
+                  update_subscription,
+                  {remove_subscription},
+                  {}, // TODO deal with removing associated URIs.
+                  updated_aor,
+                  trail);
   if (rc != HTTP_OK)
   {
     TRC_DEBUG("Modifying subscription for AoR %s failed during S4 update with "
@@ -821,7 +890,7 @@ HTTPCode SubscriberManager::modify_subscription(
     log_subscriptions(aor_id,
                       orig_aor,
                       updated_aor,
-                      subscription_id,
+                      {subscription_id},
                       now);
 
     // Finally, send any NOTIFYs.
@@ -866,18 +935,17 @@ HTTPCode SubscriberManager::get_cached_default_id(const std::string& public_id,
   return rc;
 }
 
-HTTPCode SubscriberManager::put_bindings(const std::string& aor_id,
-                                         const Bindings& update_bindings,
-                                         const AssociatedURIs& associated_uris,
-                                         const std::string& scscf_uri,
-                                         AoR*& aor,
-                                         SAS::TrailId trail)
+HTTPCode SubscriberManager::send_put(const std::string& aor_id,
+                                     const Bindings& update_bindings,
+                                     const AssociatedURIs& associated_uris,
+                                     const std::string& scscf_uri,
+                                     AoR*& aor,
+                                     SAS::TrailId trail)
 {
   // Create a patch object and apply it to an AoR, then PUT the AoR to S4.
   PatchObject patch_object;
   patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
   patch_object.set_associated_uris(associated_uris);
-  patch_object.set_minimum_cseq(1); // TODO is this right??
 
   aor = new AoR(aor_id);
   aor->patch_aor(patch_object);
@@ -887,103 +955,34 @@ HTTPCode SubscriberManager::put_bindings(const std::string& aor_id,
                                 *aor,
                                 trail);
 
-  // If the PUT returned 412 Precondition Failed, something must have added data
-  // for this AoR since we decided to send a PUT. Retry with a PATCH.
-  if (rc == HTTP_PRECONDITION_FAILED)
+  // If the PUT fails, delete the AoR we created.
+  if (rc != HTTP_OK)
   {
-    TRC_DEBUG("PUT for AoR %s failed with 412 Precondition Failed - retry with PATCH",
-              aor_id.c_str());
-
-    // Delete the AoR we created. S4 will retun an AoR once the patch is applied.
     delete aor; aor = NULL;
-    rc = _s4->handle_patch(aor_id,
-                           patch_object,
-                           &aor,
-                           trail);
-  }
-
-  if (rc == HTTP_OK)
-  {
-    log_updated_bindings(aor, update_bindings, time(NULL));
   }
 
   return rc;
 }
 
-HTTPCode SubscriberManager::patch_bindings(const std::string& aor_id,
-                                           const Bindings& update_bindings,
-                                           const std::vector<std::string>& remove_bindings,
-                                           const std::vector<std::string>& remove_subscriptions,
-                                           const AssociatedURIs& associated_uris,
-                                           AoR*& aor,
-                                           SAS::TrailId trail)
+HTTPCode SubscriberManager::send_patch(const std::string& aor_id,
+                                       const Bindings& update_bindings,
+                                       const std::vector<std::string>& remove_bindings,
+                                       const SubscriptionPair& update_subscription,
+                                       const std::vector<std::string>& remove_subscriptions,
+                                       const AssociatedURIs& associated_uris,
+                                       AoR*& aor,
+                                       SAS::TrailId trail)
 {
   PatchObject patch_object;
   patch_object.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
   patch_object.set_remove_bindings(remove_bindings);
-  patch_object.set_remove_subscriptions(remove_subscriptions);
-  patch_object.set_associated_uris(associated_uris);
-  patch_object.set_increment_cseq(true);
-  HTTPCode rc = _s4->handle_patch(aor_id,
-                                  patch_object,
-                                  &aor,
-                                  trail);
-
-  return rc;
-}
-
-HTTPCode SubscriberManager::patch_subscription(const std::string& aor_id,
-                                               const SubscriptionPair& update_subscription,
-                                               const std::string& remove_subscription,
-                                               AoR*& aor,
-                                               SAS::TrailId trail)
-{
-  PatchObject patch_object;
-
   if (update_subscription.second != NULL)
   {
     Subscriptions subscriptions;
     subscriptions.insert(update_subscription);
     patch_object.set_update_subscriptions(AoRUtils::copy_subscriptions(subscriptions));
   }
-  else
-  {
-    patch_object.set_remove_subscriptions({remove_subscription});
-  }
-
-  patch_object.set_increment_cseq(true);
-
-  HTTPCode rc = _s4->handle_patch(aor_id,
-                                  patch_object,
-                                  &aor,
-                                  trail);
-
-  return rc;
-}
-
-HTTPCode SubscriberManager::patch_bindings_and_subscriptions(const std::string& aor_id,
-                                                             const std::vector<std::string>& remove_bindings,
-                                                             const std::vector<std::string>& remove_subscriptions,
-                                                             AoR*& aor,
-                                                             SAS::TrailId trail)
-{
-  PatchObject patch_object;
-  patch_object.set_remove_bindings(remove_bindings);
   patch_object.set_remove_subscriptions(remove_subscriptions);
-  patch_object.set_increment_cseq(true);
-  HTTPCode rc = _s4->handle_patch(aor_id,
-                                  patch_object,
-                                  &aor,
-                                  trail);
-  return rc;
-}
-
-HTTPCode SubscriberManager::patch_associated_uris(const std::string& aor_id,
-                                                  const AssociatedURIs& associated_uris,
-                                                  AoR*& aor,
-                                                  SAS::TrailId trail)
-{
-  PatchObject patch_object;
   patch_object.set_associated_uris(associated_uris);
   patch_object.set_increment_cseq(true);
   HTTPCode rc = _s4->handle_patch(aor_id,
@@ -1121,34 +1120,37 @@ void SubscriberManager::log_updated_bindings(const AoR* updated_aor,
 void SubscriberManager::log_subscriptions(std::string default_impu,
                                           const AoR* orig_aor,
                                           const AoR* updated_aor,
-                                          std::string subscription_id,
+                                          const std::vector<std::string>& subscription_ids,
                                           int now)
 {
   if (_analytics != NULL)
   {
-    Subscriptions::const_iterator subscription =
-                              updated_aor->_subscriptions.find(subscription_id);
-
-    // We need to find the subscription in the AoR in order to pull out
-    // sufficient information to make a log about the changes.
-    if (subscription != updated_aor->_subscriptions.end())
-    {
-      _analytics->subscription(default_impu,
-                               (*subscription).second->_to_tag,
-                               (*subscription).second->_req_uri,
-                               (*subscription).second->_expires - now);
-    }
-    else
+    for (std::string subscription_id : subscription_ids)
     {
       Subscriptions::const_iterator subscription =
-                                 orig_aor->_subscriptions.find(subscription_id);
+                                updated_aor->_subscriptions.find(subscription_id);
 
-      if (subscription != orig_aor->_subscriptions.end())
+      // We need to find the subscription in the AoR in order to pull out
+      // sufficient information to make a log about the changes.
+      if (subscription != updated_aor->_subscriptions.end())
       {
         _analytics->subscription(default_impu,
                                  (*subscription).second->_to_tag,
                                  (*subscription).second->_req_uri,
-                                 0);
+                                 (*subscription).second->_expires - now);
+      }
+      else
+      {
+        Subscriptions::const_iterator subscription =
+                                   orig_aor->_subscriptions.find(subscription_id);
+
+        if (subscription != orig_aor->_subscriptions.end())
+        {
+          _analytics->subscription(default_impu,
+                                   (*subscription).second->_to_tag,
+                                   (*subscription).second->_req_uri,
+                                   0);
+        }
       }
     }
   }

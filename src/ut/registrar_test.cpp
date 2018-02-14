@@ -176,7 +176,7 @@ ACTION_P(SaveBindingsRegister, bindings)
 
 ACTION_P(SaveBindingsReRegister, bindings)
 {
-  *bindings = AoRUtils::copy_bindings(arg2);
+  *bindings = AoRUtils::copy_bindings(arg3);
 }
 
 /// Fixture for RegistrarTest.
@@ -384,7 +384,7 @@ TEST_F(RegistrarTest, RegisterSubscriber)
                     Return(HTTP_OK)));
   EXPECT_CALL(*_sm, get_bindings("sip:6505550231@homedomain", _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
-  EXPECT_CALL(*_sm, register_subscriber("sip:6505550231@homedomain", "sip:scscf.sprout.homedomain:5058;transport=TCP", irs_info._associated_uris, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber("sip:6505550231@homedomain", "sip:scscf.sprout.homedomain:5058;transport=TCP", irs_info._associated_uris, _, _, _, _))
     .WillOnce(DoAll(SaveBindingsRegister(&bindings),
                     SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
@@ -449,7 +449,7 @@ TEST_F(RegistrarTest, AddBindingNoPrivateID)
                     SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
     .WillOnce(DoAll(SaveBindingsRegister(&bindings),
                     SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
@@ -491,10 +491,10 @@ TEST_F(RegistrarTest, ReRegisterSubscriber)
 
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_get_single_binding();
-  EXPECT_CALL(*_sm, reregister_subscriber("sip:6505550231@homedomain", irs_info._associated_uris, _, std::vector<std::string>(), _, _, _))
+  EXPECT_CALL(*_sm, reregister_subscriber("sip:6505550231@homedomain", "sip:scscf.sprout.homedomain:5058;transport=TCP", irs_info._associated_uris, _, std::vector<std::string>(), _, _, _))
     .WillOnce(DoAll(SaveBindingsReRegister(&bindings),
-                    SetArgReferee<5>(irs_info),
-                    SetArgReferee<4>(all_bindings),
+                    SetArgReferee<6>(irs_info),
+                    SetArgReferee<5>(all_bindings),
                     Return(HTTP_OK)));
   EXPECT_CALL(*_sm, register_with_application_servers(_, _, _, _, _, false, _));
 
@@ -534,9 +534,9 @@ TEST_F(RegistrarTest, FetchBindingsRegisterExistingSubscriber)
 
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_get_single_binding();
-  EXPECT_CALL(*_sm, reregister_subscriber(_, _, Bindings(), std::vector<std::string>(), _, _, _))
-    .WillOnce(DoAll(SetArgReferee<5>(irs_info),
-                    SetArgReferee<4>(all_bindings),
+  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, Bindings(), std::vector<std::string>(), _, _, _))
+    .WillOnce(DoAll(SetArgReferee<6>(irs_info),
+                    SetArgReferee<5>(all_bindings),
                     Return(HTTP_OK)));
 
   inject_msg(msg.get());
@@ -565,7 +565,7 @@ TEST_F(RegistrarTest, FetchBindingsUnregisteredSubscriber)
 
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, Bindings(), _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, Bindings(), _, _, _))
     .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
 
@@ -597,10 +597,10 @@ TEST_F(RegistrarTest, DeregisterSubscriber)
   std::vector<std::string> removed_bindings;
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_get_single_binding();
-  EXPECT_CALL(*_sm, reregister_subscriber(_, _, Bindings(), _, _, _, _))
-    .WillOnce(DoAll(SaveArg<3>(&removed_bindings),
-                    SetArgReferee<5>(irs_info),
-                    SetArgReferee<4>(all_bindings),
+  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, Bindings(), _, _, _, _))
+    .WillOnce(DoAll(SaveArg<4>(&removed_bindings),
+                    SetArgReferee<6>(irs_info),
+                    SetArgReferee<5>(all_bindings),
                     Return(HTTP_OK)));
   EXPECT_CALL(*_sm, register_with_application_servers(_, _, _, _, 0, false, _));
 
@@ -632,10 +632,10 @@ TEST_F(RegistrarTest, DeregisterSubscriberWithWildcard)
   std::vector<std::string> removed_bindings;
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_get_single_binding();
-  EXPECT_CALL(*_sm, reregister_subscriber(_, _, Bindings(), _, _, _, _))
-    .WillOnce(DoAll(SaveArg<3>(&removed_bindings),
-                    SetArgReferee<5>(irs_info),
-                    SetArgReferee<4>(all_bindings),
+  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, Bindings(), _, _, _, _))
+    .WillOnce(DoAll(SaveArg<4>(&removed_bindings),
+                    SetArgReferee<6>(irs_info),
+                    SetArgReferee<5>(all_bindings),
                     Return(HTTP_OK)));
   expectations_for_registration_sender();
 
@@ -699,7 +699,7 @@ TEST_F(RegistrarTest, RegisterFail)
   std::vector<std::string> removed_bindings;
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
   expectations_for_registration_sender();
 
@@ -719,7 +719,7 @@ TEST_F(RegistrarTest, ReRegisterFail)
   HSSConnection::irs_info irs_info;
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_get_single_binding();
-  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, _, _, _, _))
+  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, _, _, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
   expectations_for_registration_sender();
 
@@ -741,7 +741,7 @@ TEST_F(RegistrarTest, DeregisterFail)
   HSSConnection::irs_info irs_info;
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_get_single_binding();
-  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, _, _, _, _))
+  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, _, _, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
   expectations_for_registration_sender();
 
@@ -839,7 +839,7 @@ TEST_F(RegistrarTest, EmergencyRegistration)
   std::vector<std::string> removed_bindings;
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
     .WillOnce(DoAll(SaveBindingsRegister(&bindings),
                     SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
@@ -881,7 +881,7 @@ TEST_F(RegistrarTest, EmergencyRegistrationAllIMPUsBarred)
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
     .WillOnce(DoAll(SaveBindingsRegister(&bindings),
                     SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
@@ -935,10 +935,10 @@ TEST_F(RegistrarTest, ReduceTimeForEmergencyBinding)
   EXPECT_CALL(*_sm, get_bindings(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(get_bindings),
                     Return(HTTP_OK)));
-  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, _, _, _, _))
+  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, _, _, _, _, _))
     .WillOnce(DoAll(SaveBindingsReRegister(&bindings),
-                    SetArgReferee<5>(irs_info),
-                    SetArgReferee<4>(all_bindings),
+                    SetArgReferee<6>(irs_info),
+                    SetArgReferee<5>(all_bindings),
                     Return(HTTP_OK)));
 
   inject_msg(msg.get());
@@ -984,7 +984,7 @@ TEST_F(RegistrarTest, ComplexAssociatedURIs)
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
   expectations_for_registration_sender();
@@ -1052,7 +1052,7 @@ TEST_F(RegistrarTest, BadGRUU)
 
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
   expectations_for_registration_sender();
@@ -1082,7 +1082,7 @@ TEST_F(RegistrarTest, GRUUNotSupported)
   std::vector<std::string> removed_bindings;
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
   expectations_for_registration_sender();
@@ -1111,7 +1111,7 @@ TEST_F(RegistrarTest, NoPath)
   set_up_single_returned_binding(all_bindings, msg._cid);
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
   expectations_for_registration_sender();
