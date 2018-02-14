@@ -381,12 +381,8 @@ private:
   /// @param[in]  public_id  - The public ID whose associated URIs are being
   ///                          looked up.
   /// @param[out] uris       - The associated uris for the public ID passed in.
-  /// @param[in]  sm         - The subscriber manager instance that handles
-  ///                          looking up the subscriber info from homestead.
-  /// @param[in]  trail      - The SAS trail ID.
   bool get_associated_uris(std::string public_id,
-                           std::vector<std::string>& uris,
-                           SAS::TrailId trail);
+                           std::vector<std::string>& uris);
 
   /// Look up the aliases for the given public ID, using the cache if
   /// possible (and caching the subscriber data otherwise).
@@ -398,12 +394,8 @@ private:
   ///                          false otherwise.
   /// @param[in]  public_id  - The public ID whose aliases are being looked up.
   /// @param[out] uris       - The associated uris for the public ID passed in.
-  /// @param[in]  sm         - The subscriber manager instance that handles
-  ///                          looking up the subscriber info from homestead.
-  /// @param[in]  trail      - The SAS trail ID.
   bool get_aliases(std::string public_id,
-                   std::vector<std::string>& aliases,
-                   SAS::TrailId trail);
+                   std::vector<std::string>& aliases);
 
   /// Look up the iFCs for the given public ID, using the cache if possible
   /// (and caching the subscriber data otherwise).
@@ -417,12 +409,8 @@ private:
   ///                          through the subscriber manager).
   /// @param[in]  public_id  - The public ID whose iFCs are being looked up.
   /// @param[out] ifcs       - The iFCs for the public ID passed in.
-  /// @param[in]  sm         - The subscriber manager instance that handles
-  ///                          looking up subscriber info from homestead.
-  /// @param[in]  trail      - The SAS trail ID.
   HTTPCode lookup_ifcs(std::string public_id,
-                       Ifcs& ifcs,
-                       SAS::TrailId trail);
+                       Ifcs& ifcs);
 
   /// Gets the subscriber's data (associated URIs, iFCs...) from the cache if
   /// possible, or from the subscriber manager (which talk to homestead, which
@@ -431,11 +419,7 @@ private:
   /// @return           - The HTTP result code from the subscriber manager.
   /// @param public_id  - The public ID of the subscriber whose info is being
   ///                     looked up.
-  /// @param sm         - The subscriber manager instance that handles looking
-  ///                     up subscriber info from homestead.
-  /// @param trail      - The SAS trail ID.
-  HTTPCode get_data_from_hss(std::string public_id,
-                             SAS::TrailId trail);
+  HTTPCode get_data_from_hss(std::string public_id);
 
   /// Asks the subscriber manager to fetch the subscriber's data (associated
   /// URIs, iFCs...) from homestead (which talks to the HSS).
@@ -445,12 +429,8 @@ private:
   ///                     looked up.
   /// @param irs_query  - IRS query containing details about the subscriber, to
   ///                     allow them to be found.
-  /// @param sm         - The subscriber manager instance that handles looking
-  ///                     up subscriber info from homestead.
-  /// @param trail      - The SAS trail ID.
   HTTPCode read_hss_data(std::string public_id,
-                         const HSSConnection::irs_query& irs_query,
-                         SAS::TrailId trail);
+                         const HSSConnection::irs_query& irs_query);
 
   /// Add the S-CSCF sproutlet into a dialog.
   /// The third parameter passed may be attached to the Record-Route and can be
