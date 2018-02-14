@@ -64,6 +64,8 @@ const pj_str_t STR_JSON = pj_str((char*)"json");
 const pj_str_t STR_SDP = pj_str((char*)"sdp");
 const pj_str_t STR_TEXT = pj_str((char*)"text");
 const pj_str_t STR_XML = pj_str((char*)"xml");
+const pj_str_t STR_MESSAGE = pj_str((char*)"message");
+const pj_str_t STR_SIP = pj_str((char*)"sip");
 const pj_str_t STR_EVENT = pj_str((char*)"Event");
 const pj_str_t STR_EVENT_LOWER = pj_str((char*)"event");
 const pj_str_t STR_EVENTS = pj_str((char*)"events");
@@ -176,6 +178,7 @@ const pj_str_t STR_XMLNS_XSI_NAME = pj_str((char*)"xmlns:xsi");
 const pj_str_t STR_XMLNS_XSI_VAL = pj_str((char*)"http://www.w3.org/2001/XMLSchema-instance");
 const pj_str_t STR_XMLNS_ERE_NAME  = pj_str((char*)"xmlns:ere");
 const pj_str_t STR_XMLNS_ERE_VAL = pj_str((char*)"urn:3gpp:ns:extRegExp:1.0");
+const pj_str_t STR_3GPP_IMS_XML = pj_str((char*)"3gpp-ims+xml");
 
 // XML schema location
 const pj_str_t STR_XSI_SLOC_NAME = pj_str((char*)"xsi:schemaLocation");

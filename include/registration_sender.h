@@ -22,7 +22,7 @@
 ///
 /// This class is responsible for sending 3rd party (de)registrations to
 /// application servers and running callbacks based on the success or failure
-/// of this registrations.
+/// of these registrations.
 class RegistrationSender
 {
 public:
@@ -35,13 +35,11 @@ public:
   public:
     /// Called to notify the consumer that a subscriber must be de-registered.
     ///
-    /// @todo SS5 to fill in the return value.
-    ///
     /// @param [in] public_id     - The public identity to deregister. This is
     ///                             not necessarily a primary IMPU.
     /// @param [in] trail         - SAS trail ID to use for logging.
     ///
-    /// @return
+    /// @return  The return code of the deregister operation.
     virtual HTTPCode deregister_subscriber(const std::string& public_id,
                                            SAS::TrailId trail) = 0;
 

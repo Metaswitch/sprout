@@ -14,13 +14,10 @@
 
 #include "httpstack.h"
 #include "httpstack_utils.h"
-#include "chronosconnection.h"
 #include "hssconnection.h"
 #include "subscriber_manager.h"
 #include "sipresolver.h"
 #include "impistore.h"
-#include "fifcservice.h"
-#include "aor.h"
 
 /// Base AuthTimeoutTask class for tasks that implement authentication timeout
 /// callbacks from specific timer services.
@@ -51,9 +48,8 @@ protected:
   const Config* _cfg;
 };
 
-/**
- * @brief Task to deregister bindings in AoR in response to RTR request
- */
+
+/// Task to deregister bindings in AoR in response to RTR request
 class DeregistrationTask : public HttpStackUtils::Task
 {
 public:
@@ -83,51 +79,43 @@ public:
 
   void run();
 
-  /**
-   * @brief Handles a RTR request based on parsed infomation
-   *
-   * @return HTTPCode   success code of deregister_bindings below
-   */
+  /// Handles a RTR request based on parsed infomation
+  ///
+  /// @return HTTPCode   success code of deregister_bindings below
   HTTPCode handle_request();
 
-  /**
-   * @brief Retrieve the aors and any private IDs from the request body
-   *
-   * @param body[in]     HTTP request body
-   *
-   * @return HTTPCode
-   *   HTTP_OK          - request body successfully parsed
-   *   HTTP_BAD_REQUEST - json in request body is missing or wrong format
-   */
+  /// Retrieve the aors and any private IDs from the request body
+  ///
+  /// @param body[in]     HTTP request body
+  ///
+  /// @return HTTPCode
+  ///  HTTP_OK          - request body successfully parsed
+  ///  HTTP_BAD_REQUEST - json in request body is missing or wrong format
   HTTPCode parse_request(std::string body);
 
-  /**
-   * @brief Deregister binding in response to RTR request
-   *
-   * @param aor_id[in]              address of record for the bindings
-   * @param private_id[in]          IMPI of the bindings to be deregistered
-   * @param impis_to_delete[in,out] IMPI of the bindings to be deregistered
-   *
-   * @return
-   *   HTTP_OK          - binding successfully deregistered
-   *
-   *   HTTP_SERVER_ERROR
-   *   HTTP_NOT_FOUND
-   *   HTTP_PRECONDITION_FAILED
-   *                    - error occurred during s4 handle_get, handle_patch, or
-   *                    deregister with hss
-   */
+  /// Deregister binding in response to RTR request
+  ///
+  /// @param aor_id[in]              address of record for the bindings
+  /// @param private_id[in]          IMPI of the bindings to be deregistered
+  /// @param impis_to_delete[out]    IMPI of the bindings to be deregistered
+  ///
+  /// @return
+  ///   HTTP_OK          - binding successfully deregistered
+  ///
+  ///   HTTP_SERVER_ERROR
+  ///   HTTP_NOT_FOUND
+  ///   HTTP_PRECONDITION_FAILED
+  ///                    - error occurred during s4 handle_get, handle_patch, or
+  ///                    deregister with hss
   HTTPCode deregister_bindings(std::string aor_id,
                                std::string private_id,
                                std::set<std::string>& impis_to_delete);
 
 protected:
-  /**
-   * @brief Delete IMPI from ImpiStore based on RTR request
-   *
-   * @param store[in,out]    ImpiStore where IMPIs are to be deleted
-   * @param impi[in]         IMPI to be deleted
-   */
+  /// @brief Delete IMPI from ImpiStore based on RTR request
+  ///
+  /// @param store[in]        ImpiStore where IMPIs are to be deleted
+  /// @param impi[in]         IMPI to be deleted
   void delete_impi_from_store(ImpiStore* store, const std::string& impi);
 
   const Config* _cfg;
@@ -135,9 +123,7 @@ protected:
 };
 
 
-/**
- * @brief Task to retrieve bindings from store.
- */
+///Task to retrieve bindings from store.
 class GetBindingsTask : public HttpStackUtils::Task
 {
 public:
@@ -157,13 +143,11 @@ public:
   void run();
 
 protected:
-  /**
-   * @brief Write information about all bindings in an AoR to a JSON string
-   *
-   * @param bindings[in]   map of binding_id and Binding object in an AoR
-   *
-   * @return JSON string containing all bindings information
-   */
+  /// Write information about all bindings in an AoR to a JSON string
+  ///
+  /// @param bindings[in]   map of binding_id to Binding object in an AoR
+  ///
+  /// @return JSON string containing all bindings information
   std::string serialize_data(const Bindings& bindings);
   const Config* _cfg;
 };
@@ -188,13 +172,11 @@ public:
   void run();
 
 protected:
-  /**
-   * @brief Write information about all subscriptions in an AoR to a JSON string
-   *
-   * @param subscription[in]   map of to_tag and Subscription object in an AoR
-   *
-   * @return JSON string containing all subscription information
-   */
+  /// Write information about all subscriptions in an AoR to a JSON string
+  ///
+  /// @param subscription[in]   map of to_tag and Subscription object in an AoR
+  ///
+  /// @return JSON string containing all subscription information
   std::string serialize_data(const Subscriptions& subscriptions);
   const Config* _cfg;
 };
@@ -252,33 +234,29 @@ public:
 
   void run();
 
-  /**
-   * @brief Parse push profile request to populate _associated_uris for this
-   * Task
-   *
-   * @param body[in]   request body of Push Profile
-   * @param trail      SAS logging
-   *
-   * @return
-   *   HTTP_OK          - Associated URIS successfully populated
-   *   HTTP_BAD_REQUEST - failed to parse request body as JSON/XML
-   */
+ 
+  /// Parse push profile request to populate _associated_uris for this task
+  ///
+  /// @param body[in]   request body of Push Profile
+  /// @param trail[in]  SAS logging
+  ///
+  /// @return
+  ///  HTTP_OK          - Associated URIS successfully populated
+  ///  HTTP_BAD_REQUEST - failed to parse request body as JSON/XML
   HTTPCode get_associated_uris(std::string body, SAS::TrailId trail);
 
-  /**
-   * @brief Get subscriber manager to update associated uris based on
-   * _associated_uris that is populated in get_associated_uris
-   *
-   * @param trail      SAS logging
-   *
-   * @return
-   *   HTTP_OK       - Subscriber Manager successfully updated associated URIs
-   *
-   *   HTTP_SERVER_ERROR
-   *   HTTP_NOT_FOUND
-   *   HTTP_PRECONDITION_FAILED
-   *                    - error occurred during s4 handle_get or handle_patch
-   */
+  /// Get subscriber manager to update associated uris based on _associated_uris
+  /// that is populated in get_associated_uris
+  ///
+  /// @param trail[in]   SAS logging
+  ///
+  /// @return
+  ///  HTTP_OK         - Subscriber Manager successfully updated associated URIs
+  ///
+  ///  HTTP_SERVER_ERROR
+  ///  HTTP_NOT_FOUND
+  ///  HTTP_PRECONDITION_FAILED
+  ///                  - error occurred during s4 handle_get or handle_patch
   HTTPCode update_associated_uris(SAS::TrailId trail);
 
 protected:
