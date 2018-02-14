@@ -257,7 +257,7 @@ bool process_queue_element()
             if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
                (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
             {
-              TRC_ERROR("Returning 500 response following exception");
+              TRC_DEBUG("Returning 500 response following exception");
               reject_with_retry_header(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
             }
 
@@ -523,7 +523,7 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
   // Respond statelessly with a 503 Service Unavailable, including a
   // Retry-After header with a zero length timeout.
-  TRC_WARNING("Rejected request due to overload");
+  TRC_VERBOSE("Rejected request due to overload");
 
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);

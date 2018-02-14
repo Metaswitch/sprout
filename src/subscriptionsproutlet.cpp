@@ -342,8 +342,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   std::string aor;
   if (!irs_info._associated_uris.get_default_impu(aor, false))
   {
-    TRC_ERROR("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
-    TRC_ERROR("Could not determine default URI, Subscribe is being rejected with 403");
+    TRC_VERBOSE("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
+    TRC_VERBOSE("Could not determine default URI, Subscribe is being rejected with 403");
     pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
     send_response(rsp);
     free_msg(req);
@@ -407,7 +407,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   {
     // Failed to connect to the local store.  Reject the subscribe with a 500
     // response.
-    TRC_ERROR("Failed to connect to local store for SUBSCRIBE, aor=%s", aor.c_str());
+    TRC_VERBOSE("Failed to connect to local store for SUBSCRIBE, aor=%s", aor.c_str());
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
 
     // Build and send the reply.
