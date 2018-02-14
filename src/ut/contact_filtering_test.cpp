@@ -669,6 +669,21 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
   binding._path_headers.push_back("banana");
   Target target;
   EXPECT_FALSE(binding_to_target(aor,
+                                 binding_id,
+                                 binding,
+                                 false,
+                                 pool,
+                                 target));
+}
+TEST_F(ContactFilteringBindingToTargetTest, EmptyPath)
+{
+  std::string aor = "sip:user@domain.com";
+  Binding binding(aor);
+  create_binding(binding);
+  std::string binding_id = "<sip:user@10.1.2.3>";
+  binding._path_headers.clear();
+  Target target;
+  EXPECT_TRUE(binding_to_target(aor,
                                 binding_id,
                                 binding,
                                 false,

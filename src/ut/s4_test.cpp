@@ -988,6 +988,34 @@ TEST_F(BasicS4Test, CheckExpiryTimeOnWrite)
   delete aor; aor = NULL;
 }
 
+// This test covers getting subscriber information from S4, but where the
+// subscriber information is corrupt.
+TEST_F(BasicS4Test, GetCorruptSubscriberInfoInvalidJSON)
+{
+  get_data_expect_call_success(_mock_store1, "{\"invalidJSON}", 1);
+
+  AoR* get_aor = NULL;
+  uint64_t version;
+  HTTPCode rc = this->_s4->handle_get("aor_id", &get_aor, version, 0);
+
+  EXPECT_EQ(rc, 500);
+  ASSERT_TRUE(get_aor == NULL);
+}
+
+// This test covers getting subscriber information from S4, but where the
+// subscriber information is corrupt.
+TEST_F(BasicS4Test, GetCorruptSubscriberInfoMissingValues)
+{
+  get_data_expect_call_success(_mock_store1, "{}", 1);
+
+  AoR* get_aor = NULL;
+  uint64_t version;
+  HTTPCode rc = this->_s4->handle_get("aor_id", &get_aor, version, 0);
+
+  EXPECT_EQ(rc, 500);
+  ASSERT_TRUE(get_aor == NULL);
+}
+
 // This tests that if the last binding in an AoR is removed, the AoR is cleared
 TEST_F(BasicS4Test, ClearUpEmptyAoR)
 {
@@ -1016,6 +1044,49 @@ TEST_F(BasicS4Test, ClearUpEmptyAoR)
   delete aor; aor = NULL;
 }
 
+// This tests that if the last non-emergency binding in an AoR is removed, any
+// subscriptions are removed.
+TEST_F(BasicS4Test, ClearUpSubscriptionsInAoR)
+{
+  // Create an AoR with one binding, one emergency binding, and one
+  // subscription.
+  AoR* get_aor = AoRTestUtils::create_simple_aor("aor_id");
+  get_aor->get_binding(AoRTestUtils::BINDING_ID)->_emergency_registration = true;
+  Binding* binding = AoRTestUtils::build_binding("aor_id", time(NULL));
+  get_aor->_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID + "2", binding));
+  std::string get_str = _serializer_deserializer.serialize_aor(get_aor);
+
+  // Create an AoR with one binding, and no subscriptions. The binding should be
+  // an emergency binding.
+  AoR* expect_aor = AoRTestUtils::create_simple_aor("aor_id", false);
+  expect_aor->get_binding(AoRTestUtils::BINDING_ID)->_emergency_registration = true;
+  std::string expect_str = _serializer_deserializer.serialize_aor(expect_aor);
+
+  // The get call returns an AoR with one regular binding, one emergency
+  // binding, and one subscription. The patch removes the regular binding.
+  // S4 then removes the subscription, as tested by the set_data call.
+  get_data_expect_call_success(_mock_store1, get_str, 1);
+  EXPECT_CALL(*_mock_store1, set_data(_, _, expect_str, _, _, _, An<Store::Format>()))
+    .WillOnce(Return(Store::Status::OK));
+  set_chronos_put_expectations();
+  get_data_expect_call_success(_mock_store2, get_str, 1);
+  EXPECT_CALL(*_mock_store2, set_data(_, _, expect_str, _, _, _, An<Store::Format>()))
+    .WillOnce(Return(Store::Status::OK));
+  get_data_expect_call_success(_mock_store3, get_str, 1);
+  EXPECT_CALL(*_mock_store3, set_data(_, _, expect_str, _, _, _, An<Store::Format>()))
+    .WillOnce(Return(Store::Status::OK));
+
+  PatchObject po;
+  po._remove_bindings.push_back(AoRTestUtils::BINDING_ID + "2");
+  AoR* aor = NULL;
+  HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
+
+  EXPECT_EQ(rc, 200);
+
+  delete aor; aor = NULL;
+  delete expect_aor; expect_aor = NULL;
+  delete get_aor; get_aor = NULL;
+}
 
 /// The following tests check the Chronos sending timer when S4 writes to AoR.
 
@@ -1210,7 +1281,7 @@ TEST_F(BasicS4Test, HandleTimerPop)
 // This test checks that a mimic timer pop will be sent when binding is found to
 // have expired. The simplest way to test writing expired data is to do a GET
 // where there's no data on the local site.
-TEST_F(BasicS4Test, DISABLED_MimicTimerPop)
+TEST_F(BasicS4Test, MimicTimerPop)
 {
   std::string actual_aor_id;
 

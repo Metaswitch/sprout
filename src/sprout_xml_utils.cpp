@@ -296,10 +296,8 @@ bool parse_ims_subscription(const std::string public_user_identity,
       temp_aliases = sp_identities;
       maybe_found_aliases = true;
     }
-    else
-    {
-      sp_identities.clear();
-    }
+
+    sp_identities.clear();
   }
 
   if (aliases.empty())

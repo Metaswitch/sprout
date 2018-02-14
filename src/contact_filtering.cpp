@@ -266,7 +266,8 @@ bool binding_to_target(const std::string& aor,
     }
     else
     {
-      TRC_DEBUG("Empty path headers field for contact %s, implying no path headers were present on a register (which is valid)",
+      TRC_DEBUG("Empty path headers field for contact %s, implying no path "
+                "headers were present on a register (which is valid)",
                 binding._uri.c_str());
     }
   }

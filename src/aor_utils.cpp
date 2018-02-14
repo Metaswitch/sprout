@@ -32,6 +32,7 @@ pjsip_sip_uri* pub_gruu(const Binding* binding, pj_pool_t* pool)
   // if its less than 2 characters in length, the stripping function will give
   // us a buffer underrun, so exit now.
   std::string sip_instance = binding->_params.at("+sip.instance");
+
   if (sip_instance.length() < 2)
   {
     // instance ID too short to be parsed

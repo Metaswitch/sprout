@@ -585,7 +585,7 @@ TEST_F(RegistrarTest, FetchBindingsUnregisteredSubscriber)
 // code is the same as the register case) - check the reregister call in detail,
 // that the correct stats are called, and that the
 // register_with_application_servers call is not for an initial register.
-TEST_F(RegistrarTest, DeRegisterSubscriber)
+TEST_F(RegistrarTest, DeregisterSubscriber)
 {
   Message msg;
   msg._expires = "Expires: 0";
@@ -612,6 +612,41 @@ TEST_F(RegistrarTest, DeRegisterSubscriber)
 
   ASSERT_EQ(removed_bindings.size(), 1);
   EXPECT_EQ(removed_bindings[0], "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>");
+
+  // Check the stats are correct
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
+}
+
+// Test deregistering a subscriber with the wildcard contact header.
+TEST_F(RegistrarTest, DeregisterSubscriberWithWildcard)
+{
+  Message msg;
+  msg._expires = "Expires: 0";
+  msg._contact = "*";
+  msg._contact_instance = "";
+  msg._contact_params = "";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings = Bindings();
+  std::vector<std::string> removed_bindings;
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_get_single_binding();
+  EXPECT_CALL(*_sm, reregister_subscriber(_, _, Bindings(), _, _, _, _))
+    .WillOnce(DoAll(SaveArg<3>(&removed_bindings),
+                    SetArgReferee<5>(irs_info),
+                    SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  inject_msg(msg.get());
+
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  ASSERT_EQ(removed_bindings.size(), 1);
+  EXPECT_EQ(removed_bindings[0], "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1");
 
   // Check the stats are correct
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
@@ -696,7 +731,7 @@ TEST_F(RegistrarTest, ReRegisterFail)
 }
 
 // Test that an deregister fails correctly if the reregister call fails.
-TEST_F(RegistrarTest, DeRegisterFail)
+TEST_F(RegistrarTest, DeregisterFail)
 {
   Message msg;
   msg._expires = "Expires: 0";
@@ -1005,18 +1040,20 @@ TEST_F(RegistrarTest, InvalidContactStar)
 TEST_F(RegistrarTest, BadGRUU)
 {
   Message msg;
-  msg._contact_instance = ";+sip.instance";
+  msg._contact_instance = ";+sip.instance=1";
+  msg._contact_params = "";
 
-  Bindings bindings;
-  HSSConnection::irs_info irs_info;
   Bindings all_bindings;
-  set_up_single_returned_binding(all_bindings, msg._cid);
+  HSSConnection::irs_info irs_info;
+  Binding* binding = AoRTestUtils::build_binding("sip:6505550231@homedomain", time(NULL));
+  binding->_cid = msg._cid;
+  binding->_params["+sip.instance"] = "1";
+  all_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID, binding));
 
   expectations_for_successful_get_subscriber_state(irs_info);
-  expectations_for_get_single_binding();
-  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, _, _, _, _))
-    .WillOnce(DoAll(SetArgReferee<5>(irs_info),
-                    SetArgReferee<4>(all_bindings),
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
   expectations_for_registration_sender();
 
@@ -1024,6 +1061,9 @@ TEST_F(RegistrarTest, BadGRUU)
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
+
+  // Check that there's no GRUU on the response.
+  EXPECT_EQ("Contact: <sip:6505550231@192.91.191.29:59934;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=1;reg-id=1", get_headers(out, "Contact"));
   free_txdata();
 }
 
