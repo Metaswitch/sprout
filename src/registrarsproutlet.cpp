@@ -505,19 +505,13 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       (rt != RegisterType::FETCH) &&
       (rt != RegisterType::FETCH_INITIAL))
   {
+    pjsip_msg* clone_rsp = clone_msg(rsp);
+
     int max_expiry = AoRUtils::get_max_expiry(all_bindings, now);
 
-    std::string as_reg_id = public_id;
-
-    if (irs_info._associated_uris.is_impu_barred(public_id))
-    {
-      as_reg_id = default_impu;
-    }
-
-    // SS5-TODO: Should the response have been cloned?
     _registrar->_sm->register_with_application_servers(req,
-                                                       rsp,
-                                                       as_reg_id,
+                                                       clone_rsp,
+                                                       public_id,
                                                        irs_info._service_profiles[public_id],
                                                        max_expiry,
                                                        (rt == RegisterType::INITIAL),
@@ -602,13 +596,11 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
 
     if ((contact_hdr->star) && (expiry != 0))
     {
-      // EM-TODO: Deal with working case of contact header *
-      // Wildcard contact, which can only be used if the expiry is 0
       TRC_DEBUG("Attempted to deregister all bindings, but expiry "
                 "value wasn't 0");
       st_code = PJSIP_SC_BAD_REQUEST;
       break;
-     }
+    }
 
     if (PJUtils::is_emergency_registration(contact_hdr))
     {
@@ -669,6 +661,20 @@ void RegistrarSproutletTsx::get_bindings_from_req(
 
   while (contact != NULL)
   {
+    if (contact->star)
+    {
+      // The REGISTER has a Contact header that looks something like
+      // "Contact: *". This means that we should remove all existing bindings.
+      // (We've already checked for invalid use of the wildcard contact
+      // header in the basic validation).
+      SubscriberDataUtils::delete_bindings(updated_bindings);
+
+      for (BindingPair binding : current_bindings)
+      {
+        binding_ids_to_remove.push_back(binding.first);
+      }
+    }
+
     expiry = PJUtils::expiry_for_binding(contact,
                                          expires,
                                          _registrar->_max_expires);
@@ -980,7 +986,7 @@ void RegistrarSproutletTsx::add_contact_headers(pjsip_msg* rsp,
 
       // Add a GRUU if the UE supports GRUUs and the contact header contains
       // a +sip.instance parameter.
-      if (PJUtils::msg_supports_extension(req, "gruu")) // EM-TODO should be a constant
+      if (PJUtils::msg_supports_extension(req, "gruu"))
       {
         // The pub-gruu parameter on the Contact header is calculated
         // from the instance-id, to avoid unnecessary storage in
