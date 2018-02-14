@@ -58,6 +58,7 @@ using ::testing::SetArgReferee;
 using ::testing::DoAll;
 using ::testing::StrictMock;
 using ::testing::InSequence;
+using ::testing::AllOf;
 
 // TODO - make this class more consistent with the
 // TestingCommon::SubscriptionBuilder class (ie. have function "set_route",
@@ -9216,7 +9217,8 @@ TEST_F(SCSCFTest, AutomaticRegistration)
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
   // The SM should be invoked with a request type of "reg" and with the right
   // private ID.
-  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryForRegisteringPrivateId("kermit"), _, _))
+  EXPECT_CALL(*_sm, get_subscriber_state(AllOf(IrsQueryWithPrivateId("kermit"),
+                                               IrsQueryWithReqType(HSSConnection::REG)), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
                     Return(HTTP_OK)));
 
@@ -9242,9 +9244,11 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
   // Set caller info.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  // The SM should be invoked with a request type of "reg". No
-  // Proxy-Authorization present, so derive the IMPI from the IMPU.
-  EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryForRegisteringPrivateId("6505551000@homedomain"), _, _))
+  // The SM should be invoked with a request type of "reg" and with the right
+  // private ID. No Proxy-Authorization present, so derive the IMPI from the
+  // IMPU.
+  EXPECT_CALL(*_sm, get_subscriber_state(AllOf(IrsQueryWithPrivateId("6505551000@homedomain"),
+                                               IrsQueryWithReqType(HSSConnection::REG)), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info_1),
                     Return(HTTP_OK)));
 
