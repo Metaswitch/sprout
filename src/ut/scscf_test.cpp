@@ -2653,6 +2653,8 @@ TEST_F(SCSCFTest, TestSIPMessageSupport)
 {
   SCOPED_TRACE("");
 
+  TransportFlow tpCalleeBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
+
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
@@ -2669,11 +2671,11 @@ TEST_F(SCSCFTest, TestSIPMessageSupport)
   inject_msg(msg.get_request(), _tp_default);
   poll();
 
-  // MESSAGE passed on
+  // MESSAGE passed on to destination (bono set up in callee's bindings)
   SCOPED_TRACE("MESSAGE (S)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("MESSAGE").matches(out));
-  _tp_default->expect_target(current_txdata(), false);
+  tpCalleeBono.expect_target(current_txdata(), false);
 
    message = pop_txdata();
 
@@ -4350,6 +4352,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCalleeBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4378,13 +4381,14 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
   free_txdata();
 
-  // Without getting a response from AS, INVITE continues to be pass on to final destination
+  // Without getting a response from AS, INVITE continues to be passed on to
+  // final destination (to the bono set up in the callee's bindings)
   SCOPED_TRACE("INVITE (3)");
   out = current_txdata()->msg;
   ReqMatcher r3("INVITE");
   ASSERT_NO_FATAL_FAILURE(r3.matches(out));
 
-  tpBono.expect_target(current_txdata(), false);
+  tpCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r3.uri());
   free_txdata();
 
@@ -6498,7 +6502,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpDivertedToCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.214", 5061);
+  TransportFlow tpDivertedToCalleeBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -6569,14 +6573,13 @@ TEST_F(SCSCFTest, MmtelCdiv)
   msg.convert_routeset(out);
   free_txdata();
 
-  // INVITE passed on to final destination
+  // INVITE passed on to final destination (the bono set up in the diverted-to
+  // callee's bindings)
   SCOPED_TRACE("INVITE (4)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  // INVITE passed to final destination, which is the final callee (who the call
-  // was diverted to).
-  tpDivertedToCallee.expect_target(current_txdata(), false);
+  tpDivertedToCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
   EXPECT_THAT(get_headers(out, "History-Info"),
@@ -6662,7 +6665,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpDivertedToCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.214", 5061);
+  TransportFlow tpDivertedToCalleeBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -6752,9 +6755,9 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  // INVITE passed to final destination, which is the final callee (who the call
-  // was diverted twice to).
-  tpDivertedToCallee.expect_target(current_txdata(), false);
+  // INVITE passed to final destination, which is the bono set up in the
+  // bindings of the final callee (who the call was diverted twice to reach)
+  tpDivertedToCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", r1.uri());
   free_txdata();
 
@@ -8008,7 +8011,8 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
 }
 
 
-// Test local MESSAGE request with both originating and terminating ASs where terminating UE doesn't respond.
+// Test local MESSAGE request with both originating and terminating ASs where
+// the terminating UE doesn't respond.
 TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
 {
   // Set up caller info, including one iFC.
@@ -8030,7 +8034,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpUE2(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+  TransportFlow tpCalleeBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
 
   // ---------- Send MESSAGE
   // We're within the trust boundary, so no stripping should occur.
@@ -8139,8 +8143,9 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  // MESSAGE passed to terminating UE (UE2).
-  tpUE2.expect_target(current_txdata(), false);
+  // MESSAGE passed to terminating UE (UE2) - expect the target to be the bono
+  // set up in this UEs bindings.
+  tpCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
 
   // UE sends an immediate 100 Trying response.  This isn't realistic as the
