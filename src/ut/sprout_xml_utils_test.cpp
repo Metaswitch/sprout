@@ -26,11 +26,36 @@ class SproutXMLUtilsTest : public ::testing::Test
   {
   }
 
-  void check_expectations(std::string xml,
-                          bool successful,
-                          std::string impu,
-                          AssociatedURIs exp_associated_uris = {},
-                          std::vector<std::string> exp_aliases = {})
+  void check_parse_ims_subscription_failure(const std::string& xml,
+                                            const std::string& impu)
+  {
+    std::shared_ptr<rapidxml::xml_document<> > root (new rapidxml::xml_document<>);
+    char* cstr_xml = strdup(xml.c_str());
+    root->parse<0>(cstr_xml);
+    rapidxml::xml_node<>* node = root->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
+
+    std::map<std::string, Ifcs> ifcs_map;
+    AssociatedURIs associated_uris;
+    std::vector<std::string> aliases;
+
+    bool rc = SproutXmlUtils::parse_ims_subscription(impu,
+                                                     root,
+                                                     node,
+                                                     ifcs_map,
+                                                     associated_uris,
+                                                     aliases,
+                                                     NULL,
+                                                     0);
+
+    EXPECT_FALSE(rc);
+
+    free(cstr_xml);
+  }
+
+  void check_parse_ims_subscription_success(const std::string& xml,
+                                            const std::string& impu,
+                                            const AssociatedURIs& exp_associated_uris,
+                                            std::vector<std::string>& exp_aliases)
   {
     std::shared_ptr<rapidxml::xml_document<> > root (new rapidxml::xml_document<>);
     char* cstr_xml = strdup(xml.c_str());
@@ -50,19 +75,15 @@ class SproutXMLUtilsTest : public ::testing::Test
                                                      NULL,
                                                      0);
 
-    EXPECT_EQ(successful, rc);
+    EXPECT_TRUE(rc);
 
-    if (successful)
-    {
-      EXPECT_TRUE(exp_associated_uris == associated_uris);
-      std::sort(aliases.begin(), aliases.end());
-      std::sort(exp_aliases.begin(), exp_aliases.end());
-      EXPECT_EQ(exp_aliases, aliases);
-    }
+    EXPECT_TRUE(exp_associated_uris == associated_uris);
+    std::sort(aliases.begin(), aliases.end());
+    std::sort(exp_aliases.begin(), exp_aliases.end());
+    EXPECT_EQ(exp_aliases, aliases);
 
     free(cstr_xml);
   }
-
 };
 
 TEST_F(SproutXMLUtilsTest, MissingServiceProfile)
@@ -71,7 +92,7 @@ TEST_F(SproutXMLUtilsTest, MissingServiceProfile)
                     "<IMSSubscription>"
                     "NaN"
                     "</IMSSubscription>";
-  check_expectations(xml, false, "test");
+  check_parse_ims_subscription_failure(xml, "test");
 }
 
 TEST_F(SproutXMLUtilsTest, MissingPublicIdentity)
@@ -80,7 +101,7 @@ TEST_F(SproutXMLUtilsTest, MissingPublicIdentity)
                     "<IMSSubscription>"
                     "<ServiceProfile>NaN</ServiceProfile>"
                     "</IMSSubscription>";
-  check_expectations(xml, false, "test");
+  check_parse_ims_subscription_failure(xml, "test");
 }
 
 TEST_F(SproutXMLUtilsTest, MissingPublicIdentityIdentity)
@@ -91,7 +112,7 @@ TEST_F(SproutXMLUtilsTest, MissingPublicIdentityIdentity)
                     "<PublicIdentity>NaN</PublicIdentity>"
                     "</ServiceProfile>"
                     "</IMSSubscription>";
-  check_expectations(xml, false, "test");
+  check_parse_ims_subscription_failure(xml, "test");
 }
 
 TEST_F(SproutXMLUtilsTest, AmbiguousWildcardMatch)
@@ -158,7 +179,7 @@ TEST_F(SproutXMLUtilsTest, AmbiguousWildcardMatch)
   exp_aliases.push_back("sip:12!.*!@example.com");
   exp_aliases.push_back("sip:123@example.com");
 
-  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+  check_parse_ims_subscription_success(xml, "sip:1234@example.com", exp_associated_uris, exp_aliases);
 }
 
 TEST_F(SproutXMLUtilsTest, MultipleServiceProfiles)
@@ -226,7 +247,7 @@ TEST_F(SproutXMLUtilsTest, MultipleServiceProfiles)
   exp_aliases.push_back("sip:1234@example.com");
   exp_aliases.push_back("sip:1235@example.com");
 
-  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+  check_parse_ims_subscription_success(xml, "sip:1234@example.com", exp_associated_uris, exp_aliases);
 }
 
 TEST_F(SproutXMLUtilsTest, MultipleServiceProfilesWildcardMatch)
@@ -309,7 +330,7 @@ TEST_F(SproutXMLUtilsTest, MultipleServiceProfilesWildcardMatch)
   exp_aliases.push_back("sip:123!.*!@example.com");
   exp_aliases.push_back("sip:1235@example.com");
 
-  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+  check_parse_ims_subscription_success(xml, "sip:1234@example.com", exp_associated_uris, exp_aliases);
 }
 
 TEST_F(SproutXMLUtilsTest, BarringStatus)
@@ -379,7 +400,7 @@ TEST_F(SproutXMLUtilsTest, BarringStatus)
   exp_aliases.push_back("sip:12!.*!@example.com");
   exp_aliases.push_back("sip:1234@example.com");
 
-  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+  check_parse_ims_subscription_success(xml, "sip:1234@example.com", exp_associated_uris, exp_aliases);
 }
 
 TEST_F(SproutXMLUtilsTest, NoMatch)
@@ -418,7 +439,7 @@ TEST_F(SproutXMLUtilsTest, NoMatch)
   exp_associated_uris.add_uri("sip:124@example.com", false);
   std::vector<std::string> exp_aliases;
 
-  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+  check_parse_ims_subscription_success(xml, "sip:1234@example.com", exp_associated_uris, exp_aliases);
 }
 
 TEST_F(SproutXMLUtilsTest, WildcardMatchOverridden)
@@ -476,5 +497,5 @@ TEST_F(SproutXMLUtilsTest, WildcardMatchOverridden)
   std::vector<std::string> exp_aliases;
   exp_aliases.push_back("sip:1234@example.com");
 
-  check_expectations(xml, true, "sip:1234@example.com", exp_associated_uris, exp_aliases);
+  check_parse_ims_subscription_success(xml, "sip:1234@example.com", exp_associated_uris, exp_aliases);
 }

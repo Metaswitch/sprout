@@ -585,7 +585,7 @@ TEST_F(RegistrarTest, FetchBindingsUnregisteredSubscriber)
 // code is the same as the register case) - check the reregister call in detail,
 // that the correct stats are called, and that the
 // register_with_application_servers call is not for an initial register.
-TEST_F(RegistrarTest, DeRegisterSubscriber)
+TEST_F(RegistrarTest, DeregisterSubscriber)
 {
   Message msg;
   msg._expires = "Expires: 0";
@@ -619,7 +619,7 @@ TEST_F(RegistrarTest, DeRegisterSubscriber)
 }
 
 // Test deregistering a subscriber with the wildcard contact header.
-TEST_F(RegistrarTest, DeRegisterSubscriberWithWildcard)
+TEST_F(RegistrarTest, DeregisterSubscriberWithWildcard)
 {
   Message msg;
   msg._expires = "Expires: 0";
@@ -731,7 +731,7 @@ TEST_F(RegistrarTest, ReRegisterFail)
 }
 
 // Test that an deregister fails correctly if the reregister call fails.
-TEST_F(RegistrarTest, DeRegisterFail)
+TEST_F(RegistrarTest, DeregisterFail)
 {
   Message msg;
   msg._expires = "Expires: 0";

@@ -1048,12 +1048,16 @@ TEST_F(BasicS4Test, ClearUpEmptyAoR)
 // subscriptions are removed.
 TEST_F(BasicS4Test, ClearUpSubscriptionsInAoR)
 {
+  // Create an AoR with one binding, one emergency binding, and one
+  // subscription.
   AoR* get_aor = AoRTestUtils::create_simple_aor("aor_id");
   get_aor->get_binding(AoRTestUtils::BINDING_ID)->_emergency_registration = true;
   Binding* binding = AoRTestUtils::build_binding("aor_id", time(NULL));
   get_aor->_bindings.insert(std::make_pair(AoRTestUtils::BINDING_ID + "2", binding));
   std::string get_str = _serializer_deserializer.serialize_aor(get_aor);
 
+  // Create an AoR with one binding, and no subscriptions. The binding should be
+  // an emergency binding.
   AoR* expect_aor = AoRTestUtils::create_simple_aor("aor_id", false);
   expect_aor->get_binding(AoRTestUtils::BINDING_ID)->_emergency_registration = true;
   std::string expect_str = _serializer_deserializer.serialize_aor(expect_aor);

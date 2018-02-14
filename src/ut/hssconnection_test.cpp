@@ -171,7 +171,7 @@ class HssConnectionTest : public BaseTest
           "</ServiceProfile>"
         "</NonsenseWord>"
       "</ClearwaterRegData>";
-    fakecurl_responses["http://10.42.42.42:80/impu/serverfailureonget/reg-data"] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses["http://10.42.42.42:80/impu/curlnotfoundonget/reg-data"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid44/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44&sos=true"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
@@ -447,12 +447,12 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
   EXPECT_EQ(0u, irs_info._associated_uris.get_unbarred_uris().size());
 }
 
-TEST_F(HssConnectionTest, GetServerFailure)
+TEST_F(HssConnectionTest, GetSubscriberNotFoundCURLError)
 {
   HSSConnection::irs_query irs_query;
   HSSConnection::irs_info irs_info;
 
-  HTTPCode rc = _hss.get_registration_data("serverfailureonget", irs_info, 0);
+  HTTPCode rc = _hss.get_registration_data("curlnotfoundonget", irs_info, 0);
 
   EXPECT_EQ(rc, 404);
 }

@@ -596,8 +596,6 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
 
     if ((contact_hdr->star) && (expiry != 0))
     {
-      // EM-TODO: Deal with working case of contact header *
-      // Wildcard contact, which can only be used if the expiry is 0
       TRC_DEBUG("Attempted to deregister all bindings, but expiry "
                 "value wasn't 0");
       st_code = PJSIP_SC_BAD_REQUEST;
@@ -665,6 +663,10 @@ void RegistrarSproutletTsx::get_bindings_from_req(
   {
     if (contact->star)
     {
+      // The REGISTER has a Contact header that looks something like
+      // "Contact: *". This means that we should remove all existing bindings.
+      // (We've already checked for invalid use of the wildcard contact
+      // header in the basic validation).
       SubscriberDataUtils::delete_bindings(updated_bindings);
 
       for (BindingPair binding : current_bindings)
