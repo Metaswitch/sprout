@@ -1066,10 +1066,10 @@ TEST_F(BasicS4Test, ClearUpSubscriptionsInAoR)
     .WillOnce(Return(Store::Status::OK));
   set_chronos_put_expectations();
   get_data_expect_call_success(_mock_store2, get_str, 1);
-  EXPECT_CALL(*_mock_store1, set_data(_, _, expect_str, _, _, _, An<Store::Format>()))
+  EXPECT_CALL(*_mock_store2, set_data(_, _, expect_str, _, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::Status::OK));
   get_data_expect_call_success(_mock_store3, get_str, 1);
-  EXPECT_CALL(*_mock_store1, set_data(_, _, expect_str, _, _, _, An<Store::Format>()))
+  EXPECT_CALL(*_mock_store3, set_data(_, _, expect_str, _, _, _, An<Store::Format>()))
     .WillOnce(Return(Store::Status::OK));
 
   PatchObject po;
@@ -1077,7 +1077,7 @@ TEST_F(BasicS4Test, ClearUpSubscriptionsInAoR)
   AoR* aor = NULL;
   HTTPCode rc = this->_s4->handle_patch("aor_id", po, &aor, 0);
 
-  EXPECT_EQ(rc, 500);
+  EXPECT_EQ(rc, 200);
 
   delete aor; aor = NULL;
   delete expect_aor; expect_aor = NULL;
