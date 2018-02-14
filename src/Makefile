@@ -154,6 +154,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        options_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
+                       ifchandler_test.cpp \
                        sip_parser_test.cpp \
                        connection_tracker_test.cpp \
                        quiescing_manager_test.cpp \

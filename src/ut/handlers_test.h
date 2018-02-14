@@ -20,7 +20,6 @@
 #include "basetest.hpp"
 #include "siptest.hpp"
 #include "fakehssconnection.hpp"
-#include "fakechronosconnection.hpp"
 #include "mock_subscriber_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
@@ -28,8 +27,8 @@
 #include "gtest/gtest.h"
 
 
-// Base class used for testing handlers with Mock SDMs.
-class TestWithMocks : public SipTest
+// Base class used for testing handlers with Mock Subscriber Manager.
+class TestWithMockSM : public BaseTest
 {
   MockSubscriberManager* sm;
   MockHttpStack* stack;

@@ -101,6 +101,13 @@ public:
   {
   }
 
+  void interpret_ifcs(Ifcs& ifcs,
+                      const SessionCase& session_case,
+                      bool is_registered,
+                      bool is_initial_registration,
+                      pjsip_msg* msg,
+                      std::vector<AsInvocation>& application_servers);
+
   void doBaseTest(string description,
                   string ifc,
                   pjsip_msg* msg,
@@ -191,6 +198,27 @@ TEST_F(IfcHandlerTest, ServedUser)
   EXPECT_EQ("tel:5755550099", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 }
 
+// Gets the application servers matched from the iFCs provided.
+void IfcHandlerTest::interpret_ifcs(Ifcs& ifcs,
+                                    const SessionCase& session_case,
+                                    bool is_registered,
+                                    bool is_initial_registration,
+                                    pjsip_msg* msg,
+                                    std::vector<AsInvocation>& application_servers)
+{
+  for (Ifc ifc : ifcs.ifcs_list())
+  {
+    if (ifc.filter_matches(session_case,
+                           is_registered,
+                           is_initial_registration,
+                           msg,
+                           0))
+    {
+      application_servers.push_back(ifc.as_invocation());
+    }
+  }
+}
+
 /// Test an iFC.
 void IfcHandlerTest::doBaseTest(string description,
                                 string ifc,
@@ -209,17 +237,12 @@ void IfcHandlerTest::doBaseTest(string description,
   char* cstr_ifc = strdup(ifc.c_str());
   root->parse<0>(cstr_ifc);
   Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
-  bool found_match;
-  RegistrationUtils::interpret_ifcs(*ifcs,
-                                    {},
-                                    IFCConfiguration(false,false,"",NULL,NULL),
-                                    sescase,
-                                    reg,
-                                    initial_registration,
-                                    msg,
-                                    application_servers,
-                                    found_match,
-                                    0);
+  interpret_ifcs(*ifcs,
+                 sescase,
+                 reg,
+                 initial_registration,
+                 msg,
+                 application_servers);
   delete ifcs;
   free(cstr_ifc);
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
