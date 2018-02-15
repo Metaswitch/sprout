@@ -34,7 +34,7 @@ RegistrationSender::~RegistrationSender()
 
 void RegistrationSender::register_dereg_event_consumer(DeregistrationEventConsumer* dereg_event_consumer)
 {
-  TRC_DEBUG("Initializing RegistrationSender with reference to this subscriber manager");
+  TRC_DEBUG("Register the Deregistration Event Consumer");
   _dereg_event_consumer = dereg_event_consumer;
 }
 
@@ -111,11 +111,16 @@ void RegistrationSender::register_with_application_servers(pjsip_msg* received_r
       _ifc_configuration._no_matching_ifcs_tbl->increment();
     }
 
+    // If we are configured to reject if there are no matching iFCs, deregister
+    // the subscriber. If we are handling a 3rd party deregistration, the
+    // subscriber is already being deregistered so don't trigger another
+    // deregistration here.
     if (_ifc_configuration._reject_if_no_matching_ifcs)
     {
       if (expires > 0)
       {
-        TRC_DEBUG("No matching iFCs were found for %s - the subscriber should be deregistered",
+        TRC_DEBUG("No matching iFCs were found for %s and we are configured to"
+                  "require them - the subscriber should be deregistered",
                   served_user.c_str());
         deregister_subscriber = true;
       }
@@ -171,7 +176,7 @@ void RegistrationSender::deregister_with_application_servers(const std::string& 
                                       NULL,
                                       served_user,
                                       ifcs,
-                                      0,
+                                      0, // Set expiry to 0 for deregistration
                                       false,
                                       unused_deregister_subscriber,
                                       trail);
@@ -189,7 +194,7 @@ void RegistrationSender::match_application_servers(pjsip_msg* received_register_
   matched_dummy_as = false;
 
   // Go through the list of iFCs and find which application servers should be
-  // invoked for this request. Save off any application servers that do not
+  // invoked for this request. Save off any application servers that don't
   // match a dummy AS.
   for (Ifc ifc : ifcs.ifcs_list())
   {
@@ -229,7 +234,7 @@ void RegistrationSender::match_application_servers(pjsip_msg* received_register_
 
     // Go though the list of fallback iFCs and find which application servers
     // should be invoked for this request. Save off any application servers that
-    // do match a dummy AS.
+    // don't match a dummy AS.
     for (Ifc ifc : fallback_ifcs)
     {
       if (ifc.filter_matches(SessionCase::Originating,
@@ -336,14 +341,9 @@ void RegistrationSender::send_register_to_as(pjsip_msg* received_register_msg,
     // Copy P-Charging-Function-Addresses from the OK response.
     PJUtils::clone_header(&STR_P_C_F_A, ok_response_msg, tdata->msg, tdata->pool);
 
-    // Generate a message body based on Filter Criteria values
+    // Build up this multipart body incrementally, based on the ServiceInfo,
+    // IncludeRegisterRequest and IncludeRegisterResponse fields.
     char buf[MAX_SIP_MSG_SIZE];
-    pj_str_t sip_type = pj_str("message");
-    pj_str_t sip_subtype = pj_str("sip");
-    pj_str_t xml_type = pj_str("application");
-    pj_str_t xml_subtype = pj_str("3gpp-ims+xml");
-
-    // Build up this multipart body incrementally, based on the ServiceInfo, IncludeRegisterRequest and IncludeRegisterResponse fields
     pjsip_msg_body *final_body = pjsip_multipart_create(tdata->pool, NULL, NULL);
 
     // If we only have one part, we don't want a multipart MIME body - store the reference to each one here to use instead
@@ -356,7 +356,7 @@ void RegistrationSender::send_register_to_as(pjsip_msg* received_register_msg,
       std::string xml_str = "<ims-3gpp><service-info>"+as.service_info+"</service-info></ims-3gpp>";
       pj_str_t xml_pj_str;
       pj_cstr(&xml_pj_str, xml_str.c_str());
-      xml_part->body = pjsip_msg_body_create(tdata->pool, &xml_type, &xml_subtype, &xml_pj_str),
+      xml_part->body = pjsip_msg_body_create(tdata->pool, &STR_APPLICATION, &STR_3GPP_IMS_XML , &xml_pj_str),
       possible_final_body = xml_part->body;
       multipart_parts++;
       pjsip_multipart_add_part(tdata->pool,
@@ -369,7 +369,7 @@ void RegistrationSender::send_register_to_as(pjsip_msg* received_register_msg,
       pjsip_multipart_part *request_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(received_register_msg, buf, sizeof(buf));
       pj_str_t request_str = pj_str(buf);
-      request_part->body = pjsip_msg_body_create(tdata->pool, &sip_type, &sip_subtype, &request_str),
+      request_part->body = pjsip_msg_body_create(tdata->pool, &STR_MESSAGE, &STR_SIP, &request_str),
       possible_final_body = request_part->body;
       multipart_parts++;
       pjsip_multipart_add_part(tdata->pool,
@@ -382,7 +382,7 @@ void RegistrationSender::send_register_to_as(pjsip_msg* received_register_msg,
       pjsip_multipart_part *response_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(ok_response_msg, buf, sizeof(buf));
       pj_str_t response_str = pj_str(buf);
-      response_part->body = pjsip_msg_body_create(tdata->pool, &sip_type, &sip_subtype, &response_str),
+      response_part->body = pjsip_msg_body_create(tdata->pool, &STR_MESSAGE, &STR_SIP, &response_str),
       possible_final_body = response_part->body;
       multipart_parts++;
       pjsip_multipart_add_part(tdata->pool,
