@@ -8393,9 +8393,8 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
 
   // Set up callee info.
   HSSConnection::irs_info irs_info;
-  setup_irs_info(irs_info, "6515551000", "homedomain");
   Bindings bindings;
-  setup_binding(bindings, "sip:6515551000@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  setup_callee_info(irs_info, bindings, "6515551000", "homedomain");
   EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithWildcard("sip:650![0-9]+!@homedomain"), _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
@@ -10124,9 +10123,8 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
 
   // Expect calls to get iFCs and bindings for callee.
   HSSConnection::irs_info irs_info_2;
-  setup_irs_info(irs_info_2, "6505551234", "homedomain");
   Bindings bindings;
-  setup_binding(bindings);
+  setup_callee_info(irs_info_2, bindings, "6505551234", "homedomain");
   expect_get_callee_info(irs_info_2, bindings);
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
