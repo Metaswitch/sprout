@@ -85,6 +85,8 @@ static pjsip_module mod_connection_tracking =
   NULL,                                 /* on_tsx_state()       */
 };
 
+// LCOV_EXCL_START - Stack not tested by UTs
+
 static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 {
   // Notify the connection tracker that the transport is active.
@@ -604,7 +606,6 @@ pj_status_t start_pjsip_thread()
   return PJ_SUCCESS;
 }
 
-
 pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
                        int pcscf_trusted_port,
@@ -1006,3 +1007,5 @@ void destroy_stack(void)
   // Terminate PJSIP.
   term_pjsip();
 }
+
+// LCOV_EXCL_STOP

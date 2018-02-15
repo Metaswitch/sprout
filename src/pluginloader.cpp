@@ -17,6 +17,8 @@
 #include "log.h"
 #include "pluginloader.h"
 
+// LCOV_EXCL_START - Plugin Loader isn't covered at all by UTs
+
 /// Create a PluginLoader to load plugins from the specified path with the
 /// supplied configuration options.
 PluginLoader::PluginLoader(const std::string& path, struct options& opt) :
@@ -173,3 +175,5 @@ bool PluginLoader::api_supported(int version)
   }
   return false;
 }
+
+// LCOV_EXCL_STOP

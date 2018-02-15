@@ -214,7 +214,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_registration_sender.cpp
 
 COVERAGE_ROOT := ..
-sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/clearwater-s4/src/ut
+sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/clearwater-s4/src/ut|^modules/app-servers/include/|modules/app-servers/test/
 
 SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
                           -I../include \
