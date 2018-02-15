@@ -122,7 +122,7 @@ Ifcs RegistrationSenderTest::build_ifcs(std::string as_uri,
   // Create a service profile with a single iFC.
   TestingCommon::ServiceProfileBuilder sp = TestingCommon::ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>REGISTER</Method>"}, as_uri, 0, 1, service_info, include_body);
+    .addIfc(1, {"<Method>REGISTER</Method>"}, as_uri, 0, "1", service_info, include_body);
 
   return sp.return_ifcs();
 }

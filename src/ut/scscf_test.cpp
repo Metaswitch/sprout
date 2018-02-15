@@ -314,22 +314,19 @@ protected:
                          std::string user = "6505551234",
                          const std::string& domain = "homedomain");
   // Helper functions to add more detailed subscriber info.
-  char* set_service_profile_from_ifc_list(HSSConnection::irs_info& irs_info,
-                                          std::vector<std::string> ifc_list,
-                                          std::string uri);
-  void add_ifc(std::vector<std::string>& ifc_list,
+  void set_ifcs_from_service_profile(HSSConnection::irs_info& irs_info,
+                                     ServiceProfileBuilder& service_profile,
+                                     std::string uri);
+  void set_ifc(HSSConnection::irs_info& irs_info,
+               std::string uri,
                int priority,
                std::vector<std::string> triggers,
                std::string app_serv_name,
                int cond_neg = 0,
                std::string default_handling = "0");
-  char* set_service_profile(HSSConnection::irs_info& irs_info,
-                            std::string uri,
-                            int priority,
-                            std::vector<std::string> triggers,
-                            std::string app_serv_name,
-                            int cond_neg = 0,
-                            std::string default_handling = "0");
+  void put_ifcs_into_irs_info(HSSConnection::irs_info& irs_info,
+                              std::string uri,
+                              Ifcs& ifcs);
   void add_sp_identity(HSSConnection::irs_info& irs_info,
                        std::string uri,
                        bool barring = false);
@@ -473,21 +470,21 @@ void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app
   // Expect a call to look up the iFCs for the caller.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  std::vector<std::string> ifc_list_1;
-  add_ifc(ifc_list_1, 2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP");
-  add_ifc(ifc_list_1, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  char* ifc_str_1 = set_service_profile_from_ifc_list(irs_info_1, ifc_list_1, "sip:6505551000@homedomain");
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_1, service_profile_1, "sip:6505551000@homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Expect calls to look up the iFCs and bindings of the callee.
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  std::vector<std::string> ifc_list_2;
-  add_ifc(ifc_list_2, 1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  add_ifc(ifc_list_2, 2, {"<Method>QWERTY_UIOP</Method>"}, "sip:sholes.example.com");
-  add_ifc(ifc_list_2, 3, {"<Method>INVITE</Method>"}, "sip:6.2.3.4:56786;transport=UDP");
-  char* ifc_str_2 = set_service_profile_from_ifc_list(irs_info_2, ifc_list_2, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP")
+    .addIfc(2, {"<Method>QWERTY_UIOP</Method>"}, "sip:sholes.example.com")
+    .addIfc(3, {"<Method>INVITE</Method>"}, "sip:6.2.3.4:56786;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_2, service_profile_2, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 3);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:4.2.3.4:56788;transport=UDP")));
@@ -704,8 +701,6 @@ void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app
   send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 5);
 
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
@@ -1227,91 +1222,48 @@ void SCSCFTestBase::setup_callee_info(HSSConnection::irs_info& irs_info,
   setup_binding(bindings, uri);
 }
 
-// Add a list of iFCs to the irs info.
-char* SCSCFTestBase::set_service_profile_from_ifc_list(HSSConnection::irs_info& irs_info,
-                                                       std::vector<std::string> ifc_list,
-                                                       std::string uri)
+// Adds the iFCs set in the passed in service profile to the irs info.
+void SCSCFTestBase::set_ifcs_from_service_profile(HSSConnection::irs_info& irs_info,
+                                                  ServiceProfileBuilder& service_profile,
+                                                  std::string uri)
 {
-  string all_ifcs = "";
-  for (std::vector<std::string>::iterator ifc = ifc_list.begin();
-       ifc != ifc_list.end();
-       ifc++)
-  {
-    all_ifcs.append(*ifc);
-  }
+  // Create an iFCs object. The easiest way to do this is to use the
+  // ServiceProfileBulider.
+  Ifcs ifcs = service_profile.return_ifcs();
 
-  string ifcs_text = "<ServiceProfile>\n"
-                       + all_ifcs + "\n"
-                     "</ServiceProfile>";
-  std::shared_ptr<rapidxml::xml_document<>> root (new rapidxml::xml_document<>);
-  char* cstr_ifcs = strdup(ifcs_text.c_str());
-  root->parse<0>(cstr_ifcs);
-  Ifcs ifcs = Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
-  irs_info._service_profiles.insert(std::make_pair(uri, ifcs));
-
-  // If blank iFC (used as placeholder for tests where iFCs are not required) is
-  // present, remove it.
-  irs_info._service_profiles.erase(IFC_PLACEHOLDER);
-
-  return cstr_ifcs;
+  put_ifcs_into_irs_info(irs_info, uri, ifcs);
 }
 
-// Adds an iFC (as a string) to the vector of iFCs passed in.
-void SCSCFTestBase::add_ifc(std::vector<std::string>& ifc_list,
+// Adds ONLY ONE iFC, whose info is passed in, to the irs_info.
+// If multiple iFCs need to be added, set_ifcs_from_service_profiles should be
+// used instead.
+void SCSCFTestBase::set_ifc(HSSConnection::irs_info& irs_info,
+                            std::string uri,
                             int priority,
                             std::vector<std::string> triggers,
                             std::string app_serv_name,
                             int cond_neg,
                             std::string default_handling)
 {
-  string triggers_in_xml;
-  for (std::vector<std::string>::iterator trigger = triggers.begin();
-       trigger != triggers.end();
-       ++trigger)
-  {
-    string trigger_in_xml = "<SPT>\n"
-                              "<ConditionNegated>" + std::to_string(cond_neg) + "</ConditionNegated>\n"
-                              "<Group>0</Group>\n"
-                              + *trigger +
-                              "<Extension></Extension>\n"
-                            "</SPT>";
-    triggers_in_xml.append(trigger_in_xml);
-  }
+  // Create an Ifcs object containing the iFC. The easiest way to do this is to
+  // build a service profile and extract it from there - this uses only common
+  // testing functions.
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(priority, triggers, app_serv_name, cond_neg, default_handling);
+  Ifcs ifcs = service_profile.return_ifcs();
 
-  std::string default_handling_str = "";
-  if (!default_handling.empty())
-  {
-    default_handling_str.append("<DefaultHandling>").append(default_handling).append("</DefaultHandling>\n");
-  }
-
-  std::string ifc = "<InitialFilterCriteria>\n"
-                      "<Priority>" + std::to_string(priority) + "</Priority>\n"
-                      "<TriggerPoint>\n"
-                        "<ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                        + triggers_in_xml +
-                      "</TriggerPoint>\n"
-                      "<ApplicationServer>\n"
-                        "<ServerName>" + app_serv_name + "</ServerName>\n"
-                        + default_handling_str +
-                      "</ApplicationServer>\n"
-                    "</InitialFilterCriteria>";
-
-  ifc_list.push_back(ifc);
+  put_ifcs_into_irs_info(irs_info, uri, ifcs);
 }
 
-// Adds a single iFC to the irs_info.
-char* SCSCFTestBase::set_service_profile(HSSConnection::irs_info& irs_info,
-                                         std::string uri,
-                                         int priority,
-                                         std::vector<std::string> triggers,
-                                         std::string app_serv_name,
-                                         int cond_neg,
-                                         std::string default_handling)
+// Puts the iFCs into the irs info.
+void SCSCFTestBase::put_ifcs_into_irs_info(HSSConnection::irs_info& irs_info,
+                                           std::string uri,
+                                           Ifcs& ifcs)
 {
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, priority, triggers, app_serv_name, cond_neg, default_handling);
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, uri);
-  return ifc_str;
+  // Insert the Ifcs object into the irs_info, and if a blank iFC is present
+  // (used as a placeholder for tests where iFCs aren't required) remove it.
+  irs_info._service_profiles.insert(std::make_pair(uri, ifcs));
+  irs_info._service_profiles.erase(IFC_PLACEHOLDER);
 }
 
 // Add details to the irs_info about an identity that is in the same service
@@ -2751,7 +2703,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
   irs_info_1._regstate = "UNREGISTERED";
-  char* ifc_str = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Setup info about callee.
@@ -2842,8 +2794,6 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
 
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
-
-  free(ifc_str);
 }
 
 
@@ -2855,7 +2805,7 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
   irs_info_1._regstate = "UNREGISTERED";
-  char* ifc_str = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Setup info about callee.
@@ -2964,7 +2914,6 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
-  free(ifc_str);
 }
 
 
@@ -2976,10 +2925,10 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
   add_sp_identity(irs_info, "tel:6505551234");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  char* ifc_str_1 = set_service_profile_from_ifc_list(irs_info, ifc_list, "tel:6505551234");
-  char* ifc_str_2 = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifcs_from_service_profile(irs_info, service_profile, "tel:6505551234");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info, bindings, "sip:6505551234@homedomain", 2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3049,8 +2998,6 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
   EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   free_txdata();
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -3060,7 +3007,7 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
   // Expect a call to look up the iFCs for the caller.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3100,8 +3047,6 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
   string fresp = respond_to_txdata(current_txdata(), 100);
   inject_msg(fresp, &tpAS1);
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -3111,7 +3056,7 @@ TEST_F(SCSCFTest, ISCASURIMalformed)
   // Set up info about caller, with a malformed AS URI.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 0, {"<Method>INVITE</Method>"}, "sip::5060");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 0, {"<Method>INVITE</Method>"}, "sip::5060");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3141,8 +3086,6 @@ TEST_F(SCSCFTest, ISCASURIMalformed)
   RespMatcher(502).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -3152,7 +3095,7 @@ TEST_F(SCSCFTest, ISCASURITel)
   // Expect a call to look up the iFCs for the caller.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "tel:1234");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "tel:1234");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3180,8 +3123,6 @@ TEST_F(SCSCFTest, ISCASURITel)
   RespMatcher(502).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -3191,10 +3132,10 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
   // Expect a call to look up the iFCs for the caller.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 0, {"<Method>ETAOIN_SHRDLU</Method>"}, "sip:linotype.example.org");
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info_1, ifc_list, "sip:6505551000@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(0, {"<Method>ETAOIN_SHRDLU</Method>"}, "sip:linotype.example.org")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_1, service_profile, "sip:6505551000@homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Expect calls to look up the iFCs and bindings of the callee.
@@ -3274,7 +3215,6 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
   EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
 
   free_txdata();
-  free(ifc_str);
 }
 
 
@@ -3285,7 +3225,7 @@ TEST_F(SCSCFTest, SimpleReject)
   // so that an AS is invoked.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3345,8 +3285,6 @@ TEST_F(SCSCFTest, SimpleReject)
   SCOPED_TRACE("ACK");
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
-
-  free(ifc_str);
 }
 
 
@@ -3357,7 +3295,7 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
   // the AS will reject the call before the targets are looked up.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3419,8 +3357,6 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
   SCOPED_TRACE("ACK");
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
-
-  free(ifc_str);
 }
 
 
@@ -3430,7 +3366,7 @@ TEST_F(SCSCFTest, SimpleAccept)
   // Set up callee info.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3491,8 +3427,6 @@ TEST_F(SCSCFTest, SimpleAccept)
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -3503,7 +3437,7 @@ TEST_F(SCSCFTest, SimpleRedirect)
   // redirect the call.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3566,8 +3500,6 @@ TEST_F(SCSCFTest, SimpleRedirect)
   SCOPED_TRACE("ACK");
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
-
-  free(ifc_str);
 }
 
 
@@ -3577,7 +3509,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   // Set up caller info.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("408")));
@@ -3640,8 +3572,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   SCOPED_TRACE("ACK");
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
-
-  free(ifc_str);
 }
 
 
@@ -3654,7 +3584,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   // default handling set to session terminated.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -3703,8 +3633,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   inject_msg(msg.get_request(), &tpCaller);
   poll();
   ASSERT_EQ(0, txdata_count());
-
-  free(ifc_str);
 }
 
 
@@ -3716,7 +3644,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
   // default handling set to session terminated.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -3798,8 +3726,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate100AfterTimeout)
   // Check no other messages are pending.
   ASSERT_EQ(0, txdata_count());
   pjsip_tx_data_dec_ref(inv_for_as); inv_for_as = NULL;
-
-  free(ifc_str);
 }
 
 
@@ -3811,7 +3737,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateMessage100AfterTimeout)
   // default handling set to session terminated.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -3876,8 +3802,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateMessage100AfterTimeout)
   // Check no other messages are pending.
   ASSERT_EQ(0, txdata_count());
   pjsip_tx_data_dec_ref(msg_for_as); msg_for_as = NULL;
-
-  free(ifc_str);
 }
 
 
@@ -3889,7 +3813,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
   // default handling set to session terminated.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -3952,8 +3876,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate200AfterTimeout)
 
   // Check no other messages are pending.
   ASSERT_EQ(0, txdata_count());
-
-  free(ifc_str);
 }
 
 
@@ -3965,7 +3887,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
   // default handling set to session terminated.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -4032,8 +3954,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate4xxAfterTimeout)
 
   // Check error is not forwarded on, as timeout error has already been sent.
   ASSERT_EQ(0, txdata_count());
-
-  free(ifc_str);
 }
 
 
@@ -4045,7 +3965,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
   // default handling set to session terminated.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -4113,8 +4033,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate5xxAfterTimeout)
 
   // Check error is not forwarded on, as timeout error has already been sent.
   ASSERT_EQ(0, txdata_count());
-
-  free(ifc_str);
 }
 
 
@@ -4129,7 +4047,7 @@ TEST_F(SCSCFTest, TimeoutExtendedByProofOfLife)
   // default handling set to session terminated.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4199,8 +4117,6 @@ TEST_F(SCSCFTest, TimeoutExtendedByProofOfLife)
   // Check no other messages pending.
   poll();
   ASSERT_EQ(0, txdata_count());
-
-  free(ifc_str);
 }
 
 
@@ -4213,7 +4129,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   // default handling set to session terminated.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4263,8 +4179,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   inject_msg(msg.get_request(), &tpCaller);
   poll();
   ASSERT_EQ(0, txdata_count());
-
-  free(ifc_str);
 }
 
 
@@ -4276,7 +4190,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  char* ifc_str = set_service_profile(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  set_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
   expect_get_callee_info(irs_info_2, bindings);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address"))).Times(1);
@@ -4314,8 +4228,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_diversion = false;
   stack_data.record_route_on_every_hop = false;
-
-  free(ifc_str);
 }
 
 
@@ -4327,7 +4239,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   expect_get_callee_info(irs_info, bindings);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4371,8 +4283,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
   tpCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r3.uri());
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -4385,7 +4295,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
   expect_get_callee_info(irs_info, bindings);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4419,8 +4329,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
   tpCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -4432,7 +4340,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_callee_info(irs_info, bindings);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(StrEq("sip:1.2.3.4:56789;transport=UDP"), _));
@@ -4490,7 +4398,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
 
   free_txdata();
-  free(ifc_str);
 }
 
 
@@ -4502,7 +4409,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_callee_info(irs_info, bindings);
 
   // This flow counts as an unsuccessful AS communication, as a 100 trying does
@@ -4568,8 +4475,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
   // Target sends back 100 Trying
   inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -4582,7 +4487,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_callee_info(irs_info, bindings);
 
   // This flow counts as an unsuccessful AS communication, as a 100 trying does
@@ -4653,8 +4558,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
   // Target sends back 100 Trying
   inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -4667,7 +4570,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
   // before these are looked up.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   // This flow counts as a successful AS communication, as it sent back a 1xx
@@ -4747,8 +4650,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
   msg._cseq++;
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
-
-  free(ifc_str);
 }
 
 
@@ -4761,7 +4662,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_callee_info(irs_info, bindings, "sip:6505551234@homedomain", 2);
 
   // This flow is classed as a successful AS flow, as the AS will pass the
@@ -4866,8 +4767,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   // Check there are no outstanding messages - this confirms sprout did not
   // create a fork to bypass the AS.
   ASSERT_EQ(0, txdata_count());
-
-  free(ifc_str);
 }
 
 
@@ -4878,7 +4777,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
   expect_get_callee_info(irs_info, bindings);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -4934,8 +4833,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   RespMatcher(200).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -4949,7 +4846,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
   expect_get_callee_info(irs_info, bindings);
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, _));
@@ -5009,8 +4906,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   RespMatcher(200).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -5022,7 +4917,7 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP", 0, "");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP", 0, "");
   expect_get_callee_info(irs_info, bindings);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -5056,8 +4951,6 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
   tpCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -5069,7 +4962,7 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP", 0, "frog");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP", 0, "frog");
   expect_get_callee_info(irs_info, bindings);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -5103,8 +4996,6 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
   tpCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -5118,7 +5009,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
   // Set up caller info, which includes an iFC for a non-existent AS.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Set up callee info.
@@ -5168,8 +5059,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
               MatchesRegex("Record-Route:.*billing-role=charge-term.*"
                            "Record-Route:.*billing-role=charge-orig.*"));
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -5183,7 +5072,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   // Set up caller info.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Set up callee info.
@@ -5253,8 +5142,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   RespMatcher(200).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -5269,10 +5156,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   // real AS.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp");
-  add_ifc(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info_1, ifc_list, "sip:6505551000@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_1, service_profile, "sip:6505551000@homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address")));
@@ -5311,8 +5198,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   EXPECT_THAT(get_headers(out, "Record-Route"),
               MatchesRegex("Record-Route:.*billing-role=charge-orig.*"));
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -5339,10 +5224,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   // prevent cleanup issues at the end of the test.
   HSSConnection::irs_info irs_info_2;
   setup_irs_info(irs_info_2, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp");
-  add_ifc(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info_2, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
+  set_ifcs_from_service_profile(irs_info_2, service_profile, "sip:6505551234@homedomain");
   expect_get_subscriber_state(irs_info_2, "sip:6505551234@homedomain");
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
@@ -5397,7 +5282,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
 
   stack_data.record_route_on_initiation_of_terminating = old_rr_on_init_of_term;
   stack_data.record_route_on_completion_of_originating = old_rr_on_comp_of_orig;
-  free(ifc_str);
 }
 
 
@@ -5411,10 +5295,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   // reject the call before these are looked up.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
-  add_ifc(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=TCP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=TCP");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -5517,8 +5401,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorSentImmediately)
   ASSERT_EQ(0, txdata_count());
   pjsip_tx_data_dec_ref(invite_1_tx_data); invite_1_tx_data = NULL;
   pjsip_tx_data_dec_ref(invite_2_tx_data); invite_2_tx_data = NULL;
-
-  free(ifc_str);
 }
 
 
@@ -5531,10 +5413,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   // before these are looked up.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
-  add_ifc(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56789;transport=TCP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56789;transport=TCP");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -5634,8 +5516,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueErrorTimeoutThenResp)
   ASSERT_EQ(0, txdata_count());
   pjsip_tx_data_dec_ref(invite_1_tx_data); invite_1_tx_data = NULL;
   pjsip_tx_data_dec_ref(invite_2_tx_data); invite_2_tx_data = NULL;
-
-  free(ifc_str);
 }
 
 
@@ -5648,10 +5528,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueMessageErrorTimeoutThenResp)
   // message before the target is looked up.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
-  add_ifc(ifc_list, 2, {"<Method>MESSAGE</Method>"}, "sip:4.2.3.4:56789;transport=TCP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP")
+    .addIfc(2, {"<Method>MESSAGE</Method>"}, "sip:4.2.3.4:56789;transport=TCP");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
@@ -5726,8 +5606,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueMessageErrorTimeoutThenResp)
   ASSERT_EQ(0, txdata_count());
   pjsip_tx_data_dec_ref(message_1_tx_data); message_1_tx_data = NULL;
   pjsip_tx_data_dec_ref(message_2_tx_data); message_2_tx_data = NULL;
-
-  free(ifc_str);
 }
 
 
@@ -5877,11 +5755,10 @@ void SCSCFTestBase::doAsOriginated(const std::string& msg, bool expect_orig)
 {
   // Set up caller info.
   HSSConnection::irs_info irs_info_1;
-  char* ifc_str_1 = NULL;
   if (expect_orig)
   {
     setup_irs_info(irs_info_1, "6505551000", "homedomain");
-    ifc_str_1 = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+    set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
     expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
   }
 
@@ -5889,7 +5766,7 @@ void SCSCFTestBase::doAsOriginated(const std::string& msg, bool expect_orig)
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  char* ifc_str_2 = set_service_profile(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifc(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -5986,9 +5863,6 @@ void SCSCFTestBase::doAsOriginated(const std::string& msg, bool expect_orig)
   inject_msg(respond_to_current_txdata(200));
   inject_msg(respond_to_current_txdata(200));
   inject_msg(respond_to_current_txdata(200));
-
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -6042,10 +5916,10 @@ TEST_F(SCSCFTest, Cdiv)
   // Call originally sent to "sip:6505551234@homedomain". Set up its info.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info_1, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_1, service_profile, "sip:6505551234@homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551234@homedomain", 2);
 
   // The call is diverted to "sip:6505555678@homedomain". Set up its info.
@@ -6172,8 +6046,6 @@ TEST_F(SCSCFTest, Cdiv)
   free_txdata();
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-
-  free(ifc_str);
 }
 
 
@@ -6183,10 +6055,10 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   // Setup info about the callee.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain", 2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -6285,8 +6157,6 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   // This route header is determined from the BGCF config.
   EXPECT_EQ("Route: <sip:10.0.0.1:5060;transport=TCP;lr>", get_headers(out, "Route"));
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -6306,7 +6176,7 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   setup_irs_info(irs_info_2, "6505551234", "homedomain");
   // Set default handling to terminate to prevent clean up issues at end of
   // test.
-  char* ifc_str = set_service_profile(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP", 0, "1");
+  set_ifc(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP", 0, "1");
   expect_get_subscriber_state(irs_info_2, "sip:6505551234@homedomain");
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
@@ -6362,8 +6232,6 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -6376,7 +6244,7 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
   setup_irs_info(irs_info, "1115551234", "homedomain");
   // Set default handling to terminate to prevent clean up issues at end of
   // test.
-  char* ifc_str = set_service_profile(irs_info, "sip:1115551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP", 0, "1");
+  set_ifc(irs_info, "sip:1115551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP", 0, "1");
   expect_get_subscriber_state(irs_info, "sip:1115551234@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -6425,8 +6293,6 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:1115551234@homedomain>;sescase=term;regstate=reg"));
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -6437,10 +6303,10 @@ TEST_F(SCSCFTest, MmtelCdiv)
   // terminating iFC.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:mmtel.homedomain");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info_1, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:mmtel.homedomain");
+  set_ifcs_from_service_profile(irs_info_1, service_profile, "sip:6505551234@homedomain");
   // Lookup iFCs on orig and term (but they are cached so only need one lookup
   // here), and lookup if retarget. So overall expect two lookups.
   expect_get_subscriber_state(irs_info_1, "sip:6505551234@homedomain", 2);
@@ -6562,8 +6428,6 @@ TEST_F(SCSCFTest, MmtelCdiv)
   EXPECT_THAT(get_headers(out, "History-Info"),
               testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -6572,17 +6436,17 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   // Set up info about the original callee.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551234", "homedomain");
-  char* ifc_str_1 = set_service_profile(irs_info_1, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>2</SessionCase><!-- terminating-unregistered -->"}, "sip:mmtel.homedomain");
+  set_ifc(irs_info_1, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>2</SessionCase><!-- terminating-unregistered -->"}, "sip:mmtel.homedomain");
   irs_info_1._regstate = "UNREGISTERED";
   expect_get_subscriber_state(irs_info_1, "sip:6505551234@homedomain", 2);
 
   // Set up info about the forwarded callee.
   HSSConnection::irs_info irs_info_2;
   setup_irs_info(irs_info_2, "6505555678", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>2</SessionCase><!-- terminating-unregistered -->"}, "sip:mmtel.homedomain");
-  char* ifc_str_2 = set_service_profile_from_ifc_list(irs_info_2, ifc_list, "sip:6505555678@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>2</SessionCase><!-- terminating-unregistered -->"}, "sip:mmtel.homedomain");
+  set_ifcs_from_service_profile(irs_info_2, service_profile, "sip:6505555678@homedomain");
   irs_info_2._regstate = "UNREGISTERED";
   expect_get_subscriber_state(irs_info_2, "sip:6505555678@homedomain", 2);
 
@@ -6737,9 +6601,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   tpDivertedToCalleeBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", r1.uri());
   free_txdata();
-
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -6749,14 +6610,14 @@ TEST_F(SCSCFTest, MmtelFlow)
   // Set up caller info.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str_1 = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Set up callee info.
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  char* ifc_str_2 = set_service_profile(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifc(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 2);
 
   _xdm_connection->put("sip:6505551000@homedomain",
@@ -6842,9 +6703,6 @@ TEST_F(SCSCFTest, MmtelFlow)
   EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
   EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
   free_txdata();
-
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -6868,20 +6726,20 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
   irs_info_1._regstate = "UNREGISTERED";
-  std::vector<std::string> ifc_list_1;
-  add_ifc(ifc_list_1, 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
-  add_ifc(ifc_list_1, 2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  char* ifc_str_1 = set_service_profile_from_ifc_list(irs_info_1, ifc_list_1, "sip:6505551000@homedomain");
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_1, service_profile_1, "sip:6505551000@homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Set up callee info.
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  std::vector<std::string> ifc_list_2;
-  add_ifc(ifc_list_2, 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
-  add_ifc(ifc_list_2, 2, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
-  char* ifc_str_2 = set_service_profile_from_ifc_list(irs_info_2, ifc_list_2, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_2, service_profile_2, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 3);
 
   _xdm_connection->put("sip:6505551000@homedomain",
@@ -7011,9 +6869,6 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
   free_txdata();
-
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -7035,21 +6890,21 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   // Set up caller info.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  std::vector<std::string> ifc_list_1;
-  add_ifc(ifc_list_1, 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
-  add_ifc(ifc_list_1, 2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
-  char* ifc_str_1 = set_service_profile_from_ifc_list(irs_info_1, ifc_list_1, "sip:6505551000@homedomain");
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  set_ifcs_from_service_profile(irs_info_1, service_profile_1, "sip:6505551000@homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Set up callee info.
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  std::vector<std::string> ifc_list_2;
-  add_ifc(ifc_list_2, 1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
-  add_ifc(ifc_list_2, 2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
-  add_ifc(ifc_list_2, 3, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
-  char* ifc_str_2 = set_service_profile_from_ifc_list(irs_info_2, ifc_list_2, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(3, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_2, service_profile_2, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 4);
 
   _xdm_connection->put("sip:6505551000@homedomain",
@@ -7145,9 +7000,6 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
   free_txdata();
-
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -7163,7 +7015,7 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
   // before it is passed on.
   HSSConnection::irs_info irs_info_2;
   setup_irs_info(irs_info_2, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>OPTIONS</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>OPTIONS</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info_2, "sip:6505551234@homedomain");
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
@@ -7211,8 +7063,6 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
   msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -7228,7 +7078,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   // Set up callee info.
   HSSConnection::irs_info irs_info_2;
   setup_irs_info(irs_info_2, "6505501234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info_2, "sip:6505501234@homedomain", 1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info_2, "sip:6505501234@homedomain", 1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info_2, "sip:6505501234@homedomain", 2);
 
   _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
@@ -7345,8 +7195,6 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-
-  free(ifc_str);
 }
 
 
@@ -7360,7 +7208,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   // should be done on "tel:6505551000".
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "", false, true);
-  char* ifc_str = set_service_profile(irs_info, "tel:6505551000", 1, {"<Method>INVITE</Method>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "tel:6505551000", 1, {"<Method>INVITE</Method>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info, "tel:6505551000");
 
   // When the P-Asserted-Identity doesn't include "user=phone", expect the
@@ -7506,8 +7354,6 @@ TEST_F(SCSCFTest, OriginatingExternal)
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-
-  free(ifc_str);
 }
 
 
@@ -7517,14 +7363,14 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   // Set up caller info.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str_1 = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Set up callee info.
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  char* ifc_str_2 = set_service_profile(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 2);
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
@@ -7710,9 +7556,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   }
 
   EXPECT_FALSE(found_wrong_uri);
-
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -7723,14 +7566,14 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   // Set up caller info, including one iFC.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str_1 = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Set up callee info, including one iFC.
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  char* ifc_str_2 = set_service_profile(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  set_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 2);
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
@@ -7982,9 +7825,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   // tracked.
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -7995,14 +7835,14 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   // Set up caller info, including one iFC.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str_1 = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Set up callee info, including one iFC.
   HSSConnection::irs_info irs_info_2;
   Bindings bindings;
   setup_callee_info(irs_info_2, bindings);
-  char* ifc_str_2 = set_service_profile(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  set_ifc(irs_info_2, "sip:6505551234@homedomain", 1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 2);
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
@@ -8180,9 +8020,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   RespMatcher(408).matches(current_txdata()->msg);
   tpAS.expect_target(current_txdata(), true);
   free_txdata();
-
-  free(ifc_str_1);
-  free(ifc_str_2);
 }
 
 
@@ -8197,7 +8034,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   // Set up callee info, including one iFC.
   HSSConnection::irs_info irs_info_2;
   setup_irs_info(irs_info_2, "6505501234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info_2, "sip:6505501234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info_2, "sip:6505501234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info_2, "sip:6505501234@homedomain", 2);
 
   _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
@@ -8379,8 +8216,6 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   //  We should have tracked the session setup time for just the original session.
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-
-  free(ifc_str);
 }
 
 
@@ -8706,7 +8541,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_irs_info(irs_info, "6505550231", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505550231@homedomain", 1, {"<Method>REGISTER</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
+  set_ifc(irs_info, "sip:6505550231@homedomain", 1, {"<Method>REGISTER</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
   setup_binding(bindings, "sip:6505550231@homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213");
   expect_get_callee_info(irs_info, bindings, "sip:6505550231@homedomain");
 
@@ -8766,8 +8601,6 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   // UE ACKs the response.
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
-
-  free(ifc_str);
 }
 
 
@@ -8780,7 +8613,7 @@ TEST_F(SCSCFTest, FlowFailedResponseBindingRemovalFails)
   HSSConnection::irs_info irs_info;
   Bindings bindings_1;
   setup_irs_info(irs_info, "6505550231", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505550231@homedomain", 1, {"<Method>REGISTER</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
+  set_ifc(irs_info, "sip:6505550231@homedomain", 1, {"<Method>REGISTER</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, "1");
   setup_binding(bindings_1, "sip:6505550231@homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213");
   expect_get_callee_info(irs_info, bindings_1, "sip:6505550231@homedomain");
 
@@ -8844,8 +8677,6 @@ TEST_F(SCSCFTest, FlowFailedResponseBindingRemovalFails)
   // UE ACKs the response.
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
-
-  free(ifc_str);
 }
 
 
@@ -8859,7 +8690,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
 {
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain", 2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -8947,8 +8778,6 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
 
   EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -8959,7 +8788,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
   // Setup info about the callee.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain", 2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -9044,8 +8873,6 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
 
   EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -9056,10 +8883,10 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
   // Setup info about the callee.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56787;transport=UDP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP")
+    .addIfc(1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56787;transport=UDP");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain", 2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -9148,8 +8975,6 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
 
   EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -9351,10 +9176,10 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
   // Set up caller info.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP");
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info_1, ifc_list, "sip:6505551000@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifcs_from_service_profile(irs_info_1, service_profile, "sip:6505551000@homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -9415,8 +9240,6 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
   // Should not RR between AS's and therefore shouldn't SE
   ASSERT_TRUE(get_headers(out, "Record-Route").empty());
   ASSERT_TRUE(get_headers(out, "Session-Expires").empty());
-
-  free(ifc_str);
 }
 
 
@@ -9462,10 +9285,10 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   // Set up callee info.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   // First call succeeds, second and third calls fail.
   EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551234@homedomain"), _, _))
     .Times(3)
@@ -9537,8 +9360,6 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   RespMatcher(504).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -9558,10 +9379,10 @@ TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
   // Set up callee info.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   // First call succeeds, second and third calls fail.
   EXPECT_CALL(*_sm, get_subscriber_state(IrsQueryWithPublicId("sip:6505551234@homedomain"), _, _))
     .Times(3)
@@ -9639,8 +9460,6 @@ TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
   RespMatcher(404).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -9701,7 +9520,7 @@ TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
   // Set up callee info.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain", true); // This IMPU is barred.
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
   Bindings bindings;
   setup_binding(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", true); // Add an emergency binding.
@@ -9722,8 +9541,6 @@ TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
   SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
-
-  free(ifc_str);
 }
 
 
@@ -9738,7 +9555,7 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_irs_info(irs_info, "6505551234", "homedomain", true); // This IMPU is barred.
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  set_ifc(irs_info, "sip:6505551234@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
   setup_binding(bindings, "sip:6505551234@homedomain", "sip:fowertreetoowun@10.114.61.213:5061;transport=tcp;ob");
   setup_binding(bindings, "sip:6505551234@homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", true); // Add an emergency binding.
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
@@ -9760,8 +9577,6 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
   SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*sos.*"), hdrs);
-
-  free(ifc_str);
 }
 
 
@@ -9773,7 +9588,7 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectOrig)
   // Set up caller info.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 0, {"<Method>PUBLISH</Method>"}, "sip:DUMMY_AS");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 0, {"<Method>PUBLISH</Method>"}, "sip:DUMMY_AS");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -9801,8 +9616,6 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectOrig)
   RespMatcher(400).matches(out);
   tpBono.expect_target(current_txdata(), true);
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -9814,7 +9627,7 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectTerm)
   // Set up callee info.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551234", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551234@homedomain", 0, {"<Method>PUBLISH</Method>"}, "sip:DUMMY_AS");
+  set_ifc(irs_info, "sip:6505551234@homedomain", 0, {"<Method>PUBLISH</Method>"}, "sip:DUMMY_AS");
   expect_get_subscriber_state(irs_info, "sip:6505551234@homedomain");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -9842,7 +9655,6 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectTerm)
   RespMatcher(400).matches(out);
   tpBono.expect_target(current_txdata(), true);
   free_txdata();
-  free(ifc_str);
 }
 
 
@@ -9857,7 +9669,7 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
   // will fail if it is routed to).
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info_1, "sip:6505551000@homedomain", 0, {"<Method>PUBLISH</Method>"}, "sip:9.8.7.6:54321;transport=UDP");
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 0, {"<Method>PUBLISH</Method>"}, "sip:9.8.7.6:54321;transport=UDP");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Expect calls to look up iFCs and bindings for the callee.
@@ -9962,8 +9774,6 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
   // more realistic test of AS communication tracking.
   send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
-
-  free(ifc_str);
 }
 
 
@@ -10093,17 +9903,15 @@ TEST_F(SCSCFTest, OnlyDummyApplicationServers)
   HSSConnection::irs_info irs_info;
   Bindings bindings;
   setup_callee_info(irs_info, bindings);
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info, ifc_list, "sip:6505551234@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
+  set_ifcs_from_service_profile(irs_info, service_profile, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info, bindings);
 
   SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
-
-  free(ifc_str);
 }
 
 
@@ -10114,11 +9922,11 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
     // Expect call to get iFCs for caller.
   HSSConnection::irs_info irs_info_1;
   setup_irs_info(irs_info_1, "6505551000", "homedomain");
-  std::vector<std::string> ifc_list;
-  add_ifc(ifc_list, 0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
-  add_ifc(ifc_list, 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  add_ifc(ifc_list, 2, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
-  char* ifc_str = set_service_profile_from_ifc_list(irs_info_1, ifc_list, "sip:6505551000@homedomain");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
+  set_ifcs_from_service_profile(irs_info_1, service_profile, "sip:6505551000@homedomain");
   expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
 
   // Expect calls to get iFCs and bindings for callee.
@@ -10196,8 +10004,6 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
   // more realistic test of AS communication tracking.
   send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
-
-  free(ifc_str);
 }
 
 
@@ -10227,7 +10033,7 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
   // triggered on originating calls, if the RequestURI contains "sos".
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<RequestURI>sos</RequestURI>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=TCP");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<RequestURI>sos</RequestURI>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=TCP");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   // Create a MESSAGE containing the URI "urn:service:sos".
@@ -10267,8 +10073,6 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
   RespMatcher(200).matches(out);
   _tp_default->expect_target(current_txdata(), true);
   free_txdata();
-
-  free(ifc_str);
 }
 
 
@@ -10652,7 +10456,7 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   // Set up caller info.
   HSSConnection::irs_info irs_info;
   setup_irs_info(irs_info, "6505551000", "homedomain");
-  char* ifc_str = set_service_profile(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  set_ifc(irs_info, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
   expect_get_subscriber_state(irs_info, "sip:6505551000@homedomain");
 
   // Set LIA to find callee - this will be needed in "doAsOriginated", which is
@@ -10763,6 +10567,5 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   delete ralf_request_2; ralf_request_2 = NULL;
   delete ralf_request_3; ralf_request_3 = NULL;
   delete ralf_request_4; ralf_request_4 = NULL;
-  free(ifc_str);
 }
 

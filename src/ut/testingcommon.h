@@ -109,7 +109,7 @@ namespace TestingCommon
   //           0                                 This can be 0, 1, or invalid.
   //         </DefaultHandling>
   //         <ServiceInfo>
-  //           banana                             This value can vary.
+  //           banana                            This value can vary.
   //         </SerivceInfo>
   //         <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>
   //       </ApplicationServer>
@@ -126,7 +126,7 @@ namespace TestingCommon
     ServiceProfileBuilder& addIdentity(std::string);
     ServiceProfileBuilder& addWildcard(std::string, int, std::string);
     ServiceProfileBuilder& addBarringIndication(std::string, std::string);
-    ServiceProfileBuilder& addIfc(int, std::vector<std::string>, std::string, int=0, int=0, std::string = "", bool = false);
+    ServiceProfileBuilder& addIfc(int, std::vector<std::string>, std::string, int=0, std::string="0", std::string = "", bool = false);
     ServiceProfileBuilder& addIfcNoDefHandling(int, std::vector<std::string>, std::string, int=0);
     ServiceProfileBuilder& addIfcBadDefField(int, std::vector<std::string>, std::string, int, std::string);
 

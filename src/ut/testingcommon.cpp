@@ -205,7 +205,7 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfc(int priority,
                                                      std::vector<std::string> triggers,
                                                      std::string app_serv_name,
                                                      int cond_neg,
-                                                     int default_handling,
+                                                     std::string default_handling,
                                                      std::string service_info,
                                                      bool include_body)
 {
@@ -214,7 +214,7 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfc(int priority,
   new_ifc.triggers = triggers;
   new_ifc.app_server_name = app_serv_name;
   new_ifc.condition_negated = std::to_string(cond_neg);
-  new_ifc.default_handling = std::to_string(default_handling);
+  new_ifc.default_handling = default_handling;
   new_ifc.service_info = service_info;
   new_ifc.include_body = include_body;
 
