@@ -122,6 +122,7 @@ namespace TestingCommon
     ~ServiceProfileBuilder() {};
 
     std::string return_profile();
+    Ifcs return_ifcs();
     ServiceProfileBuilder& addIdentity(std::string);
     ServiceProfileBuilder& addWildcard(std::string, int, std::string);
     ServiceProfileBuilder& addBarringIndication(std::string, std::string);

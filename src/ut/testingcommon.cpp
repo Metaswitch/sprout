@@ -32,7 +32,6 @@ std::string TestingCommon::add_node(std::string node_name,
 
 using namespace TestingCommon;
 
-
 // Returns a string, which is the service profile in XML.
 std::string ServiceProfileBuilder::return_profile()
 {
@@ -86,6 +85,20 @@ std::string ServiceProfileBuilder::return_profile()
 
   service_profile += end_node(SERVICE_PROFILE);
   return service_profile;
+}
+
+// Return an Ifcs object that represents the service profile.
+Ifcs ServiceProfileBuilder::return_ifcs()
+{
+  // Get the string representation of the service profile.
+  std::string sp_str = return_profile();
+
+  // Parse the service profile string to XML.
+  std::shared_ptr<rapidxml::xml_document<>> root (new rapidxml::xml_document<>);
+  root->parse<0>(root->allocate_string(sp_str.c_str()));
+
+  // Build and return Ifcs from the XML.
+  return Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
 }
 
 // Add an identity to the list of identities. This identity is always added with
