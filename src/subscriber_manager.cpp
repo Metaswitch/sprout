@@ -463,15 +463,15 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
 }
 
 HTTPCode SubscriberManager::update_subscription(
-                                           const std::string& public_id,
-                                           const SubscriptionPair& subscription,
-                                           HSSConnection::irs_info& irs_info,
-                                           SAS::TrailId trail)
+                                              const std::string& public_id,
+                                              Subscriptions& subscriptions,
+                                              HSSConnection::irs_info& irs_info,
+                                              SAS::TrailId trail)
 {
   TRC_DEBUG("Updating subscription for IMPU %s", public_id.c_str());
 
   return modify_subscription(public_id,
-                             {subscription},
+                             subscriptions,
                              "",
                              irs_info,
                              trail);

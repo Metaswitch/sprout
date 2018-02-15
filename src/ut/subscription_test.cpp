@@ -194,16 +194,17 @@ string SubscribeMessage::get()
   return ret;
 }
 
-/// Save off the SubscriptionPair. We can't just use SaveArg, as this only
-/// saves off the SubscriptionPair, not the SubscriptionPair members. This
-/// means that the subscription object has been deleted before we can
-/// check it. This allows us to create a copy of the Subscription object
-/// we can check against. The caller is responsible for deleting the copied
-/// object.
-ACTION_P2(SaveSubscriptionPair, first, second)
+/// Save off the SubscriptionPair in the Subscriptions map. We can't just use
+/// SaveArg, as this only saves off the SubscriptionPair, not the
+/// SubscriptionPair members. This means that the subscription object has been
+/// deleted before we can check it. This allows us to create a copy of the
+/// Subscription object we can check against. The caller is responsible for
+/// deleting the copied object.
+ACTION_P2(SaveSubscription, first, second)
 {
-  *first = arg1.first;
-  *second = Subscription(*(arg1.second));
+  // There should only ever be one SubscriptionPair in the Subscriptions map.
+  *first = arg1.begin()->first;
+  *second = Subscription(*(arg1.begin()->second));
 }
 
 class SubscriptionTest : public SipTest
@@ -334,7 +335,7 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
   irs_info._ecfs.push_back("ECF TEST");
 
   EXPECT_CALL(*_sm, update_subscription("sip:6505550231@homedomain", _, _, _))
-    .WillOnce(DoAll(SaveSubscriptionPair(&subscription_id, &subscription),
+    .WillOnce(DoAll(SaveSubscription(&subscription_id, &subscription),
                     SetArgReferee<2>(irs_info),
                     Return(HTTP_OK)));
 

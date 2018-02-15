@@ -332,9 +332,11 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     TRC_DEBUG("Adding/updating the subscription with ID %s",
               new_subscription->get_id().c_str());
 
+    Subscriptions new_subscriptions;
+    new_subscriptions.insert(std::make_pair(new_subscription->get_id(), new_subscription));
     rc = _subscription->_sm->update_subscription(
                    public_id,
-                   std::make_pair(new_subscription->get_id(), new_subscription),
+                   new_subscriptions,
                    irs_info,
                    trail_id);
   }

@@ -45,7 +45,7 @@ public:
                                          SAS::TrailId trail));
 
   MOCK_METHOD4(update_subscription, HTTPCode(const std::string& public_id,
-                                             const SubscriptionPair& subscription,
+                                             Subscriptions& subscriptions,
                                              HSSConnection::irs_info& irs_info,
                                              SAS::TrailId trail));
 

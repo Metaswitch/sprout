@@ -1101,11 +1101,12 @@ TEST_F(SubscriberManagerTest, TestAddSubscription)
   // Create a subscription object that we want SM to update the stored data
   // with.
   Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
-  SubscriptionPair updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);
+  Subscriptions updated_subscriptions;
+  updated_subscriptions.insert(std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription));
 
   // Call into SM to update the subscriber.
   HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         updated_subscription,
+                                                         updated_subscriptions,
                                                          irs_info,
                                                          DUMMY_TRAIL_ID);
 
@@ -1116,7 +1117,7 @@ TEST_F(SubscriberManagerTest, TestAddSubscription)
   ASSERT_NE(patch_object._update_subscriptions.find(AoRTestUtils::SUBSCRIPTION_ID),
             patch_object._update_subscriptions.end());
   EXPECT_TRUE(*(patch_object._update_subscriptions[AoRTestUtils::SUBSCRIPTION_ID]) ==
-              *(updated_subscription.second));
+              *(updated_subscriptions.begin()->second));
   EXPECT_TRUE(patch_object._increment_cseq);
 
   // Tidy up. The get/patch AoRs have been deleted by SM already.
@@ -1177,8 +1178,9 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionHSSFail)
   EXPECT_CALL(*_hss_connection, get_registration_data(_, _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
   HSSConnection::irs_info irs_info;
+  Subscriptions subscriptions; // Blank object to use as placeholder.
   HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         SubscriptionPair(),
+                                                         subscriptions,
                                                          irs_info,
                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_NOT_FOUND);
@@ -1207,8 +1209,9 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionNoDefaultIMPU)
   EXPECT_CALL(*_hss_connection, get_registration_data(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
+  Subscriptions subscriptions; // Blank object to use as placeholder.
   HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         SubscriptionPair(),
+                                                         subscriptions,
                                                          irs_info,
                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_BAD_REQUEST);
@@ -1241,8 +1244,9 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionS4LookupFail)
                     Return(HTTP_OK)));
   EXPECT_CALL(*_s4, handle_get(_, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
+  Subscriptions subscriptions; // Blank object to use as placeholder.
   HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         SubscriptionPair(),
+                                                         subscriptions,
                                                          irs_info,
                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
@@ -1283,10 +1287,11 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionS4WriteFail)
   EXPECT_CALL(*_s4, handle_patch(_, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
   Subscription* subscription = AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
-  SubscriptionPair updated_subscription = std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription);
+  Subscriptions updated_subscriptions;
+  updated_subscriptions.insert(std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription));
   HSSConnection::irs_info irs_info_out;
   HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         updated_subscription,
+                                                         updated_subscriptions,
                                                          irs_info_out,
                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
