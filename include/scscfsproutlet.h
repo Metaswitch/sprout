@@ -393,7 +393,7 @@ private:
   /// @return                - True if the aliases have been correctly returned,
   ///                          false otherwise.
   /// @param[in]  public_id  - The public ID whose aliases are being looked up.
-  /// @param[out] uris       - The associated uris for the public ID passed in.
+  /// @param[out] aliases    - The aliases for the public ID passed in.
   bool get_aliases(std::string public_id,
                    std::vector<std::string>& aliases);
 
@@ -413,22 +413,26 @@ private:
                        Ifcs& ifcs);
 
   /// Gets the subscriber's data (associated URIs, iFCs...) from the cache if
-  /// possible, or from the subscriber manager (which talk to homestead, which
+  /// possible, or from the subscriber manager (which talks to homestead, which
   /// talks to the HSS) if the data isn't cached, and then caches the data.
+  /// Class variables are set containing the info returned by the HSS, which is
+  /// why this function doesn't need to return this info.
   ///
-  /// @return           - The HTTP result code from the subscriber manager.
-  /// @param public_id  - The public ID of the subscriber whose info is being
-  ///                     looked up.
+  /// @return               - The HTTP result code from the subscriber manager.
+  /// @param[in] public_id  - The public ID of the subscriber whose info is
+  ///                         being looked up.
   HTTPCode get_data_from_hss(std::string public_id);
 
   /// Asks the subscriber manager to fetch the subscriber's data (associated
   /// URIs, iFCs...) from homestead (which talks to the HSS).
+  /// Class variables are set containing the info returned by the HSS, which is
+  /// why this function doesn't need to return this info.
   ///
-  /// @return           - The HTTP result code from the subscriber manager.
-  /// @param public_id  - The public ID of the subscriber whose info is being
-  ///                     looked up.
-  /// @param irs_query  - IRS query containing details about the subscriber, to
-  ///                     allow them to be found.
+  /// @return               - The HTTP result code from the subscriber manager.
+  /// @param[in] public_id  - The public ID of the subscriber whose info is
+  ///                         being looked up.
+  /// @param[in] irs_query  - IRS query containing details about the subscriber,
+  ///                         to allow them to be found.
   HTTPCode read_hss_data(std::string public_id,
                          const HSSConnection::irs_query& irs_query);
 
