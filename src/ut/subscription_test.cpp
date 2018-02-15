@@ -332,6 +332,7 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
   HSSConnection::irs_info irs_info;
   irs_info._ccfs.push_back("CCF TEST");
   irs_info._ecfs.push_back("ECF TEST");
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
 
   EXPECT_CALL(*_sm, update_subscription("sip:6505550231@homedomain", _, _, _))
     .WillOnce(DoAll(SaveSubscriptionPair(&subscription_id, &subscription),
@@ -505,7 +506,11 @@ TEST_F(SubscriptionTest, IncorrectAcceptsHeader)
 // Test that a subscribe with no Accept header is processed successfully.
 TEST_F(SubscriptionTest, EmptyAcceptsHeader)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
   SubscribeMessage msg;
   msg._accepts = "";
@@ -518,7 +523,11 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
 // application/reginfo+xml is processed succesfully
 TEST_F(SubscriptionTest, CorrectAcceptsHeader)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
   SubscribeMessage msg;
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
@@ -527,60 +536,51 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   check_subscribe_response(200, "OK");
 }
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Server Error).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerServerError)
+// Test that subscribing to an unregistered subscriber fails
+TEST_F(SubscriptionTest, UnregisteredSubscribee)
 {
-  SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_SERVER_ERROR));
-  inject_msg(msg.get());
-  check_subscribe_response(500, "Internal Server Error");
-}
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_UNREGISTERED;
+  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Unavailable).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerUnavailable)
-{
   SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_TEMP_UNAVAILABLE));
   inject_msg(msg.get());
+
   check_subscribe_response(480, "Temporarily Unavailable");
 }
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Forbidden).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerForbidden)
+// Test that subscribing fails when the connection to the HSS times out.
+TEST_F(SubscriptionTest, HSSConnectionTimeout)
 {
+  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_GATEWAY_TIMEOUT));
+
   SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_FORBIDDEN));
   inject_msg(msg.get());
-  check_subscribe_response(403, "Forbidden");
+
+  check_subscribe_response(504, "Server Timeout");
 }
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Not Found).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerNotFound)
+// Test that subscribing fails when the connection to the HSS fails.
+TEST_F(SubscriptionTest, HSSConnectionError)
 {
-  SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_FORBIDDEN));
-  inject_msg(msg.get());
-  check_subscribe_response(403, "Forbidden");
-}
+  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_TEMP_UNAVAILABLE));
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Timeout).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerTimeout)
-{
   SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_SERVER_UNAVAILABLE));
   inject_msg(msg.get());
+
   check_subscribe_response(504, "Server Timeout");
 }
 
 // Test that nothing goes wrong if the subscribe is from a Tel URI
 TEST_F(SubscriptionTest, TelURI)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
   SubscribeMessage msg;
   msg._scheme = "tel";
@@ -592,7 +592,11 @@ TEST_F(SubscriptionTest, TelURI)
 // Test that nothing goes wrong if the ReqURI is a Tel URI
 TEST_F(SubscriptionTest, ReqUriTelUri)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
   SubscribeMessage msg;
   msg._domain = "example.domain.org";

@@ -51,10 +51,7 @@ void NotifySender::send_notifys(const std::string& aor_id,
              orig_aor._notify_cseq + 1 :
              updated_aor._notify_cseq;
 
-  AssociatedURIs associated_uris = updated_aor.bindings().empty() ?
-                                   orig_aor._associated_uris :
-                                   updated_aor._associated_uris;
-
+  AssociatedURIs associated_uris = updated_aor._associated_uris;
 
   // Don't include any emergency registrations in the NOTIFYs - TS specs
   // say that they shouldn't be present.

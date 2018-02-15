@@ -440,8 +440,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                 trail());
   }
 
-  // SS5-TODO - what error codes can the registrar return?
-  st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
+  if (rc == HTTP_OK)
+  {
+    st_code = PJSIP_SC_OK;
+  }
+  else
+  {
+    st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
+  }
 
   // 6. Build and send the response.
   pjsip_msg* rsp = create_response(req, st_code);

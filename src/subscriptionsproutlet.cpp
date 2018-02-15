@@ -349,7 +349,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                  trail_id);
   }
 
-  pjsip_status_code st_code = subscribe_convert_to_sip(rc);
+  pjsip_status_code st_code =
+                 determine_hss_sip_response(rc, irs_info._regstate, "SUBSCRIBE");
 
   pjsip_msg* rsp = create_response(req, st_code);
 
@@ -495,32 +496,4 @@ Subscription* SubscriptionSproutletTsx::create_subscription(pjsip_msg* req,
   subscription->_expires = now + expiry;
 
   return subscription;
-}
-
-// Convert the HTTPCode from the subscriber manager to the SIP code to send to
-// the caller.
-pjsip_status_code SubscriptionSproutletTsx::subscribe_convert_to_sip(HTTPCode rc)
-{
-  pjsip_status_code st_code;
-
-  switch (rc)
-  {
-    case HTTP_OK:
-      st_code = PJSIP_SC_OK;
-      break;
-    case HTTP_NOT_FOUND:
-    case HTTP_FORBIDDEN:
-      st_code = PJSIP_SC_FORBIDDEN;
-      break;
-    case HTTP_TEMP_UNAVAILABLE:
-      st_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
-      break;
-    case HTTP_SERVER_ERROR:
-      st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-      break;
-    default:
-      st_code = PJSIP_SC_SERVER_TIMEOUT;
-  }
-
-  return st_code;
 }
