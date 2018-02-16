@@ -635,7 +635,7 @@ void SipTest::register_uri(SubscriberManager* sm,
   {
     HSSConnection::irs_info irs_info;
     Subscription* subscription= AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
-    HTTPCode ret = sm->update_subscription(sip_uri, std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription), irs_info, 0);
+    HTTPCode ret = sm->update_subscription(sip_uri, {(std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription))}, irs_info, 0);
 
     delete subscription;
 

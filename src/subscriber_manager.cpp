@@ -459,7 +459,7 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
 
 HTTPCode SubscriberManager::update_subscription(
                                               const std::string& public_id,
-                                              Subscriptions& subscriptions,
+                                              const Subscriptions& subscriptions,
                                               HSSConnection::irs_info& irs_info,
                                               SAS::TrailId trail)
 {
