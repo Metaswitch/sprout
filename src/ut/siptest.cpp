@@ -615,8 +615,7 @@ void SipTest::register_uri(SubscriberManager* sm,
   }
 
   Bindings all_bindings;
-  Binding* binding = AoRTestUtils::build_binding(sip_uri, time(NULL));
-  binding->_uri = contact;
+  Binding* binding = AoRTestUtils::build_binding(sip_uri, time(NULL), contact);
   binding->_cid = "1";
   binding->_cseq = 1;
   AssociatedURIs associated_uris = {};

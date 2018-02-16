@@ -53,18 +53,19 @@ using testing::HasSubstr;
 using ::testing::Return;
 using ::testing::SaveArg;
 
-// TECH-DEBT-TODO:
-// This class is meant to be a set of FV tests that use real Sprout components
-// so far as possible, with the external interfaces being mocked/faked out.
-// So far, these tests are not complete, and aren't particularly well structured
-// either - we should rework the S-CSCF UTs to be much more UT based, pull a
-// bunch of those tests into this suite, and do a proper design/set up proper
-// infrastructure for these tests.
-// For now, these tests run through a couple of mainline calls. They don't
-// really check that much about the calls, just that basically the right flows
-// appear to be happening (as verified by looking at Record-/Route headers).
-// This is sufficient for now; but we shouldn't really add any more tests to
-// this suite without stepping back and doing this properly.
+/// @todo
+///
+/// This class is meant to be a set of FV tests that use real Sprout components
+/// so far as possible, with the external interfaces being mocked/faked out.
+/// So far, these tests are not complete, and aren't particularly well structured
+/// either - we should rework the S-CSCF UTs to be much more UT based, pull a
+/// bunch of those tests into this suite, and do a proper design/set up proper
+/// infrastructure for these tests.
+/// For now, these tests run through a couple of mainline calls. They don't
+/// really check that much about the calls, just that basically the right flows
+/// appear to be happening (as verified by looking at Record-/Route headers).
+/// This is sufficient for now; but we shouldn't really add any more tests to
+/// this suite without stepping back and doing this properly.
 class SCSCFMessage : public TestingCommon::Message
 {
 public:
@@ -137,7 +138,7 @@ public:
                                           );
     _scscf_sproutlet->init();
 
-    // Create the I-CSCF Sproutlets.
+    // Create the I-CSCF Sproutlet.
     _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
                                         string(UT_DIR).append("/test_icscf.json"));
 
@@ -393,8 +394,7 @@ void SproutFVTest::send_response_back_through_dialog(const std::string& response
     ASSERT_EQ(1, txdata_count());
     RespMatcher(status_code).matches(current_txdata()->msg);
 
-    // Render the received message to a string so we can re-inject it. 64kB
-    // should be enough space for this.
+    // Render the received message to a string so we can re-inject it.
     char msg_print_buf[0x10000];
     pj_ssize_t len = pjsip_msg_print(current_txdata()->msg,
                                      msg_print_buf,
@@ -642,9 +642,6 @@ void SproutFVTest::doFourAppServerFlow(std::string record_route_regex, bool app_
   // AS communication tracking works correctly. There are a total of 5 hops in
   // total.
   pjsip_tx_data* txdata = pop_txdata();
-
-  // Send a 200 ringing back down the chain to finish the transaction. This is a
-  // more realistic test of AS communication tracking.
   send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 5);
 
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
@@ -677,7 +674,6 @@ TEST_F(SproutFVTest, TestOnNetCallTelURI)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-
   SCSCFMessage msg;
   msg._toscheme = "tel";
   msg._to = "6505551234";
@@ -693,14 +689,10 @@ TEST_F(SproutFVTest, TestNotifys)
 {
   register_uri(_sm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", true);
   poll();
-
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
-
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   EXPECT_EQ("Event: reg", get_headers(out, "Event"));
-
-  // Tidy up
   inject_msg(respond_to_current_txdata(200));
 }
 
@@ -713,7 +705,6 @@ TEST_F(SproutFVTest, TestApplicationServers)
   // - AS3's Record-Route
   // - AS4's Record-Route
   // - on end of terminating handling
-
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -723,5 +714,30 @@ TEST_F(SproutFVTest, TestApplicationServers)
                       "Record-Route: <sip:4.2.3.4>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
                       "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-orig>", true);
+  free_txdata();
+}
+
+// Test an on-net call with unregistered subscriber.
+TEST_F(SproutFVTest, TestOnNetCallUnregistered)
+{
+  register_uri(_sm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", false);
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
+  SCSCFMessage msg;
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+
+  // Send INVITE
+  inject_msg(msg.get_request());
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  out = current_txdata()->msg;
+  RespMatcher(404).matches(out);
   free_txdata();
 }
