@@ -158,17 +158,14 @@ protected:
 
   static SipTest* _current_instance;
 
-  /// SDM-REFACTOR-TODO: Removed, but we may want to add this back in some
-  /// fashion for the FV tests.
   /// Register the specified URI.
-  //void register_uri(SubscriberDataManager* sdm,
-  //                  FakeHSSConnection* hss,
-  //                  const string& user,
-  //                  const string& domain,
-  //                  const string& contact,
-  //                  int lifetime = 3600,
-  //                  string instance_id="",
-  //                  bool emergency=false);
+  void register_uri(SubscriberManager* sm,
+                    FakeHSSConnection* hss,
+                    const string& user,
+                    const string& domain,
+                    const string& contact,
+                    bool add_subscription = true,
+                    bool add_tel = true);
 
   /// Build an incoming SIP packet.
   pjsip_rx_data* build_rxdata(const string& msg, TransportFlow* tp = _tp_default, pj_pool_t* rdata_pool = NULL);
