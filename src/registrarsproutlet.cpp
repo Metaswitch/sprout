@@ -32,7 +32,7 @@ extern "C" {
 #include "utils.h"
 #include "wildcard_utils.h"
 #include "sproutsasevent.h"
-#include "hss_sip_mapping.h"
+#include "sm_sip_mapping.h"
 #include "registrarsproutlet.h"
 #include "constants.h"
 #include "custom_headers.h"
@@ -294,7 +294,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   std::string default_impu;
 
   HTTPCode rc = _registrar->_sm->get_subscriber_state(irs_query, irs_info, trail());
-  st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
+  st_code = determine_sm_sip_response(rc, irs_info._regstate, "REGISTER");
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -366,7 +366,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
   {
     // Getting the current bindings failed. SAS log and reject the request.
-    st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
+    st_code = determine_sm_sip_response(rc, irs_info._regstate, "REGISTER");
     TRC_DEBUG("Failed to get current bindings for %s  - error is %d",
               default_impu.c_str(), rc);
     // EM-TODO: REDO SAS log
@@ -440,8 +440,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                 trail());
   }
 
-  // SS5-TODO - what error codes can the registrar return?
-  st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
+  if (rc == HTTP_OK)
+  {
+    st_code = PJSIP_SC_OK;
+  }
+  else
+  {
+    st_code = determine_sm_sip_response(rc, irs_info._regstate, "REGISTER");
+  }
 
   // 6. Build and send the response.
   pjsip_msg* rsp = create_response(req, st_code);

@@ -32,6 +32,7 @@ extern "C" {
 #include "pjutils.h"
 #include "test_interposer.hpp"
 #include "siptest.hpp"
+#include "aor_test_utils.h"
 
 using namespace std;
 
@@ -593,42 +594,59 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
-// SDM-REFACTOR-TODO - remove this function as it is no longer used (unless we
-// add it back in to be used in FV tests)
-/*void SipTest::register_uri(SubscriberDataManager* sdm,
+void SipTest::register_uri(SubscriberManager* sm,
                            FakeHSSConnection* hss,
                            const std::string& user,
                            const std::string& domain,
                            const std::string& contact,
-                           int lifetime,
-                           std::string instance_id,
-                           bool emergency)
+                           bool add_subscription,
+                           bool add_tel)
 {
-  string uri("sip:");
-  uri.append(user).append("@").append(domain);
+  string sip_uri("sip:");
+  sip_uri.append(user).append("@").append(domain);
+
   if (hss)
   {
-    hss->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss->set_impu_result(sip_uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
+    if (add_tel)
+    {
+      hss->set_impu_result("tel:" + user, "call", RegDataXMLUtils::STATE_REGISTERED, "");
+    }
   }
-  AoRPair* aor = sdm->get_aor_data(uri, 0);
-  Binding* binding = aor->get_current()->get_binding(contact);
-  binding->_uri = contact;
+
+  Bindings all_bindings;
+  Binding* binding = AoRTestUtils::build_binding(sip_uri, time(NULL), contact);
   binding->_cid = "1";
   binding->_cseq = 1;
-  binding->_expires = time(NULL) + lifetime;
-  binding->_priority = 1000;
-  binding->_emergency_registration = emergency;
-  if (!instance_id.empty())
-  {
-    binding->_params["+sip.instance"] = instance_id;
-  }
   AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(uri, false);
-  bool ret = sdm->set_aor_data(uri, SubscriberDataManager::EventTrigger::ADMIN, aor, 0);
-  delete aor;
-  EXPECT_TRUE(ret);
-};
-*/
+  associated_uris.add_uri(sip_uri, false);
+  if (add_tel)
+  {
+    associated_uris.add_uri("tel:" + user, false);
+  }
+  HSSConnection::irs_info irs_info;
+  HTTPCode ret = sm->register_subscriber(sip_uri, "server_name_todo", associated_uris, {(std::make_pair(contact, binding))}, all_bindings, irs_info, 0);
+
+  delete binding;
+
+  EXPECT_EQ(ret, HTTP_OK);
+
+  if (add_subscription)
+  {
+    HSSConnection::irs_info irs_info;
+    Subscription* subscription= AoRTestUtils::build_subscription(AoRTestUtils::SUBSCRIPTION_ID, time(NULL));
+    HTTPCode ret = sm->update_subscription(sip_uri, std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription), irs_info, 0);
+
+    delete subscription;
+
+    EXPECT_EQ(ret, HTTP_OK);
+  }
+
+  for (BindingPair binding : all_bindings)
+  {
+    delete binding.second;
+  }
+}
 
 pjsip_tx_data* SipTest::current_txdata()
 {

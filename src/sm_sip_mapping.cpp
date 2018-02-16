@@ -1,5 +1,5 @@
 /*
- * @file hss_sip_mapping.cpp
+ * @file sm_sip_mapping.cpp
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -9,15 +9,12 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#include "hss_sip_mapping.h"
+#include "sm_sip_mapping.h"
+#include "xml_utils.h"
 
-#include "hssconnection.h"
-#include "pjutils.h"
-#include "stack.h"
-
-pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
-                                             std::string& regstate,
-                                             const char* sip_msg_type)
+pjsip_status_code determine_sm_sip_response(HTTPCode http_code,
+                                            std::string& regstate,
+                                            const char* sip_msg_type)
 {
   pjsip_status_code st_code = PJSIP_SC_OK;
 
