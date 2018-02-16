@@ -169,7 +169,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
       else
       {
         TRC_WARNING("Invalid SCSCF URI %s", scscf.c_str());
-        status_code = (pjsip_status_code)477;
+        status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
       }
     }
     else
@@ -253,7 +253,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
         {
           // Failed to parse capabilities, so reject with 480 response.
           TRC_INFO("Malformed required capabilities returned by HSS");
-          status_code = (pjsip_status_code)473;
+          status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
         }
       }
 
@@ -270,7 +270,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
     {
       // Failure response from HSS indicating that a subscriber exists but is unregistered and
       // has no unregistered services, so respond with 480 Temporarily Unavailable.
-      status_code = (pjsip_status_code)474;
+      status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
     }
     else
     {
@@ -374,8 +374,8 @@ int ICSCFUARouter::hss_query()
   {
     // HSS failed to respond or responded with invalid data, so reject the
     // request with a 480.
-    TRC_ERROR("I-CSCF UAR got %d HTTP response from Homestead, replying with SIP error 475", rc);
-    status_code = (pjsip_status_code)475;
+    TRC_ERROR("I-CSCF UAR got %d HTTP response from Homestead", rc);
+    status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
   }
   else
   {
@@ -448,8 +448,8 @@ int ICSCFLIRouter::hss_query()
     // HSS failed to respond or responded with invalid data, so reject the
     // request with a 480.
     // LCOV_EXCL_START
-    TRC_ERROR("I-CSCF UAR got %d HTTP response from Homestead, replying with SIP error 476", rc);
-    status_code = (pjsip_status_code)476;
+    TRC_ERROR("I-CSCF UAR got %d HTTP response from Homestead", rc);
+    status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
     // LCOV_EXCL_STOP
   }
   else

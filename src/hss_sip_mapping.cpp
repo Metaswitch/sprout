@@ -40,12 +40,12 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
           // "if the Request-URI of the SUBSCRIBE request contains a URI for
           // which currently no binding exists, then send a 480 (Temporarily
           // Unavailable) response"
-          st_code = (pjsip_status_code)471;
+          st_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
         }
         else
         {
           // LCOV_EXCL_START
-          st_code = (pjsip_status_code)524;
+          st_code = PJSIP_SC_SERVER_TIMEOUT;
           // LCOV_EXCL_STOP
         }
         break;
@@ -56,7 +56,7 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
         TRC_ERROR("Rejecting %s request as subscriber not present on the HSS",
                   sip_msg_type);
 
-        st_code = (pjsip_status_code)472;
+        st_code = PJSIP_SC_FORBIDDEN;
         break;
 
       case HTTP_SERVER_UNAVAILABLE:
@@ -76,7 +76,7 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
         TRC_ERROR("Rejecting %s request as unable to contact HSS: %d",
                   sip_msg_type, http_code);
 
-        st_code = (pjsip_status_code)534;
+        st_code = PJSIP_SC_SERVER_TIMEOUT;
         break;
 
       case HTTP_SERVER_ERROR:
@@ -85,14 +85,14 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
         TRC_ERROR("Rejecting %s request following error communicating with the HSS",
                   sip_msg_type);
 
-        st_code = (pjsip_status_code)520;
+        st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
         break;
 
       default:
         TRC_ERROR("Rejecting %s request following response %d from HSS",
                   sip_msg_type, http_code);
 
-        st_code = (pjsip_status_code)544;
+        st_code = PJSIP_SC_SERVER_TIMEOUT;
         break;
     }
   }
