@@ -12,7 +12,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          baseresolver.cpp \
                          sipresolver.cpp \
                          bono.cpp \
-                         hss_sip_mapping.cpp \
+                         sm_sip_mapping.cpp \
                          options.cpp \
                          sip_connection_pool.cpp \
                          flowtable.cpp \

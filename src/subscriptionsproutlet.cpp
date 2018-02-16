@@ -31,7 +31,7 @@ extern "C" {
 #include "contact_filtering.h"
 #include "subscriptionsproutlet.h"
 #include "uri_classifier.h"
-#include "hss_sip_mapping.h"
+#include "sm_sip_mapping.h"
 
 /// SubscriptionSproutlet constructor
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
@@ -350,7 +350,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   }
 
   pjsip_status_code st_code =
-                 determine_hss_sip_response(rc, irs_info._regstate, "SUBSCRIBE");
+                 determine_sm_sip_response(rc, irs_info._regstate, "SUBSCRIBE");
 
   pjsip_msg* rsp = create_response(req, st_code);
 
