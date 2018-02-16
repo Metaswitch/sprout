@@ -53,16 +53,12 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        SubscriberManager* sm,
                                        ACRFactory* rfacr_factory,
                                        int cfg_max_expires,
-                                       bool force_original_register_inclusion,
-                                       SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                       SNMP::RegistrationStatsTables* third_party_reg_stats_tbls) :
+                                       SNMP::RegistrationStatsTables* reg_stats_tbls) :
   Sproutlet(name, port, uri, "", aliases, NULL, NULL, network_function),
   _sm(sm),
   _acr_factory(rfacr_factory),
   _max_expires(cfg_max_expires),
-  _force_original_register_inclusion(force_original_register_inclusion),
   _reg_stats_tbls(reg_stats_tbls),
-  _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
   _next_hop_service(next_hop_service)
 {
 }
@@ -75,9 +71,6 @@ RegistrarSproutlet::~RegistrarSproutlet()
 bool RegistrarSproutlet::init()
 {
   bool init_success = true;
-
-  // EM-TODORegistrationUtils::init(_third_party_reg_stats_tbls,
-  //                                _force_original_register_inclusion);
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
@@ -517,12 +510,10 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       (rt != RegisterType::FETCH) &&
       (rt != RegisterType::FETCH_INITIAL))
   {
-    pjsip_msg* clone_rsp = clone_msg(rsp);
-
     int max_expiry = AoRUtils::get_max_expiry(all_bindings, now);
 
     _registrar->_sm->register_with_application_servers(req,
-                                                       clone_rsp,
+                                                       rsp,
                                                        public_id,
                                                        irs_info._service_profiles[public_id],
                                                        max_expiry,
@@ -621,7 +612,6 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
 
     if (PJUtils::is_emergency_registration(contact_hdr))
     {
-      TRC_DEBUG("EMER");
       if (expiry == 0)
       {
         TRC_DEBUG("Attempting to deregister an emergency registration");
@@ -734,10 +724,6 @@ void RegistrarSproutletTsx::get_bindings_from_req(
 
         TRC_DEBUG("Updating binding %s for contact %s",
                   binding_id.c_str(), contact_uri.c_str());
-
-        // TODO Examine Via header to see if we're the first hop
-        // TODO Only if we're not the first hop, check that the top path header
-        // has "ob" parameter
 
         // Get the Path headers, if present.  RFC 3327 allows us the option of
         // rejecting a request with a Path header if there is no corresponding

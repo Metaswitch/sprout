@@ -61,9 +61,7 @@ public:
                      SubscriberManager* sm,
                      ACRFactory* rfacr_factory,
                      int cfg_max_expires,
-                     bool force_original_register_inclusion,
-                     SNMP::RegistrationStatsTables* reg_stats_tbls,
-                     SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
+                     SNMP::RegistrationStatsTables* reg_stats_tbls);
   ~RegistrarSproutlet();
 
   bool init();
@@ -86,8 +84,8 @@ private:
   // Factory for create ACR messages for Rf billing flows.
   ACRFactory* _acr_factory;
 
+  // The maximum time a binding can exist for before needing re-registration.
   int _max_expires;
-  bool _force_original_register_inclusion;
 
   // Pre-constructed Service Route header added to REGISTER responses.
   pjsip_routing_hdr* _service_route;
@@ -95,7 +93,6 @@ private:
   // SNMP tables that count the number of attempts, successes and failures of
   // registration attempts.
   SNMP::RegistrationStatsTables* _reg_stats_tbls;
-  SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
 
   // The next service to route requests onto if the sproutlet does not handle
   // them itself.
