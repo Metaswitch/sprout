@@ -194,15 +194,15 @@ string SubscribeMessage::get()
   return ret;
 }
 
-/// Save off the SubscriptionPair in the Subscriptions map. We can't just use
-/// SaveArg, as this only saves off the SubscriptionPair, not the
-/// SubscriptionPair members. This means that the subscription object has been
-/// deleted before we can check it. This allows us to create a copy of the
+/// Save off the subscription (which is a pair) in the Subscriptions map. We
+/// can't just use SaveArg, as this only saves off the subscription pair, not
+/// its members. This means that the subscription object has been deleted before
+/// we can check it. This function allows us to create a copy of the
 /// Subscription object we can check against. The caller is responsible for
 /// deleting the copied object.
 ACTION_P2(SaveSubscription, first, second)
 {
-  // There should only ever be one SubscriptionPair in the Subscriptions map.
+  // There should only ever be one subscription in the Subscriptions map.
   *first = arg1.begin()->first;
   *second = Subscription(*(arg1.begin()->second));
 }

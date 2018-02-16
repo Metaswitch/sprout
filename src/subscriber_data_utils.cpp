@@ -133,12 +133,12 @@ void SubscriberDataUtils::classify_bindings(const std::string& aor_id,
 }
 
 void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
-                                               const SubscriberDataUtils::EventTrigger& event_trigger,
-                                               const Subscriptions& orig_subscriptions,
-                                               const Subscriptions& updated_subscriptions,
-                                               const ClassifiedBindings& classified_bindings,
-                                               const bool& associated_uris_changed,
-                                               ClassifiedSubscriptions& classified_subscriptions)
+                                                 const SubscriberDataUtils::EventTrigger& event_trigger,
+                                                 const Subscriptions& orig_subscriptions,
+                                                 const Subscriptions& updated_subscriptions,
+                                                 const ClassifiedBindings& classified_bindings,
+                                                 const bool& associated_uris_changed,
+                                                 ClassifiedSubscriptions& classified_subscriptions)
 {
   // We should have been given an empty classified_subscriptions vector, but
   // clear it just in case
@@ -188,7 +188,7 @@ void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
 
   // 1/2: Iterate over the original subscriptions and classify those that aren't
   // in the updated subscriptions.
-  for (SubscriptionPair orig_s : orig_subscriptions)
+  for (Subscriptions::Element orig_s : orig_subscriptions._subscriptions_map)
   {
     std::string subscription_id = orig_s.first;
     Subscription* subscription = orig_s.second;
@@ -240,7 +240,7 @@ void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
   }
 
   // 2/2: Iterate over the updated subscriptions and classify them.
-  for (SubscriptionPair updated_s : updated_subscriptions)
+  for (Subscriptions::Element updated_s : updated_subscriptions._subscriptions_map)
   {
 
     std::string subscription_id = updated_s.first;
@@ -248,7 +248,7 @@ void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
 
     // Find the subscription in the set if original subscriptions to determine
     // if the current subscription has been changed.
-    Subscriptions::const_iterator orig_s_match = orig_subscriptions.find(subscription_id);
+    std::map<std::string, Subscription*>::const_iterator orig_s_match = orig_subscriptions.find(subscription_id);
 
     SubscriberDataUtils::SubscriptionEvent event;
     bool notify_required = base_notify_required;
@@ -327,10 +327,3 @@ void SubscriberDataUtils::delete_subscriptions(ClassifiedSubscriptions& classifi
   classified_subscriptions.clear();
 }
 
-void SubscriberDataUtils::delete_subscriptions(Subscriptions& subscriptions)
-{
-  for (SubscriptionPair subscription : subscriptions)
-  {
-    delete subscription.second;
-  }
-}
