@@ -43,12 +43,16 @@ std::string aor_template(std::string expires)
 
 // Leave buffer time to ensure this expiry time hasn't passed when reading AoR
 // from remote site. All tests using this AoR will not have mimic timer pop.
-std::string not_expired = std::to_string(time(NULL) + 500);
-std::string AOR_WITH_BINDING = aor_template(not_expired);
+std::string AOR_WITH_BINDING()
+{
+  return aor_template(std::to_string(time(NULL) + 500));
+}
 
 // Tests that use this expired binding will have mimic timer pop.
-std::string expired = std::to_string(time(NULL) - 1);
-std::string AOR_WITH_BINDING_EXPIRED = aor_template(expired);
+std::string AOR_WITH_EXPIRED_BINDING()
+{
+  return aor_template(std::to_string(time(NULL) - 1));
+}
 
 /// Fixture for BasicS4Test.
 class BasicS4Test : public ::testing::Test
@@ -282,7 +286,7 @@ TEST_F(BasicS4Test, GetSubscriberInfoFoundOnRemoteSiteErrorOnWrite)
     InSequence s;
 
     get_data_expect_call_failure(_mock_store1, Store::Status::NOT_FOUND);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_chronos_put_expectations();
     set_data_expect_call(_mock_store1, Store::Status::ERROR);
   }
@@ -310,10 +314,10 @@ TEST_F(BasicS4Test, GetSubscriberInfoFoundOnRemoteSiteContentionOnWrite)
   {
     InSequence s;
     get_data_expect_call_failure(_mock_store1, Store::Status::NOT_FOUND);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_chronos_put_expectations();
     set_data_expect_call(_mock_store1, Store::Status::DATA_CONTENTION);
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
   }
 
   AoR* get_aor = NULL;
@@ -330,9 +334,9 @@ TEST_F(BasicS4Test, GetSubscriberInfoFoundOnRemoteSiteContentionOnWrite)
 // This test covers deleting a subscriber successfully from each site.
 TEST_F(BasicS4Test, DeleteSubscriber)
 {
-  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
-  get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
-  get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
+  get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
+  get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
   EXPECT_CALL(*_mock_store1, set_data(_, "aor_id", _, _, 0, _, An<Store::Format>()))
     .WillOnce(Return(Store::Status::OK));
   EXPECT_CALL(*_mock_store2, set_data(_, "aor_id", _, _, 0, _, An<Store::Format>()))
@@ -372,7 +376,7 @@ TEST_F(BasicS4Test, DeleteSubscriberStoreErrorOnGet)
 // on trying to write the delete to the local store.
 TEST_F(BasicS4Test, DeleteSubscriberContentionOnWrite)
 {
-  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
   set_data_expect_call(_mock_store1, Store::Status::DATA_CONTENTION);
   set_chronos_delete_expectations();
 
@@ -385,7 +389,7 @@ TEST_F(BasicS4Test, DeleteSubscriberContentionOnWrite)
 // error on trying to write the delete to the local store.
 TEST_F(BasicS4Test, DeleteSubscriberStoreErrorOnWrite)
 {
-  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
   set_data_expect_call(_mock_store1, Store::Status::ERROR);
   set_chronos_delete_expectations();
 
@@ -400,7 +404,7 @@ TEST_F(BasicS4Test, DeleteSubscriberStoreErrorOnWrite)
 // to delete doesn't match the subscriber to delete.
 TEST_F(BasicS4Test, DeleteSubscriberVersionMismatch)
 {
-  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 10);
+  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 10);
 
   uint64_t version = 1;
 
@@ -423,11 +427,11 @@ TEST_F(BasicS4Test, DeleteSubscriberStoreErrorOnGetOnRemoteSite)
   // site. The second remote site is still processed.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_delete_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
     get_data_expect_call_failure(_mock_store2, Store::Status::ERROR);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -451,11 +455,11 @@ TEST_F(BasicS4Test, DeleteSubscriberNotFoundOnRemoteSite)
   // site. The second remote site is still processed.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_delete_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
     get_data_expect_call_failure(_mock_store2, Store::Status::NOT_FOUND);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -479,14 +483,14 @@ TEST_F(BasicS4Test, DeleteSubscriberContentionOnDeleteOnRemoteSite)
   // The delete is retried, then the second remote site is processed.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_delete_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store2, Store::Status::DATA_CONTENTION);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store2, Store::Status::OK);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -511,12 +515,12 @@ TEST_F(BasicS4Test, DeleteSubscriberStoreErrorOnDeleteOnRemoteSite)
   // processed.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_delete_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store2, Store::Status::ERROR);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -601,7 +605,7 @@ TEST_F(BasicS4Test, AddSubscriberThatAlreadyExistsOnRemoteSite)
     set_data_expect_call(_mock_store1, Store::Status::OK);
     set_data_expect_call(_mock_store2, Store::Status::OK);
     set_data_expect_call(_mock_store3, Store::Status::DATA_CONTENTION);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     EXPECT_CALL(*_mock_store3, set_data(_, "aor_id", expect_patched_str, _, _, _, An<Store::Format>()))
      .WillOnce(Return(Store::Status::OK));
   }
@@ -792,7 +796,7 @@ TEST_F(BasicS4Test, UpdateSubscriberErrorOnGetOnLocalStore)
 // site when setting the subscriber's information.
 TEST_F(BasicS4Test, UpdateSubscriberErrorOnWriteOnLocalStore)
 {
-  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
   set_chronos_put_expectations();
   set_data_expect_call(_mock_store1, Store::Status::ERROR);
 
@@ -818,15 +822,15 @@ TEST_F(BasicS4Test, UpdateSubscriberContentionOnWriteOnLocalStore)
   // are processed successfully.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_put_expectations();
     set_data_expect_call(_mock_store1, Store::Status::DATA_CONTENTION);
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_put_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store2, Store::Status::OK);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -851,14 +855,14 @@ TEST_F(BasicS4Test, UpdateSubscriberContentionOnWriteOnRemoteStore)
   // is repeated. The second remote site is then processed successfully.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_put_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store2, Store::Status::DATA_CONTENTION);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store2, Store::Status::OK);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -884,11 +888,11 @@ TEST_F(BasicS4Test, UpdateSubscriberErrorOnGetOnRemoteStore)
   // The second remote site is then processed successfully.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_put_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
     get_data_expect_call_failure(_mock_store2, Store::Status::ERROR);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -914,12 +918,12 @@ TEST_F(BasicS4Test, UpdateSubscriberErrorOnWriteOnRemoteStore)
   // The second remote site is then processed successfully.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_put_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store2, Store::Status::ERROR);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -946,12 +950,12 @@ TEST_F(BasicS4Test, UpdateSubscriberNotFoundOnRemoteStore)
   // processed successfully.
   {
     InSequence s;
-    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
     set_chronos_put_expectations();
     set_data_expect_call(_mock_store1, Store::Status::OK);
     get_data_expect_call_failure(_mock_store2, Store::Status::NOT_FOUND);
     set_data_expect_call(_mock_store2, Store::Status::OK);
-    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+    get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
     set_data_expect_call(_mock_store3, Store::Status::OK);
   }
 
@@ -1023,13 +1027,13 @@ TEST_F(BasicS4Test, ClearUpEmptyAoR)
   // patch removes the binding. S4 then removes the subscription, as shown
   // by the expiry time of 0 on the set call, and the send_delete chronos
   // call.
-  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
   EXPECT_CALL(*_mock_store1, set_data(_, _, _, _, 0, _, An<Store::Format>()))
     .WillOnce(Return(Store::Status::OK));
-  get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
   EXPECT_CALL(*_mock_store2, set_data(_, _, _, _, 0, _, An<Store::Format>()))
     .WillOnce(Return(Store::Status::OK));
-  get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
   EXPECT_CALL(*_mock_store3, set_data(_, _, _, _, 0, _, An<Store::Format>()))
     .WillOnce(Return(Store::Status::OK));
   set_chronos_delete_expectations();
@@ -1231,9 +1235,9 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberUpdateFail)
 // argument for send_delete is too simple to worth checking.
 TEST_F(BasicS4Test, ChronosTimerOnSubscriberDelete)
 {
-  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
-  get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
-  get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
+  get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
+  get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
   set_data_expect_call(_mock_store1, Store::Status::OK);
   set_data_expect_call(_mock_store2, Store::Status::OK);
   set_data_expect_call(_mock_store3, Store::Status::OK);
@@ -1250,9 +1254,9 @@ TEST_F(BasicS4Test, ChronosTimerOnSubscriberDelete)
 // the test above.
 TEST_F(BasicS4Test, ChronosTimerOnSubscriberDeleteFail)
 {
-  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING, 1);
-  get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING, 1);
-  get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING, 1);
+  get_data_expect_call_success(_mock_store1, AOR_WITH_BINDING(), 1);
+  get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING(), 1);
+  get_data_expect_call_success(_mock_store3, AOR_WITH_BINDING(), 1);
   set_data_expect_call(_mock_store1, Store::Status::OK);
   set_data_expect_call(_mock_store2, Store::Status::OK);
   set_data_expect_call(_mock_store3, Store::Status::OK);
@@ -1288,7 +1292,7 @@ TEST_F(BasicS4Test, MimicTimerPop)
   {
     InSequence s;
     get_data_expect_call_failure(_mock_store1, Store::Status::NOT_FOUND);
-    get_data_expect_call_success(_mock_store2, AOR_WITH_BINDING_EXPIRED, 1);
+    get_data_expect_call_success(_mock_store2, AOR_WITH_EXPIRED_BINDING(), 1);
     set_chronos_put_expectations();
 
     // Unlike the test above, this timer pop comes from mimic_timer_pop rather

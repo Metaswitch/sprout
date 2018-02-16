@@ -432,7 +432,17 @@ SIPEventPriorityLevel get_priority_of_message(const pjsip_msg* msg,
                                               SAS::TrailId trail);
 
 
-/// EM-TODO
+/// Get the expiry time for the binding represented by the contact header.
+///
+/// @param[in] contact     - The contact header. If the contact header has an
+///                          expires parameter we take the expiry value from it.
+/// @param[in] expires     - The expires header. May not be present. If it is,
+///                          we use its value if there's nothing on the contact
+///                          header.
+/// @param[in] max_expires - Default value - we use this if there's nothing on
+///                          the contact/expires header.
+///
+/// @return The expiry time for this binding.
 int expiry_for_binding(pjsip_contact_hdr* contact,
                        pjsip_expires_hdr* expires,
                        int max_expires);

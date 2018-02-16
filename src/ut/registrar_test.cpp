@@ -219,9 +219,7 @@ public:
                                                   _sm,
                                                   _acr_factory,
                                                   300,
-                                                  false,
-                                                  &SNMP::FAKE_REGISTRATION_STATS_TABLES,
-                                                  &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES);
+                                                  &SNMP::FAKE_REGISTRATION_STATS_TABLES);
 
     EXPECT_TRUE(_registrar_sproutlet->init());
 

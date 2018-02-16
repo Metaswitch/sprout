@@ -53,16 +53,12 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        SubscriberManager* sm,
                                        ACRFactory* rfacr_factory,
                                        int cfg_max_expires,
-                                       bool force_original_register_inclusion,
-                                       SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                       SNMP::RegistrationStatsTables* third_party_reg_stats_tbls) :
+                                       SNMP::RegistrationStatsTables* reg_stats_tbls) :
   Sproutlet(name, port, uri, "", aliases, NULL, NULL, network_function),
   _sm(sm),
   _acr_factory(rfacr_factory),
   _max_expires(cfg_max_expires),
-  _force_original_register_inclusion(force_original_register_inclusion),
   _reg_stats_tbls(reg_stats_tbls),
-  _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
   _next_hop_service(next_hop_service)
 {
 }
@@ -75,9 +71,6 @@ RegistrarSproutlet::~RegistrarSproutlet()
 bool RegistrarSproutlet::init()
 {
   bool init_success = true;
-
-  // EM-TODORegistrationUtils::init(_third_party_reg_stats_tbls,
-  //                                _force_original_register_inclusion);
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
@@ -191,7 +184,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   pjsip_status_code st_code = basic_validation_of_register(
                                                         req,
                                                         num_contact_headers,
-                                                        emergency_registration);
+                                                        emergency_registration,
+                                                        trail());
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -332,7 +326,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     TRC_DEBUG("Failed to get subscriber information for %s - error is %d",
               public_id.c_str(), st_code);
 
-    SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDCONTACT, 0);
+    SAS::Event event(trail(), SASEvent::REGISTER_IRS_INVALID, 0);
     event.add_var_param(public_id);
     SAS::report_event(event);
 
@@ -369,10 +363,10 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     st_code = determine_sm_sip_response(rc, irs_info._regstate, "REGISTER");
     TRC_DEBUG("Failed to get current bindings for %s  - error is %d",
               default_impu.c_str(), rc);
-    // EM-TODO: REDO SAS log
-    SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
+
+    SAS::Event event(trail(), SASEvent::REGISTER_FAILED_GET_BINDINGS, 0);
     event.add_var_param(default_impu);
-    event.add_var_param(public_id);
+    event.add_static_param(rc);
     SAS::report_event(event);
 
     acr->send();
@@ -481,7 +475,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED, 0);
     event.add_var_param(public_id);
-    event.add_static_param(st_code);// EM-TODO change SAS log
+    event.add_static_param(st_code);
     SAS::report_event(event);
 
     track_register_failures_statistics(rt);
@@ -516,12 +510,10 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       (rt != RegisterType::FETCH) &&
       (rt != RegisterType::FETCH_INITIAL))
   {
-    pjsip_msg* clone_rsp = clone_msg(rsp);
-
     int max_expiry = AoRUtils::get_max_expiry(all_bindings, now);
 
     _registrar->_sm->register_with_application_servers(req,
-                                                       clone_rsp,
+                                                       rsp,
                                                        public_id,
                                                        irs_info._service_profiles[public_id],
                                                        max_expiry,
@@ -552,7 +544,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
                                                    pjsip_msg* req,
                                                    int& num_contact_headers,
-                                                   bool& emergency_registration)
+                                                   bool& emergency_registration,
+                                                   SAS::TrailId trail)
 {
   // Perform basic validation of the register. We can reject the request
   // early which saves contacting the HSS/memcached (although we do have to
@@ -581,7 +574,7 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
     // the AoR isn't valid for the domain in the RequestURI).
     TRC_DEBUG("Rejecting register request using invalid URI scheme");
 
-    SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
     SAS::report_event(event);
 
     st_code = PJSIP_SC_NOT_FOUND;
@@ -609,13 +602,16 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
     {
       TRC_DEBUG("Attempted to deregister all bindings, but expiry "
                 "value wasn't 0");
+
+      SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDCONTACT, 0);
+      SAS::report_event(event);
+
       st_code = PJSIP_SC_BAD_REQUEST;
       break;
     }
 
     if (PJUtils::is_emergency_registration(contact_hdr))
     {
-      TRC_DEBUG("EMER");
       if (expiry == 0)
       {
         TRC_DEBUG("Attempting to deregister an emergency registration");
@@ -637,6 +633,10 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
   {
     TRC_DEBUG("Register request is solely attempting to deregister emergency "
               "registrations");
+
+    SAS::Event event(trail, SASEvent::DEREGISTER_FAILED_EMERGENCY, 0);
+    SAS::report_event(event);
+
     st_code = PJSIP_SC_NOT_IMPLEMENTED;
   }
 
@@ -724,10 +724,6 @@ void RegistrarSproutletTsx::get_bindings_from_req(
 
         TRC_DEBUG("Updating binding %s for contact %s",
                   binding_id.c_str(), contact_uri.c_str());
-
-        // TODO Examine Via header to see if we're the first hop
-        // TODO Only if we're not the first hop, check that the top path header
-        // has "ob" parameter
 
         // Get the Path headers, if present.  RFC 3327 allows us the option of
         // rejecting a request with a Path header if there is no corresponding
@@ -1022,16 +1018,8 @@ void RegistrarSproutletTsx::add_contact_headers(pjsip_msg* rsp,
       // the data in the store to be corrupt.
 
       // LCOV_EXCL_START - No UTs for unhittable code.
-
       TRC_WARNING("Badly formed contact URI %s for address of record %s",
                   binding->_uri.c_str(), public_id.c_str());
-
-      // EM-TODO SAS event
-      //SAS::Event event(trail, SASEvent::REGISTER_FAILED_CONTACT_URI, 0);
-      //event.add_var_param(public_id);
-      //event.add_var_param(binding->_uri);
-      //SAS::report_event(event);
-
       // LCOV_EXCL_STOP
     }
   }
@@ -1148,7 +1136,7 @@ void RegistrarSproutletTsx::add_p_associated_uri_headers(
         else
         {
           TRC_DEBUG("Bad associated URI %s", uri.c_str());
-          // EM-TODO check if this is the correct SAS event
+
           SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 0);
           event.add_var_param(uri);
           SAS::report_event(event);
