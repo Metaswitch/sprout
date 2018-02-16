@@ -123,6 +123,7 @@ protected:
   ///                                      in the request.
   /// @param emergency_registration[out] - Whether this register adds/updates
   ///                                      an emergency registration.
+  /// @param trail                       - The SAS trail for this request.
   ///
   /// @return Whether the request is valid. The cases are:
   ///   PJSIP_OK - The request is valid
@@ -132,7 +133,8 @@ protected:
   ///                              emergency registrations
   pjsip_status_code basic_validation_of_register(pjsip_msg* req,
                                                  int& num_contact_headers,
-                                                 bool& emergency_registration);
+                                                 bool& emergency_registration,
+                                                 SAS::TrailId trail);
 
   void get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
                              const std::string& private_id, ///<private ID that the request refers to
