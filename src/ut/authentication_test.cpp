@@ -165,7 +165,7 @@ public:
   void check_sas_correlator(std::string value, bool present=true)
   {
     bool found_value = false;
-    std::vector<MockSASMessage*> markers = mock_sas_find_marker_multiple(MARKED_ID_GENERIC_CORRELATOR);
+    std::vector<MockSASMessage*> markers = mock_sas_find_marker_multiple(MARKER_ID_GENERIC_CORRELATOR);
     for (MockSASMessage* marker : markers)
     {
       EXPECT_EQ(marker->var_params.size(), 1u);
