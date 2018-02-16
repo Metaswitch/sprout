@@ -316,11 +316,6 @@ HTTPCode SubscriberManager::reregister_subscriber_internal(const std::string& ao
       delete updated_aor; updated_aor = NULL;
       return rc;
     }
-
-    // Send 3rd party deREGISTERs.
-    _registration_sender->deregister_with_application_servers(aor_id,
-                                                              irs_info._service_profiles[aor_id],
-                                                              trail);
   }
 
   delete orig_aor; orig_aor = NULL;

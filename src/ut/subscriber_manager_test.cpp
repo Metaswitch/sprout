@@ -689,8 +689,8 @@ TEST_F(SubscriberManagerTest, TestReregisterSubscriberRemoveLastBinding)
 {
   // Set up the expected calls. We expect a get to S4, an analytics log for the
   // removed binding, a write to S4, a log for the added binding, a log for the
-  // removed subscription, a call out to the Notify Sender, a call to the HSS
-  // connection and finally a call to the registration sender.
+  // removed subscription, a call out to the Notify Sender, and finally a call
+  // to the HSS connection.
   // The AoR we return on the lookup has a binding and subscription with the
   // same contact URI - this allows us to test that the subscription is removed
   // if the binding is removed.
@@ -710,7 +710,6 @@ TEST_F(SubscriberManagerTest, TestReregisterSubscriberRemoveLastBinding)
   EXPECT_CALL(*_notify_sender, send_notifys(_, _, _, _, _, _));
   EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
       .WillOnce(Return(HTTP_OK));
-  EXPECT_CALL(*_registration_sender, deregister_with_application_servers(DEFAULT_ID, _, _));
 
   AssociatedURIs associated_uris;
   associated_uris.add_uri(DEFAULT_ID, false);
