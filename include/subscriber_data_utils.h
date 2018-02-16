@@ -1,5 +1,5 @@
 /**
- * @file notify_utils2.h
+ * @file subscriber_data_utils.h
  *
  * Copyright (C) Metaswitch Networks 2018
  * If license terms are provided to you in a COPYING file in the root directory
@@ -9,8 +9,8 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef NOTIFY_UTILS2_H__
-#define NOTIFY_UTILS2_H__
+#ifndef SUBSCRIBER_DATA_UTILS_H__
+#define SUBSCRIBER_DATA_UTILS_H__
 
 #include <string>
 

@@ -334,7 +334,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
     Subscriptions new_subscriptions;
     new_subscriptions.insert(std::make_pair(new_subscription->get_id(), new_subscription));
-    rc = _subscription->_sm->update_subscription(
+    rc = _subscription->_sm->update_subscriptions(
                    public_id,
                    new_subscriptions,
                    irs_info,
@@ -345,10 +345,10 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     TRC_DEBUG("Removing the subscription with ID %s",
               new_subscription->get_id().c_str());
 
-    rc = _subscription->_sm->remove_subscription(public_id,
-                                                 new_subscription->get_id(),
-                                                 irs_info,
-                                                 trail_id);
+    rc = _subscription->_sm->remove_subscriptions(public_id,
+                                                  {new_subscription->get_id()},
+                                                  irs_info,
+                                                  trail_id);
   }
 
   pjsip_status_code st_code =

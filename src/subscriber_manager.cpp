@@ -75,8 +75,10 @@ HTTPCode SubscriberManager::register_subscriber_internal(const std::string& aor_
   AoR* orig_aor = NULL;
   AoR* updated_aor = NULL;
 
-  // We may have been called with no bindings to update. In that case do not PUT
-  // any data to S4.
+  // We may have been called with no bindings to update. This is the case when
+  // we receive a fetch bindings register from a subscriber that is unregistered.
+  // In that situation, we do not have any data to PUT to S4, but we should
+  // deregister the subscriber with the HSS.
   if (!add_bindings.empty())
   {
     PatchObject patch_object;
@@ -93,7 +95,8 @@ HTTPCode SubscriberManager::register_subscriber_internal(const std::string& aor_
                                   *updated_aor,
                                   trail);
 
-    // The PUT failed, so return.
+    // If the PUT resulted in precondition failed (which happens if there is
+    // already an AoR in the store), we retry with a reregister.
     if ((rc == HTTP_PRECONDITION_FAILED) && (retry))
     {
       TRC_DEBUG("Registering AoR %s failed with 412 PRECONDITION FAILED - retry with reregister",
@@ -119,27 +122,17 @@ HTTPCode SubscriberManager::register_subscriber_internal(const std::string& aor_
       return rc;
     }
 
-    log_updated_bindings(updated_aor, add_bindings, now);
+    log_updated_bindings(*updated_aor, add_bindings, now);
 
     // Get all bindings to return to the caller
     all_bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
                                                   now);
-
-    // Send any NOTIFYs. Normally we expect no NOTIFYs to be sent, as this was
-    // triggered by an initial register. However, there's a chance if we had to
-    // retry the write to S4. Either way, we let the Notify Sender decide.
-    send_notifys(aor_id,
-                 orig_aor,
-                 updated_aor,
-                 SubscriberDataUtils::EventTrigger::USER,
-                 now,
-                 trail);
   }
   else
   {
     // The was nothing to store for this subscriber so we should deregister the
     // subscriber with the HSS since they will have previously been registered
-    // incorrectly.
+    // incorrectly when the registrar was figuring out the default public ID.
     if (all_bindings.empty())
     {
       HTTPCode rc = deregister_with_hss(aor_id,
@@ -194,12 +187,10 @@ HTTPCode SubscriberManager::reregister_subscriber_internal(const std::string& ao
                                                            bool retry,
                                                            SAS::TrailId trail)
 {
-
   TRC_DEBUG("Reregistering AoR %s", aor_id.c_str());
 
   int now = time(NULL);
 
-  // Get the current AoR from S4.
   AoR* orig_aor = NULL;
   uint64_t unused_version;
   HTTPCode rc = _s4->handle_get(aor_id,
@@ -240,7 +231,10 @@ HTTPCode SubscriberManager::reregister_subscriber_internal(const std::string& ao
                                                      updated_bindings,
                                                      binding_ids_to_remove);
 
-  log_removed_bindings(orig_aor,
+  // We log removed bindings before writing to the store so that in the case
+  // that the write fails, our estimate of how many active bindings we have will
+  // be an underestimate, not an overestimate.
+  log_removed_bindings(*orig_aor,
                        binding_ids_to_remove);
 
   PatchObject patch_object;
@@ -256,7 +250,9 @@ HTTPCode SubscriberManager::reregister_subscriber_internal(const std::string& ao
                          &updated_aor,
                          trail);
 
-  // The PATCH failed, so return.
+  // If we didn't find an existing AoR, that means the subscriber does not
+  // currently exist. We might want to retry by registering the subscriber
+  // afresh.
   if ((rc == HTTP_NOT_FOUND) && (retry))
   {
     TRC_DEBUG("Reregistering AoR %s failed with 404 NOT FOUND - retry with register",
@@ -281,11 +277,11 @@ HTTPCode SubscriberManager::reregister_subscriber_internal(const std::string& ao
     return rc;
   }
 
-  log_updated_bindings(updated_aor, updated_bindings, now);
+  log_updated_bindings(*updated_aor, updated_bindings, now);
 
   log_subscriptions(aor_id,
-                    orig_aor,
-                    updated_aor,
+                    *orig_aor,
+                    *updated_aor,
                     subscription_ids_to_remove,
                     now);
 
@@ -354,12 +350,14 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
                        unused_version,
                        trail);
 
-  // If there is no AoR, we still count that as a success.
   if (rc != HTTP_OK)
   {
     delete orig_aor; orig_aor = NULL;
     if (rc == HTTP_NOT_FOUND)
     {
+      // If there is no AoR, we still count that as a success.
+      TRC_DEBUG("Removing bindings for AoR %s succeeded because no bindings are present in the store",
+                aor_id.c_str());
       return HTTP_OK;
     }
 
@@ -369,7 +367,10 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
     return rc;
   }
 
-  log_removed_bindings(orig_aor,
+  // We log removed bindings before writing to the store so that in the case
+  // that the write fails, our estimate of how many active bindings we have will
+  // be an underestimate, not an overestimate.
+  log_removed_bindings(*orig_aor,
                        binding_ids);
 
   // Check if there are any subscriptions that share the same contact as
@@ -379,7 +380,6 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
                                                      orig_aor->subscriptions(),
                                                      Bindings(),
                                                      binding_ids);
-
 
   PatchObject patch_object;
   build_patch(patch_object,
@@ -405,8 +405,8 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
   }
 
   log_subscriptions(aor_id,
-                    orig_aor,
-                    updated_aor,
+                    *orig_aor,
+                    *updated_aor,
                     subscription_ids_to_remove,
                     now);
 
@@ -457,7 +457,7 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
   return HTTP_OK;
 }
 
-HTTPCode SubscriberManager::update_subscription(
+HTTPCode SubscriberManager::update_subscriptions(
                                               const std::string& public_id,
                                               const Subscriptions& subscriptions,
                                               HSSConnection::irs_info& irs_info,
@@ -465,32 +465,32 @@ HTTPCode SubscriberManager::update_subscription(
 {
   TRC_DEBUG("Updating subscription for IMPU %s", public_id.c_str());
 
-  return modify_subscription(public_id,
+  return modify_subscriptions(public_id,
                              subscriptions,
-                             "",
+                             {},
                              irs_info,
                              trail);
 }
 
-HTTPCode SubscriberManager::remove_subscription(
+HTTPCode SubscriberManager::remove_subscriptions(
                                              const std::string& public_id,
-                                             const std::string& subscription_id,
+                                             const std::vector<std::string>& subscription_ids,
                                              HSSConnection::irs_info& irs_info,
                                              SAS::TrailId trail)
 {
   TRC_DEBUG("Removing subscription for IMPU %s", public_id.c_str());
 
-  return modify_subscription(public_id,
-                             Subscriptions(),
-                             subscription_id,
-                             irs_info,
-                             trail);
+  return modify_subscriptions(public_id,
+                              Subscriptions(),
+                              subscription_ids,
+                              irs_info,
+                              trail);
 }
 
-HTTPCode SubscriberManager::modify_subscription(
+HTTPCode SubscriberManager::modify_subscriptions(
                                     const std::string& public_id,
                                     const Subscriptions& update_subscriptions,
-                                    const std::string& remove_subscription,
+                                    const std::vector<std::string>& remove_subscriptions,
                                     HSSConnection::irs_info& irs_info,
                                     SAS::TrailId trail)
 {
@@ -510,7 +510,6 @@ HTTPCode SubscriberManager::modify_subscription(
     return rc;
   }
 
-  // Get the current AoR from S4.
   AoR* orig_aor = NULL;
   uint64_t unused_version;
   rc = _s4->handle_get(aor_id,
@@ -531,7 +530,7 @@ HTTPCode SubscriberManager::modify_subscription(
   PatchObject patch_object;
   build_patch(patch_object,
               update_subscriptions,
-              {remove_subscription},
+              remove_subscriptions,
               irs_info._associated_uris);
 
   // PATCH the existing AoR.
@@ -554,12 +553,12 @@ HTTPCode SubscriberManager::modify_subscription(
     // OK to the client.
 
     // Write an analytics log for the modified subscription.
-    std::string subscription_id = (remove_subscription == "") ?
+    std::string subscription_id = (remove_subscriptions.empty()) ?
                                     update_subscriptions.begin()->first :
-                                    remove_subscription;
+                                    remove_subscriptions[0];
     log_subscriptions(aor_id,
-                      orig_aor,
-                      updated_aor,
+                      *orig_aor,
+                      *updated_aor,
                       {subscription_id},
                       now);
 
@@ -607,12 +606,14 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
                          version,
                          trail);
 
-    // If there is no AoR, we still count that as a success.
     if (rc != HTTP_OK)
     {
       delete orig_aor; orig_aor = NULL;
       if (rc == HTTP_NOT_FOUND)
       {
+        // If there is no AoR, we still count that as a success.
+        TRC_DEBUG("Deregistering AoR %s succeeded because there is no AoR in the store",
+                  aor_id.c_str());
         return HTTP_OK;
       }
 
@@ -629,7 +630,10 @@ HTTPCode SubscriberManager::deregister_subscriber(const std::string& public_id,
       binding_ids.push_back(binding.first);
     }
 
-    log_removed_bindings(orig_aor,
+    // We log removed bindings before writing to the store so that in the case
+    // that the write fails, our estimate of how many active bindings we have will
+    // be an underestimate, not an overestimate.
+    log_removed_bindings(*orig_aor,
                          binding_ids);
 
     rc = _s4->handle_delete(aor_id,
@@ -685,7 +689,6 @@ HTTPCode SubscriberManager::get_bindings(const std::string& aor_id,
   TRC_DEBUG("Retrieving bindings for AoR %s",
             aor_id.c_str());
 
-  // Get the current AoR from S4.
   AoR* aor = NULL;
   uint64_t unused_version;
   HTTPCode rc = _s4->handle_get(aor_id,
@@ -715,7 +718,6 @@ HTTPCode SubscriberManager::get_subscriptions(const std::string& aor_id,
   TRC_DEBUG("Retrieving subscriptions for AoR %s",
             aor_id.c_str());
 
-  // Get the current AoR from S4.
   AoR* aor = NULL;
   uint64_t unused_version;
   HTTPCode rc = _s4->handle_get(aor_id,
@@ -742,6 +744,8 @@ HTTPCode SubscriberManager::get_cached_subscriber_state(const std::string& publi
                                                         HSSConnection::irs_info& irs_info,
                                                         SAS::TrailId trail)
 {
+  // This call results in a GET to homestead which only looks up what data
+  // homestead has cached. It will not result in a SAR being sent to the HSS.
   HTTPCode http_code = _hss_connection->get_registration_data(public_id,
                                                               irs_info,
                                                               trail);
@@ -752,6 +756,9 @@ HTTPCode SubscriberManager::get_subscriber_state(const HSSConnection::irs_query&
                                                  HSSConnection::irs_info& irs_info,
                                                  SAS::TrailId trail)
 {
+  // This call results in a PUT to homestead which first does a cache lookup and
+  // if that fails, results in a SAR to the HSS in order to get subscriber
+  // information.
   HTTPCode http_code = _hss_connection->update_registration_state(irs_query,
                                                                   irs_info,
                                                                   trail);
@@ -864,7 +871,10 @@ void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
     }
   }
 
-  log_removed_bindings(orig_aor,
+  // We log removed bindings before writing to the store so that in the case
+  // that the write fails, our estimate of how many active bindings we have will
+  // be an underestimate, not an overestimate.
+  log_removed_bindings(*orig_aor,
                        binding_ids_to_remove);
 
   // Send a PATCH to remove any expired bindings and subscriptions. We only do
@@ -902,8 +912,8 @@ void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
   }
 
   log_subscriptions(aor_id,
-                    orig_aor,
-                    updated_aor,
+                    *orig_aor,
+                    *updated_aor,
                     subscription_ids_to_remove,
                     now);
 
@@ -938,7 +948,6 @@ void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
                                                               irs_info._service_profiles[aor_id],
                                                               trail);
   }
-
 
   delete orig_aor; orig_aor = NULL;
   delete updated_aor; updated_aor = NULL;
@@ -1093,14 +1102,14 @@ HTTPCode SubscriberManager::deregister_with_hss(const std::string& aor_id,
 }
 
 void SubscriberManager::log_removed_bindings(
-                                    const AoR* orig_aor,
+                                    const AoR& orig_aor,
                                     const std::vector<std::string>& binding_ids)
 {
   if (_analytics != NULL)
   {
     for (std::string binding_id : binding_ids)
     {
-      for (BindingPair binding_pair : orig_aor->bindings())
+      for (BindingPair binding_pair : orig_aor.bindings())
       {
         if (binding_pair.first == binding_id)
         {
@@ -1116,7 +1125,7 @@ void SubscriberManager::log_removed_bindings(
   }
 }
 
-void SubscriberManager::log_updated_bindings(const AoR* updated_aor,
+void SubscriberManager::log_updated_bindings(const AoR& updated_aor,
                                              const Bindings& binding_pairs,
                                              int now)
 {
@@ -1124,8 +1133,8 @@ void SubscriberManager::log_updated_bindings(const AoR* updated_aor,
   {
     for (BindingPair binding_pair : binding_pairs)
     {
-      if (updated_aor->_bindings.find(binding_pair.first) !=
-          updated_aor->_bindings.end())
+      if (updated_aor._bindings.find(binding_pair.first) !=
+          updated_aor._bindings.end())
       {
         _analytics->registration(binding_pair.second->_address_of_record,
                                  binding_pair.first,
@@ -1137,8 +1146,8 @@ void SubscriberManager::log_updated_bindings(const AoR* updated_aor,
 }
 
 void SubscriberManager::log_subscriptions(std::string default_impu,
-                                          const AoR* orig_aor,
-                                          const AoR* updated_aor,
+                                          const AoR& orig_aor,
+                                          const AoR& updated_aor,
                                           const std::vector<std::string>& subscription_ids,
                                           int now)
 {
@@ -1147,11 +1156,11 @@ void SubscriberManager::log_subscriptions(std::string default_impu,
     for (std::string subscription_id : subscription_ids)
     {
       Subscriptions::const_iterator subscription =
-                                updated_aor->_subscriptions.find(subscription_id);
+                                updated_aor._subscriptions.find(subscription_id);
 
       // We need to find the subscription in the AoR in order to pull out
       // sufficient information to make a log about the changes.
-      if (subscription != updated_aor->_subscriptions.end())
+      if (subscription != updated_aor._subscriptions.end())
       {
         _analytics->subscription(default_impu,
                                  (*subscription).second->_to_tag,
@@ -1161,9 +1170,9 @@ void SubscriberManager::log_subscriptions(std::string default_impu,
       else
       {
         Subscriptions::const_iterator subscription =
-                                   orig_aor->_subscriptions.find(subscription_id);
+                                   orig_aor._subscriptions.find(subscription_id);
 
-        if (subscription != orig_aor->_subscriptions.end())
+        if (subscription != orig_aor._subscriptions.end())
         {
           _analytics->subscription(default_impu,
                                    (*subscription).second->_to_tag,
