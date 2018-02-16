@@ -93,9 +93,10 @@ private:
   MockSubscriberManager* _subscriber_manager;
 
   // Builds iFCs for a subscriber.
-  Ifcs build_ifcs(std::string as_uri = "sip:1.2.3.4:56789;transport=TCP",
+  Ifcs build_ifcs(std::vector<std::string> as_uris = {"sip:1.2.3.4:56789;transport=TCP"},
                   std::string service_info = "",
-                  bool include_body = false);
+                  bool include_body = false,
+                  bool session_terminated = true);
 
   // Set up a base message that looks more like a register.
   class RegisterMessage : public TestingCommon::Message
@@ -115,14 +116,19 @@ private:
   };
 };
 
-Ifcs RegistrationSenderTest::build_ifcs(std::string as_uri,
+Ifcs RegistrationSenderTest::build_ifcs(std::vector<std::string> as_uris,
                                         std::string service_info,
-                                        bool include_body)
+                                        bool include_body,
+                                        bool session_terminated)
 {
   // Create a service profile with a single iFC.
   TestingCommon::ServiceProfileBuilder sp = TestingCommon::ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>REGISTER</Method>"}, as_uri, 0, "1", service_info, include_body);
+    .addIdentity("sip:6505551000@homedomain");
+
+  for (std::string as_uri : as_uris)
+  {
+    sp.addIfc(1, {"<Method>REGISTER</Method>"}, as_uri, 0, (session_terminated ? "1" : "0"), service_info, include_body);
+  }
 
   return sp.return_ifcs();
 }
@@ -181,7 +187,7 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterWithBody)
   pjsip_msg* received_register = parse_msg(msg.get_request());
   pjsip_msg* sent_response = parse_msg(msg.get_response());
 
-  Ifcs ifcs = build_ifcs("sip:1.2.3.4:56789;transport=TCP",
+  Ifcs ifcs = build_ifcs({"sip:1.2.3.4:56789;transport=TCP"},
                          "",
                          true);
   bool unused_deregister_subscriber;
@@ -231,7 +237,7 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterWithServiceInfoBody)
   pjsip_msg* received_register = parse_msg(msg.get_request());
   pjsip_msg* sent_response = parse_msg(msg.get_response());
 
-  Ifcs ifcs = build_ifcs("sip:1.2.3.4:56789;transport=TCP",
+  Ifcs ifcs = build_ifcs({"sip:1.2.3.4:56789;transport=TCP"},
                          "banana");
   bool unused_deregister_subscriber;
   _registration_sender->register_with_application_servers(received_register,
@@ -266,9 +272,9 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterWithServiceInfoBody)
 }
 
 // Set up a single iFC and check that a 3rd party register is sent to the
-// application server. Return an error and verify that the subscriber is
-// deregistered.
-TEST_F(RegistrationSenderTest, 3rdPartyRegisterIFCErrorResponse)
+// session terminated application server. Return an error and verify that the
+// subscriber is deregistered.
+TEST_F(RegistrationSenderTest, 3rdPartyRegisterErrorResponseDeregister)
 {
   RegisterMessage msg;
   pjsip_msg* received_register = parse_msg(msg.get_request());
@@ -295,6 +301,115 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterIFCErrorResponse)
 
   // Check statistics.
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
+}
+
+// Set up a single iFC and check that a 3rd party register is sent to the
+// session continued application server. Return an error and verify that the
+// subscriber is not deregistered.
+TEST_F(RegistrationSenderTest, 3rdPartyRegisterErrorResponse)
+{
+  RegisterMessage msg;
+  pjsip_msg* received_register = parse_msg(msg.get_request());
+  pjsip_msg* sent_response = parse_msg(msg.get_response());
+
+  // Make sure the subscriber is not deregistered.
+  EXPECT_CALL(*_subscriber_manager, deregister_subscriber(_, _)).Times(0);
+
+  Ifcs ifcs = build_ifcs({"sip:1.2.3.4:56789;transport=TCP"},
+                         "",
+                         false,
+                         false);
+  bool unused_deregister_subscriber;
+  _registration_sender->register_with_application_servers(received_register,
+                                                          sent_response,
+                                                          "sip:6505551000@homedomain",
+                                                          ifcs,
+                                                          300,
+                                                          true,
+                                                          unused_deregister_subscriber,
+                                                          0);
+
+  // Respond to the 3rd party register.
+  ASSERT_EQ(1, txdata_count());
+  inject_msg(respond_to_current_txdata(500));
+
+  // Check statistics.
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
+}
+
+// Set up a two iFCs and check that two 3rd party registers are sent to the
+// application servers.
+TEST_F(RegistrationSenderTest, 3rdPartyRegisterMultipleAS)
+{
+  RegisterMessage msg;
+  pjsip_msg* received_register = parse_msg(msg.get_request());
+  pjsip_msg* sent_response = parse_msg(msg.get_response());
+
+  Ifcs ifcs = build_ifcs({"sip:1.2.3.4:56789;transport=TCP", "sip:9.8.7.6:54321;transport=TCP"});
+  bool unused_deregister_subscriber;
+  _registration_sender->register_with_application_servers(received_register,
+                                                          sent_response,
+                                                          "sip:6505551000@homedomain",
+                                                          ifcs,
+                                                          300,
+                                                          true,
+                                                          unused_deregister_subscriber,
+                                                          0);
+
+  // Expect two 3rd party registers.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check and respond to the first register.
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ("sip:1.2.3.4:56789;transport=TCP", str_uri(out->line.req.uri));
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check and respond to the second register.
+  out = current_txdata()->msg;
+  EXPECT_EQ("sip:9.8.7.6:54321;transport=TCP", str_uri(out->line.req.uri));
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check statistics.
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+}
+
+// Set up a two iFCs and check that two 3rd party registers are sent to the
+// application servers. Return an error from one of the application servers and
+// check that the subscriber is deregistered.
+TEST_F(RegistrationSenderTest, 3rdPartyRegisterMultipleASErrorResponse)
+{
+  RegisterMessage msg;
+  pjsip_msg* received_register = parse_msg(msg.get_request());
+  pjsip_msg* sent_response = parse_msg(msg.get_response());
+
+  // Expect the subscriber to be deregistered.
+  EXPECT_CALL(*_subscriber_manager, deregister_subscriber("sip:6505551000@homedomain",
+                                                          _));
+
+  Ifcs ifcs = build_ifcs({"sip:1.2.3.4:56789;transport=TCP", "sip:9.8.7.6:54321;transport=TCP"});
+  bool unused_deregister_subscriber;
+  _registration_sender->register_with_application_servers(received_register,
+                                                          sent_response,
+                                                          "sip:6505551000@homedomain",
+                                                          ifcs,
+                                                          300,
+                                                          true,
+                                                          unused_deregister_subscriber,
+                                                          0);
+
+  // Expect two 3rd party registers.
+  ASSERT_EQ(2, txdata_count());
+
+  // Respond to the registers.
+  inject_msg(respond_to_current_txdata(200));
+  inject_msg(respond_to_current_txdata(500));
+
+  // Check statistics.
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
 }
 
@@ -365,7 +480,7 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterDummyIFC)
   pjsip_msg* received_register = parse_msg(msg.get_request());
   pjsip_msg* sent_response = parse_msg(msg.get_response());
 
-  Ifcs ifcs = build_ifcs("dummy-as");
+  Ifcs ifcs = build_ifcs({"dummy-as"});
   bool unused_deregister_subscriber;
   _registration_sender->register_with_application_servers(received_register,
                                                           sent_response,
@@ -405,7 +520,7 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterDummyFIFC)
 // No iFCs are matched (normal, fallback or dummy). We are configured to reject
 // the request if no iFCs are matched so check that that information is passed
 // back.
-TEST_F(RegistrationSenderTest, 3rdPartyRegisterNoIFC)
+TEST_F(RegistrationSenderTest, 3rdPartyRegisterNoIFCDeregister)
 {
   RegisterMessage msg;
   msg._from = "6505559999";
@@ -425,6 +540,66 @@ TEST_F(RegistrationSenderTest, 3rdPartyRegisterNoIFC)
 
   ASSERT_EQ(0, txdata_count());
   EXPECT_TRUE(deregister_subscriber);
+
+  // Check statistics.
+  EXPECT_EQ(1,(SNMP::FAKE_NO_MATCHING_IFCS_TABLE)._count);
+  EXPECT_EQ(1,(SNMP::FAKE_NO_MATCHING_FALLBACK_IFCS_TABLE)._count);
+}
+
+// We are configured not to reject if there are no matching iFCs. Send a request
+// that matches no iFCs (normal, fallback or dummy), and make sure that we do
+// not reject the request.
+TEST_F(RegistrationSenderTest, 3rdPartyRegisterNoIFC)
+{
+  _registration_sender->_ifc_configuration._reject_if_no_matching_ifcs = false;
+
+  RegisterMessage msg;
+  msg._from = "6505559999";
+  msg._to = "6505559999";
+  pjsip_msg* received_register = parse_msg(msg.get_request());
+  pjsip_msg* sent_response = parse_msg(msg.get_response());
+
+  bool deregister_subscriber;
+  _registration_sender->register_with_application_servers(received_register,
+                                                          sent_response,
+                                                          "sip:6505559999@homedomain",
+                                                          {},
+                                                          300,
+                                                          true,
+                                                          deregister_subscriber,
+                                                          0);
+
+  ASSERT_EQ(0, txdata_count());
+  EXPECT_FALSE(deregister_subscriber);
+
+  // Check statistics.
+  EXPECT_EQ(1,(SNMP::FAKE_NO_MATCHING_IFCS_TABLE)._count);
+  EXPECT_EQ(1,(SNMP::FAKE_NO_MATCHING_FALLBACK_IFCS_TABLE)._count);
+}
+
+// No iFCs are matched (normal, fallback or dummy) for a register with expiry 0.
+// We are configured to reject the request if no iFCs are matched, but this is a
+// deregister so make sure we don't deregister the subscriber again.
+TEST_F(RegistrationSenderTest, 3rdPartyDeregisterNoIFC)
+{
+  RegisterMessage msg;
+  msg._from = "6505559999";
+  msg._to = "6505559999";
+  pjsip_msg* received_register = parse_msg(msg.get_request());
+  pjsip_msg* sent_response = parse_msg(msg.get_response());
+
+  bool deregister_subscriber;
+  _registration_sender->register_with_application_servers(received_register,
+                                                          sent_response,
+                                                          "sip:6505559999@homedomain",
+                                                          {},
+                                                          0,
+                                                          true,
+                                                          deregister_subscriber,
+                                                          0);
+
+  ASSERT_EQ(0, txdata_count());
+  EXPECT_FALSE(deregister_subscriber);
 
   // Check statistics.
   EXPECT_EQ(1,(SNMP::FAKE_NO_MATCHING_IFCS_TABLE)._count);
