@@ -383,6 +383,12 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(get_pool(rsp), expiry);
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)expires_hdr);
 
+    pjsip_contact_hdr* contact_hdr = pjsip_contact_hdr_create(get_pool(rsp));
+    pjsip_name_addr* contact_uri = pjsip_name_addr_create(get_pool(rsp));
+    contact_uri->uri = (pjsip_uri*)stack_data.scscf_uri;
+    contact_hdr->uri = (pjsip_uri*)contact_uri;
+    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)contact_hdr);
+
     // Add the to tag to the response
     pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(rsp,
                                                           PJSIP_H_TO,
