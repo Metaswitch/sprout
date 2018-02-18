@@ -468,6 +468,51 @@ TEST_F(RegistrarTest, RegisterSubscriberNoPrivateID)
   SubscriberDataUtils::delete_bindings(bindings);
 }
 
+// Check that everything works with a Tel URI
+TEST_F(RegistrarTest, RegisterSubscriberTelURI)
+{
+  Message msg;
+  msg._scheme = "tel";
+  msg._auth = "Authorization: Digest username=\"6505550231\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+
+  // Catch the irs_query and the bindings object set on the calls to SM.
+  HSSConnection::irs_query irs_query;
+  Bindings bindings;
+
+  // Set up the irs_info and all_bindings objects returned by the SM.
+  HSSConnection::irs_info irs_info;
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri("tel:6505550231", false);
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  irs_info._associated_uris = associated_uris;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+
+  // Set up the expect calls.
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SaveArg<0>(&irs_query),
+                    SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
+    .WillOnce(DoAll(SaveBindingsRegister(&bindings),
+                    SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  // Send register.
+  inject_msg(msg.get());
+
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  free_txdata();
+
+  // Tidy up.
+  SubscriberDataUtils::delete_bindings(bindings);
+}
+
 // Test reregistering a subscriber. We don't check much in this test (as the
 // code is the same as the register case) - check the reregister call in detail,
 // that the correct stats are called, and that the
@@ -648,6 +693,37 @@ TEST_F(RegistrarTest, DeregisterSubscriberWithWildcard)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
 }
 
+TEST_F(RegistrarTest, DeregisterSubscriberContactParams)
+{
+  Message msg;
+  msg._contact_params = ";expires=0;+sip.ice;reg-id=1";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings = Bindings();
+  std::vector<std::string> removed_bindings;
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_get_single_binding();
+  EXPECT_CALL(*_sm, reregister_subscriber(_, _, _, Bindings(), _, _, _, _))
+    .WillOnce(DoAll(SaveArg<4>(&removed_bindings),
+                    SetArgReferee<6>(irs_info),
+                    SetArgReferee<5>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  inject_msg(msg.get());
+
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  ASSERT_EQ(removed_bindings.size(), 1);
+  EXPECT_EQ(removed_bindings[0], "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1");
+
+  // Check the stats are correct
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
+}
+
 // Test that a register fails correctly if we're unable to get the subscriber
 // state.
 TEST_F(RegistrarTest, GetSubscriberStateFail)
@@ -791,6 +867,38 @@ TEST_F(RegistrarTest, BadScheme)
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
+}
+
+// Test that a subscriber is able to register, even if the registering identity
+// is barred.
+TEST_F(RegistrarTest, RegisteringIMPUBarred)
+{
+  Message msg;
+
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri("sip:6505550231@homedomain", true);
+  associated_uris.add_uri("sip:6505550232@homedomain", false);
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  irs_info._associated_uris = associated_uris;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*_sm, register_with_application_servers(_, _, "sip:6505550232@homedomain", _, _, _, _));
+
+  inject_msg(msg.get());
+
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
 }
 
 // Test that a subscriber is unable to do a normal register if all of the
@@ -951,6 +1059,42 @@ TEST_F(RegistrarTest, ReduceTimeForEmergencyBinding)
   SubscriberDataUtils::delete_bindings(bindings);
 }
 
+// Test that an emergency registration is successful when there's no GRUU.
+TEST_F(RegistrarTest, EmergencyRegistrationNoGRUU)
+{
+  Message msg;
+  msg._contact += ";sos";
+  msg._contact_instance = "";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings;
+  Binding* binding = AoRTestUtils::build_binding("sip:6505550231@homedomain", time(NULL));
+  binding->_cid = msg._cid;
+  binding->_emergency_registration = true;
+  all_bindings.insert(std::make_pair("sos", binding));
+  Bindings bindings;
+  std::vector<std::string> removed_bindings;
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
+    .WillOnce(DoAll(SaveBindingsRegister(&bindings),
+                    SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+
+  inject_msg(msg.get());
+
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  ASSERT_EQ(bindings.size(), 1);
+  EXPECT_TRUE(bindings["sip:6505550231@192.91.191.29:59934;transport=tcp;ob;sos"]->_emergency_registration);
+
+  // Tidy up
+  SubscriberDataUtils::delete_bindings(bindings);
+}
+
 // Test that the correct P-Associated-URI headers are set if there's a complex
 // set of associated URIs.
 TEST_F(RegistrarTest, ComplexAssociatedURIs)
@@ -965,12 +1109,20 @@ TEST_F(RegistrarTest, ComplexAssociatedURIs)
   irs_info._associated_uris.add_uri("sip:6505550233@homedomain", true);
   irs_info._associated_uris.add_uri("sip:6505550234@homedomain", false);
   irs_info._associated_uris.add_uri("sip:6505550235@homedomain", true);
+  irs_info._associated_uris.add_uri("tel:65055503311", false);
+  irs_info._associated_uris.add_uri("tel:65055502312", true);
+  irs_info._associated_uris.add_uri("tel:65055502313", false);
+  irs_info._associated_uris.add_uri("tel:65055502314", true);
+  irs_info._associated_uris.add_uri("tel:nottela", false);
+  irs_info._associated_uris.add_uri("tel:nottelb", true);
   irs_info._associated_uris.add_uri("6505550231@homedomain", false);
   irs_info._associated_uris.add_uri("6505550232@homedomain", false);
   irs_info._associated_uris.add_wildcard_mapping("6!.*!@homedomain", "6505550232@homedomain");
   irs_info._associated_uris.add_wildcard_mapping("6!.*!@homedomain", "6505550232@homedomain");
   irs_info._associated_uris.add_wildcard_mapping("sip:6!.*!@homedomain", "sip:6505550234@homedomain");
   irs_info._associated_uris.add_wildcard_mapping("sip:6!.*!@homedomain", "sip:6505550235@homedomain");
+  irs_info._associated_uris.add_wildcard_mapping("tel:6!.*!@homedomain", "tel:6505550313");
+  irs_info._associated_uris.add_wildcard_mapping("tel:6!.*!@homedomain", "tel:6505550314");
 
   Bindings all_bindings;
   set_up_single_returned_binding(all_bindings, msg._cid);
@@ -989,8 +1141,39 @@ TEST_F(RegistrarTest, ComplexAssociatedURIs)
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>\r\nP-Associated-URI: <sip:6505550232@homedomain>\r\nP-Associated-URI: <sip:6505550234@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>\r\nP-Associated-URI: <sip:6505550232@homedomain>\r\nP-Associated-URI: <sip:6505550234@homedomain>\r\nP-Associated-URI: <tel:65055503311>\r\nP-Associated-URI: <tel:65055502313>", get_headers(out, "P-Associated-URI"));
 
+  free_txdata();
+}
+
+// Test that a subscriber is able to register when it's not the primary IMPU
+TEST_F(RegistrarTest, RegisteringNonPrimaryIMPU)
+{
+  Message msg;
+
+  AssociatedURIs associated_uris;
+  associated_uris.add_uri("sip:6505550232@homedomain", false);
+  associated_uris.add_uri("sip:6505550231@homedomain", false);
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  irs_info._associated_uris = associated_uris;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SetArgReferee<1>(irs_info),
+                    Return(HTTP_OK)));
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  EXPECT_CALL(*_sm, register_with_application_servers(_, _, "sip:6505550231@homedomain", _, _, _, _));
+
+  inject_msg(msg.get());
+
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
   free_txdata();
 }
 
@@ -1122,15 +1305,56 @@ TEST_F(RegistrarTest, NoPath)
   free_txdata();
 }
 
-// EM-TODO: Extra Coverage TODOs - consider for FV tests.
-// Register with non primary IMPU
-// Register with multiple associated URIs (same as above?) - also Tel URIs
-// Associated-URIS in PAU header with wildcards
-// Registrations with Tel URIs (including emergency)
-// Emergency reg with no sip instance (gruu?)
-// Expires in the contact headers
-// Contact with *
-// Expires set to 0 in contact headers
-// No expiry header or contact parameter
-// Binding rinstance?
-// Test with no route header?
+// Test that the behaviour is correct when the original register doesn't have
+// a route header.
+TEST_F(RegistrarTest, NoRoute)
+{
+  Message msg;
+  msg._route = "";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  free_txdata();
+}
+
+// Test that the behaviour is correct when the original register doesn't have
+// a route header.
+TEST_F(RegistrarTest, RouteRemoteSite)
+{
+  Message msg;
+  msg._route = "sprout-site2.homedomain";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, "sip:scscf.sprout-site2.homedomain:5058;transport=TCP", _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  free_txdata();
+}

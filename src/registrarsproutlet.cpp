@@ -512,9 +512,16 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     int max_expiry = AoRUtils::get_max_expiry(all_bindings, now);
 
+    std::string as_id = public_id;
+
+    if (irs_info._associated_uris.is_impu_barred(public_id))
+    {
+      as_id = default_impu;
+    }
+
     _registrar->_sm->register_with_application_servers(req,
                                                        rsp,
-                                                       public_id,
+                                                       as_id,
                                                        irs_info._service_profiles[public_id],
                                                        max_expiry,
                                                        (rt == RegisterType::INITIAL),

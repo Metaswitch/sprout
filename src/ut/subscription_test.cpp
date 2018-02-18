@@ -349,10 +349,11 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
 
-  // Check the Charging, From and Expires headers.
+  // Check the Charging, From, Expires, and Contact headers.
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=\"CCF TEST\";ecf=\"ECF TEST\"", get_headers(out, "P-Charging-Function-Addresses"));
   EXPECT_EQ("Expires: 300", get_headers(out, "Expires"));
+  EXPECT_EQ("Contact: <sip:all.the.sprout.nodes:5058;transport=TCP>", get_headers(out, "Contact"));
 
   // Pull out the to tag on the OK
   std::vector<std::string> to_params;

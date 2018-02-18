@@ -369,6 +369,13 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
                                                               expiry);
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)expires_hdr);
 
+    // Add the contact header
+    pjsip_contact_hdr* contact_hdr = pjsip_contact_hdr_create(get_pool(rsp));
+    pjsip_name_addr* contact_uri = pjsip_name_addr_create(get_pool(rsp));
+    contact_uri->uri = (pjsip_uri*)stack_data.scscf_uri;
+    contact_hdr->uri = (pjsip_uri*)contact_uri;
+    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)contact_hdr);
+
     // Add a P-Charging-Function-Addresses header to the successful SUBSCRIBE
     // response containing the charging addresses returned by the HSS.
     PJUtils::add_pcfa_header(rsp,
