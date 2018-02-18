@@ -506,11 +506,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Send the register request/response to the register sender, in case there's
   // any third party registers to send.
-  if ((!AoRUtils::contains_emergency_binding(all_bindings)) &&
+  if ((!SubscriberDataUtils::contains_emergency_binding(all_bindings)) &&
       (rt != RegisterType::FETCH) &&
       (rt != RegisterType::FETCH_INITIAL))
   {
-    int max_expiry = AoRUtils::get_max_expiry(all_bindings, now);
+    int max_expiry = SubscriberDataUtils::get_max_expiry(all_bindings, now);
 
     _registrar->_sm->register_with_application_servers(req,
                                                        rsp,

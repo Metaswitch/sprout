@@ -11,6 +11,7 @@
 
 #include <set>
 
+#include "sproutsasevent.h"
 #include "subscriber_data_utils.h"
 #include "log.h"
 
@@ -40,10 +41,10 @@ SubscriberDataUtils::ContactEvent
 }
 
 void SubscriberDataUtils::classify_bindings(const std::string& aor_id,
-                                          const SubscriberDataUtils::EventTrigger& event_trigger,
-                                          const Bindings& orig_bindings,
-                                          const Bindings& updated_bindings,
-                                          ClassifiedBindings& classified_bindings)
+                                            const SubscriberDataUtils::EventTrigger& event_trigger,
+                                            const Bindings& orig_bindings,
+                                            const Bindings& updated_bindings,
+                                            ClassifiedBindings& classified_bindings)
 {
   // We should have been given an empty classified_bindings vector, but clear
   // it just in case.
@@ -133,12 +134,12 @@ void SubscriberDataUtils::classify_bindings(const std::string& aor_id,
 }
 
 void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
-                                               const SubscriberDataUtils::EventTrigger& event_trigger,
-                                               const Subscriptions& orig_subscriptions,
-                                               const Subscriptions& updated_subscriptions,
-                                               const ClassifiedBindings& classified_bindings,
-                                               const bool& associated_uris_changed,
-                                               ClassifiedSubscriptions& classified_subscriptions)
+                                                 const SubscriberDataUtils::EventTrigger& event_trigger,
+                                                 const Subscriptions& orig_subscriptions,
+                                                 const Subscriptions& updated_subscriptions,
+                                                 const ClassifiedBindings& classified_bindings,
+                                                 const bool& associated_uris_changed,
+                                                 ClassifiedSubscriptions& classified_subscriptions)
 {
   // We should have been given an empty classified_subscriptions vector, but
   // clear it just in case
@@ -299,6 +300,82 @@ void SubscriberDataUtils::classify_subscriptions(const std::string& aor_id,
   }
 }
 
+Bindings SubscriberDataUtils::copy_bindings(const Bindings& bindings)
+{
+  Bindings copy_bindings;
+  for (BindingPair b : bindings)
+  {
+    Binding* copy_b = new Binding(*(b.second));
+    copy_bindings.insert(std::make_pair(b.first, copy_b));
+  }
+
+  return copy_bindings;
+}
+
+Bindings SubscriberDataUtils::copy_active_bindings(const Bindings& bindings,
+                                                   int now,
+                                                   SAS::TrailId trail)
+{
+  Bindings copy_bindings;
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_expires - now > 0)
+    {
+      Binding* copy_b = new Binding(*(b.second));
+      copy_bindings.insert(std::make_pair(b.first, copy_b));
+    }
+    else
+    {
+      SAS::Event event(trail, SASEvent::BINDING_EXPIRED, 0);
+      event.add_var_param(b.second->_address_of_record);
+      event.add_var_param(b.second->_uri);
+      event.add_var_param(b.second->_cid);
+      event.add_static_param(b.second->_expires);
+      event.add_static_param(now);
+      SAS::report_event(event);
+    }
+  }
+
+  return copy_bindings;
+}
+
+Subscriptions SubscriberDataUtils::copy_subscriptions(const Subscriptions& subscriptions)
+{
+  Subscriptions copy_subscriptions;
+  for (SubscriptionPair s :subscriptions)
+  {
+    Subscription* copy_s = new Subscription(*(s.second));
+    copy_subscriptions.insert(std::make_pair(s.first, copy_s));
+  }
+
+  return copy_subscriptions;
+}
+
+Subscriptions SubscriberDataUtils::copy_active_subscriptions(const Subscriptions& subscriptions,
+                                                             int now,
+                                                             SAS::TrailId trail)
+{
+  Subscriptions copy_subscriptions;
+  for (SubscriptionPair s :subscriptions)
+  {
+    if (s.second->_expires - now > 0)
+    {
+      Subscription* copy_s = new Subscription(*(s.second));
+      copy_subscriptions.insert(std::make_pair(s.first, copy_s));
+    }
+    else
+    {
+      SAS::Event event(trail, SASEvent::SUBSCRIPTION_EXPIRED, 0);
+      event.add_var_param(s.second->_from_uri);
+      event.add_static_param(s.second->_expires);
+      event.add_static_param(now);
+      SAS::report_event(event);
+    }
+  }
+
+  return copy_subscriptions;
+}
+
 void SubscriberDataUtils::delete_bindings(ClassifiedBindings& classified_bindings)
 {
   for (ClassifiedBinding* binding : classified_bindings)
@@ -334,3 +411,32 @@ void SubscriberDataUtils::delete_subscriptions(Subscriptions& subscriptions)
     delete subscription.second;
   }
 }
+
+int SubscriberDataUtils::get_max_expiry(Bindings bindings,
+                                        int now)
+{
+  int max_expiry = 0;
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_expires - now > max_expiry)
+    {
+      max_expiry = b.second->_expires - now;
+    }
+  }
+
+  return max_expiry;
+}
+
+bool SubscriberDataUtils::contains_emergency_binding(Bindings bindings)
+{
+  for (BindingPair b : bindings)
+  {
+    if (b.second->_emergency_registration)
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+

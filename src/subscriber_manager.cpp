@@ -10,6 +10,7 @@
  */
 
 #include "subscriber_manager.h"
+#include "sproutsasevent.h"
 #include "aor_utils.h"
 #include "pjutils.h"
 
@@ -125,8 +126,9 @@ HTTPCode SubscriberManager::register_subscriber_internal(const std::string& aor_
     log_updated_bindings(*updated_aor, add_bindings, now);
 
     // Get all bindings to return to the caller
-    all_bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
-                                                  now);
+    all_bindings = SubscriberDataUtils::copy_active_bindings(updated_aor->bindings(),
+                                                             now,
+                                                             trail);
   }
   else
   {
@@ -286,8 +288,9 @@ HTTPCode SubscriberManager::reregister_subscriber_internal(const std::string& ao
                     now);
 
   // Get all bindings to return to the caller
-  all_bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
-                                                now);
+  all_bindings = SubscriberDataUtils::copy_active_bindings(updated_aor->bindings(),
+                                                           now,
+                                                           trail);
 
   send_notifys(aor_id,
                orig_aor,
@@ -411,8 +414,9 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
                     now);
 
   // Get all bindings to return to the caller
-  bindings = AoRUtils::copy_active_bindings(updated_aor->bindings(),
-                                            now);
+  bindings = SubscriberDataUtils::copy_active_bindings(updated_aor->bindings(),
+                                                       now,
+                                                       trail);
 
   send_notifys(aor_id,
                orig_aor,
@@ -704,8 +708,9 @@ HTTPCode SubscriberManager::get_bindings(const std::string& aor_id,
   }
 
   // Set the bindings to return to the caller.
-  bindings = AoRUtils::copy_active_bindings(aor->bindings(),
-                                            time(NULL));
+  bindings = SubscriberDataUtils::copy_active_bindings(aor->bindings(),
+                                                       time(NULL),
+                                                       trail);
 
   delete aor; aor = NULL;
   return HTTP_OK;
@@ -733,8 +738,9 @@ HTTPCode SubscriberManager::get_subscriptions(const std::string& aor_id,
   }
 
   // Set the subscriptions to return to the caller.
-  subscriptions = AoRUtils::copy_active_subscriptions(aor->subscriptions(),
-                                                      time(NULL));
+  subscriptions = SubscriberDataUtils::copy_active_subscriptions(aor->subscriptions(),
+                                                                 time(NULL),
+                                                                 trail);
 
   delete aor; aor = NULL;
   return HTTP_OK;
@@ -927,6 +933,10 @@ void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
   if ((updated_aor != NULL) &&
       (updated_aor->bindings().empty()))
   {
+    SAS::Event event(trail, SASEvent::REGISTRATION_EXPIRED, 0);
+    event.add_var_param(aor_id);
+    SAS::report_event(event);
+
     HSSConnection::irs_info irs_info;
     rc = deregister_with_hss(aor_id,
                              HSSConnection::DEREG_TIMEOUT,
@@ -1190,7 +1200,7 @@ void SubscriberManager::build_patch(PatchObject& po,
                                     const std::vector<std::string>& remove_subscriptions,
                                     const AssociatedURIs& associated_uris)
 {
-  po.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
+  po.set_update_bindings(SubscriberDataUtils::copy_bindings(update_bindings));
   po.set_remove_bindings(remove_bindings);
   po.set_remove_subscriptions(remove_subscriptions);
   po.set_associated_uris(associated_uris);
@@ -1201,7 +1211,7 @@ void SubscriberManager::build_patch(PatchObject& po,
                                     const Bindings& update_bindings,
                                     const AssociatedURIs& associated_uris)
 {
-  po.set_update_bindings(AoRUtils::copy_bindings(update_bindings));
+  po.set_update_bindings(SubscriberDataUtils::copy_bindings(update_bindings));
   po.set_associated_uris(associated_uris);
 }
 
@@ -1210,7 +1220,7 @@ void SubscriberManager::build_patch(PatchObject& po,
                                     const std::vector<std::string>& remove_subscriptions,
                                     const AssociatedURIs& associated_uris)
 {
-  po.set_update_subscriptions(AoRUtils::copy_subscriptions(update_subscriptions));
+  po.set_update_subscriptions(SubscriberDataUtils::copy_subscriptions(update_subscriptions));
   po.set_remove_subscriptions(remove_subscriptions);
   po.set_associated_uris(associated_uris);
   po.set_increment_cseq(true);
