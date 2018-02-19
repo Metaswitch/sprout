@@ -1,5 +1,5 @@
 /**
- * @file notify_utils2.h
+ * @file subscriber_data_utils.h
  *
  * Copyright (C) Metaswitch Networks 2018
  * If license terms are provided to you in a COPYING file in the root directory
@@ -9,12 +9,13 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef NOTIFY_UTILS2_H__
-#define NOTIFY_UTILS2_H__
+#ifndef SUBSCRIBER_DATA_UTILS_H__
+#define SUBSCRIBER_DATA_UTILS_H__
 
 #include <string>
 
 #include "aor.h"
+#include "sas.h"
 
 namespace SubscriberDataUtils
 {
@@ -128,6 +129,18 @@ void classify_subscriptions(
                      std::vector<SubscriberDataUtils::ClassifiedSubscription*>&
                        classified_subscriptions);
 
+// Helper functions to copy bindings.
+Bindings copy_bindings(const Bindings& bindings);
+Bindings copy_active_bindings(const Bindings& bindings,
+                              int now,
+                              SAS::TrailId trail);
+
+// Helper functions to copy subscriptions.
+Subscriptions copy_subscriptions(const Subscriptions& subscriptions);
+Subscriptions copy_active_subscriptions(const Subscriptions& subscriptions,
+                                        int now,
+                                        SAS::TrailId trail);
+
 /// Helper functions to delete bindings.
 void delete_bindings(std::vector<SubscriberDataUtils::ClassifiedBinding*>&
                                                            classified_bindings);
@@ -137,6 +150,13 @@ void delete_bindings(Bindings& bindings);
 void delete_subscriptions(std::vector<SubscriberDataUtils::ClassifiedSubscription*>&
                                                       classified_subscriptions);
 void delete_subscriptions(Subscriptions& subscriptions);
+
+// Gets the maximum expiry from the bindings provided.
+int get_max_expiry(Bindings bindings,
+                   int now);
+
+// Works out if there are an emergency bindings in the bindings provided.
+bool contains_emergency_binding(Bindings bindings);
 
 ContactEvent determine_contact_event(const EventTrigger& event_trigger);
 };

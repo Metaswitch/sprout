@@ -335,7 +335,7 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
   irs_info._ecfs.push_back("ECF TEST");
   irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
 
-  EXPECT_CALL(*_sm, update_subscription("sip:6505550231@homedomain", _, _, _))
+  EXPECT_CALL(*_sm, update_subscriptions("sip:6505550231@homedomain", _, _, _))
     .WillOnce(DoAll(SaveSubscription(&subscription_id, &subscription),
                     SetArgReferee<2>(irs_info),
                     Return(HTTP_OK)));
@@ -383,7 +383,8 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
 
   // Now expire the same subscription. The subscription ID is the to tag from
   // 200 OK.
-  EXPECT_CALL(*_sm, remove_subscription("sip:6505550231@homedomain", to_tag, _, _))
+  std::vector<std::string> subscription_ids = {to_tag};
+  EXPECT_CALL(*_sm, remove_subscriptions("sip:6505550231@homedomain", subscription_ids, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(irs_info),
                     Return(HTTP_OK)));
 
@@ -510,7 +511,7 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
 {
   HSSConnection::irs_info irs_info;
   irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
     WillOnce(DoAll(SetArgReferee<2>(irs_info),
                    Return(HTTP_OK)));
 
@@ -527,7 +528,7 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
 {
   HSSConnection::irs_info irs_info;
   irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
     WillOnce(DoAll(SetArgReferee<2>(irs_info),
                    Return(HTTP_OK)));
 
@@ -543,7 +544,7 @@ TEST_F(SubscriptionTest, UnregisteredSubscribee)
 {
   HSSConnection::irs_info irs_info;
   irs_info._regstate = RegDataXMLUtils::STATE_UNREGISTERED;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
     WillOnce(DoAll(SetArgReferee<2>(irs_info),
                    Return(HTTP_OK)));
 
@@ -556,7 +557,7 @@ TEST_F(SubscriptionTest, UnregisteredSubscribee)
 // Test that subscribing fails when the connection to the HSS times out.
 TEST_F(SubscriptionTest, HSSConnectionTimeout)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_GATEWAY_TIMEOUT));
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).WillOnce(Return(HTTP_GATEWAY_TIMEOUT));
 
   SubscribeMessage msg;
   inject_msg(msg.get());
@@ -567,7 +568,7 @@ TEST_F(SubscriptionTest, HSSConnectionTimeout)
 // Test that subscribing fails when the connection to the HSS fails.
 TEST_F(SubscriptionTest, HSSConnectionError)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_TEMP_UNAVAILABLE));
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).WillOnce(Return(HTTP_TEMP_UNAVAILABLE));
 
   SubscribeMessage msg;
   inject_msg(msg.get());
@@ -580,7 +581,7 @@ TEST_F(SubscriptionTest, TelURI)
 {
   HSSConnection::irs_info irs_info;
   irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
     WillOnce(DoAll(SetArgReferee<2>(irs_info),
                    Return(HTTP_OK)));
 
@@ -596,7 +597,7 @@ TEST_F(SubscriptionTest, ReqUriTelUri)
 {
   HSSConnection::irs_info irs_info;
   irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
     WillOnce(DoAll(SetArgReferee<2>(irs_info),
                    Return(HTTP_OK)));
 

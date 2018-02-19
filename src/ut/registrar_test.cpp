@@ -168,12 +168,12 @@ string Message::get()
 /// object.
 ACTION_P(SaveBindingsRegister, bindings)
 {
-  *bindings = AoRUtils::copy_bindings(arg3);
+  *bindings = SubscriberDataUtils::copy_bindings(arg3);
 }
 
 ACTION_P(SaveBindingsReRegister, bindings)
 {
-  *bindings = AoRUtils::copy_bindings(arg3);
+  *bindings = SubscriberDataUtils::copy_bindings(arg3);
 }
 
 /// Fixture for RegistrarTest.

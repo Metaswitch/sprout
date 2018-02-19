@@ -44,15 +44,15 @@ public:
                                          Bindings& bindings,
                                          SAS::TrailId trail));
 
-  MOCK_METHOD4(update_subscription, HTTPCode(const std::string& public_id,
-                                             const Subscriptions& subscriptions,
-                                             HSSConnection::irs_info& irs_info,
-                                             SAS::TrailId trail));
+  MOCK_METHOD4(update_subscriptions, HTTPCode(const std::string& public_id,
+                                              const Subscriptions& subscriptions,
+                                              HSSConnection::irs_info& irs_info,
+                                              SAS::TrailId trail));
 
-  MOCK_METHOD4(remove_subscription, HTTPCode(const std::string& public_id,
-                                             const std::string& subscription_id,
-                                             HSSConnection::irs_info& irs_info,
-                                             SAS::TrailId trail));
+  MOCK_METHOD4(remove_subscriptions, HTTPCode(const std::string& public_id,
+                                              const std::vector<std::string>& subscription_ids,
+                                              HSSConnection::irs_info& irs_info,
+                                              SAS::TrailId trail));
 
   MOCK_METHOD2(deregister_subscriber, HTTPCode(const std::string& public_id,
                                                SAS::TrailId trail));
