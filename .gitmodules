@@ -55,3 +55,6 @@
 [submodule "clearwater-etcd-plugins"]
 	path = modules/clearwater-etcd-plugins
 	url = git@github.com:Metaswitch/clearwater-etcd-plugins.git
+[submodule "modules/clearwater-s4"]
+	path = modules/clearwater-s4
+	url = git@github.com:Metaswitch/clearwater-s4.git

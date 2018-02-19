@@ -17,15 +17,9 @@
 #include <vector>
 #include <unordered_map>
 
-#include "analyticslogger.h"
-#include "aschain.h"
 #include "acr.h"
-#include "hssconnection.h"
-#include "subscriber_data_manager.h"
+#include "subscriber_manager.h"
 #include "sproutlet.h"
-#include "snmp_counter_table.h"
-#include "session_expires_helper.h"
-#include "as_communication_tracker.h"
 #include "compositesproutlet.h"
 
 class SubscriptionSproutletTsx;
@@ -38,11 +32,8 @@ public:
                         const std::string& uri,
                         const std::string& network_function,
                         const std::string& next_hop_service,
-                        SubscriberDataManager* sdm,
-                        std::vector<SubscriberDataManager*> remote_sdms,
-                        HSSConnection* hss_connection,
+                        SubscriberManager* sm,
                         ACRFactory* acr_factory,
-                        AnalyticsLogger* analytics_logger,
                         int cfg_max_expires);
   ~SubscriptionSproutlet();
 
@@ -61,16 +52,10 @@ private:
 
   friend class SubscriptionSproutletTsx;
 
-  SubscriberDataManager* _sdm;
-  std::vector<SubscriberDataManager*> _remote_sdms;
-
-  // Connection to the HSS service for retrieving associated public URIs.
-  HSSConnection* _hss;
+  SubscriberManager* _sm;
 
   /// Factory for generating ACR messages for Rf billing.
   ACRFactory* _acr_factory;
-
-  AnalyticsLogger* _analytics;
 
   /// The maximum time (in seconds) that a device can subscribe for.
   int _max_expires;
@@ -98,30 +83,17 @@ protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
 
-  AoR::Subscription create_subscription(pjsip_msg* req, int expiry);
-
-  Store::Status update_subscription_in_stores(SubscriptionSproutlet* _subscription,
-                                              AoR::Subscription& new_subscription,
-                                              std::string aor,
-                                              AssociatedURIs* associated_uris,
-                                              pjsip_msg* req,
-                                              std::string public_id,
-                                              ACR* acr,
-                                              std::deque<std::string> ccfs,
-                                              std::deque<std::string> ecfs);
-
-  AoRPair* read_and_cache_from_store(SubscriberDataManager* sdm,
-                                     std::string aor,
-                                     std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
-
-  void update_subscription(SubscriptionSproutlet* _subscription,
-                           AoR::Subscription& new_subscription,
-                           std::string aor,
-                           AoRPair* aor_pair,
-                           std::map<SubscriberDataManager*, AoRPair*>& _cached_aors);
-
-  void log_subscriptions(const std::string& aor_name,
-                         AoR* aor_data);
+  /// Create a subscription object. This is called if the subscribe processing
+  /// is going to add/update a subscription.
+  ///
+  /// @param req[in]    - The SIP request to create a subscription object from.
+  /// @param expiry[in] - The expiry time of the subscription. This is passed in
+  ///                     rather than calculated from the request, as we've
+  ///                     already had to calculate it in order to know if we're
+  ///                     adding/updating or removing a subscription.
+  ///
+  /// @return The created subscription object
+  Subscription* create_subscription(pjsip_msg* req, int expiry);
 
   SubscriptionSproutlet* _subscription;
 };

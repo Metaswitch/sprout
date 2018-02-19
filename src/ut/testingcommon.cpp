@@ -32,7 +32,6 @@ std::string TestingCommon::add_node(std::string node_name,
 
 using namespace TestingCommon;
 
-
 // Returns a string, which is the service profile in XML.
 std::string ServiceProfileBuilder::return_profile()
 {
@@ -86,6 +85,20 @@ std::string ServiceProfileBuilder::return_profile()
 
   service_profile += end_node(SERVICE_PROFILE);
   return service_profile;
+}
+
+// Return an Ifcs object that represents the service profile.
+Ifcs ServiceProfileBuilder::return_ifcs()
+{
+  // Get the string representation of the service profile.
+  std::string sp_str = return_profile();
+
+  // Parse the service profile string to XML.
+  std::shared_ptr<rapidxml::xml_document<>> root (new rapidxml::xml_document<>);
+  root->parse<0>(root->allocate_string(sp_str.c_str()));
+
+  // Build and return Ifcs from the XML.
+  return Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
 }
 
 // Add an identity to the list of identities. This identity is always added with
@@ -192,14 +205,18 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfc(int priority,
                                                      std::vector<std::string> triggers,
                                                      std::string app_serv_name,
                                                      int cond_neg,
-                                                     int default_handling)
+                                                     std::string default_handling,
+                                                     std::string service_info,
+                                                     bool include_body)
 {
   IfcStruct new_ifc;
   new_ifc.priority = priority;
   new_ifc.triggers = triggers;
   new_ifc.app_server_name = app_serv_name;
   new_ifc.condition_negated = std::to_string(cond_neg);
-  new_ifc.default_handling = std::to_string(default_handling);
+  new_ifc.default_handling = default_handling;
+  new_ifc.service_info = service_info;
+  new_ifc.include_body = include_body;
 
   _ifcs.push_back(new_ifc);
   return *this;
@@ -231,6 +248,14 @@ std::string ServiceProfileBuilder::create_ifc(IfcStruct ifc_info)
   if (ifc_info.default_handling != NO_DEF_HANDLING_FIELD)
   {
     ifc += add_node(DEFAULT_HANDLING, ifc_info.default_handling);
+  }
+  if (ifc_info.service_info != "")
+  {
+    ifc += add_node(SERVICE_INFO, ifc_info.service_info);
+  }
+  if (ifc_info.include_body)
+  {
+    ifc += add_node(EXTENSION, INCLUDE_BODY);
   }
   ifc += end_node(APP_SERVER);
   ifc += end_node(IFC);

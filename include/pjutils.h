@@ -65,6 +65,8 @@ std::string pj_status_to_string(const pj_status_t status);
 
 std::string hdr_to_string(void* hdr);
 
+std::string body_to_string(pjsip_msg_body* body);
+
 std::string extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_uri* impu_uri);
 
 std::string public_id_from_uri(const pjsip_uri* uri);
@@ -194,14 +196,42 @@ public:
   virtual ~Callback() {}
 };
 
+/// @brief An implementation of a Callback that simply runs a callable function
+/// object that it has been passed.
+class FunctorCallback : public Callback
+{
+public:
+  /// Constructor.
+  ///
+  /// @param [in] fn - The function object to call when the callback is run. To
+  ///                  avoid implicitly copying large objects, this only takes a
+  ///                  function object by move (meaning the version owned by the
+  ///                  caller of the constructor is moved into the callback and
+  ///                  is no longer available to the caller).
+  FunctorCallback(std::function<void()>&& fn): _fn(fn) {}
+
+  /// Executes the stored callback.
+  void run() { return _fn(); }
+
+private:
+  /// The stored function object.
+  std::function<void()> _fn;
+};
+
 // A function that takes a token and a pjsip_event, and returns a Callback
 // object that can safely be run on another thread.
 typedef Callback* (*send_callback_builder)(void* token, pjsip_event* event);
 
 // Runs the specified callback on a worker thread.
 // `is_pjsip_thread` is used to allow a non-PJSIP owned thread (e.g. an HTTP
-// thread) to indicate that it can't possibly be the transport thread.
+// thread) to indicate that it can't possibly be the transport thread).
 void run_callback_on_worker_thread(PJUtils::Callback* cb,
+                                   bool is_pjsip_thread = true);
+
+// Runs the specified callable function object on a worker thread.
+// `is_pjsip_thread` is used to allow a non-PJSIP owned thread (e.g. an HTTP
+// thread) to indicate that it can't possibly be the transport thread).
+void run_callback_on_worker_thread(std::function<void()>&& fn,
                                    bool is_pjsip_thread = true);
 
 pj_status_t send_request(pjsip_tx_data* tdata,
@@ -400,6 +430,22 @@ void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
 SIPEventPriorityLevel get_priority_of_message(const pjsip_msg* msg,
                                               RPHService* rph_service,
                                               SAS::TrailId trail);
+
+
+/// Get the expiry time for the binding represented by the contact header.
+///
+/// @param[in] contact     - The contact header. If the contact header has an
+///                          expires parameter we take the expiry value from it.
+/// @param[in] expires     - The expires header. May not be present. If it is,
+///                          we use its value if there's nothing on the contact
+///                          header.
+/// @param[in] max_expires - Default value - we use this if there's nothing on
+///                          the contact/expires header.
+///
+/// @return The expiry time for this binding.
+int expiry_for_binding(pjsip_contact_hdr* contact,
+                       pjsip_expires_hdr* expires,
+                       int max_expires);
 
 } // namespace PJUtils
 

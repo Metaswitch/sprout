@@ -125,6 +125,8 @@ public:
 
 extern FakeIPCountTable FAKE_IP_COUNT_TABLE;
 extern FakeCounterTable FAKE_COUNTER_TABLE;
+extern FakeCounterTable FAKE_NO_MATCHING_IFCS_TABLE;
+extern FakeCounterTable FAKE_NO_MATCHING_FALLBACK_IFCS_TABLE;
 extern FakeCounterByScopeTable FAKE_COUNTER_BY_SCOPE_TABLE;
 extern FakeEventAccumulatorTable FAKE_EVENT_ACCUMULATOR_TABLE;
 extern FakeContinuousAccumulatorTable FAKE_CONTINUOUS_ACCUMULATOR_TABLE;
