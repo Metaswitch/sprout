@@ -13,6 +13,7 @@
 
 #include "subscriber_manager.h"
 #include "aor_test_utils.h"
+#include "test_interposer.hpp"
 #include "mock_s4.h"
 #include "mock_hss_connection.h"
 #include "mock_analytics_logger.h"
@@ -48,10 +49,14 @@ public:
                                                 _analytics_logger,
                                                 _notify_sender,
                                                 _registration_sender);
+
+    cwtest_completely_control_time();
   };
 
   virtual ~SubscriberManagerTest()
   {
+    cwtest_reset_time();
+
     delete _subscriber_manager; _subscriber_manager = NULL;
     delete _notify_sender; _notify_sender = NULL;
     delete _registration_sender; _registration_sender = NULL;
