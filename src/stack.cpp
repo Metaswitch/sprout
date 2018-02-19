@@ -85,6 +85,8 @@ static pjsip_module mod_connection_tracking =
   NULL,                                 /* on_tsx_state()       */
 };
 
+// LCOV_EXCL_START - Stack not tested by UTs
+
 static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 {
   // Notify the connection tracker that the transport is active.
@@ -604,7 +606,6 @@ pj_status_t start_pjsip_thread()
   return PJ_SUCCESS;
 }
 
-
 pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
                        int pcscf_trusted_port,
@@ -624,7 +625,6 @@ pj_status_t init_stack(const std::string& system_name,
                        SIPResolver* sipresolver,
                        int record_routing_model,
                        const int default_session_expires,
-                       const int max_session_expires,
                        const int sip_tcp_connect_timeout,
                        const int sip_tcp_send_timeout,
                        QuiescingManager *quiescing_mgr_arg,
@@ -657,7 +657,6 @@ pj_status_t init_stack(const std::string& system_name,
 
   // Copy other functional options to stack data.
   stack_data.default_session_expires = default_session_expires;
-  stack_data.max_session_expires = max_session_expires;
   stack_data.sip_tcp_connect_timeout = sip_tcp_connect_timeout;
   stack_data.sip_tcp_send_timeout = sip_tcp_send_timeout;
   stack_data.enable_orig_sip_to_tel_coerce = enable_orig_sip_to_tel_coerce;
@@ -1008,3 +1007,5 @@ void destroy_stack(void)
   // Terminate PJSIP.
   term_pjsip();
 }
+
+// LCOV_EXCL_STOP

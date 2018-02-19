@@ -18,10 +18,11 @@ extern "C" {
 #include <pjlib.h>
 }
 
-// Forward declaration of PJUtils function.
+// Forward declaration of PJUtils functions.
 namespace PJUtils {
 
 std::string pj_str_to_string(const pj_str_t* pjstr);
+std::string uri_to_string(pjsip_uri_context_e context, const pjsip_uri* uri);
 
 }
 

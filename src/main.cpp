@@ -39,7 +39,7 @@ extern "C" {
 #include "cfgoptions.h"
 #include "sasevent.h"
 #include "analyticslogger.h"
-#include "subscriber_data_manager.h"
+#include "subscriber_manager.h"
 #include "stack.h"
 #include "bono.h"
 #include "hssconnection.h"
@@ -61,7 +61,9 @@ extern "C" {
 #include "scscfselector.h"
 #include "chronosconnection.h"
 #include "chronoshandlers.h"
+#include "s4_chronoshandlers.h"
 #include "handlers.h"
+#include "s4_handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
 #include "sproutletproxy.h"
@@ -102,7 +104,6 @@ enum OptionTypes
   OPT_MIN_TOKEN_RATE,
   OPT_MAX_TOKEN_RATE,
   OPT_EXCEPTION_MAX_TTL,
-  OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
   OPT_HTTP_BLACKLIST_DURATION,
   OPT_ASTAIRE_BLACKLIST_DURATION,
@@ -168,7 +169,6 @@ const static struct pj_getopt_option long_opt[] =
   { "hss",                          required_argument, 0, 'H'},
   { "record-routing-model",         required_argument, 0, 'C'},
   { "default-session-expires",      required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-  { "max-session-expires",          required_argument, 0, OPT_MAX_SESSION_EXPIRES},
   { "target-latency-us",            required_argument, 0, OPT_TARGET_LATENCY_US},
   { "xdms",                         required_argument, 0, 'X'},
   { "ralf",                         required_argument, 0, 'G'},
@@ -337,9 +337,6 @@ static void usage(void)
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request\n"
-       "                            (in seconds. Min 90. Defaults to 600)\n"
-       "     --max-session-expires <expiry>\n"
-       "                            The maximum allowed session expiry period.\n"
        "                            (in seconds. Min 90. Defaults to 600)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
@@ -983,25 +980,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case OPT_MAX_SESSION_EXPIRES:
-      {
-        int max_session_expires;
-        bool rc = validated_atoi(pj_optarg, max_session_expires);
-
-        if ((rc) && max_session_expires >= MIN_SESSION_EXPIRES)
-        {
-          options->max_session_expires = max_session_expires;
-          TRC_INFO("Max session expiry time set to %d", max_session_expires);
-        }
-        else
-        {
-          TRC_WARNING("Invalid value for max session expiry: '%s'. "
-                      "The default value of %d will be used.",
-                      pj_optarg, options->max_session_expires);
-        }
-      }
-      break;
-
     case OPT_EMERGENCY_REG_ACCEPTED:
       options->emerg_reg_accepted = PJ_TRUE;
       TRC_INFO("Emergency registrations accepted");
@@ -1421,8 +1399,9 @@ Store* local_impi_data_store = NULL;
 std::vector<Store*> remote_impi_data_stores;
 AoRStore* local_aor_store = NULL;
 std::vector<AoRStore*> remote_aor_stores;
-SubscriberDataManager* local_sdm = NULL;
-std::vector<SubscriberDataManager*> remote_sdms;
+S4* s4 = NULL;
+std::vector<S4*> remote_s4s;
+SubscriberManager* subscriber_manager = NULL;
 ImpiStore* local_impi_store = NULL;
 std::vector<ImpiStore*> remote_impi_stores;
 RalfProcessor* ralf_processor = NULL;
@@ -1436,6 +1415,7 @@ AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
+IFCConfiguration ifc_configuration = {};
 
 int create_astaire_stores(struct options opt,
                           AstaireResolver*& astaire_resolver,
@@ -1693,7 +1673,6 @@ int main(int argc, char* argv[])
   opt.sas_server = "0.0.0.0";
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
-  opt.max_session_expires = 10 * 60;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
   opt.http_address = "127.0.0.1";
@@ -1932,6 +1911,10 @@ int main(int argc, char* argv[])
   SNMP::ScalarByScopeTable* penalties_scalar = NULL;
   SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
+  SNMP::RegistrationStatsTables third_party_reg_stats_tbls = {nullptr, nullptr, nullptr};
+  SNMP::CounterTable* no_matching_ifcs_tbl = NULL;
+  SNMP::CounterTable* no_matching_fallback_ifcs_tbl = NULL;
+
   SNMP::CounterTable* route_to_remote_alias_tbl = NULL;
   SNMP::CounterTable* accept_for_remote_alias_tbl = NULL;
 
@@ -1985,6 +1968,17 @@ int main(int argc, char* argv[])
                                                         ".1.2.826.0.1.1578918.9.3.30");
     token_rate_scalar = SNMP::ScalarByScopeTable::create("sprout_current_token_rate",
                                                          ".1.2.826.0.1.1578918.9.3.31");
+
+    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
+                                                                                   ".1.2.826.0.1.1578918.9.3.12");
+    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
+                                                                                 ".1.2.826.0.1.1578918.9.3.13");
+    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
+                                                                                 ".1.2.826.0.1.1578918.9.3.14");
+    no_matching_fallback_ifcs_tbl = SNMP::CounterTable::create("no_matching_fallback_ifcs",
+                                                               "1.2.826.0.1.1578918.9.3.39");
+    no_matching_ifcs_tbl = SNMP::CounterTable::create("no_matching_ifcs",
+                                                      "1.2.826.0.1.1578918.9.3.41");
 
     route_to_remote_alias_tbl = SNMP::CounterTable::create("route_to_remote_alias",
                                                            "1.2.826.0.1.1578918.9.3.44");
@@ -2074,7 +2068,6 @@ int main(int argc, char* argv[])
                       sip_resolver,
                       opt.record_routing_model,
                       opt.default_session_expires,
-                      opt.max_session_expires,
                       opt.sip_tcp_connect_timeout,
                       opt.sip_tcp_send_timeout,
                       quiescing_mgr,
@@ -2159,6 +2152,13 @@ int main(int argc, char* argv[])
                                            "sprout",
                                            AlarmDef::SPROUT_FIFC_STATUS,
                                            AlarmDef::CRITICAL));
+
+  // Create the IFC Configuration
+  ifc_configuration = IFCConfiguration(opt.apply_fallback_ifcs,
+                                       opt.reject_if_no_matching_ifcs,
+                                       opt.dummy_app_server,
+                                       no_matching_ifcs_tbl,
+                                       no_matching_fallback_ifcs_tbl);
 
   // Create ENUM service.
   if (!opt.enum_servers.empty())
@@ -2248,23 +2248,30 @@ int main(int argc, char* argv[])
     return rc;
   }
 
-  // Use the AOR stores we've create to create the local (and optionally remote)
-  // SDMs.
-  local_sdm = new SubscriberDataManager(local_aor_store,
-                                        chronos_connection,
-                                        analytics_logger,
-                                        true);
-
-  for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
-       it != remote_aor_stores.end();
-       ++it)
+  // Set up the SM and S4s
+  for (AoRStore* store : remote_aor_stores)
   {
-    SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
-                                                                  chronos_connection,
-                                                                  NULL,
-                                                                  false);
-    remote_sdms.push_back(remote_sdm);
+    S4* remote_s4 = new S4("Remote S4", store);
+    remote_s4s.push_back(remote_s4);
   }
+
+  s4 = new S4("Local S4",
+              chronos_connection,
+              "/timers",
+              local_aor_store,
+              remote_s4s);
+
+  NotifySender* notify_sender = new NotifySender();
+  RegistrationSender* registration_sender =
+    new RegistrationSender(ifc_configuration,
+                           fifc_service,
+                           &third_party_reg_stats_tbls,
+                           opt.force_third_party_register_body);
+  subscriber_manager = new SubscriberManager(s4,
+                                             hss_connection,
+                                             analytics_logger,
+                                             notify_sender,
+                                             registration_sender);
 
   // Start the HTTP stack early as plugins might need to register handlers
   // with it.
@@ -2390,51 +2397,31 @@ int main(int argc, char* argv[])
   // be invoked. We don't increment any statistics relating to the fallback
   // iFCs in these flows though (as they should only be used on initial
   // registration).
-  DeregistrationTask::Config deregistration_config(local_sdm,
-                                                   remote_sdms,
-                                                   hss_connection,
-                                                   fifc_service,
-                                                   IFCConfiguration(opt.apply_fallback_ifcs,
-                                                                    opt.reject_if_no_matching_ifcs,
-                                                                    opt.dummy_app_server,
-                                                                    NULL,
-                                                                    NULL),
+  DeregistrationTask::Config deregistration_config(subscriber_manager,
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
-  PushProfileTask::Config push_profile_config(local_sdm,
-                                              remote_sdms,
-                                              hss_connection);
-  GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
-  DeleteImpuTask::Config delete_impu_config(local_sdm,
-                                            remote_sdms,
-                                            hss_connection,
-                                            fifc_service,
-                                            IFCConfiguration(opt.apply_fallback_ifcs,
-                                                             opt.reject_if_no_matching_ifcs,
-                                                             opt.dummy_app_server,
-                                                             NULL,
-                                                             NULL));
 
-  AoRTimeoutTask::Config aor_timeout_config(local_sdm,
-                                            remote_sdms,
-                                            hss_connection,
-                                            fifc_service,
-                                            IFCConfiguration(opt.apply_fallback_ifcs,
-                                                             opt.reject_if_no_matching_ifcs,
-                                                             opt.dummy_app_server,
-                                                             NULL,
-                                                             NULL));
+  PushProfileTask::Config push_profile_config(subscriber_manager);
+  DeleteImpuTask::Config delete_impu_config(subscriber_manager);
+
+  AoRTimeoutTask::Config aor_timeout_config(s4);
+
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
+
+  GetBindingsTask::Config get_bindings_config(subscriber_manager);
+  GetSubscriptionsTask::Config get_subscriptions_config(subscriber_manager);
 
   HttpStackUtils::TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
   HttpStackUtils::TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
   HttpStackUtils::PingHandler ping_handler;
-  HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
-  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
+
+  HttpStackUtils::SpawningHandler<GetBindingsTask, GetBindingsTask::Config> get_bindings_handler(&get_bindings_config);
+  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetSubscriptionsTask::Config> get_subscriptions_handler(&get_subscriptions_config);
+
   HttpStackUtils::SpawningHandler<DeleteImpuTask, DeleteImpuTask::Config> delete_impu_handler(&delete_impu_config);
 
   if (opt.enabled_scscf)
@@ -2566,17 +2553,17 @@ int main(int argc, char* argv[])
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;
-  delete local_sdm;
+  delete subscriber_manager;
+  delete notify_sender;
+  delete s4;
   delete local_aor_store;
   delete local_data_store;
 
-  for (std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
-       it != remote_sdms.end();
-       ++it)
+  for (S4* remote_s4 : remote_s4s)
   {
-    delete *it;
+    delete remote_s4;
   }
-  remote_sdms.clear();
+  remote_s4s.clear();
 
   for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
        it != remote_aor_stores.end();
@@ -2643,6 +2630,12 @@ int main(int argc, char* argv[])
   delete target_latency_scalar;
   delete penalties_scalar;
   delete token_rate_scalar;
+
+  delete third_party_reg_stats_tbls.init_reg_tbl;
+  delete third_party_reg_stats_tbls.re_reg_tbl;
+  delete third_party_reg_stats_tbls.de_reg_tbl;
+  delete no_matching_ifcs_tbl;
+  delete no_matching_fallback_ifcs_tbl;
 
   delete route_to_remote_alias_tbl;
   delete accept_for_remote_alias_tbl;

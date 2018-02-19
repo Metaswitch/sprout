@@ -167,16 +167,19 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
 
           if (trail != 0)
           {
+            // LCOV_EXCL_START
             SAS::Event event(trail, SASEvent::SIPRESOLVE_NAPTR_SUCCESS_SRV, 0);
             event.add_var_param(name);
             event.add_var_param(srv_name);
             std::string transport_str = get_transport_str(naptr->transport);
             event.add_var_param(transport_str);
             SAS::report_event(event);
+            // LCOV_EXCL_STOP
           }
         }
         else
         {
+          // LCOV_EXCL_START
           // Move straight to A/AAAA lookup of the domain returned by NAPTR.
           a_name = naptr->replacement;
 
@@ -187,6 +190,7 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
             event.add_var_param(a_name);
             SAS::report_event(event);
           }
+          // LCOV_EXCL_STOP
         }
       }
       else
@@ -253,7 +257,9 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
 
       if (!result.records().empty())
       {
+        // LCOV_EXCL_START
         srv_name = result.domain();
+        // LCOV_EXCL_STOP
       }
     }
     else if (transport == IPPROTO_TCP)

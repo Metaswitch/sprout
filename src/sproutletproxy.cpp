@@ -736,7 +736,7 @@ SproutletProxy::UASTsx::~UASTsx()
     //
     // For non-ACK transactions, there isn't any harm in logging an extra flush
     // marker after the end marker.
-    SAS::Marker flush(_trail, MARKED_ID_FLUSH);
+    SAS::Marker flush(_trail, MARKER_ID_FLUSH);
     SAS::report_marker(flush);
   }
 

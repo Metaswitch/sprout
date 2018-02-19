@@ -20,92 +20,29 @@
 #include "basetest.hpp"
 #include "siptest.hpp"
 #include "fakehssconnection.hpp"
-#include "fakechronosconnection.hpp"
-#include "mock_subscriber_data_manager.h"
+#include "mock_subscriber_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
+#include "aor_test_utils.h"
 #include "gtest/gtest.h"
 
 
-// Base class used for testing handlers with Mock SDMs.
-class TestWithMockSdms : public SipTest
+// Base class used for testing handlers with Mock Subscriber Manager.
+class TestWithMockSM : public BaseTest
 {
-  MockSubscriberDataManager* store;
-  MockSubscriberDataManager* remote_store1;
-  MockSubscriberDataManager* remote_store2;
+  MockSubscriberManager* sm;
   MockHttpStack* stack;
-  MockHSSConnection* mock_hss;
 
   virtual void SetUp()
   {
-    store = new MockSubscriberDataManager();
-    remote_store1 = new MockSubscriberDataManager();
-    remote_store2 = new MockSubscriberDataManager();
-    mock_hss = new MockHSSConnection();
+    sm = new MockSubscriberManager();
     stack = new MockHttpStack();
   }
 
   virtual void TearDown()
   {
-    delete stack;
-    delete remote_store1; remote_store1 = NULL;
-    delete remote_store2; remote_store2 = NULL;
-    delete store; store = NULL;
-    delete mock_hss;
-  }
-
-  AoRPair* build_aor(std::string aor_id,
-                                            bool include_subscription = true)
-  {
-    AoR* aor = new AoR(aor_id);
-    int now = time(NULL);
-    build_binding(aor, now);
-    if (include_subscription)
-    {
-      build_subscription(aor, now);
-    }
-    aor->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
-    AoR* aor2 = new AoR(*aor);
-    AoRPair* aor_pair = new AoRPair(aor, aor2);
-
-    return aor_pair;
-  }
-
-  AoR::Binding*
-    build_binding(AoR* aor,
-                  int now,
-                  const std::string& id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1")
-  {
-    AoR::Binding* b = aor->get_binding(std::string(id));
-    b->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
-    b->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
-    b->_cseq = 17038;
-    b->_expires = now + 5;
-    b->_priority = 0;
-    b->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-    b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
-    b->_params["reg-id"] = "1";
-    b->_params["+sip.ice"] = "";
-    b->_emergency_registration = false;
-    b->_private_id = "6505550231";
-    return b;
-  }
-
-  AoR::Subscription*
-    build_subscription(AoR* aor,
-                       int now,
-                       const std::string& id = "1234")
-  {
-    AoR::Subscription* s = aor->get_subscription(id);
-    s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
-    s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
-    s->_from_tag = std::string("4321");
-    s->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
-    s->_to_tag = std::string("1234");
-    s->_cid = std::string("xyzabc@192.91.191.29");
-    s->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-    s->_expires = now + 300;
-    return s;
+    delete stack; stack = NULL;
+    delete sm; sm = NULL;
   }
 };
 

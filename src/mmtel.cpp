@@ -58,12 +58,15 @@ AppServerTsx* Mmtel::get_app_tsx(SproutletHelper* helper,
   }
   else
   {
+    // LCOV_EXCL_START - Move to MMTel repo
     TRC_DEBUG("Failed to find P-Served-User header - not invoking MMTEL");
+    // LCOV_EXCL_STOP
   }
 
   return mmtel_tsx;
 }
 
+// LCOV_EXCL_START - Move to MMTel repo
 // Get the user services (simservs) configuration if relevant and present.
 //
 // @returns The simservs object if it is relevant and present.  If there is
@@ -1170,3 +1173,5 @@ pjsip_status_code MmtelTsx::apply_ib_call_barring(pjsip_msg* req)
 
   return apply_call_barring(_user_services->inbound_cb_rules(), req);
 }
+
+// LCOV_EXCL_STOP
