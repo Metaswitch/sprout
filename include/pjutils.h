@@ -418,6 +418,24 @@ bool is_param_in_top_route(const pjsip_msg* req,
 /// @param hdr        - The header to add
 void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
 
+/// Check whether a parameter is present in a specified pjsip_generic_array_hdr
+/// header of a message.
+//
+/// @param msg       the message to be searched
+/// @param htype     type of pjsip_generic_array_hdr header to be serached
+/// @param pname     name of the parameter to be searched for
+///
+/// @return          boolean indicating whether the parameter was found (true if found)
+bool is_param_in_generic_array_hdr(pjsip_msg* msg, pjsip_hdr_e htype, const pj_str_t* param_name);
+
+/// Get the last occurence of a pjsip_routing_hdr header from a message
+///
+/// @param msg       the message to be searched
+/// @param name      name of the header
+///
+/// @return          a pointer to the header, NULL pointer if not found
+pjsip_routing_hdr* msg_get_last_routing_hdr_by_name(pjsip_msg* msg, const pj_str_t* name);
+
 /// Gets the priority of a message, based on the Resource-Priority headers.
 /// The priority is an integer between 0 and 15, where 0 is the default
 /// priority and 15 is the highest priority.

@@ -181,10 +181,12 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // 1. Perform basic validation of the register.
   int num_contact_headers = 0;
   bool emergency_registration = false;
+  bool contains_id = false;
   pjsip_status_code st_code = basic_validation_of_register(
                                                         req,
                                                         num_contact_headers,
                                                         emergency_registration,
+                                                        contains_id,
                                                         trail());
 
   if (st_code != PJSIP_SC_OK)
@@ -449,7 +451,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   if (st_code == PJSIP_SC_OK)
   {
-    // Create supported and require headers for RFC5626.
+    // Create Supported and Require headers for RFC5626.
     gen_hdr = pjsip_generic_string_hdr_create(get_pool(rsp),
                                               &STR_SUPPORTED,
                                               &STR_OUTBOUND);
@@ -492,7 +494,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)gen_hdr);
     add_contact_headers(rsp, req, all_bindings, now, default_impu, trail());
-    handle_path_headers(rsp, req, all_bindings);
+    handle_path_headers(rsp, req, contains_id, all_bindings);
     add_service_route_header(rsp, req);
 
     // Add P-Associated-URI headers for all of the associated URIs that are real
@@ -552,6 +554,7 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
                                                    pjsip_msg* req,
                                                    int& num_contact_headers,
                                                    bool& emergency_registration,
+                                                   bool& contains_id,
                                                    SAS::TrailId trail)
 {
   // Perform basic validation of the register. We can reject the request
@@ -604,6 +607,30 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
     int expiry = PJUtils::expiry_for_binding(contact_hdr,
                                              expires,
                                              _registrar->_max_expires);
+
+    bool contains_instance_id = false;
+    bool contains_reg_id = false;
+
+    // Check for the presence of sip-instance and reg-id parameters
+    pjsip_param* p = contact_hdr->other_param.next;
+
+    while ((p != NULL) && (p != &contact_hdr->other_param))
+    {
+      if (pj_stricmp(&p->name, &STR_SIP_INSTANCE) == 0)
+      {
+        contains_instance_id = true;
+      }
+
+      if (pj_stricmp(&p->name, &STR_REG_ID) == 0)
+      {
+        contains_reg_id = true;
+      }
+
+      p = p->next;
+    }
+
+    contains_id = contains_id ? contains_id :
+                                      (contains_instance_id && contains_reg_id);
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -1035,24 +1062,62 @@ void RegistrarSproutletTsx::add_contact_headers(pjsip_msg* rsp,
 void RegistrarSproutletTsx::handle_path_headers(
                                        pjsip_msg* rsp,
                                        pjsip_msg* req,
+                                       const bool& contains_id,
                                        const Bindings& bindings)
 {
-  // Deal with path header related fields in the response.
-  pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
-                              pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
+  // We check if the UE that sent this REGISTER supports "outbound" (RFC5626)
+  bool supported_outbound = PJUtils::is_param_in_generic_array_hdr(
+                                                              req,
+                                                              PJSIP_H_SUPPORTED,
+                                                              &STR_OUTBOUND);
 
-  if ((path_hdr != NULL) && (!bindings.empty()))
+  // Deal with path header related fields in the response.
+  // Find the first path header as added to the message. We do this using the
+  // function msg_get_last_routing_hdr_by_name which itterates through the
+  // headers of the message and returns the last one (which will be the first
+  // one added).
+  pjsip_routing_hdr* first_path_hdr =
+                     PJUtils::msg_get_last_routing_hdr_by_name(req, &STR_PATH);
+
+
+  if (first_path_hdr != NULL)
   {
-    // We have bindings with path headers so we must require Outbound.
-    pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(get_pool(rsp));
-    require_hdr->count = 1;
-    require_hdr->values[0] = STR_OUTBOUND;
-    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)require_hdr);
+    // Check for the presence of an "ob" parameter in the URI of the first path header
+    pjsip_sip_uri* uri =
+             (first_path_hdr->name_addr.uri != NULL) ?
+              (pjsip_sip_uri*)pjsip_uri_get_uri(first_path_hdr->name_addr.uri) :
+              NULL;
+
+    bool contains_ob = ((uri != NULL) &&
+                        (pjsip_param_find(&uri->other_param, &STR_OB) != NULL));
+
+    // We include the outbound option tag in the Require header if and only if:
+    // 1. We have bindings
+    // 2. The first path header contains the "ob" parameter
+    // 3. At least one contact header contains the instance-id and reg-id header
+    //    parameters
+    // 4. The UE supports "outbound" (RFC5626)
+    //
+    // The above behaviour is described in RFC5626 section 6. See also
+    // TS24.229, 5.4.1.2.2F, step h).
+    if ((!bindings.empty()) &&
+        (contains_ob) &&
+        (contains_id) &&
+        (supported_outbound))
+    {
+      pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(get_pool(rsp));
+      require_hdr->count = 1;
+      require_hdr->values[0] = STR_OUTBOUND;
+      pjsip_msg_add_hdr(rsp, (pjsip_hdr*)require_hdr);
+    }
   }
 
   // Echo back any Path headers as per RFC 3327, section 5.3.  We take these
   // from the request as they may not exist in the bindings anymore if the
   // bindings have expired.
+  pjsip_routing_hdr* path_hdr =
+           (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
+
   while (path_hdr)
   {
     pjsip_msg_add_hdr(rsp,

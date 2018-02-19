@@ -349,7 +349,7 @@ protected:
   // against this header is adding fragility to our tests.
   // TODO - Turn this into a function which will match against the full header
   // with either order.
-  const std::string BONO_ROUTE_HEADER = "Route: <sip:abcdefgh@bono1.homedomain;transport=tcp;lr>";
+  const std::string BONO_ROUTE_HEADER = "Route: <sip:abcdefgh@bono1.homedomain;transport=tcp;lr;ob>";
   // When fake subscriber info is set, iFCs must be set. An empty iFC object is
   // used, with this placeholder as the key.
   const std::string IFC_PLACEHOLDER = "placeholder";

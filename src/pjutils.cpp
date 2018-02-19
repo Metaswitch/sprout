@@ -2842,6 +2842,37 @@ void PJUtils::add_top_header(pjsip_msg* msg, pjsip_hdr* hdr)
   }
 }
 
+bool PJUtils::is_param_in_generic_array_hdr(pjsip_msg* msg, pjsip_hdr_e htype, const pj_str_t* param_name)
+{
+  bool found = false;
+  pjsip_generic_array_hdr* hdr = (pjsip_generic_array_hdr*)
+                                 pjsip_msg_find_hdr(msg, htype, NULL);
+
+  while ((hdr != NULL) && !found)
+  {
+    for (unsigned int i = 0; i < hdr->count; i++)
+    {
+      found = (pj_stricmp(&hdr->values[i], param_name) == 0);
+      if (found) break;
+    }
+    hdr = (pjsip_generic_array_hdr*)
+                  pjsip_msg_find_hdr(msg, htype, hdr->next);
+  }
+  return found;
+}
+
+pjsip_routing_hdr* PJUtils::msg_get_last_routing_hdr_by_name(pjsip_msg* msg, const pj_str_t* name)
+{
+  pjsip_routing_hdr* hdr = NULL;
+  for (pjsip_routing_hdr* h = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, name, NULL);
+       h != NULL;
+      h = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, name, h->next))
+  {
+    hdr = h;
+  }
+  return hdr;
+}
+
 SIPEventPriorityLevel PJUtils::get_priority_of_message(const pjsip_msg* msg,
                                                        RPHService* rph_service,
                                                        SAS::TrailId trail)

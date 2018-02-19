@@ -120,6 +120,9 @@ protected:
   ///                                      in the request.
   /// @param emergency_registration[out] - Whether this register adds/updates
   ///                                      an emergency registration.
+  /// @param contains_id[out]            - Whether this register has an instance
+  ///                                      ID and reg ID in at least one
+  ///                                      contact.
   /// @param trail                       - The SAS trail for this request.
   ///
   /// @return Whether the request is valid. The cases are:
@@ -131,6 +134,7 @@ protected:
   pjsip_status_code basic_validation_of_register(pjsip_msg* req,
                                                  int& num_contact_headers,
                                                  bool& emergency_registration,
+                                                 bool& contains_id,
                                                  SAS::TrailId trail);
 
   void get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
@@ -152,6 +156,7 @@ protected:
                            SAS::TrailId trail);
   void handle_path_headers(pjsip_msg* rsp,
                            pjsip_msg* req,
+                           const bool& contains_id,
                            const Bindings& bindings);
   void add_service_route_header(pjsip_msg* rsp,
                                 pjsip_msg* req);

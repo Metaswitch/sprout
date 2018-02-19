@@ -58,6 +58,7 @@ public:
   bool _gruu_support;
   int _unique; //< unique to this dialog; inserted into Call-ID
   string _cid;
+  string _supported;
 
   Message() :
     _method("REGISTER"),
@@ -67,13 +68,14 @@ public:
     _contact_instance(";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""),
     _contact_params(";expires=300;+sip.ice;reg-id=1"),
     _expires(""),
-    _path("Path: <sip:abcdefgh@bono1.homedomain;transport=tcp;lr>"),
+    _path("Path: <sip:abcdefgh@bono1.homedomain;transport=tcp;lr;ob>"),
     _auth(""),
     _cseq("17038"),
     _branch(""),
     _scheme("sip"),
     _route("sprout.homedomain"),
-    _gruu_support(true)
+    _gruu_support(true),
+    _supported("outbound, path")
   {
     static int unique = 1042;
     _unique = unique;
@@ -117,7 +119,7 @@ string Message::get()
                "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bK%14$s\r\n"
                "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-               "Supported: outbound, path%13$s\r\n"
+               "Supported: %16$s%13$s\r\n"
                "To: <%2$s>\r\n"
                "Max-Forwards: 68\r\n"
                "Call-ID: %15$s\r\n"
@@ -149,7 +151,8 @@ string Message::get()
                /* 12 */ route.c_str(),
                /* 13 */ _gruu_support ? ", gruu" : "",
                /* 14 */ branch.c_str(),
-               /* 15 */ _cid.c_str()
+               /* 15 */ _cid.c_str(),
+               /* 16 */ _supported.c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -394,7 +397,7 @@ TEST_F(RegistrarTest, RegisterSubscriber)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:6505550231@192.91.191.29:59934;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b4dd32817622\"", get_headers(out, "Contact"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require"));
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
@@ -560,7 +563,8 @@ TEST_F(RegistrarTest, ReRegisterSubscriber)
 }
 
 // Test a fetch request for an existing subscriber. This shouldn't pass in any
-// changes on the reregister request, or increment any stats.
+// changes on the reregister request, or increment any stats, or require
+// outbound support.
 TEST_F(RegistrarTest, FetchBindingsRegisterExistingSubscriber)
 {
   Message msg;
@@ -584,6 +588,8 @@ TEST_F(RegistrarTest, FetchBindingsRegisterExistingSubscriber)
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("", get_headers(out, "Require"));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
 
   free_txdata();
 
@@ -649,6 +655,11 @@ TEST_F(RegistrarTest, DeregisterSubscriber)
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  // We should get the supported header, but no require header (as we've got no
+  // bindings).
+  EXPECT_EQ("", get_headers(out, "Require"));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
 
   ASSERT_EQ(removed_bindings.size(), 1);
   EXPECT_EQ(removed_bindings[0], "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>");
@@ -1355,6 +1366,126 @@ TEST_F(RegistrarTest, RouteRemoteSite)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  free_txdata();
+}
+
+// Test that we don't require outbound support if the UE doesn't support it
+TEST_F(RegistrarTest, OutboundNotSupported)
+{
+  Message msg;
+  msg._supported = "path";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  EXPECT_EQ("", get_headers(out, "Require"));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+
+  free_txdata();
+}
+
+// Test that we don't require outbound support if the contact header doesn't
+// have a reg ID
+TEST_F(RegistrarTest, NoRegID)
+{
+  Message msg;
+  msg._contact_params = "";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  EXPECT_EQ("", get_headers(out, "Require"));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+
+  free_txdata();
+}
+
+// Test that we don't require outbound support if the contact header doesn't
+// have an instance ID
+TEST_F(RegistrarTest, NoInstanceID)
+{
+  Message msg;
+  msg._contact_instance = "";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  EXPECT_EQ("", get_headers(out, "Require"));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+
+  free_txdata();
+}
+
+// Test that we don't require outbound support if the first path header doesn't
+// have the 'ob' parameter
+TEST_F(RegistrarTest, NoOBParameter)
+{
+  Message msg;
+  msg._path = "Path: <sip:abcdefgh@bono1.homedomain;transport=tcp;lr;ob>\n"
+              "Path: <sip:bcdefghi@bono1.homedomain;transport=tcp;lr>";
+
+  HSSConnection::irs_info irs_info;
+  Bindings all_bindings;
+  set_up_single_returned_binding(all_bindings, msg._cid);
+  expectations_for_successful_get_subscriber_state(irs_info);
+  expectations_for_not_found_get_bindings();
+  EXPECT_CALL(*_sm, register_subscriber(_, _, _, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
+                    Return(HTTP_OK)));
+  expectations_for_registration_sender();
+
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  EXPECT_EQ("", get_headers(out, "Require"));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
 
   free_txdata();
 }
