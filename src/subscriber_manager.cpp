@@ -869,7 +869,7 @@ void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
 
   // Find any expired subscriptions in the original AoR.
   std::vector<std::string> subscription_ids_to_remove;
-  for (SubscriptionPair sp : orig_aor->subscriptions())
+  for (Subscriptions::Element sp : orig_aor->subscriptions())
   {
     if (sp.second->_expires <= now)
     {
@@ -1048,7 +1048,7 @@ std::vector<std::string> SubscriberManager::subscriptions_to_remove(const Bindin
 
   // Loop over the subscriptions. If any have the same contact as one of the
   // missing URIs, the subscription should be removed.
-  for (SubscriptionPair sp : orig_subscriptions)
+  for (Subscriptions::Element sp : orig_subscriptions)
   {
     if (missing_uris.find(sp.second->_req_uri) != missing_uris.end())
     {
