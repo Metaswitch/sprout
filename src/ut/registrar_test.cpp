@@ -1495,7 +1495,7 @@ TEST_F(RegistrarTest, NoOBParameter)
 
 // Tests that if we receive a REGISTER with a Route header that is only matched
 // on the port, we use the configured S-CSCF URI in the IRS query
-TEST_F(RegistrarTest, RegistrarSproutletNonMathingDomainUseRootURI)
+TEST_F(RegistrarTest, PortMatchedRouteHeaderUsesConfiguredServerName)
 {
   // Create a REGISTER message with a Route header that only matches on the port
   // (i.e. doesn't include the service=registrar parameter and uses only the

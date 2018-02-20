@@ -2333,7 +2333,7 @@ TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
 // Tests that if we receive a request that has no Route header (and hence is
 // routed to the Auth Sproutlet by the port), we set the server-name in our
 // request to Homestead to be the root URI of the Auth Sproutlet
-TEST_F(AuthenticationTest, AuthSproutletNonMathingDomainUseRootURI)
+TEST_F(AuthenticationTest, PortMatchedRouteHeaderUsesConfiguredServerName)
 {
   pjsip_tx_data* tdata;
 
