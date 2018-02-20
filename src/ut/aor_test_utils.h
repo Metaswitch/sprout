@@ -33,7 +33,7 @@ namespace AoRTestUtils
     b->_cseq = 17038;
     b->_expires = now + expiry;
     b->_priority = 0;
-    b->_path_headers.push_back("<sip:abcdefgh@bono1.homedomain;transport=tcp;lr>");
+    b->_path_headers.push_back("<sip:abcdefgh@bono1.homedomain;transport=tcp;lr;ob>");
     b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
     b->_params["reg-id"] = "1";
     b->_params["+sip.ice"] = "";

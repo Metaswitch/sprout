@@ -32,7 +32,7 @@ extern "C" {
 #include "utils.h"
 #include "wildcard_utils.h"
 #include "sproutsasevent.h"
-#include "hss_sip_mapping.h"
+#include "sm_sip_mapping.h"
 #include "registrarsproutlet.h"
 #include "constants.h"
 #include "custom_headers.h"
@@ -53,16 +53,12 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        SubscriberManager* sm,
                                        ACRFactory* rfacr_factory,
                                        int cfg_max_expires,
-                                       bool force_original_register_inclusion,
-                                       SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                       SNMP::RegistrationStatsTables* third_party_reg_stats_tbls) :
+                                       SNMP::RegistrationStatsTables* reg_stats_tbls) :
   Sproutlet(name, port, uri, "", aliases, NULL, NULL, network_function),
   _sm(sm),
   _acr_factory(rfacr_factory),
   _max_expires(cfg_max_expires),
-  _force_original_register_inclusion(force_original_register_inclusion),
   _reg_stats_tbls(reg_stats_tbls),
-  _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
   _next_hop_service(next_hop_service)
 {
 }
@@ -75,9 +71,6 @@ RegistrarSproutlet::~RegistrarSproutlet()
 bool RegistrarSproutlet::init()
 {
   bool init_success = true;
-
-  // EM-TODORegistrationUtils::init(_third_party_reg_stats_tbls,
-  //                                _force_original_register_inclusion);
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
@@ -188,10 +181,13 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // 1. Perform basic validation of the register.
   int num_contact_headers = 0;
   bool emergency_registration = false;
+  bool contains_id = false;
   pjsip_status_code st_code = basic_validation_of_register(
                                                         req,
                                                         num_contact_headers,
-                                                        emergency_registration);
+                                                        emergency_registration,
+                                                        contains_id,
+                                                        trail());
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -294,7 +290,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   std::string default_impu;
 
   HTTPCode rc = _registrar->_sm->get_subscriber_state(irs_query, irs_info, trail());
-  st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
+  st_code = determine_sm_sip_response(rc, irs_info._regstate, "REGISTER");
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -332,7 +328,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     TRC_DEBUG("Failed to get subscriber information for %s - error is %d",
               public_id.c_str(), st_code);
 
-    SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDCONTACT, 0);
+    SAS::Event event(trail(), SASEvent::REGISTER_IRS_INVALID, 0);
     event.add_var_param(public_id);
     SAS::report_event(event);
 
@@ -366,13 +362,13 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   if ((rc != HTTP_OK) && (rc != HTTP_NOT_FOUND))
   {
     // Getting the current bindings failed. SAS log and reject the request.
-    st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
+    st_code = determine_sm_sip_response(rc, irs_info._regstate, "REGISTER");
     TRC_DEBUG("Failed to get current bindings for %s  - error is %d",
               default_impu.c_str(), rc);
-    // EM-TODO: REDO SAS log
-    SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
+
+    SAS::Event event(trail(), SASEvent::REGISTER_FAILED_GET_BINDINGS, 0);
     event.add_var_param(default_impu);
-    event.add_var_param(public_id);
+    event.add_static_param(rc);
     SAS::report_event(event);
 
     acr->send();
@@ -440,8 +436,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                 trail());
   }
 
-  // SS5-TODO - what error codes can the registrar return?
-  st_code = determine_hss_sip_response(rc, irs_info._regstate, "REGISTER");
+  if (rc == HTTP_OK)
+  {
+    st_code = PJSIP_SC_OK;
+  }
+  else
+  {
+    st_code = determine_sm_sip_response(rc, irs_info._regstate, "REGISTER");
+  }
 
   // 6. Build and send the response.
   pjsip_msg* rsp = create_response(req, st_code);
@@ -449,7 +451,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   if (st_code == PJSIP_SC_OK)
   {
-    // Create supported and require headers for RFC5626.
+    // Create Supported and Require headers for RFC5626.
     gen_hdr = pjsip_generic_string_hdr_create(get_pool(rsp),
                                               &STR_SUPPORTED,
                                               &STR_OUTBOUND);
@@ -475,7 +477,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED, 0);
     event.add_var_param(public_id);
-    event.add_static_param(st_code);// EM-TODO change SAS log
+    event.add_static_param(st_code);
     SAS::report_event(event);
 
     track_register_failures_statistics(rt);
@@ -492,7 +494,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)gen_hdr);
     add_contact_headers(rsp, req, all_bindings, now, default_impu, trail());
-    handle_path_headers(rsp, req, all_bindings);
+    handle_path_headers(rsp, req, contains_id, all_bindings);
     add_service_route_header(rsp, req);
 
     // Add P-Associated-URI headers for all of the associated URIs that are real
@@ -506,17 +508,22 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Send the register request/response to the register sender, in case there's
   // any third party registers to send.
-  if ((!AoRUtils::contains_emergency_binding(all_bindings)) &&
+  if ((!SubscriberDataUtils::contains_emergency_binding(all_bindings)) &&
       (rt != RegisterType::FETCH) &&
       (rt != RegisterType::FETCH_INITIAL))
   {
-    pjsip_msg* clone_rsp = clone_msg(rsp);
+    int max_expiry = SubscriberDataUtils::get_max_expiry(all_bindings, now);
 
-    int max_expiry = AoRUtils::get_max_expiry(all_bindings, now);
+    std::string as_id = public_id;
+
+    if (irs_info._associated_uris.is_impu_barred(public_id))
+    {
+      as_id = default_impu;
+    }
 
     _registrar->_sm->register_with_application_servers(req,
-                                                       clone_rsp,
-                                                       public_id,
+                                                       rsp,
+                                                       as_id,
                                                        irs_info._service_profiles[public_id],
                                                        max_expiry,
                                                        (rt == RegisterType::INITIAL),
@@ -546,7 +553,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
                                                    pjsip_msg* req,
                                                    int& num_contact_headers,
-                                                   bool& emergency_registration)
+                                                   bool& emergency_registration,
+                                                   bool& contains_id,
+                                                   SAS::TrailId trail)
 {
   // Perform basic validation of the register. We can reject the request
   // early which saves contacting the HSS/memcached (although we do have to
@@ -575,7 +584,7 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
     // the AoR isn't valid for the domain in the RequestURI).
     TRC_DEBUG("Rejecting register request using invalid URI scheme");
 
-    SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
     SAS::report_event(event);
 
     st_code = PJSIP_SC_NOT_FOUND;
@@ -599,17 +608,44 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
                                              expires,
                                              _registrar->_max_expires);
 
+    bool contains_instance_id = false;
+    bool contains_reg_id = false;
+
+    // Check for the presence of sip-instance and reg-id parameters
+    pjsip_param* p = contact_hdr->other_param.next;
+
+    while ((p != NULL) && (p != &contact_hdr->other_param))
+    {
+      if (pj_stricmp(&p->name, &STR_SIP_INSTANCE) == 0)
+      {
+        contains_instance_id = true;
+      }
+
+      if (pj_stricmp(&p->name, &STR_REG_ID) == 0)
+      {
+        contains_reg_id = true;
+      }
+
+      p = p->next;
+    }
+
+    contains_id = contains_id ? contains_id :
+                                      (contains_instance_id && contains_reg_id);
+
     if ((contact_hdr->star) && (expiry != 0))
     {
       TRC_DEBUG("Attempted to deregister all bindings, but expiry "
                 "value wasn't 0");
+
+      SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDCONTACT, 0);
+      SAS::report_event(event);
+
       st_code = PJSIP_SC_BAD_REQUEST;
       break;
     }
 
     if (PJUtils::is_emergency_registration(contact_hdr))
     {
-      TRC_DEBUG("EMER");
       if (expiry == 0)
       {
         TRC_DEBUG("Attempting to deregister an emergency registration");
@@ -631,6 +667,10 @@ pjsip_status_code RegistrarSproutletTsx::basic_validation_of_register(
   {
     TRC_DEBUG("Register request is solely attempting to deregister emergency "
               "registrations");
+
+    SAS::Event event(trail, SASEvent::DEREGISTER_FAILED_EMERGENCY, 0);
+    SAS::report_event(event);
+
     st_code = PJSIP_SC_NOT_IMPLEMENTED;
   }
 
@@ -718,10 +758,6 @@ void RegistrarSproutletTsx::get_bindings_from_req(
 
         TRC_DEBUG("Updating binding %s for contact %s",
                   binding_id.c_str(), contact_uri.c_str());
-
-        // TODO Examine Via header to see if we're the first hop
-        // TODO Only if we're not the first hop, check that the top path header
-        // has "ob" parameter
 
         // Get the Path headers, if present.  RFC 3327 allows us the option of
         // rejecting a request with a Path header if there is no corresponding
@@ -1016,16 +1052,8 @@ void RegistrarSproutletTsx::add_contact_headers(pjsip_msg* rsp,
       // the data in the store to be corrupt.
 
       // LCOV_EXCL_START - No UTs for unhittable code.
-
       TRC_WARNING("Badly formed contact URI %s for address of record %s",
                   binding->_uri.c_str(), public_id.c_str());
-
-      // EM-TODO SAS event
-      //SAS::Event event(trail, SASEvent::REGISTER_FAILED_CONTACT_URI, 0);
-      //event.add_var_param(public_id);
-      //event.add_var_param(binding->_uri);
-      //SAS::report_event(event);
-
       // LCOV_EXCL_STOP
     }
   }
@@ -1034,24 +1062,62 @@ void RegistrarSproutletTsx::add_contact_headers(pjsip_msg* rsp,
 void RegistrarSproutletTsx::handle_path_headers(
                                        pjsip_msg* rsp,
                                        pjsip_msg* req,
+                                       const bool& contains_id,
                                        const Bindings& bindings)
 {
-  // Deal with path header related fields in the response.
-  pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
-                              pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
+  // We check if the UE that sent this REGISTER supports "outbound" (RFC5626)
+  bool supported_outbound = PJUtils::is_param_in_generic_array_hdr(
+                                                              req,
+                                                              PJSIP_H_SUPPORTED,
+                                                              &STR_OUTBOUND);
 
-  if ((path_hdr != NULL) && (!bindings.empty()))
+  // Deal with path header related fields in the response.
+  // Find the first path header as added to the message. We do this using the
+  // function msg_get_last_routing_hdr_by_name which itterates through the
+  // headers of the message and returns the last one (which will be the first
+  // one added).
+  pjsip_routing_hdr* first_path_hdr =
+                     PJUtils::msg_get_last_routing_hdr_by_name(req, &STR_PATH);
+
+
+  if (first_path_hdr != NULL)
   {
-    // We have bindings with path headers so we must require Outbound.
-    pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(get_pool(rsp));
-    require_hdr->count = 1;
-    require_hdr->values[0] = STR_OUTBOUND;
-    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)require_hdr);
+    // Check for the presence of an "ob" parameter in the URI of the first path header
+    pjsip_sip_uri* uri =
+             (first_path_hdr->name_addr.uri != NULL) ?
+              (pjsip_sip_uri*)pjsip_uri_get_uri(first_path_hdr->name_addr.uri) :
+              NULL;
+
+    bool contains_ob = ((uri != NULL) &&
+                        (pjsip_param_find(&uri->other_param, &STR_OB) != NULL));
+
+    // We include the outbound option tag in the Require header if and only if:
+    // 1. We have bindings
+    // 2. The first path header contains the "ob" parameter
+    // 3. At least one contact header contains the instance-id and reg-id header
+    //    parameters
+    // 4. The UE supports "outbound" (RFC5626)
+    //
+    // The above behaviour is described in RFC5626 section 6. See also
+    // TS24.229, 5.4.1.2.2F, step h).
+    if ((!bindings.empty()) &&
+        (contains_ob) &&
+        (contains_id) &&
+        (supported_outbound))
+    {
+      pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(get_pool(rsp));
+      require_hdr->count = 1;
+      require_hdr->values[0] = STR_OUTBOUND;
+      pjsip_msg_add_hdr(rsp, (pjsip_hdr*)require_hdr);
+    }
   }
 
   // Echo back any Path headers as per RFC 3327, section 5.3.  We take these
   // from the request as they may not exist in the bindings anymore if the
   // bindings have expired.
+  pjsip_routing_hdr* path_hdr =
+           (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
+
   while (path_hdr)
   {
     pjsip_msg_add_hdr(rsp,
@@ -1142,7 +1208,7 @@ void RegistrarSproutletTsx::add_p_associated_uri_headers(
         else
         {
           TRC_DEBUG("Bad associated URI %s", uri.c_str());
-          // EM-TODO check if this is the correct SAS event
+
           SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 0);
           event.add_var_param(uri);
           SAS::report_event(event);

@@ -142,7 +142,7 @@ void RegistrationSender::deregister_with_application_servers(const std::string& 
   std::string served_user_uri_string = "<"+served_user+">";
   const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
 
-  SAS::Event event(trail, SASEvent::REGISTER_AS_START, 0);
+  SAS::Event event(trail, SASEvent::AS_REGISTER_START, 0);
   event.add_var_param(served_user);
   SAS::report_event(event);
 
@@ -163,7 +163,7 @@ void RegistrationSender::deregister_with_application_servers(const std::string& 
     //LCOV_EXCL_START
     TRC_DEBUG("Unable to create third party registration for %s",
               served_user.c_str());
-    SAS::Event event(trail, SASEvent::DEREGISTER_AS_FAILED, 0);
+    SAS::Event event(trail, SASEvent::AS_DEREGISTER_FAILED, 0);
     event.add_var_param(served_user);
     SAS::report_event(event);
     //LCOV_EXCL_STOP
@@ -489,7 +489,7 @@ void RegistrationSender::RegisterCallback::run()
   {
     TRC_INFO("Third-party REGISTER transaction failed with code %d", _status_code);
 
-    SAS::Event event(_reg_data->trail, SASEvent::REGISTER_AS_FAILED, 0);
+    SAS::Event event(_reg_data->trail, SASEvent::AS_REGISTER_FAILED, 0);
     event.add_static_param(_status_code);
     SAS::report_event(event);
 

@@ -61,9 +61,7 @@ public:
                      SubscriberManager* sm,
                      ACRFactory* rfacr_factory,
                      int cfg_max_expires,
-                     bool force_original_register_inclusion,
-                     SNMP::RegistrationStatsTables* reg_stats_tbls,
-                     SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
+                     SNMP::RegistrationStatsTables* reg_stats_tbls);
   ~RegistrarSproutlet();
 
   bool init();
@@ -86,8 +84,8 @@ private:
   // Factory for create ACR messages for Rf billing flows.
   ACRFactory* _acr_factory;
 
+  // The maximum time a binding can exist for before needing re-registration.
   int _max_expires;
-  bool _force_original_register_inclusion;
 
   // Pre-constructed Service Route header added to REGISTER responses.
   pjsip_routing_hdr* _service_route;
@@ -95,7 +93,6 @@ private:
   // SNMP tables that count the number of attempts, successes and failures of
   // registration attempts.
   SNMP::RegistrationStatsTables* _reg_stats_tbls;
-  SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
 
   // The next service to route requests onto if the sproutlet does not handle
   // them itself.
@@ -123,6 +120,10 @@ protected:
   ///                                      in the request.
   /// @param emergency_registration[out] - Whether this register adds/updates
   ///                                      an emergency registration.
+  /// @param contains_id[out]            - Whether this register has an instance
+  ///                                      ID and reg ID in at least one
+  ///                                      contact.
+  /// @param trail                       - The SAS trail for this request.
   ///
   /// @return Whether the request is valid. The cases are:
   ///   PJSIP_OK - The request is valid
@@ -132,7 +133,9 @@ protected:
   ///                              emergency registrations
   pjsip_status_code basic_validation_of_register(pjsip_msg* req,
                                                  int& num_contact_headers,
-                                                 bool& emergency_registration);
+                                                 bool& emergency_registration,
+                                                 bool& contains_id,
+                                                 SAS::TrailId trail);
 
   void get_bindings_from_req(pjsip_msg* req,         ///<REGISTER request containing new binding information
                              const std::string& private_id, ///<private ID that the request refers to
@@ -153,6 +156,7 @@ protected:
                            SAS::TrailId trail);
   void handle_path_headers(pjsip_msg* rsp,
                            pjsip_msg* req,
+                           const bool& contains_id,
                            const Bindings& bindings);
   void add_service_route_header(pjsip_msg* rsp,
                                 pjsip_msg* req);

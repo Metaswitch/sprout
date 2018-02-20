@@ -13,6 +13,7 @@
 
 #include "subscriber_manager.h"
 #include "aor_test_utils.h"
+#include "test_interposer.hpp"
 #include "mock_s4.h"
 #include "mock_hss_connection.h"
 #include "mock_analytics_logger.h"
@@ -25,7 +26,6 @@ using ::testing::Return;
 using ::testing::SaveArg;
 using ::testing::SetArgReferee;
 using ::testing::SetArgPointee;
-using ::testing::InSequence;
 using ::testing::SaveArgPointee;
 
 static const int DUMMY_TRAIL_ID = 0;
@@ -49,10 +49,14 @@ public:
                                                 _analytics_logger,
                                                 _notify_sender,
                                                 _registration_sender);
+
+    cwtest_completely_control_time();
   };
 
   virtual ~SubscriberManagerTest()
   {
+    cwtest_reset_time();
+
     delete _subscriber_manager; _subscriber_manager = NULL;
     delete _notify_sender; _notify_sender = NULL;
     delete _registration_sender; _registration_sender = NULL;
@@ -81,11 +85,8 @@ MATCHER_P(AoRsMatch, expected_aor, "")
 TEST_F(SubscriberManagerTest, TestRegisterSubscriber)
 {
   // Set up the expected calls. We expect an analytics log for the added
-  // bindings, a write to S4, and a call out to the Notify Sender. On the write
-  // to S4 we match against an expected AoR that has the single added binding.
-  // The notify call should also use this expected AoR, and an empty AoR as
-  // the original AoR.
-  AoR empty_aor;
+  // bindings, and a write to S4. On the write to S4 we match against an
+  // expected AoR that has the single added binding.
   AoR* expected_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false, false);
   expected_aor->_notify_cseq = 1;
   EXPECT_CALL(*_s4, handle_put(DEFAULT_ID, AoRsMatch(*expected_aor), _))
@@ -94,12 +95,6 @@ TEST_F(SubscriberManagerTest, TestRegisterSubscriber)
                                                AoRTestUtils::BINDING_ID,
                                                AoRTestUtils::CONTACT_URI,
                                                300));
-  EXPECT_CALL(*_notify_sender, send_notifys(DEFAULT_ID,
-                                            AoRsMatch(empty_aor),
-                                            AoRsMatch(*expected_aor),
-                                            SubscriberDataUtils::EventTrigger::USER,
-                                            _,
-                                            _));
 
   // Build the updated bindings to pass in.
   Binding* binding = AoRTestUtils::build_binding(DEFAULT_ID, time(NULL));
@@ -134,7 +129,6 @@ TEST_F(SubscriberManagerTest, TestRegisterSubscriber)
 // Test that registering a subscriber fails if the write to S4 fails.
 TEST_F(SubscriberManagerTest, TestRegisterSubscriberWriteFail)
 {
-  // Set up expect calls to the HSS and S4.
   EXPECT_CALL(*_s4, handle_put(_, _, _)).WillOnce(Return(HTTP_SERVER_ERROR));
 
   // Build the updated bindings to pass in.
@@ -312,8 +306,7 @@ TEST_F(SubscriberManagerTest, TestRegisterNoBindingsHSSFail)
                                                          irs_info,
                                                          DUMMY_TRAIL_ID);
 
-  // Now check the results. The SM call should have been successful, and the
-  // returned binding should be empty.
+  // Check the call to SM failed.
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
 }
 
@@ -479,16 +472,14 @@ TEST_F(SubscriberManagerTest, TestReregisterSubscriberContactChanged)
   SubscriberDataUtils::delete_bindings(all_bindings);
 }
 
-// Test that a rereigster that no longer exists results in the subscriber
+// Test that a reregister that no longer exists results in the subscriber
 // being recreated. This reregister fails during the get to S4.
 TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriber)
 {
   // Set up the expected calls. We expect a get to S4 (which fails with 404),
-  // a put to S4, and analytics log for the added binding, and finally a call
-  // out to the Notify Sender.
+  // a put to S4, and an analytics log for the added binding.
   // The AoR we return on the write we set up to have the expected bindings -
   // this means we can test the analytics logs.
-  AoR empty_aor;
   AoR* expected_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false, false);
   expected_aor->_notify_cseq = 1;
   EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
@@ -499,12 +490,6 @@ TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriber)
                                                AoRTestUtils::BINDING_ID,
                                                AoRTestUtils::CONTACT_URI,
                                                300));
-  EXPECT_CALL(*_notify_sender, send_notifys(DEFAULT_ID,
-                                            AoRsMatch(empty_aor),
-                                            AoRsMatch(*expected_aor),
-                                            SubscriberDataUtils::EventTrigger::USER,
-                                            _,
-                                            _));
 
   // Build the updated bindings to pass in.
   AssociatedURIs associated_uris;
@@ -525,8 +510,6 @@ TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriber)
                                                            irs_info,
                                                            DUMMY_TRAIL_ID);
 
-  // Check that the reregister call was successful, and that we have the right
-  // number of bindings.
   EXPECT_EQ(rc, HTTP_OK);
   EXPECT_EQ(all_bindings.size(), 1);
 
@@ -536,16 +519,14 @@ TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriber)
   delete expected_aor; expected_aor = NULL;
 }
 
-// Test that a rereigster that no longer exists results in the subscriber
+// Test that a reregister that no longer exists results in the subscriber
 // being recreated. This reregister fails during the patch to S4.
 TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriber2)
 {
   // Set up the expected calls. We expect a get to S4, a patch to S4 (which
-  // fails with 404), a put to S4, and analytics log for the added binding, and
-  // finally a call out to the Notify Sender.
+  // fails with 404), a put to S4, and an analytics log for the added binding.
   // The AoR we return on the write we set up to have the expected bindings -
   // this means we can test the analytics logs.
-  AoR empty_aor;
   AoR* get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false);
   AoR* expected_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, false, false);
   expected_aor->_notify_cseq = 1;
@@ -561,12 +542,6 @@ TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriber2)
                                                AoRTestUtils::BINDING_ID,
                                                AoRTestUtils::CONTACT_URI,
                                                300));
-  EXPECT_CALL(*_notify_sender, send_notifys(DEFAULT_ID,
-                                            AoRsMatch(empty_aor),
-                                            AoRsMatch(*expected_aor),
-                                            SubscriberDataUtils::EventTrigger::USER,
-                                            _,
-                                            _));
 
   // Build the updated bindings to pass in.
   AssociatedURIs associated_uris;
@@ -587,8 +562,6 @@ TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriber2)
                                                            irs_info,
                                                            DUMMY_TRAIL_ID);
 
-  // Check that the reregister call was successful, and that we have the right
-  // number of bindings.
   EXPECT_EQ(rc, HTTP_OK);
   EXPECT_EQ(all_bindings.size(), 1);
 
@@ -629,8 +602,6 @@ TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriberReappears)
                                                            irs_info,
                                                            DUMMY_TRAIL_ID);
 
-  // Check that the reregister call was successful, and that we have the right
-  // number of bindings.
   EXPECT_EQ(rc, HTTP_PRECONDITION_FAILED);
   EXPECT_EQ(all_bindings.size(), 0);
 
@@ -675,8 +646,6 @@ TEST_F(SubscriberManagerTest, TestReregisterRemovedSubscriberReappears2)
                                                            irs_info,
                                                            DUMMY_TRAIL_ID);
 
-  // Check that the reregister call was successful, and that we have the right
-  // number of bindings.
   EXPECT_EQ(rc, HTTP_PRECONDITION_FAILED);
   EXPECT_EQ(all_bindings.size(), 0);
 
@@ -689,8 +658,8 @@ TEST_F(SubscriberManagerTest, TestReregisterSubscriberRemoveLastBinding)
 {
   // Set up the expected calls. We expect a get to S4, an analytics log for the
   // removed binding, a write to S4, a log for the added binding, a log for the
-  // removed subscription, a call out to the Notify Sender, a call to the HSS
-  // connection and finally a call to the registration sender.
+  // removed subscription, a call out to the Notify Sender, and finally a call
+  // to the HSS connection.
   // The AoR we return on the lookup has a binding and subscription with the
   // same contact URI - this allows us to test that the subscription is removed
   // if the binding is removed.
@@ -710,7 +679,6 @@ TEST_F(SubscriberManagerTest, TestReregisterSubscriberRemoveLastBinding)
   EXPECT_CALL(*_notify_sender, send_notifys(_, _, _, _, _, _));
   EXPECT_CALL(*_hss_connection, update_registration_state(_, _, _))
       .WillOnce(Return(HTTP_OK));
-  EXPECT_CALL(*_registration_sender, deregister_with_application_servers(DEFAULT_ID, _, _));
 
   AssociatedURIs associated_uris;
   associated_uris.add_uri(DEFAULT_ID, false);
@@ -1017,7 +985,7 @@ TEST_F(SubscriberManagerTest, TestRemoveBindingS4WriteFail)
 
 // Test that removing a binding from a subscriber fails if the HSS update
 // after the subscriber is removed fails.
-TEST_F(SubscriberManagerTest, TestRemoveOnlyBindingHSSFail2)
+TEST_F(SubscriberManagerTest, TestRemoveOnlyBindingHSSFail)
 {
   // Set up the expected calls. We expect a get to the HSS, a get to S4, an
   // analytics log for the removed binding, a write to S4, a call out to the
@@ -1051,7 +1019,6 @@ TEST_F(SubscriberManagerTest, TestRemoveOnlyBindingHSSFail2)
                                                      all_bindings,
                                                      DUMMY_TRAIL_ID);
 
-  // Check that the call failed.
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
 
   // Delete the bindings we've been passed.
@@ -1105,10 +1072,10 @@ TEST_F(SubscriberManagerTest, TestAddSubscription)
   updated_subscriptions.insert(std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription));
 
   // Call into SM to update the subscriber.
-  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         updated_subscriptions,
-                                                         irs_info,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->update_subscriptions(DEFAULT_ID,
+                                                          updated_subscriptions,
+                                                          irs_info,
+                                                          DUMMY_TRAIL_ID);
 
   // Finally, we carry out some more checks. Most of the checks are done by the
   // expect calls; we also check that the update call was successful, and that
@@ -1159,10 +1126,10 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscription)
   EXPECT_CALL(*_notify_sender, send_notifys(_, _, _, _, _, _));
 
   // Call into SM to remove the subscription
-  HTTPCode rc = _subscriber_manager->remove_subscription(DEFAULT_ID,
-                                                         AoRTestUtils::SUBSCRIPTION_ID,
-                                                         irs_info,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->remove_subscriptions(DEFAULT_ID,
+                                                          {AoRTestUtils::SUBSCRIPTION_ID},
+                                                          irs_info,
+                                                          DUMMY_TRAIL_ID);
 
   // Check that the remove call was successful, and that the patch sent up to S4
   // contained the subscription ID we want removing.
@@ -1179,10 +1146,10 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionHSSFail)
     .WillOnce(Return(HTTP_NOT_FOUND));
   HSSConnection::irs_info irs_info;
   Subscriptions subscriptions; // Blank object to use as placeholder.
-  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         subscriptions,
-                                                         irs_info,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->update_subscriptions(DEFAULT_ID,
+                                                          subscriptions,
+                                                          irs_info,
+                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_NOT_FOUND);
 }
 
@@ -1193,10 +1160,10 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscriptionHSSFail)
   EXPECT_CALL(*_hss_connection, get_registration_data(_, _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
   HSSConnection::irs_info irs_info;
-  HTTPCode rc = _subscriber_manager->remove_subscription(DEFAULT_ID,
-                                                         AoRTestUtils::SUBSCRIPTION_ID,
-                                                         irs_info,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->remove_subscriptions(DEFAULT_ID,
+                                                          {AoRTestUtils::SUBSCRIPTION_ID},
+                                                          irs_info,
+                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_NOT_FOUND);
 }
 
@@ -1210,10 +1177,10 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionNoDefaultIMPU)
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
   Subscriptions subscriptions; // Blank object to use as placeholder.
-  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         subscriptions,
-                                                         irs_info,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->update_subscriptions(DEFAULT_ID,
+                                                          subscriptions,
+                                                          irs_info,
+                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_BAD_REQUEST);
 }
 
@@ -1226,10 +1193,10 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscriptionNoDefaultIMPU)
   EXPECT_CALL(*_hss_connection, get_registration_data(_, _, _))
     .WillOnce(DoAll(SetArgReferee<1>(irs_info),
                     Return(HTTP_OK)));
-  HTTPCode rc = _subscriber_manager->remove_subscription(DEFAULT_ID,
-                                                         AoRTestUtils::SUBSCRIPTION_ID,
-                                                         irs_info,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->remove_subscriptions(DEFAULT_ID,
+                                                          {AoRTestUtils::SUBSCRIPTION_ID},
+                                                          irs_info,
+                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_BAD_REQUEST);
 }
 
@@ -1245,10 +1212,10 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionS4LookupFail)
   EXPECT_CALL(*_s4, handle_get(_, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
   Subscriptions subscriptions; // Blank object to use as placeholder.
-  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         subscriptions,
-                                                         irs_info,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->update_subscriptions(DEFAULT_ID,
+                                                          subscriptions,
+                                                          irs_info,
+                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
 }
 
@@ -1263,10 +1230,10 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscriptionS4LookupFail)
                     Return(HTTP_OK)));
   EXPECT_CALL(*_s4, handle_get(_, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
-  HTTPCode rc = _subscriber_manager->remove_subscription(DEFAULT_ID,
-                                                         AoRTestUtils::SUBSCRIPTION_ID,
-                                                         irs_info,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->remove_subscriptions(DEFAULT_ID,
+                                                          {AoRTestUtils::SUBSCRIPTION_ID},
+                                                          irs_info,
+                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
 }
 
@@ -1290,10 +1257,10 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionS4WriteFail)
   Subscriptions updated_subscriptions;
   updated_subscriptions.insert(std::make_pair(AoRTestUtils::SUBSCRIPTION_ID, subscription));
   HSSConnection::irs_info irs_info_out;
-  HTTPCode rc = _subscriber_manager->update_subscription(DEFAULT_ID,
-                                                         updated_subscriptions,
-                                                         irs_info_out,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->update_subscriptions(DEFAULT_ID,
+                                                          updated_subscriptions,
+                                                          irs_info_out,
+                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
   delete subscription; subscription = NULL;
 }
@@ -1315,10 +1282,10 @@ TEST_F(SubscriberManagerTest, TestRemoveSubscriptionS4WriteFail)
   EXPECT_CALL(*_s4, handle_patch(_, _, _, _))
     .WillOnce(Return(HTTP_SERVER_ERROR));
   HSSConnection::irs_info irs_info_out;
-  HTTPCode rc = _subscriber_manager->remove_subscription(DEFAULT_ID,
-                                                         AoRTestUtils::SUBSCRIPTION_ID,
-                                                         irs_info_out,
-                                                         DUMMY_TRAIL_ID);
+  HTTPCode rc = _subscriber_manager->remove_subscriptions(DEFAULT_ID,
+                                                          {AoRTestUtils::SUBSCRIPTION_ID},
+                                                          irs_info_out,
+                                                          DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
 }
 
@@ -1514,7 +1481,6 @@ TEST_F(SubscriberManagerTest, TestGetExpiredBindings)
 // Tests when getting bindings from SM fails.
 TEST_F(SubscriberManagerTest, TestGetBindingsFail)
 {
-  InSequence s;
   EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
 
@@ -1532,7 +1498,6 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   // Set up AoRs to be returned by S4 - these are deleted by the handler
   AoR* get_aor = AoRTestUtils::create_simple_aor(DEFAULT_ID, true);
 
-  InSequence s;
   EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
     .WillOnce(DoAll(SetArgPointee<1>(get_aor),
                     Return(HTTP_OK)));
@@ -1560,7 +1525,6 @@ TEST_F(SubscriberManagerTest, TestGetExpiredSubscriptions)
   Subscription* subscription = get_aor->get_subscription(AoRTestUtils::SUBSCRIPTION_ID);
   subscription->_expires -= 10000;
 
-  InSequence s;
   EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
     .WillOnce(DoAll(SetArgPointee<1>(get_aor),
                     Return(HTTP_OK)));
@@ -1579,7 +1543,6 @@ TEST_F(SubscriberManagerTest, TestGetExpiredSubscriptions)
 // Tests when getting subscriptions from SM fails.
 TEST_F(SubscriberManagerTest, TestGetSubscriptionsFail)
 {
-  InSequence s;
   EXPECT_CALL(*_s4, handle_get(DEFAULT_ID, _, _, _))
     .WillOnce(Return(HTTP_NOT_FOUND));
 

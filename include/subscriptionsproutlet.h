@@ -95,10 +95,6 @@ protected:
   /// @return The created subscription object
   Subscription* create_subscription(pjsip_msg* req, int expiry);
 
-  /// Convert the HTTPCode response from the Subscriber Manager to a SIP code
-  /// to send to the caller.
-  pjsip_status_code subscribe_convert_to_sip(HTTPCode rc);
-
   SubscriptionSproutlet* _subscription;
 };
 

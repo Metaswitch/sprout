@@ -312,6 +312,7 @@ TEST_F(NotifySenderTest, NotifySubscriberAdminDeregister)
   std::string aor_id = "sip:1234567890@homedomain";
   AoR* orig_aor = AoRTestUtils::create_simple_aor(aor_id);
   AoR* updated_aor = new AoR(aor_id);
+  updated_aor->_associated_uris.add_uri(aor_id, false);
 
   _notify_sender->send_notifys(aor_id,
                                *orig_aor,
@@ -661,7 +662,7 @@ TEST_F(NotifySenderTest, NotifySubscriberChangedBinding)
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
 
-  // Check the NOTIFY body - the regitration includes a deactivated contact and 
+  // Check the NOTIFY body - the regitration includes a deactivated contact and
   // a created contact.
   rapidxml::xml_document<>* doc = parse_notify_body(out);
   std::vector<std::pair<std::string, bool>> impus;
