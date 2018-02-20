@@ -443,7 +443,7 @@ std::string GetSubscriptionsTask::serialize_data(
     writer.String(JSON_SUBSCRIPTIONS);
     writer.StartObject();
     {
-      for (SubscriptionPair s : subscriptions)
+      for (Subscriptions::Element s : subscriptions)
       {
         writer.String(s.first.c_str());
         s.second->to_json(writer);
