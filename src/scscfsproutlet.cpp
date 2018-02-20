@@ -630,8 +630,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       else
       {
         // Invalid URI, so just reject the request
-        std::string uri_str = PJUtils::uri_to_string(context, next_uri);
-        reject_invalid_uri(req, uri_str);
+        reject_invalid_uri(req);
       }
     }
   }
@@ -1427,28 +1426,17 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       _scscf->translate_request_uri(req, get_pool(req), trail());
 
       URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri, true, true);
-      std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
-      TRC_INFO("New URI string is %s", new_uri_str.c_str());
-
       if ((uri_class == LOCAL_PHONE_NUMBER) ||
           (uri_class == GLOBAL_PHONE_NUMBER) ||
           (uri_class == NP_DATA) ||
           (uri_class == FINAL_NP_DATA))
       {
-        TRC_DEBUG("Routing to BGCF");
-        SAS::Event event(trail(), SASEvent::PHONE_ROUTING_TO_BGCF, 0);
-        event.add_var_param(new_uri_str);
-        SAS::report_event(event);
-        route_to_bgcf(req);
+        route_to_bgcf(req, SASEvent::PHONE_ROUTING_TO_BGCF);
       }
       else if (uri_class == OFFNET_SIP_URI)
       {
         // Destination is off-net, so route to the BGCF.
-        TRC_DEBUG("Routing to BGCF");
-        SAS::Event event(trail(), SASEvent::OFFNET_ROUTING_TO_BGCF, 0);
-        event.add_var_param(new_uri_str);
-        SAS::report_event(event);
-        route_to_bgcf(req);
+        route_to_bgcf(req, SASEvent::OFFNET_ROUTING_TO_BGCF);
       }
       else if (uri_class != UNKNOWN)
       {
@@ -1458,17 +1446,23 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       else
       {
         // Non-sip: or -tel: URI is invalid at this point, so just reject the request
-        reject_invalid_uri(req, new_uri_str);
+        reject_invalid_uri(req);
       }
     }
     else
     {
       // ENUM is not configured so we have no way to tell if this request is
-      // on-net or off-net. If it's to a valid sip: or tel: URI, route it to the
+      // on-net or off-net, unless it's already a offnet SIP URI.
+      // Othwerise if it's a valid sip: or tel: URI, route it to the
       // I-CSCF, which should be able to look it up in the HSS.
       URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri, true, false);
 
-      if (uri_class != UNKNOWN)
+      if (uri_class == OFFNET_SIP_URI)
+      {
+        // Destination is definitely off-net, so route to the BGCF.
+        route_to_bgcf(req, SASEvent::OFFNET_ROUTING_TO_BGCF);
+      }
+      else if (uri_class != UNKNOWN)
       {
         TRC_DEBUG("No ENUM lookup available - routing to I-CSCF");
         route_to_icscf(req);
@@ -1476,8 +1470,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       else
       {
         // Invalid URI, so just reject the request
-        std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
-        reject_invalid_uri(req, uri_str);
+        reject_invalid_uri(req);
       }
     }
   }
@@ -1707,11 +1700,19 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
 
 
 // Route the request to the BGCF.
-void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
+void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req, int reason)
 {
-  TRC_INFO("Routing to BGCF %s",
+  std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+
+  TRC_INFO("Routing to BGCF %s - with uri of %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  _scscf->bgcf_uri()).c_str());
+                                  _scscf->bgcf_uri()).c_str(),
+           new_uri_str.c_str());
+
+  SAS::Event event(trail(), reason, 0);
+  event.add_var_param(new_uri_str);
+  SAS::report_event(event);
+
   PJUtils::add_route_header(req,
                             (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
                                                             _scscf->bgcf_uri()),
@@ -2369,8 +2370,10 @@ pjsip_msg* SCSCFSproutletTsx::get_base_request()
   }
 }
 
-void SCSCFSproutletTsx::reject_invalid_uri(pjsip_msg* req, const std::string& uri_str)
+void SCSCFSproutletTsx::reject_invalid_uri(pjsip_msg* req)
 {
+  std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+
   TRC_DEBUG("Rejecting request to invalid URI %s", uri_str.c_str());
   SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
   event.add_var_param(uri_str);
