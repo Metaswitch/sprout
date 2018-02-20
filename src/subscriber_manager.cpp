@@ -1165,13 +1165,8 @@ void SubscriberManager::log_subscriptions(std::string default_impu,
   {
     for (std::string subscription_id : subscription_ids)
     {
-<<<<<<< HEAD
-      std::map<std::string, Subscription*>::const_iterator subscription =
-                                updated_aor->_subscriptions.find(subscription_id);
-=======
       Subscriptions::const_iterator subscription =
                                 updated_aor._subscriptions.find(subscription_id);
->>>>>>> e86ea6f23d82c5863c6e8c5c2bdef2aba472742a
 
       // We need to find the subscription in the AoR in order to pull out
       // sufficient information to make a log about the changes.
@@ -1184,13 +1179,8 @@ void SubscriberManager::log_subscriptions(std::string default_impu,
       }
       else
       {
-<<<<<<< HEAD
-        std::map<std::string, Subscription*>::const_iterator subscription =
-                                   orig_aor->_subscriptions.find(subscription_id);
-=======
         Subscriptions::const_iterator subscription =
                                    orig_aor._subscriptions.find(subscription_id);
->>>>>>> e86ea6f23d82c5863c6e8c5c2bdef2aba472742a
 
         if (subscription != orig_aor._subscriptions.end())
         {
