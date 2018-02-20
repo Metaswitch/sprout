@@ -342,7 +342,7 @@ Bindings SubscriberDataUtils::copy_active_bindings(const Bindings& bindings,
 Subscriptions SubscriberDataUtils::copy_subscriptions(const Subscriptions& subscriptions)
 {
   Subscriptions copy_subscriptions;
-  for (SubscriptionPair s :subscriptions)
+  for (Subscriptions::Element s :subscriptions)
   {
     Subscription* copy_s = new Subscription(*(s.second));
     copy_subscriptions.insert(std::make_pair(s.first, copy_s));
@@ -356,7 +356,7 @@ Subscriptions SubscriberDataUtils::copy_active_subscriptions(const Subscriptions
                                                              SAS::TrailId trail)
 {
   Subscriptions copy_subscriptions;
-  for (SubscriptionPair s :subscriptions)
+  for (Subscriptions::Element s :subscriptions)
   {
     if (s.second->_expires - now > 0)
     {
