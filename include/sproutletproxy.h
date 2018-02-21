@@ -221,6 +221,18 @@ protected:
 
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const override;
+
+  /// @brief      Gets the local hostname part of a SIP URI.
+  ///
+  /// If the passed in URI does not match a sproutlet, then either returns the
+  /// hostname of the URI anyway (assuming it's local), or returns the hostname
+  /// of the _root_uri, depending on the value of `default_to_root`.
+  ///
+  /// @param[in]  uri             The SIP URI
+  /// @param[in]  default_to_root Whether to return the _root_uri's hostname if
+  ///                             the passed in URI does not match a sproutlet.
+  ///
+  /// @return     The local hostname part of the URI.
   std::string get_local_hostname(const pjsip_sip_uri* uri,
                                  bool default_to_root=false) const;
 
