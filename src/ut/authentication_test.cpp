@@ -3067,7 +3067,7 @@ TEST_F(AuthenticationTest, GetTsxParamsPreservedOnNextHop)
   pjsip_msg* pj_msg = parse_msg(msg.get());
 
   // Offer it to the AuthenticationSproutlet
-  pjsip_sip_uri* next_hop = NULL;
+  pjsip_sip_uri* next_hop = nullptr;
   SproutletHelper* helper = (SproutletHelper*)_sproutlet_proxy;
   SproutletTsx* tsx = _auth_sproutlet->get_tsx(helper,
                                                "",
@@ -3093,11 +3093,11 @@ TEST_F(AuthenticationTest, GetTsxParamsPreservedOnNextHopPortMatch)
   // doesn't match the service name of the AuthenticationSproutlet (and is only
   // matched on the port)
   AuthenticationMessage msg("INVITE");
-  msg._route_uri = "sip:sprout.homedomain:5058;transport=TCP;orig";
+  msg._route_uri = "sip:madeuphomedomain:5058;transport=TCP;orig";
   pjsip_msg* pj_msg = parse_msg(msg.get());
 
   // Offer it to the AuthenticationSproutlet
-  pjsip_sip_uri* next_hop = NULL;
+  pjsip_sip_uri* next_hop = nullptr;
   SproutletHelper* helper = (SproutletHelper*)_sproutlet_proxy;
   SproutletTsx* tsx = _auth_sproutlet->get_tsx(helper,
                                                "",

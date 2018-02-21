@@ -1526,3 +1526,32 @@ TEST_F(RegistrarTest, PortMatchedRouteHeaderUsesConfiguredServerName)
 
   free_txdata();
 }
+
+// Tests that Route header params are preserved when the RegistrarSproutlet
+// passes on a request
+TEST_F(RegistrarTest, GetTsxParamsPreservedOnNextHopPortMatch)
+{
+  // Create an INVITE with a Route header specifying the "orig" param (which
+  // therefore only matches on the port)
+  Message msg;
+  msg._method = "INVITE";
+  msg._route = "madeupdomain:5058;transport=TCP;orig";
+  pjsip_msg* pj_msg = parse_msg(msg.get());
+
+  // Offer it to the RegistrarSproutlet
+  pjsip_sip_uri* next_hop = nullptr;
+  SproutletHelper* helper = (SproutletHelper*)_registrar_proxy;
+  SproutletTsx* tsx = _registrar_sproutlet->get_tsx(helper,
+                                                    "",
+                                                    pj_msg,
+                                                    next_hop,
+                                                    stack_data.pool,
+                                                    0L);
+
+  // Expect that the RegistrarSproutlet was not interested in the message
+  EXPECT_EQ(nullptr, tsx);
+
+  // Check that the next_hop URI contains the "orig" parameter
+  bool has_param = (pjsip_param_find(&next_hop->other_param, &STR_ORIG) != nullptr);
+  EXPECT_TRUE(has_param);
+}
