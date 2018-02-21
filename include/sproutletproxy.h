@@ -220,9 +220,8 @@ protected:
   AliasMatchLocality get_uri_locality(const pjsip_uri* uri);
 
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
-                                 const Sproutlet* sproutlet) const override;
-  std::string get_local_hostname(const pjsip_sip_uri* uri,
-                                 bool default_to_root=false) const;
+                                 const Sproutlet* sproutlet) const;
+  std::string get_local_hostname(const pjsip_sip_uri* uri) const;
 
   /// @brief      Compares the given hostname to the alias lists and returns the
   ///             match locality.
