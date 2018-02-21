@@ -217,7 +217,7 @@ protected:
   ///             matched a local alias, REMOTE, indicating a remote match, or
   ///             NO_MATCH, indicating that the hostname matched neither local nor
   ///             remote aliases.
-  AliasMatchLocality get_uri_locality(const pjsip_uri* uri);
+  AliasMatchLocality get_uri_locality(const pjsip_uri* uri) const;
 
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                  const Sproutlet* sproutlet) const override;

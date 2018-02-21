@@ -1331,7 +1331,7 @@ TEST_F(RegistrarTest, NoRoute)
   set_up_single_returned_binding(all_bindings, msg._cid);
   expectations_for_successful_get_subscriber_state(irs_info);
   expectations_for_not_found_get_bindings();
-  EXPECT_CALL(*_sm, register_subscriber(_, "sip:scscf.homedomain:5058;transport=TCP", _, _, _, _, _))
+  EXPECT_CALL(*_sm, register_subscriber(_, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<4>(all_bindings),
                     Return(HTTP_OK)));
   expectations_for_registration_sender();

@@ -489,7 +489,7 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   return uri;
 }
 
-SproutletProxy::AliasMatchLocality SproutletProxy::get_uri_locality(const pjsip_uri* uri)
+SproutletProxy::AliasMatchLocality SproutletProxy::get_uri_locality(const pjsip_uri* uri) const
 {
   AliasMatchLocality best_match = AliasMatchLocality::NO_MATCH;
 
