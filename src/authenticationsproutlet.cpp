@@ -934,7 +934,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
   pjsip_sip_uri* routing_uri = get_routing_uri(req);
-  if (routing_uri != NULL)
+  if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
   {
     SCSCFUtils::get_scscf_uri(get_pool(req),
                               get_local_hostname(routing_uri),

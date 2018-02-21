@@ -268,7 +268,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
   pjsip_sip_uri* routing_uri = get_routing_uri(req);
 
-  if (routing_uri != NULL)
+  if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
   {
     SCSCFUtils::get_scscf_uri(get_pool(req),
                               get_local_hostname(routing_uri),
@@ -1143,7 +1143,7 @@ void RegistrarSproutletTsx::add_service_route_header(pjsip_msg* rsp,
   pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)sr_hdr->name_addr.uri;
   pjsip_sip_uri* routing_uri = get_routing_uri(req);
 
-  if (routing_uri != NULL)
+  if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
   {
     SCSCFUtils::get_scscf_uri(get_pool(rsp),
                               get_local_hostname(routing_uri),
