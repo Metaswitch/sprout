@@ -18,7 +18,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          flowtable.cpp \
                          http_connection_pool.cpp \
                          httpclient.cpp \
-                         httpconnection.cpp \
                          a_record_resolver.cpp \
                          hssconnection.cpp \
                          websockets.cpp \
