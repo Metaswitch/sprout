@@ -129,7 +129,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mmtel.cpp \
                        test_main.cpp \
                        fakecurl.cpp \
-                       fakehttpconnection.cpp \
                        fakexdmconnection.cpp \
                        fakehssconnection.cpp \
                        fakelogger.cpp \
