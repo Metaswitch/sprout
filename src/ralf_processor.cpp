@@ -47,7 +47,7 @@ void RalfProcessor::Pool::process_work(RalfProcessor::RalfRequest*& rr)
   // request fails in the HttpClient
   std::unique_ptr<HttpRequest> req = _ralf_connection->create_request(HttpClient::RequestType::POST, rr->path);
   req->set_sas_trail(rr->trail);
-  req->set_req_body(rr->message);
+  req->set_body(rr->message);
   req->send();
 
   delete rr; rr = NULL;

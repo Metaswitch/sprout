@@ -41,15 +41,6 @@ XDMConnection::XDMConnection(const std::string& server,
 {
 }
 
-/// Constructor supplying own connection. For UT use. Ownership passes
-/// to this object.
-XDMConnection::XDMConnection(HttpConnection* http,
-                             SNMP::EventAccumulatorTable* xdm_latency):
-  _http(http),
-  _latency_tbl(xdm_latency)
-{
-}
-
 XDMConnection::~XDMConnection()
 {
   delete _http; _http = NULL;
@@ -71,8 +62,8 @@ bool XDMConnection::get_simservs(const std::string& user,
   req->set_username(user);
   HttpResponse response = req->send();
   
-  HTTPCode http_code = response.get_return_code();
-  xml_data = response.get_resp_body();
+  HTTPCode http_code = response.get_rc();
+  xml_data = response.get_body();
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
