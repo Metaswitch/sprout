@@ -47,17 +47,18 @@ HSSConnection::HSSConnection(const std::string& server,
                              CommunicationMonitor* comm_monitor,
                              SIFCService* sifc_service,
                              long homestead_timeout_ms) :
+  _client(new HttpClient(false,
+                         resolver,
+                         homestead_count_tbl,
+                         load_monitor,
+                         SASEvent::HttpLogLevel::PROTOCOL,
+                         comm_monitor,
+                         false,
+                         false,
+                         homestead_timeout_ms)),
   _http(new HttpConnection(server,
-                           false,
-                           resolver,
-                           homestead_count_tbl,
-                           load_monitor,
-                           SASEvent::HttpLogLevel::PROTOCOL,
-                           comm_monitor,
-                           "http",
-                           false,
-                           false,
-                           homestead_timeout_ms)),
+                           _client,
+                           "http")),
   _latency_tbl(homestead_overall_latency_tbl),
   _mar_latency_tbl(homestead_mar_latency_tbl),
   _sar_latency_tbl(homestead_sar_latency_tbl),
@@ -70,8 +71,8 @@ HSSConnection::HSSConnection(const std::string& server,
 
 HSSConnection::~HSSConnection()
 {
-  delete _http;
-  _http = NULL;
+  delete _http; _http = NULL;
+  delete _client; _client = NULL;
 }
 
 /// Get an Authentication Vector as JSON object. Caller is responsible for deleting.
@@ -146,11 +147,15 @@ HTTPCode HSSConnection::get_json_object(const std::string& path,
                                         rapidjson::Document*& json_object,
                                         SAS::TrailId trail)
 {
-  std::string json_data;
-  HTTPCode rc = _http->send_get(path, json_data, "", trail);
+  std::unique_ptr<HttpRequest> req = _http->create_request(HttpClient::RequestType::GET, path);
+  req->set_sas_trail(trail);
+  HttpResponse response = req->send();
+
+  HTTPCode rc = response.get_return_code();
 
   if (rc == HTTP_OK)
   {
+    std::string json_data = response.get_resp_body();
     json_object = new rapidjson::Document;
     json_object->Parse<0>(json_data.c_str());
 
@@ -202,20 +207,21 @@ HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
   std::map<std::string, std::string> rsp_headers;
   std::vector<std::string> req_headers;
 
+  std::unique_ptr<HttpRequest> req = _http->create_request(HttpClient::RequestType::PUT, path);
+  req->set_req_body(body);
+
   if (!cache_allowed)
   {
-    req_headers.push_back("Cache-control: no-cache");
+    req->add_req_header("Cache-control: no-cache");
   }
+  req->set_sas_trail(trail);
 
-  HTTPCode http_code = _http->send_put(path,
-                                       rsp_headers,
-                                       raw_data,
-                                       body,
-                                       req_headers,
-                                       trail);
+  HttpResponse response = req->send();
+  HTTPCode http_code = response.get_return_code();
 
   if (http_code == HTTP_OK)
   {
+    std::string raw_data = response.get_resp_body();
     root = parse_xml(raw_data, path);
   }
 
@@ -228,12 +234,15 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
                                        rapidxml::xml_document<>*& root,
                                        SAS::TrailId trail)
 {
-  std::string raw_data;
+  std::unique_ptr<HttpRequest> req = _http->create_request(HttpClient::RequestType::GET, path);
+  req->set_sas_trail(trail);
+  HttpResponse response = req->send();
 
-  HTTPCode http_code = _http->send_get(path, raw_data, "", trail);
+  HTTPCode http_code = response.get_return_code();
 
   if (http_code == HTTP_OK)
   {
+    std::string raw_data = response.get_resp_body();
     root = parse_xml(raw_data, path);
   }
 
