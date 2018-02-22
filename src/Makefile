@@ -18,6 +18,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          flowtable.cpp \
                          http_connection_pool.cpp \
                          httpclient.cpp \
+                         http_request.cpp \
                          a_record_resolver.cpp \
                          hssconnection.cpp \
                          websockets.cpp \
@@ -129,7 +130,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mmtel.cpp \
                        test_main.cpp \
                        fakecurl.cpp \
-                       fakexdmconnection.cpp \
                        fakehssconnection.cpp \
                        fakelogger.cpp \
                        faketransport_udp.cpp \
@@ -179,7 +179,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        fakezmq.cpp \
                        uriclassifier_test.cpp \
                        ralf_processor_test.cpp \
-                       mockhttpconnection.cpp \
+                       mock_httpconnection.cpp \
+                       mock_http_request.cpp \
                        mockhttpstack.cpp \
                        mocktsxhelper.cpp \
                        mock_hss_connection.cpp \
@@ -210,6 +211,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_notify_sender.cpp \
                        registration_sender_test.cpp \
                        mock_registration_sender.cpp \
+                       mock_xdm_connection.cpp \
                        sprout_fv_test.cpp
 
 COVERAGE_ROOT := ..
