@@ -371,7 +371,7 @@ SCSCFSelector* SCSCFTestBase::_scscf_selector;
 MockAsCommunicationTracker* SCSCFTestBase::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTestBase::_sess_cont_comm_tracker;
 
-// Default test setup, with ICSCF and without remote SDM
+// Default test setup, with ICSCF
 class SCSCFTest : public SCSCFTestBase
 {
 public:
