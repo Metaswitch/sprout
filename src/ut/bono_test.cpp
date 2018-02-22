@@ -23,7 +23,6 @@
 #include "bono.h"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
-#include "fakexdmconnection.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
 #include "testingcommon.h"

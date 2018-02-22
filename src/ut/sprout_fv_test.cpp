@@ -22,7 +22,7 @@
 #include "analyticslogger.h"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
-#include "fakexdmconnection.hpp"
+#include "mock_xdm_connection.h"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
 #include "scscfsproutlet.h"
@@ -106,7 +106,7 @@ public:
     _sm = new SubscriberManager(_s4, _hss_connection, _analytics, _notify_sender, _registration_sender);
     _registration_sender->register_dereg_event_consumer(_sm);
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
-    _xdm_connection = new FakeXDMConnection();
+    _xdm_connection = new MockXDMConnection();
     _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
     _sess_cont_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
@@ -299,7 +299,7 @@ protected:
   NotifySender* _notify_sender;
   AnalyticsLogger* _analytics;
   FakeHSSConnection* _hss_connection;
-  FakeXDMConnection* _xdm_connection;
+  MockXDMConnection* _xdm_connection;
   BgcfService* _bgcf_service;
   EnumService* _enum_service;
   ACRFactory* _acr_factory;

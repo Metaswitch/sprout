@@ -23,7 +23,7 @@
 #include "analyticslogger.h"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
-#include "fakexdmconnection.hpp"
+#include "mock_xdm_connection.h"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
 #include "scscfsproutlet.h"
@@ -95,7 +95,7 @@ public:
     _local_aor_store = new AstaireAoRStore(_local_data_store);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
-    _xdm_connection = new FakeXDMConnection();
+    _xdm_connection = new MockXDMConnection();
     _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
     _sess_cont_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
 
@@ -261,7 +261,7 @@ protected:
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static MockHSSConnection* _hss_connection_observer;
-  static FakeXDMConnection* _xdm_connection;
+  static MockXDMConnection* _xdm_connection;
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
@@ -362,7 +362,7 @@ MockSubscriberManager* SCSCFTestBase::_sm;
 AnalyticsLogger* SCSCFTestBase::_analytics;
 FakeHSSConnection* SCSCFTestBase::_hss_connection;
 MockHSSConnection* SCSCFTestBase::_hss_connection_observer;
-FakeXDMConnection* SCSCFTestBase::_xdm_connection;
+MockXDMConnection* SCSCFTestBase::_xdm_connection;
 BgcfService* SCSCFTestBase::_bgcf_service;
 EnumService* SCSCFTestBase::_enum_service;
 ACRFactory* SCSCFTestBase::_acr_factory;
@@ -6319,8 +6319,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   expect_get_subscriber_state(irs_info_2, "sip:6505555678@homedomain");
   expect_get_bindings(bindings, "sip:6505555678@homedomain");
 
-  _xdm_connection->put("sip:6505551234@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
+  std::string simservs = R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
                             <originating-identity-presentation active="false" />
                             <originating-identity-presentation-restriction active="false">
@@ -6337,7 +6336,11 @@ TEST_F(SCSCFTest, MmtelCdiv)
                               </communication-diversion>
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+                          </simservs>)";
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs),
+                    Return(true)));
+
 
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6457,45 +6460,49 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   setup_binding(bindings, "sip:6505559012@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   expect_get_callee_info(irs_info_3, bindings, "sip:6505559012@homedomain");
 
-  _xdm_connection->put("sip:6505551234@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
-                          <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
-                            <originating-identity-presentation active="false" />
-                            <originating-identity-presentation-restriction active="false">
-                              <default-behaviour>presentation-restricted</default-behaviour>
-                            </originating-identity-presentation-restriction>
-                            <communication-diversion active="true">
-                              <NoReplyTimer>19</NoReplyTimer>"
-                                <cp:ruleset>
-                                  <cp:rule id="rule1">
-                                    <cp:conditions/>
-                                    <cp:actions><forward-to><target>sip:6505555678@homedomain</target></forward-to></cp:actions>
-                                  </cp:rule>
-                                </cp:ruleset>
-                              </communication-diversion>
-                            <incoming-communication-barring active="false"/>
-                            <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+  std::string simservs1 = R"(<?xml version="1.0" encoding="UTF-8"?>
+                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
+                             <originating-identity-presentation active="false" />
+                             <originating-identity-presentation-restriction active="false">
+                               <default-behaviour>presentation-restricted</default-behaviour>
+                             </originating-identity-presentation-restriction>
+                             <communication-diversion active="true">
+                               <NoReplyTimer>19</NoReplyTimer>"
+                                 <cp:ruleset>
+                                   <cp:rule id="rule1">
+                                     <cp:conditions/>
+                                     <cp:actions><forward-to><target>sip:6505555678@homedomain</target></forward-to></cp:actions>
+                                   </cp:rule>
+                                 </cp:ruleset>
+                               </communication-diversion>
+                             <incoming-communication-barring active="false"/>
+                             <outgoing-communication-barring active="false"/>
+                           </simservs>)";
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs1),
+                    Return(true)));
 
-  _xdm_connection->put("sip:6505555678@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
-                          <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
-                            <originating-identity-presentation active="false" />
-                            <originating-identity-presentation-restriction active="false">
-                              <default-behaviour>presentation-restricted</default-behaviour>
-                            </originating-identity-presentation-restriction>
-                            <communication-diversion active="true">
-                              <NoReplyTimer>19</NoReplyTimer>"
-                                <cp:ruleset>
-                                  <cp:rule id="rule1">
-                                    <cp:conditions/>
-                                    <cp:actions><forward-to><target>sip:6505559012@homedomain</target></forward-to></cp:actions>
-                                  </cp:rule>
-                                </cp:ruleset>
-                              </communication-diversion>
-                            <incoming-communication-barring active="false"/>
-                            <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+  std::string simservs2 = R"(<?xml version="1.0" encoding="UTF-8"?>
+                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
+                             <originating-identity-presentation active="false" />
+                             <originating-identity-presentation-restriction active="false">
+                               <default-behaviour>presentation-restricted</default-behaviour>
+                             </originating-identity-presentation-restriction>
+                             <communication-diversion active="true">
+                               <NoReplyTimer>19</NoReplyTimer>"
+                                 <cp:ruleset>
+                                   <cp:rule id="rule1">
+                                     <cp:conditions/>
+                                     <cp:actions><forward-to><target>sip:6505559012@homedomain</target></forward-to></cp:actions>
+                                   </cp:rule>
+                                 </cp:ruleset>
+                               </communication-diversion>
+                             <incoming-communication-barring active="false"/>
+                             <outgoing-communication-barring active="false"/>
+                           </simservs>)";
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505555678@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs2),
+                    Return(true)));
 
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6620,8 +6627,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   set_ifc(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 2);
 
-  _xdm_connection->put("sip:6505551000@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
+  std::string simservs = R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
                             <originating-identity-presentation active="true" />
                             <originating-identity-presentation-restriction active="true">
@@ -6630,7 +6636,11 @@ TEST_F(SCSCFTest, MmtelFlow)
                             <communication-diversion active="false"/>
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+                          </simservs>)";
+
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs),
+                    Return(true)));
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6742,8 +6752,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   set_ifcs_from_service_profile(irs_info_2, service_profile_2, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 3);
 
-  _xdm_connection->put("sip:6505551000@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
+  std::string simservs = R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
                             <originating-identity-presentation active="true" />
                             <originating-identity-presentation-restriction active="true">
@@ -6752,19 +6761,14 @@ TEST_F(SCSCFTest, MmtelThenExternal)
                             <communication-diversion active="false"/>
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
-                       </simservs>)");  // "
+                          </simservs>)";
 
-  _xdm_connection->put("sip:6505551234@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
-                          <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
-                            <originating-identity-presentation active="true" />
-                            <originating-identity-presentation-restriction active="true">
-                              <default-behaviour>presentation-restricted</default-behaviour>
-                            </originating-identity-presentation-restriction>
-                            <communication-diversion active="false"/>
-                            <incoming-communication-barring active="false"/>
-                            <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs),
+                    Return(true)));
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs),
+                    Return(true)));
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6907,8 +6911,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   set_ifcs_from_service_profile(irs_info_2, service_profile_2, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 4);
 
-  _xdm_connection->put("sip:6505551000@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
+  std::string simservs = R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
                             <originating-identity-presentation active="true" />
                             <originating-identity-presentation-restriction active="true">
@@ -6917,19 +6920,14 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
                             <communication-diversion active="false"/>
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+                          </simservs>)";
 
-  _xdm_connection->put("sip:6505551234@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
-                          <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
-                            <originating-identity-presentation active="true" />
-                            <originating-identity-presentation-restriction active="true">
-                              <default-behaviour>presentation-restricted</default-behaviour>
-                            </originating-identity-presentation-restriction>
-                            <communication-diversion active="false"/>
-                            <incoming-communication-barring active="false"/>
-                            <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
+    .Times(2).WillRepeatedly(DoAll(SetArgReferee<1>(simservs),
+                                   Return(true)));
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
+    .Times(2).WillRepeatedly(DoAll(SetArgReferee<1>(simservs),
+                                   Return(true)));
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
