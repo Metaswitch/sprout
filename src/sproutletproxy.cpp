@@ -1164,11 +1164,19 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
 bool SproutletProxy::UASTsx::cancel_timer(TimerID id)
 {
   pj_timer_entry* tentry = (pj_timer_entry*)id;
-  bool cancelled = _sproutlet_proxy->cancel_timer(tentry);
-  if (cancelled)
-  {
-    _pending_timers.erase(tentry);
-  }
+
+  // Cancel the timer at PJSIP
+  _sproutlet_proxy->cancel_timer(tentry);
+
+  // Always attempt to remove the timer entry from the _pending_timers
+  // set, regardless of whether the attempt to cancel the timer at PJSIP
+  // succeeds or fails.  Its possible that the timer has already popped
+  // (in which case the above call will fail), but the timer is still
+  // on the pending list blocked behind the transaction lock, and we need
+  // to make sure that timer callback doesn't find the timer entry when the
+  // lock is released - see process_timer_pop() below.
+  bool cancelled = _pending_timers.erase(tentry);
+
   return cancelled;
 }
 
