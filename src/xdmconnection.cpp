@@ -57,10 +57,10 @@ bool XDMConnection::get_simservs(const std::string& user,
 
   std::string url = "/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml";
 
-  std::unique_ptr<HttpRequest> req = _http->create_request(HttpClient::RequestType::GET, url);
-  req->set_sas_trail(trail);
-  req->set_username(user);
-  HttpResponse response = req->send();
+  HttpResponse response = _http->create_request(HttpClient::RequestType::GET, url)
+                          .set_sas_trail(trail)
+                          .set_username(user)
+                          .send();
   
   HTTPCode http_code = response.get_rc();
   xml_data = response.get_body();
