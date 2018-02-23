@@ -147,9 +147,9 @@ HTTPCode HSSConnection::get_json_object(const std::string& path,
                                         rapidjson::Document*& json_object,
                                         SAS::TrailId trail)
 {
-  std::unique_ptr<HttpRequest> req = _http->create_request(HttpClient::RequestType::GET, path);
-  req->set_sas_trail(trail);
-  HttpResponse response = req->send();
+  HttpResponse response = _http->create_request(HttpClient::RequestType::GET, path)
+                          .set_sas_trail(trail)
+                          .send();
 
   HTTPCode rc = response.get_rc();
 
@@ -207,16 +207,16 @@ HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
   std::map<std::string, std::string> rsp_headers;
   std::vector<std::string> req_headers;
 
-  std::unique_ptr<HttpRequest> req = _http->create_request(HttpClient::RequestType::PUT, path);
-  req->set_body(body);
+  HttpRequest req = _http->create_request(HttpClient::RequestType::PUT, path);
+  req.set_body(body)
+     .set_sas_trail(trail);
 
   if (!cache_allowed)
   {
-    req->add_header("Cache-control: no-cache");
+    req.add_header("Cache-control: no-cache");
   }
-  req->set_sas_trail(trail);
 
-  HttpResponse response = req->send();
+  HttpResponse response = req.send();
   HTTPCode http_code = response.get_rc();
 
   if (http_code == HTTP_OK)
@@ -234,9 +234,9 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
                                        rapidxml::xml_document<>*& root,
                                        SAS::TrailId trail)
 {
-  std::unique_ptr<HttpRequest> req = _http->create_request(HttpClient::RequestType::GET, path);
-  req->set_sas_trail(trail);
-  HttpResponse response = req->send();
+  HttpResponse response =_http->create_request(HttpClient::RequestType::GET, path)
+                         .set_sas_trail(trail)
+                         .send();
 
   HTTPCode http_code = response.get_rc();
 
