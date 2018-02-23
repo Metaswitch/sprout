@@ -45,10 +45,10 @@ void RalfProcessor::Pool::process_work(RalfProcessor::RalfRequest*& rr)
 {
   // Send the request. Penalties are set via the load monitor if the
   // request fails in the HttpClient
-  std::unique_ptr<HttpRequest> req = _ralf_connection->create_request(HttpClient::RequestType::POST, rr->path);
-  req->set_sas_trail(rr->trail);
-  req->set_body(rr->message);
-  req->send();
+  _ralf_connection->create_request(HttpClient::RequestType::POST, rr->path)
+  .set_sas_trail(rr->trail)
+  .set_body(rr->message)
+  .send();
 
   delete rr; rr = NULL;
 }
