@@ -179,7 +179,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        fakezmq.cpp \
                        uriclassifier_test.cpp \
                        ralf_processor_test.cpp \
-                       mock_httpconnection.cpp \
+                       mock_httpclient.cpp \
                        mock_http_request.cpp \
                        mockhttpstack.cpp \
                        mocktsxhelper.cpp \

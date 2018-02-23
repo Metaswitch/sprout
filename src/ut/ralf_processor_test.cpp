@@ -14,32 +14,35 @@
 
 #include "basetest.hpp"
 #include "ralf_processor.h"
-#include "mock_httpconnection.h"
-#include "mock_http_request.h"
+#include "mock_httpclient.h"
+#include "httpconnection.h"
 
 using ::testing::_;
 using ::testing::Return;
+using ::testing::AllOf;
 
 class RalfProcessorTest : public BaseTest
 {
-  MockHttpConnection* _ralf_connection;
+  MockHttpClient* _mock_client;
+  HttpConnection* _ralf_connection;
   RalfProcessor* _ralf_processor;
-  MockHttpRequest* _mock_http_req;
 
   RalfProcessorTest()
   {
-    _ralf_connection = new MockHttpConnection();
+    _mock_client = new MockHttpClient();
+    _ralf_connection = new HttpConnection("ralf", _mock_client, "http");
     _ralf_processor = new RalfProcessor(_ralf_connection, NULL, 1);
-    _mock_http_req = new MockHttpRequest();
+
+    // If we don't override the default behaviour, return a nonsensical HTTP Code
+    ON_CALL(*_mock_client, send_request(_))
+            .WillByDefault(Return(HttpResponse(-1, "", {})));
   }
 
- virtual ~RalfProcessorTest()
- {
-   delete _ralf_processor;
-   delete _ralf_connection;
-   // We don't delete the MockHttpRequest, as that will be deleted when the
-   // unique pointer returned from HttpConnection::create_request() goes out of
-   // scope
+  virtual ~RalfProcessorTest()
+  {
+    delete _ralf_processor;
+    delete _ralf_connection;
+    delete _mock_client;
   }
 };
 
@@ -54,13 +57,12 @@ TEST_F(RalfProcessorTest, RequestComplete)
   rr->message = "message";
   rr->trail = 0;
 
-  EXPECT_CALL(*_ralf_connection, create_request_proxy(HttpClient::RequestType::POST, rr->path))
-    .WillOnce(Return(_mock_http_req));
+  EXPECT_CALL(*_mock_client, send_request(AllOf(HasScheme("http"),
+                                                HasServer("ralf"),
+                                                HasPath("path"),
+                                                HasBody("message"),
+                                                HasTrail(0))));
 
-  EXPECT_CALL(*_mock_http_req, set_body(rr->message)).Times(1);
-  EXPECT_CALL(*_mock_http_req, set_sas_trail(rr->trail)).Times(1);
-
-  EXPECT_CALL(*_mock_http_req, send()).WillOnce(Return(resp));
   _ralf_processor->send_request_to_ralf(rr);
   sleep(1);
 }

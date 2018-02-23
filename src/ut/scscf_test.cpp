@@ -10298,15 +10298,13 @@ class SCSCFTestWithRalf : public SCSCFTestBase
   static void SetUpTestCase()
   {
     SCSCFTestBase::SetUpTestCase();
-    _ralf_connection = new NiceMock<MockHttpConnection>();
-    _ralf_processor = new NiceMock<MockRalfProcessor>(_ralf_connection);
+    _ralf_processor = new NiceMock<MockRalfProcessor>();
     _ralf_acr_factory = new RalfACRFactory(_ralf_processor, ACR::SCSCF);
   }
   static void TearDownTestCase()
   {
     delete _ralf_acr_factory; _ralf_acr_factory = NULL;
     delete _ralf_processor; _ralf_processor = NULL;
-    delete _ralf_connection; _ralf_connection = NULL;
     SCSCFTestBase::TearDownTestCase();
   }
 
@@ -10388,12 +10386,10 @@ class SCSCFTestWithRalf : public SCSCFTestBase
   {
   }
 protected:
-  static MockHttpConnection* _ralf_connection;
   static MockRalfProcessor* _ralf_processor;
   static RalfACRFactory* _ralf_acr_factory;
 
 };
-MockHttpConnection* SCSCFTestWithRalf::_ralf_connection;
 MockRalfProcessor* SCSCFTestWithRalf::_ralf_processor;
 RalfACRFactory* SCSCFTestWithRalf::_ralf_acr_factory;
 
