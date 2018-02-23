@@ -185,7 +185,7 @@ private:
   /// @param tsx_start_time_usec  - The time the request was received.
   /// @param video_call           - True if INVITE was for a video session,
   ///                               false otherwise.
-  void track_session_setup_time(uint64_t tsx_start_time_usec, bool video_call);
+  uint64_t track_session_setup_time(uint64_t tsx_start_time_usec, bool video_call);
 
   /// Translate RequestURI using ENUM service if appropriate.
   ///

@@ -523,7 +523,7 @@ static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
   // Respond statelessly with a 503 Service Unavailable, including a
   // Retry-After header with a zero length timeout.
-  TRC_DEBUG("Rejected request due to overload");
+  TRC_VERBOSE("Rejected request due to overload");
 
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);

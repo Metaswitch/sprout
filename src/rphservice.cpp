@@ -221,9 +221,9 @@ SIPEventPriorityLevel RPHService::lookup_priority(std::string rph_value,
     // We received a message with an unknown RPH value. This could be because:
     //  - It is not defined in the IANA namespace.
     //  - It is not assigned a priority value in the rph.json file.
-    TRC_WARNING("An unknown RPH value \"%s\" was received on an incoming message."
-                " This message will be handled, but will not be prioritized.",
-                rph_value.c_str());
+    TRC_DEBUG("An unknown RPH value \"%s\" was received on an incoming message."
+              " This message will be handled, but will not be prioritized.",
+              rph_value.c_str());
     SAS::Event event(trail, SASEvent::RPH_VALUE_UNKNOWN, 0);
     event.add_var_param(rph_value);
     SAS::report_event(event);
