@@ -39,7 +39,7 @@ extern "C" {
 #include "cfgoptions.h"
 #include "sasevent.h"
 #include "analyticslogger.h"
-#include "subscriber_data_manager.h"
+#include "subscriber_manager.h"
 #include "stack.h"
 #include "bono.h"
 #include "hssconnection.h"
@@ -61,7 +61,9 @@ extern "C" {
 #include "scscfselector.h"
 #include "chronosconnection.h"
 #include "chronoshandlers.h"
+#include "s4_chronoshandlers.h"
 #include "handlers.h"
+#include "s4_handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
 #include "sproutletproxy.h"
@@ -94,9 +96,6 @@ enum OptionTypes
   OPT_ADDITIONAL_HOME_DOMAINS,
   OPT_EMERGENCY_REG_ACCEPTED,
   OPT_SUB_MAX_EXPIRES,
-  OPT_MAX_CALL_LIST_LENGTH,
-  OPT_MEMENTO_THREADS,
-  OPT_CALL_LIST_TTL,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
   OPT_OVERRIDE_NPDI,
@@ -104,9 +103,7 @@ enum OptionTypes
   OPT_INIT_TOKEN_RATE,
   OPT_MIN_TOKEN_RATE,
   OPT_MAX_TOKEN_RATE,
-  OPT_CASS_TARGET_LATENCY_US,
   OPT_EXCEPTION_MAX_TTL,
-  OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
   OPT_HTTP_BLACKLIST_DURATION,
   OPT_ASTAIRE_BLACKLIST_DURATION,
@@ -122,7 +119,6 @@ enum OptionTypes
   OPT_PBX_SERVICE_ROUTE,
   OPT_NON_REGISTER_AUTHENTICATION,
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
-  OPT_MEMENTO_NOTIFY_URL,
   OPT_PIDFILE,
   OPT_SPROUT_HOSTNAME,
   OPT_LISTEN_PORT,
@@ -144,7 +140,10 @@ enum OptionTypes
   OPT_HOMESTEAD_TIMEOUT,
   OPT_ORIG_SIP_TO_TEL_COERCE,
   OPT_REQUEST_ON_QUEUE_TIMEOUT,
-  OPT_BLACKLISTED_SCSCFS
+  OPT_BLACKLISTED_SCSCFS,
+  OPT_LOCAL_ALIASES,
+  OPT_REMOTE_ALIASES,
+  OPT_ALWAYS_SERVE_REMOTE_ALIASES
 };
 
 
@@ -156,6 +155,9 @@ const static struct pj_getopt_option long_opt[] =
   { "domain",                       required_argument, 0, 'D'},
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
   { "alias",                        required_argument, 0, 'n'},
+  { "local-alias-list",             required_argument, 0, OPT_LOCAL_ALIASES},
+  { "remote-alias-list",            required_argument, 0, OPT_REMOTE_ALIASES},
+  { "always-serve-remote-aliases",  no_argument,       0, OPT_ALWAYS_SERVE_REMOTE_ALIASES},
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},
@@ -167,7 +169,6 @@ const static struct pj_getopt_option long_opt[] =
   { "hss",                          required_argument, 0, 'H'},
   { "record-routing-model",         required_argument, 0, 'C'},
   { "default-session-expires",      required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-  { "max-session-expires",          required_argument, 0, OPT_MAX_SESSION_EXPIRES},
   { "target-latency-us",            required_argument, 0, OPT_TARGET_LATENCY_US},
   { "xdms",                         required_argument, 0, 'X'},
   { "ralf",                         required_argument, 0, 'G'},
@@ -190,10 +191,6 @@ const static struct pj_getopt_option long_opt[] =
   { "http-threads",                 required_argument, 0, 'q'},
   { "billing-cdf",                  required_argument, 0, 'B'},
   { "allow-emergency-registration", no_argument,       0, OPT_EMERGENCY_REG_ACCEPTED},
-  { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
-  { "memento-threads",              required_argument, 0, OPT_MEMENTO_THREADS},
-  { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
-  { "memento-notify-url",           required_argument, 0, OPT_MEMENTO_NOTIFY_URL},
   { "log-level",                    required_argument, 0, 'L'},
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
@@ -203,7 +200,6 @@ const static struct pj_getopt_option long_opt[] =
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
   { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
   { "max-token-rate",               required_argument, 0, OPT_MAX_TOKEN_RATE},
-  { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
@@ -273,7 +269,13 @@ static void usage(void)
        " -D, --domain <name>        The home domain name\n"
        "     --additional-domains <names>\n"
        "                            Comma-separated list of additional home domain names\n"
-       " -n, --alias <names>        Optional list of alias host names\n"
+       " -n, --alias <names>        (DEPRECATED) Optional list of alias host names\n"
+       "     --local-alias-list     List of hostnames corresponding to services provided by this node\n"
+       "     --remote-alias-list    List of hostnames corresponding to services provided by remote\n"
+       "                            nodes for which this node can accept traffic.\n"
+       "     --always-serve-remote-aliases\n"
+       "                            If set to Y, requests for hostnames on the remote alias list will\n"
+       "                            always be handled locally.\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
        "                            as the upstream routing proxy.  Optionally specifies the port,\n"
@@ -336,14 +338,8 @@ static void usage(void)
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request\n"
        "                            (in seconds. Min 90. Defaults to 600)\n"
-       "     --max-session-expires <expiry>\n"
-       "                            The maximum allowed session expiry period.\n"
-       "                            (in seconds. Min 90. Defaults to 600)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
-       "     --cass-target-latency-us <usecs>\n"
-       "                            Target latency above which throttling applies for the Cassandra store\n"
-       "                            that's part of the Memento application server (default: 1000000)\n"
        "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n"
        "                            the throttling code (default: 1000))\n"
        "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
@@ -374,10 +370,7 @@ static void usage(void)
        "     --max-call-list-length N\n"
        "                            Maximum number of complete call list entries to store. If this is 0,\n"
        "                            then there is no limit (default: 0)\n"
-       "     --memento-threads N    Number of Memento threads (default: 25)\n"
        "     --call-list-ttl N      Time to store call lists entries (default: 604800)\n"
-       "     --memento-notify-url <url>\n"
-       "                            URL Memento should notify when call lists change.\n"
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
@@ -698,9 +691,25 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'n':
-      options->alias_hosts = std::string(pj_optarg);
-      TRC_INFO("Alias host names = %s", pj_optarg);
+      options->deprecated_alias_hosts = std::string(pj_optarg);
+      TRC_WARNING("Deprecated --alias (-n) used. Alias host names = %s", pj_optarg);
       break;
+
+    case OPT_LOCAL_ALIASES:
+      options->local_alias_hosts = std::string(pj_optarg);
+      TRC_INFO("Local alias host names = %s", pj_optarg);
+      break;
+
+    case OPT_REMOTE_ALIASES:
+      options->remote_alias_hosts = std::string(pj_optarg);
+      TRC_INFO("Remote alias host names = %s", pj_optarg);
+      break;
+
+    case OPT_ALWAYS_SERVE_REMOTE_ALIASES:
+      options->always_serve_remote_aliases = true;
+      TRC_INFO("Always serving remote aliases.");
+      break;
+
 
     case 'r':
       {
@@ -872,14 +881,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case OPT_CASS_TARGET_LATENCY_US:
-      {
-        VALIDATE_INT_PARAM_NON_ZERO(options->cass_target_latency_us,
-                                    cass_target_latency_us,
-                                    Target cassandra latency (in microseconds));
-      }
-      break;
-
     case OPT_MAX_TOKENS:
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->max_tokens,
@@ -979,52 +980,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case OPT_MAX_SESSION_EXPIRES:
-      {
-        int max_session_expires;
-        bool rc = validated_atoi(pj_optarg, max_session_expires);
-
-        if ((rc) && max_session_expires >= MIN_SESSION_EXPIRES)
-        {
-          options->max_session_expires = max_session_expires;
-          TRC_INFO("Max session expiry time set to %d", max_session_expires);
-        }
-        else
-        {
-          TRC_WARNING("Invalid value for max session expiry: '%s'. "
-                      "The default value of %d will be used.",
-                      pj_optarg, options->max_session_expires);
-        }
-      }
-      break;
-
     case OPT_EMERGENCY_REG_ACCEPTED:
       options->emerg_reg_accepted = PJ_TRUE;
       TRC_INFO("Emergency registrations accepted");
-      break;
-
-    case OPT_MAX_CALL_LIST_LENGTH:
-      {
-        VALIDATE_INT_PARAM(options->max_call_list_length,
-                           max_call_list_length,
-                           Max call list length);
-      }
-      break;
-
-    case OPT_MEMENTO_THREADS:
-      {
-        VALIDATE_INT_PARAM(options->memento_threads,
-                           memento_threads,
-                           Memento threads);
-      }
-      break;
-
-    case OPT_CALL_LIST_TTL:
-      {
-        VALIDATE_INT_PARAM(options->call_list_ttl,
-                           call_list_ttl,
-                           TTL for entries in the call list);
-      }
       break;
 
     case OPT_BLACKLISTED_SCSCFS:
@@ -1190,12 +1148,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         TRC_INFO("Forcing inclusion of original REGISTER requests/responses on third-party REGISTERs");
         options->force_third_party_register_body = true;
       }
-      break;
-
-    case OPT_MEMENTO_NOTIFY_URL:
-      options->memento_notify_url = std::string(pj_optarg);
-      TRC_INFO("Memento notify URL set to: '%s'",
-               options->memento_notify_url.c_str());
       break;
 
     case OPT_PIDFILE:
@@ -1447,8 +1399,9 @@ Store* local_impi_data_store = NULL;
 std::vector<Store*> remote_impi_data_stores;
 AoRStore* local_aor_store = NULL;
 std::vector<AoRStore*> remote_aor_stores;
-SubscriberDataManager* local_sdm = NULL;
-std::vector<SubscriberDataManager*> remote_sdms;
+S4* s4 = NULL;
+std::vector<S4*> remote_s4s;
+SubscriberManager* subscriber_manager = NULL;
 ImpiStore* local_impi_store = NULL;
 std::vector<ImpiStore*> remote_impi_stores;
 RalfProcessor* ralf_processor = NULL;
@@ -1462,6 +1415,7 @@ AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
+IFCConfiguration ifc_configuration = {};
 
 int create_astaire_stores(struct options opt,
                           AstaireResolver*& astaire_resolver,
@@ -1719,7 +1673,6 @@ int main(int argc, char* argv[])
   opt.sas_server = "0.0.0.0";
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
-  opt.max_session_expires = 10 * 60;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
   opt.http_address = "127.0.0.1";
@@ -1728,11 +1681,7 @@ int main(int argc, char* argv[])
   opt.dns_servers.push_back("127.0.0.1");
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
-  opt.max_call_list_length = 0;
-  opt.memento_threads = 25;
-  opt.call_list_ttl = 604800;
   opt.target_latency_us = 10000;
-  opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 1000;
   opt.init_token_rate = 2000.0;
   opt.min_token_rate = 10.0;
@@ -1962,6 +1911,13 @@ int main(int argc, char* argv[])
   SNMP::ScalarByScopeTable* penalties_scalar = NULL;
   SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
+  SNMP::RegistrationStatsTables third_party_reg_stats_tbls = {nullptr, nullptr, nullptr};
+  SNMP::CounterTable* no_matching_ifcs_tbl = NULL;
+  SNMP::CounterTable* no_matching_fallback_ifcs_tbl = NULL;
+
+  SNMP::CounterTable* route_to_remote_alias_tbl = NULL;
+  SNMP::CounterTable* accept_for_remote_alias_tbl = NULL;
+
   if (opt.pcscf_enabled)
   {
     latency_table = SNMP::EventAccumulatorByScopeTable::create("bono_latency",
@@ -2012,6 +1968,22 @@ int main(int argc, char* argv[])
                                                         ".1.2.826.0.1.1578918.9.3.30");
     token_rate_scalar = SNMP::ScalarByScopeTable::create("sprout_current_token_rate",
                                                          ".1.2.826.0.1.1578918.9.3.31");
+
+    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
+                                                                                   ".1.2.826.0.1.1578918.9.3.12");
+    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
+                                                                                 ".1.2.826.0.1.1578918.9.3.13");
+    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
+                                                                                 ".1.2.826.0.1.1578918.9.3.14");
+    no_matching_fallback_ifcs_tbl = SNMP::CounterTable::create("no_matching_fallback_ifcs",
+                                                               "1.2.826.0.1.1578918.9.3.39");
+    no_matching_ifcs_tbl = SNMP::CounterTable::create("no_matching_ifcs",
+                                                      "1.2.826.0.1.1578918.9.3.41");
+
+    route_to_remote_alias_tbl = SNMP::CounterTable::create("route_to_remote_alias",
+                                                           "1.2.826.0.1.1578918.9.3.44");
+    accept_for_remote_alias_tbl = SNMP::CounterTable::create("accept_for_remote_alias",
+                                                           "1.2.826.0.1.1578918.9.3.45");
   }
 
   // Create Sprout's alarm objects.
@@ -2090,11 +2062,12 @@ int main(int argc, char* argv[])
                       opt.additional_home_domains,
                       opt.uri_scscf,
                       opt.sprout_hostname,
-                      opt.alias_hosts,
+                      opt.deprecated_alias_hosts,
+                      opt.local_alias_hosts,
+                      opt.remote_alias_hosts,
                       sip_resolver,
                       opt.record_routing_model,
                       opt.default_session_expires,
-                      opt.max_session_expires,
                       opt.sip_tcp_connect_timeout,
                       opt.sip_tcp_send_timeout,
                       quiescing_mgr,
@@ -2179,6 +2152,13 @@ int main(int argc, char* argv[])
                                            "sprout",
                                            AlarmDef::SPROUT_FIFC_STATUS,
                                            AlarmDef::CRITICAL));
+
+  // Create the IFC Configuration
+  ifc_configuration = IFCConfiguration(opt.apply_fallback_ifcs,
+                                       opt.reject_if_no_matching_ifcs,
+                                       opt.dummy_app_server,
+                                       no_matching_ifcs_tbl,
+                                       no_matching_fallback_ifcs_tbl);
 
   // Create ENUM service.
   if (!opt.enum_servers.empty())
@@ -2268,23 +2248,30 @@ int main(int argc, char* argv[])
     return rc;
   }
 
-  // Use the AOR stores we've create to create the local (and optionally remote)
-  // SDMs.
-  local_sdm = new SubscriberDataManager(local_aor_store,
-                                        chronos_connection,
-                                        analytics_logger,
-                                        true);
-
-  for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
-       it != remote_aor_stores.end();
-       ++it)
+  // Set up the SM and S4s
+  for (AoRStore* store : remote_aor_stores)
   {
-    SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
-                                                                  chronos_connection,
-                                                                  NULL,
-                                                                  false);
-    remote_sdms.push_back(remote_sdm);
+    S4* remote_s4 = new S4("Remote S4", store);
+    remote_s4s.push_back(remote_s4);
   }
+
+  s4 = new S4("Local S4",
+              chronos_connection,
+              "/timers",
+              local_aor_store,
+              remote_s4s);
+
+  NotifySender* notify_sender = new NotifySender();
+  RegistrationSender* registration_sender =
+    new RegistrationSender(ifc_configuration,
+                           fifc_service,
+                           &third_party_reg_stats_tbls,
+                           opt.force_third_party_register_body);
+  subscriber_manager = new SubscriberManager(s4,
+                                             hss_connection,
+                                             analytics_logger,
+                                             notify_sender,
+                                             registration_sender);
 
   // Start the HTTP stack early as plugins might need to register handlers
   // with it.
@@ -2344,21 +2331,29 @@ int main(int argc, char* argv[])
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
-    std::unordered_set<std::string> host_aliases;
-    host_aliases.insert(opt.local_host);
-    host_aliases.insert(opt.public_host);
-    host_aliases.insert(opt.home_domain);
-    host_aliases.insert(stack_data.home_domains.begin(),
-                        stack_data.home_domains.end());
-    host_aliases.insert(stack_data.aliases.begin(),
-                        stack_data.aliases.end());
+    std::unordered_set<std::string> host_local_aliases;
+    host_local_aliases.insert(opt.local_host);
+    host_local_aliases.insert(opt.public_host);
+    host_local_aliases.insert(opt.home_domain);
+    host_local_aliases.insert(stack_data.home_domains.begin(),
+                              stack_data.home_domains.end());
+    host_local_aliases.insert(stack_data.local_aliases.begin(),
+                              stack_data.local_aliases.end());
+
+    std::unordered_set<std::string> host_remote_aliases;
+    host_remote_aliases.insert(stack_data.remote_aliases.begin(),
+                               stack_data.remote_aliases.end());
 
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
                                          opt.sprout_hostname,
-                                         host_aliases,
+                                         host_local_aliases,
+                                         host_remote_aliases,
+                                         opt.always_serve_remote_aliases,
                                          sproutlets,
                                          opt.stateless_proxies,
+                                         route_to_remote_alias_tbl,
+                                         accept_for_remote_alias_tbl,
                                          opt.max_sproutlet_depth);
     if (sproutlet_proxy == NULL)
     {
@@ -2402,45 +2397,31 @@ int main(int argc, char* argv[])
   // be invoked. We don't increment any statistics relating to the fallback
   // iFCs in these flows though (as they should only be used on initial
   // registration).
-  DeregistrationTask::Config deregistration_config(local_sdm,
-                                                   remote_sdms,
-                                                   hss_connection,
-                                                   fifc_service,
-                                                   IFCConfiguration(opt.apply_fallback_ifcs,
-                                                                    opt.reject_if_no_matching_ifcs,
-                                                                    opt.dummy_app_server,
-                                                                    NULL,
-                                                                    NULL),
+  DeregistrationTask::Config deregistration_config(subscriber_manager,
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
-  PushProfileTask::Config push_profile_config(local_sdm,
-                                              remote_sdms,
-                                              hss_connection);
-  GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
-  DeleteImpuTask::Config delete_impu_config(local_sdm,
-                                            remote_sdms,
-                                            hss_connection,
-                                            fifc_service,
-                                            IFCConfiguration(opt.apply_fallback_ifcs,
-                                                             opt.reject_if_no_matching_ifcs,
-                                                             opt.dummy_app_server,
-                                                             NULL,
-                                                             NULL));
 
-  AoRTimeoutTask::Config aor_timeout_config(local_sdm,
-                                            remote_sdms,
-                                            hss_connection);
+  PushProfileTask::Config push_profile_config(subscriber_manager);
+  DeleteImpuTask::Config delete_impu_config(subscriber_manager);
+
+  AoRTimeoutTask::Config aor_timeout_config(s4);
+
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
 
-  TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
-  TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+  GetBindingsTask::Config get_bindings_config(subscriber_manager);
+  GetSubscriptionsTask::Config get_subscriptions_config(subscriber_manager);
+
+  HttpStackUtils::TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  HttpStackUtils::TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
   HttpStackUtils::PingHandler ping_handler;
-  HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
-  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
+
+  HttpStackUtils::SpawningHandler<GetBindingsTask, GetBindingsTask::Config> get_bindings_handler(&get_bindings_config);
+  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetSubscriptionsTask::Config> get_subscriptions_handler(&get_subscriptions_config);
+
   HttpStackUtils::SpawningHandler<DeleteImpuTask, DeleteImpuTask::Config> delete_impu_handler(&delete_impu_config);
 
   if (opt.enabled_scscf)
@@ -2572,17 +2553,17 @@ int main(int argc, char* argv[])
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;
-  delete local_sdm;
+  delete subscriber_manager;
+  delete notify_sender;
+  delete s4;
   delete local_aor_store;
   delete local_data_store;
 
-  for (std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
-       it != remote_sdms.end();
-       ++it)
+  for (S4* remote_s4 : remote_s4s)
   {
-    delete *it;
+    delete remote_s4;
   }
-  remote_sdms.clear();
+  remote_s4s.clear();
 
   for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
        it != remote_aor_stores.end();
@@ -2649,6 +2630,15 @@ int main(int argc, char* argv[])
   delete target_latency_scalar;
   delete penalties_scalar;
   delete token_rate_scalar;
+
+  delete third_party_reg_stats_tbls.init_reg_tbl;
+  delete third_party_reg_stats_tbls.re_reg_tbl;
+  delete third_party_reg_stats_tbls.de_reg_tbl;
+  delete no_matching_ifcs_tbl;
+  delete no_matching_fallback_ifcs_tbl;
+
+  delete route_to_remote_alias_tbl;
+  delete accept_for_remote_alias_tbl;
 
   hc->stop_thread();
   delete hc;

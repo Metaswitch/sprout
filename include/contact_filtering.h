@@ -12,9 +12,9 @@
 #ifndef CONTACT_FILTERING_H__
 #define CONTACT_FILTERING_H__
 
-#include "subscriber_data_manager.h"
 #include "aschain.h"
 #include "custom_headers.h"
+#include "aor.h"
 
 typedef std::map<std::string, std::string> FeatureSet;
 typedef std::pair<const std::string, std::string> Feature;
@@ -25,7 +25,7 @@ class FeatureParseError {};
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
 void filter_bindings_to_targets(const std::string& aor,
-                                const AoR* bindings,
+                                Bindings& bindings,
                                 pjsip_msg* msg,
                                 pj_pool_t* pool,
                                 int max_targets,
@@ -34,7 +34,7 @@ void filter_bindings_to_targets(const std::string& aor,
                                 SAS::TrailId trail);
 bool binding_to_target(const std::string& aor,
                        const std::string& binding_id,
-                       const AoR::Binding& binding,
+                       const Binding& binding,
                        bool deprioritized,
                        pj_pool_t* pool,
                        Target& target);

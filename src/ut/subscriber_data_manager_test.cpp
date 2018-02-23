@@ -36,6 +36,7 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgReferee;
 using ::testing::AtLeast;
+using ::testing::An;
 
 /// Fixture for BasicSubscriberDataManagerTest.
 class BasicSubscriberDataManagerTest : public SipTest
@@ -97,7 +98,7 @@ class BasicSubscriberDataManagerTest : public SipTest
 TEST_F(BasicSubscriberDataManagerTest, BindingTests)
 {
   AoRPair* aor_data1;
-  AoR::Binding* b1;
+  Binding* b1;
   AssociatedURIs associated_uris = {};
 
   // Get an initial empty AoR record and add a binding.
@@ -231,9 +232,9 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
 {
   CapturingTestLogger log;
   AoRPair* aor_data1;
-  AoR::Binding* b1;
+  Binding* b1;
   AssociatedURIs associated_uris = {};
-  AoR::Subscription* s1;
+  Subscription* s1;
 
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
@@ -330,8 +331,8 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
 {
   CapturingTestLogger log;
   AoRPair* aor_data1;
-  AoR::Binding* b1;
-  AoR::Subscription* s1;
+  Binding* b1;
+  Subscription* s1;
   AssociatedURIs associated_uris = {};
 
   // Get an initial empty AoR record and add a binding and subscription.
@@ -449,11 +450,11 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
   EXPECT_CALL(*(this->_analytics_logger), registration(_,_,_,_)).Times(AtLeast(0));
 
   CapturingTestLogger log;
-  AoR::Binding* b0;
-  AoR::Binding* b1;
-  AoR::Binding* b2;
-  AoR::Subscription* s0;
-  AoR::Subscription* s1;
+  Binding* b0;
+  Binding* b1;
+  Binding* b2;
+  Subscription* s0;
+  Subscription* s1;
   AssociatedURIs associated_uris = {};
   bool all_bindings_expired = false;
 
@@ -587,9 +588,9 @@ TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
 TEST_F(BasicSubscriberDataManagerTest, CopyTests)
 {
   AoRPair* aor_data1;
-  AoR::Binding* b1;
+  Binding* b1;
   AssociatedURIs associated_uris = {};
-  AoR::Subscription* s1;
+  Subscription* s1;
   int now;
 
   // Get an initial empty AoR record.
@@ -660,10 +661,10 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   // The expiry tests require pjsip, so initialise for this test
   CapturingTestLogger log;
   AoRPair* aor_data1;
-  AoR::Binding* b1;
-  AoR::Binding* b2;
-  AoR::Subscription* s1;
-  AoR::Subscription* s2;
+  Binding* b1;
+  Binding* b2;
+  Subscription* s1;
+  Subscription* s2;
   AssociatedURIs associated_uris = {};
   bool rc;
   int now;
@@ -817,7 +818,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, BadlyFormedJson)
 {
   AoRPair* aor_data1;
 
-  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(DoAll(SetArgReferee<2>(std::string("{\"bindings\": {}")),
                     SetArgReferee<3>(1), // CAS
                     Return(Store::OK)));
@@ -832,7 +833,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, SemanticallyInvalidJson)
 {
   AoRPair* aor_data1;
 
-  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(DoAll(SetArgReferee<2>(
                     std::string("{\"bindings\": {}, \"subscriptions\" :{}, \"notify_cseq\": \"123\"}")),
                     SetArgReferee<3>(1), // CAS
@@ -848,7 +849,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, EmptyJsonObject)
 {
   AoRPair* aor_data1;
 
-  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _, An<Store::Format>()))
     .WillOnce(DoAll(SetArgReferee<2>(std::string("{}")),
                     SetArgReferee<3>(1), // CAS
                     Return(Store::OK)));
@@ -904,8 +905,8 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
 TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 {
   AoRPair* aor_data1;
-  AoR::Binding* b1;
-  AoR::Subscription* s1;
+  Binding* b1;
+  Subscription* s1;
   bool rc;
   int now;
 
@@ -976,7 +977,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
 {
   AoRPair* aor_data1;
-  AoR::Binding* b1;
+  Binding* b1;
   std::map<std::string, uint32_t> expected_tags;
   expected_tags["REG"] = 1;
   expected_tags["BIND"] = 0;
@@ -1024,7 +1025,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   EXPECT_EQ("TIMER_ID", aor_data1->get_current()->_timer_id);
 
   // Add a subscription to the record.
-  AoR::Subscription* s1;
+  Subscription* s1;
   s1 = aor_data1->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
@@ -1049,7 +1050,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   ASSERT_TRUE(aor_data1 != NULL);
 
   // Add another binding to the record.
-  AoR::Binding* b2;
+  Binding* b2;
   b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
@@ -1079,8 +1080,8 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
 TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
 {
   AoRPair* aor_data1;
-  AoR::Binding* b1;
-  AoR::Subscription* s1;
+  Binding* b1;
+  Subscription* s1;
   std::map<std::string, uint32_t> expected_tags;
   expected_tags["REG"] = 1;
   expected_tags["BIND"] = 0;
@@ -1141,7 +1142,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   EXPECT_EQ("TIMER_ID", aor_data1->get_current()->_timer_id);
 
   // Add another binding to the record.
-  AoR::Binding* b2;
+  Binding* b2;
   b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
@@ -1159,7 +1160,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   expected_tags["BIND"]++;
 
   // Add another subscription to the record.
-  AoR::Subscription* s2;
+  Subscription* s2;
   s2 = aor_data1->get_current()->get_subscription("5678");
   s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s2->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
@@ -1197,8 +1198,8 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
 TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
 {
   AoRPair* aor_data1;
-  AoR::Binding* b1;
-  AoR::Subscription* s1;
+  Binding* b1;
+  Subscription* s1;
   std::map<std::string, uint32_t> expected_tags;
   expected_tags["REG"] = 1;
   expected_tags["BIND"] = 0;
@@ -1303,7 +1304,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
 TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
 {
   AoRPair* aor_data1;
-  AoR::Binding* b1;
+  Binding* b1;
   bool rc;
   int now;
 
@@ -1356,7 +1357,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedBinding)
 
   // Add a binding to the current AoR
   std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
-  AoR::Binding* b1 = current_aor->get_binding(b_id);
+  Binding* b1 = current_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1374,7 +1375,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedBinding)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check the 'get_updated_<bindings/subscriptions>' function returns the binding
-  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  Bindings updated_bindings = aor_pair->get_updated_bindings();
   ASSERT_TRUE(updated_bindings.find( b_id ) != updated_bindings.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1389,7 +1390,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedBinding)
 
   // Add a binding to the original AoR
   std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
-  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  Binding* b1 = orig_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1404,7 +1405,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedBinding)
   b1->_emergency_registration = false;
 
   // Add the same binding, but with an updated expiry, to the current AoR
-  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  Binding* b2 = current_aor->get_binding(b_id);
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
@@ -1423,7 +1424,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedBinding)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_bindings` returns the updated binding
-  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  Bindings updated_bindings = aor_pair->get_updated_bindings();
   ASSERT_TRUE(updated_bindings.find( b_id ) != updated_bindings.end());
   EXPECT_EQ((now + 600), updated_bindings[b_id]->_expires);
 
@@ -1439,7 +1440,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedBinding)
 
   // Add a binding to the original AoR only
   std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
-  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  Binding* b1 = orig_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1457,7 +1458,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedBinding)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_removed_bindings` returns the 'deleted' binding
-  AoR::Bindings removed_bindings = aor_pair->get_removed_bindings();
+  Bindings removed_bindings = aor_pair->get_removed_bindings();
   ASSERT_TRUE(removed_bindings.find( b_id ) != removed_bindings.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1472,7 +1473,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedBinding)
 
   // Add a binding to the original AoR
   std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
-  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  Binding* b1 = orig_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1487,7 +1488,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedBinding)
   b1->_emergency_registration = false;
 
   // Add the same binding to the current AoR
-  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  Binding* b2 = current_aor->get_binding(b_id);
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
@@ -1505,9 +1506,9 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedBinding)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_bindings` and `get_removed_bindings` return nothing
-  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  Bindings updated_bindings = aor_pair->get_updated_bindings();
   ASSERT_TRUE(updated_bindings.find( b_id ) == updated_bindings.end());
-  AoR::Bindings removed_bindings = aor_pair->get_removed_bindings();
+  Bindings removed_bindings = aor_pair->get_removed_bindings();
   ASSERT_TRUE(removed_bindings.find( b_id ) == removed_bindings.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1522,7 +1523,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedSubscription)
 
   // Add a binding and subscription to the current AoR
   std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
-  AoR::Binding* b1 = current_aor->get_binding(b_id);
+  Binding* b1 = current_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1537,7 +1538,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedSubscription)
   b1->_emergency_registration = false;
 
   std::string s_id = "1234";
-  AoR::Subscription* s1 = current_aor->get_subscription(s_id);
+  Subscription* s1 = current_aor->get_subscription(s_id);
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -1551,7 +1552,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedSubscription)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_subscriptions` returns the new subscription
-  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
   ASSERT_TRUE(updated_subscriptions.find( s_id ) != updated_subscriptions.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1566,7 +1567,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedSubscription)
 
   // Add a binding and subscription to the original AoR
   std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
-  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  Binding* b1 = orig_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1581,7 +1582,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedSubscription)
   b1->_emergency_registration = false;
 
   std::string s_id = "1234";
-  AoR::Subscription* s1 = orig_aor->get_subscription(s_id);
+  Subscription* s1 = orig_aor->get_subscription(s_id);
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -1593,7 +1594,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedSubscription)
 
   // Add the same binding and subscription to the current AoR, but with updated
   // expiry time on the subscription.
-  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  Binding* b2 = current_aor->get_binding(b_id);
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
@@ -1607,7 +1608,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedSubscription)
   b2->_private_id = "5102175698@cw-ngv.com";
   b2->_emergency_registration = false;
 
-  AoR::Subscription* s2 = current_aor->get_subscription(s_id);
+  Subscription* s2 = current_aor->get_subscription(s_id);
   s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s2->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s2->_from_tag = std::string("4321");
@@ -1621,7 +1622,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedSubscription)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_subscriptions` returns the updated subscription
-  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
   ASSERT_TRUE(updated_subscriptions.find( s_id ) != updated_subscriptions.end());
   EXPECT_EQ((now + 600), updated_subscriptions[s_id]->_expires);
 
@@ -1637,7 +1638,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedSubscription)
 
   // Add a binding and subscription to the original AoR
   std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
-  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  Binding* b1 = orig_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1652,7 +1653,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedSubscription)
   b1->_emergency_registration = false;
 
   std::string s_id = "1234";
-  AoR::Subscription* s1 = orig_aor->get_subscription(s_id);
+  Subscription* s1 = orig_aor->get_subscription(s_id);
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -1663,7 +1664,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedSubscription)
   s1->_expires = now + 300;
 
   // Add the same binding to the current AoR, but not the subscription
-  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  Binding* b2 = current_aor->get_binding(b_id);
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
@@ -1681,7 +1682,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedSubscription)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_removed_subscriptions` returns the 'deleted' subscription
-  AoR::Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
+  Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
   ASSERT_TRUE(removed_subscriptions.find( s_id ) != removed_subscriptions.end());
 
   delete aor_pair; aor_pair = NULL;
@@ -1696,7 +1697,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedSubscription)
 
   // Add a binding and subscription to the original AoR
   std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
-  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  Binding* b1 = orig_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1711,7 +1712,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedSubscription)
   b1->_emergency_registration = false;
 
   std::string s_id = "1234";
-  AoR::Subscription* s1 = orig_aor->get_subscription(s_id);
+  Subscription* s1 = orig_aor->get_subscription(s_id);
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -1722,7 +1723,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedSubscription)
   s1->_expires = now + 300;
 
   // Add the same binding and subscription to the current AoR
-  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  Binding* b2 = current_aor->get_binding(b_id);
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
@@ -1736,7 +1737,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedSubscription)
   b2->_private_id = "5102175698@cw-ngv.com";
   b2->_emergency_registration = false;
 
-  AoR::Subscription* s2 = current_aor->get_subscription(s_id);
+  Subscription* s2 = current_aor->get_subscription(s_id);
   s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s2->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s2->_from_tag = std::string("4321");
@@ -1750,9 +1751,9 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedSubscription)
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
   // Check that `get_updated_subscriptions` and `get_removed_subscriptions` returns nothing
-  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
   ASSERT_TRUE(updated_subscriptions.find( s_id ) == updated_subscriptions.end());
-  AoR::Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
+  Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
   ASSERT_TRUE(removed_subscriptions.find( s_id ) == removed_subscriptions.end());
 
   delete aor_pair; aor_pair = NULL;

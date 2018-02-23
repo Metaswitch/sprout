@@ -83,7 +83,9 @@ get_settings()
         scscf=5054
         mmtel=5055
 
-        alias_list=""
+        local_alias_list=""
+        remote_alias_list=""
+        always_serve_remote_aliases="Y"
         default_session_expires=600
         signaling_dns_server=127.0.0.1
         blacklisted_scscf_uris=""
@@ -175,19 +177,19 @@ get_daemon_args()
         [ "$enable_orig_sip_to_tel_coerce" != "Y" ] || enable_orig_sip_to_tel_coerce_arg="--enable-orig-sip-to-tel-coerce"
 
         [ -z "$sprout_target_latency_us" ] || target_latency_us_arg="--target-latency-us=$sprout_target_latency_us"
-        [ -z "$cass_target_latency_us" ] || cass_target_latency_us_arg="--cass-target-latency-us=$cass_target_latency_us"
         [ -z "$sprout_max_tokens" ] || max_tokens_arg="--max-tokens=$sprout_max_tokens"
         [ -z "$sprout_init_token_rate" ] || init_token_rate_arg="--init-token-rate=$sprout_init_token_rate"
         [ -z "$sprout_min_token_rate" ] || min_token_rate_arg="--min-token-rate=$sprout_min_token_rate"
         [ -z "$sprout_max_token_rate" ] || max_token_rate_arg="--max-token-rate=$sprout_max_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
-        [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
         [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
         [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
         [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
         [ -z "$dummy_app_server" ] || dummy_app_server_arg="--dummy-app-server=$dummy_app_server"
         [ -z "$sprout_request_on_queue_timeout" ] || request_on_queue_timeout_arg="--request-on-queue-timeout=$sprout_request_on_queue_timeout"
+        [ -z "$alias_list" ] || deprecated_alias_list_arg="--alias=$alias_list"
+        [ "$always_serve_remote_aliases" != "Y" ] || always_serve_remote_aliases_arg="--always-serve-remote-aliases"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -213,9 +215,7 @@ get_daemon_args()
                      --http-threads=$num_http_threads
                      --record-routing-model=$sprout_rr_level
                      --default-session-expires=$default_session_expires
-                     $max_session_expires_arg
                      $target_latency_us_arg
-                     $cass_target_latency_us_arg
                      $max_tokens_arg
                      $init_token_rate_arg
                      $min_token_rate_arg
@@ -239,7 +239,10 @@ get_daemon_args()
                      --analytics=$log_directory
                      --log-file=$log_directory
                      --log-level=$log_level
-                     --alias=$public_ip,$public_hostname,$alias_list
+                     $deprecated_alias_list_arg
+                     --local-alias-list=$public_ip,$public_hostname,$local_alias_list
+                     --remote-alias-list=$remote_alias_list
+                     $always_serve_remote_aliases_arg
                      --homestead-timeout=$sprout_homestead_timeout_ms"
 
         if [ -n "$reg_max_expires" ]
@@ -250,31 +253,6 @@ get_daemon_args()
         if [ -n "$sub_max_expires" ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires=$sub_max_expires"
-        fi
-
-        if [ -n "$memento_threads" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --memento-threads=$memento_threads"
-        fi
-
-        if [ -n "$max_call_list_length" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --max-call-list-length=$max_call_list_length"
-        fi
-
-        if [ -n "$memento_notify_url" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --memento-notify-url=$memento_notify_url"
-        fi
-
-        if [ -n "$call_list_ttl" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl=$call_list_ttl"
-        fi
-
-        if [ -n "$memento" ] && [ -n "$cassandra_hostname" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --plugin-option=memento,cassandra,$cassandra_hostname"
         fi
 
         # TODO improve this so we don't have to have the same parameters
@@ -288,9 +266,6 @@ get_daemon_args()
         [ "$bgcf" = "" ]                          || DAEMON_ARGS="$DAEMON_ARGS --bgcf=$bgcf"
         [ "$bgcf_prefix" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --prefix-bgcf=$bgcf_prefix"
         [ "$bgcf_uri" = "" ]                      || DAEMON_ARGS="$DAEMON_ARGS --uri-bgcf=$bgcf_uri"
-        [ "$memento" = "" ]                       || DAEMON_ARGS="$DAEMON_ARGS --memento=$memento"
-        [ "$memento_prefix" = "" ]                || DAEMON_ARGS="$DAEMON_ARGS --prefix-memento=$memento_prefix"
-        [ "$memento_uri" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --uri-memento=$memento_uri"
         [ "$gemini" = "" ]                        || DAEMON_ARGS="$DAEMON_ARGS --gemini=$gemini"
         [ "$gemini_prefix" = "" ]                 || DAEMON_ARGS="$DAEMON_ARGS --prefix-gemini=$gemini_prefix"
         [ "$gemini_uri" = "" ]                    || DAEMON_ARGS="$DAEMON_ARGS --uri-gemini=$gemini_uri"

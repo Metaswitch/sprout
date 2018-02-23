@@ -1,5 +1,5 @@
 /*
- * @file hss_sip_mapping.cpp
+ * @file sm_sip_mapping.cpp
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -9,15 +9,12 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#include "hss_sip_mapping.h"
+#include "sm_sip_mapping.h"
+#include "xml_utils.h"
 
-#include "hssconnection.h"
-#include "pjutils.h"
-#include "stack.h"
-
-pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
-                                             std::string& regstate,
-                                             const char* sip_msg_type)
+pjsip_status_code determine_sm_sip_response(HTTPCode http_code,
+                                            std::string& regstate,
+                                            const char* sip_msg_type)
 {
   pjsip_status_code st_code = PJSIP_SC_OK;
 
@@ -30,7 +27,7 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
     switch (http_code)
     {
       case HTTP_OK:
-        TRC_ERROR("Rejecting %s request following failure to register on the HSS: %s",
+        TRC_DEBUG("Rejecting %s request following failure to register on the HSS: %s",
                   sip_msg_type, regstate.c_str());
 
         if (strcmp(sip_msg_type, "SUBSCRIBE") == 0)
@@ -53,7 +50,7 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
       case HTTP_NOT_FOUND:
         // The client shouldn't retry when the subscriber isn't present in the
         // HSS; reject with a 403 in this case.
-        TRC_ERROR("Rejecting %s request as subscriber not present on the HSS",
+        TRC_DEBUG("Rejecting %s request as subscriber not present on the HSS",
                   sip_msg_type);
 
         st_code = PJSIP_SC_FORBIDDEN;
@@ -64,7 +61,7 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
         // The HSS is unavailable - the client should retry on timeout but no
         // other Clearwater nodes should (as Sprout will already have retried on
         // timeout). Reject with a 504 (503 is used for overload).
-        TRC_ERROR("Rejecting %s request as unable to contact HSS: %d",
+        TRC_DEBUG("Rejecting %s request as unable to contact HSS: %d",
                   sip_msg_type, http_code);
 
         st_code = PJSIP_SC_SERVER_TIMEOUT;
@@ -73,14 +70,14 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
       case HTTP_SERVER_ERROR:
         // This is either a server error on the HSS, or a error decoding the
         // response
-        TRC_ERROR("Rejecting %s request following error communicating with the HSS",
+        TRC_DEBUG("Rejecting %s request following error communicating with the HSS",
                   sip_msg_type);
 
         st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
         break;
 
       default:
-        TRC_ERROR("Rejecting %s request following response %d from HSS",
+        TRC_DEBUG("Rejecting %s request following response %d from HSS",
                   sip_msg_type, http_code);
 
         st_code = PJSIP_SC_SERVER_TIMEOUT;

@@ -129,19 +129,6 @@ Priority: extra
 Depends: gemini-as (= ${binary:Version})
 Description: Debugging symbols for gemini, the Mobile Twinning Application Server plug-in
 
-Package: memento-as
-Architecture: any
-Depends: sprout-base
-Suggests: memento-as-dbg
-Description: memento-as, the Call List Application Server plug-in
-
-Package: memento-as-dbg
-Architecture: any
-Section: debug
-Priority: extra
-Depends: memento-as (= ${binary:Version})
-Description: Debugging symbols for memento-as, the Call List Application Server plug-in
-
 Package: call-diversion-as
 Architecture: any
 Depends: sprout-base
