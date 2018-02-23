@@ -2263,7 +2263,7 @@ TEST_F(SCSCFTest, TestWithoutEnumUserPhone)
 
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:sprout.homedomain;orig>";
-  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
 
@@ -2288,7 +2288,7 @@ TEST_F(SCSCFTest, TestWithoutEnumOffnet)
 
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:sprout.homedomain;orig>";
-  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
 

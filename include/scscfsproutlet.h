@@ -604,11 +604,18 @@ private:
   /// Get the base request that the S-CSCF should use when retrying a request.
   pjsip_msg* get_base_request();
 
-  /// SAS logs that the next hop URI is invalid and rejects the request with a
+  /// SAS logs that the request URI is invalid and rejects the request with a
   /// 400 Bad Request error (which also frees the request).
   ///
   /// @param req      - The request to reject
   void reject_invalid_uri(pjsip_msg* req);
+
+  /// SAS logs that the next hop URI is invalid and rejects the request with a
+  /// 400 Bad Request error (which also frees the request).
+  ///
+  /// @param req         - The request to reject
+  /// @param invalid_uri - The URI which caused it to be rejected
+  void reject_invalid_uri(pjsip_msg* req, const std::string& invalid_uri);
 
   /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
   /// HSS. This field should not be changed once it has been set by the
