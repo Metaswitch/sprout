@@ -13,8 +13,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          baseresolver.cpp \
                          sipresolver.cpp \
                          bono.cpp \
-                         registration_utils.cpp \
-                         hss_sip_mapping.cpp \
+                         sm_sip_mapping.cpp \
                          options.cpp \
                          sip_connection_pool.cpp \
                          flowtable.cpp \
@@ -31,7 +30,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          memcached_config.cpp \
                          impistore.cpp \
                          astaire_impistore.cpp \
-                         subscriber_data_manager.cpp \
+                         subscriber_data_utils.cpp \
+                         subscriber_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \
                          enumservice.cpp \
@@ -58,7 +58,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          acr.cpp \
                          signalhandler.cpp \
                          health_checker.cpp \
-                         notify_utils.cpp \
+                         notify_sender.cpp \
                          unique.cpp \
                          chronosconnection.cpp \
                          accesslogger.cpp \
@@ -98,9 +98,14 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          fifcservice.cpp \
                          event_statistic_accumulator.cpp \
                          aor.cpp \
+                         aor_utils.cpp \
                          astaire_aor_store.cpp \
                          sprout_xml_utils.cpp \
-                         rphservice.cpp
+                         rphservice.cpp \
+                         s4.cpp \
+                         s4_handlers.cpp \
+                         s4_chronoshandlers.cpp \
+                         registration_sender.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -143,9 +148,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        hssconnection_test.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
-                       subscriber_data_manager_test.cpp \
+                       subscriber_manager_test.cpp \
                        astaire_impistore_test.cpp \
-                       registrar_test.cpp \
                        bono_test.cpp \
                        bgcfservice_test.cpp \
                        options_test.cpp \
@@ -161,6 +165,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
+                       registrar_test.cpp \
                        subscription_test.cpp \
                        handlers_test.cpp \
                        chronoshandlers_test.cpp \
@@ -184,7 +189,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_analytics_logger.cpp \
                        mock_sproutlet.cpp \
                        session_expires_helper_test.cpp \
-                       mock_subscriber_data_manager.cpp \
+                       mock_subscriber_manager.cpp \
                        mock_chronos_connection.cpp \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
@@ -199,14 +204,24 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        testingcommon.cpp \
                        thread_dispatcher_test.cpp \
                        rphservice_test.cpp \
-                       mock_rph_service.cpp
+                       mock_rph_service.cpp \
+                       s4_test.cpp \
+                       mock_s4.cpp \
+                       s4_chronoshandlers_test.cpp \
+                       sprout_xml_utils_test.cpp \
+                       notify_sender_test.cpp \
+                       mock_notify_sender.cpp \
+                       registration_sender_test.cpp \
+                       mock_registration_sender.cpp \
+                       sprout_fv_test.cpp
 
 COVERAGE_ROOT := ..
-sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include
+sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/clearwater-s4/src/ut|^modules/app-servers/include/|modules/app-servers/test/
 
 SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
                           -I../include \
                           -I../modules/cpp-common/include \
+                          -I../modules/clearwater-s4/include \
                           -I../modules/app-servers/include \
                           -I../usr/include \
                           -I../modules/rapidjson/include \
@@ -214,6 +229,7 @@ SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
 
 sprout_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS}
 sprout_test_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS} \
+                        -I../modules/clearwater-s4/src/ut \
                         -I../modules/sipp \
                         -I../modules/app-servers/test \
                         -I../modules/gemini/include \
@@ -263,6 +279,7 @@ sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \
 PLUGIN_COMMON_CPPFLAGS := -fPIC \
                           -I../include \
                           -I../modules/cpp-common/include \
+                          -I../modules/clearwater-s4/include \
                           -I../modules/app-servers/include \
                           -I../modules/rapidjson/include \
                           `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --cflags libpjproject`
@@ -296,7 +313,7 @@ mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
 mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
 mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
+VPATH = ../modules/cpp-common/src ../modules/clearwater-s4/src ../modules/clearwater-s4/src/ut ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
 
 # Use valgrind suppression file for UT
 sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp

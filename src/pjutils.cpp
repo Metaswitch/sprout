@@ -169,6 +169,14 @@ std::string PJUtils::hdr_to_string(void* hdr)
 }
 
 
+std::string PJUtils::body_to_string(pjsip_msg_body* body)
+{
+  char buf[16384];
+  int len = body->print_body(body, buf, sizeof(buf));
+  return std::string(buf, len);
+}
+
+
 /// Returns a canonical IMS public user identity from a URI as per TS 23.003
 /// 13.4.
 std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
@@ -1277,6 +1285,13 @@ void PJUtils::run_callback_on_worker_thread(PJUtils::Callback* cb,
   }
 }
 
+void PJUtils::run_callback_on_worker_thread(std::function<void()>&& fn,
+                                            bool is_pjsip_thread)
+{
+  Callback* cb = new FunctorCallback(std::move(fn));
+  run_callback_on_worker_thread(cb, is_pjsip_thread);
+}
+
 /// This provides function similar to the pjsip_endpt_send_request method
 /// but includes setting the SAS trail.
 pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
@@ -2258,7 +2273,7 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
          ++it)
     {
       TRC_DEBUG("Adding CCF %s to PCFA header", it->c_str());
-      add_pcfa_param(&pcfa_hdr->ccf, pool, STR_CCF, *it);      
+      add_pcfa_param(&pcfa_hdr->ccf, pool, STR_CCF, *it);
     }
 
     for (std::deque<std::string>::const_iterator it = ecfs.begin();
@@ -2266,7 +2281,7 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
          ++it)
     {
       TRC_DEBUG("Adding ECF %s to PCFA header", it->c_str());
-      add_pcfa_param(&pcfa_hdr->ecf, pool, STR_ECF, *it);      
+      add_pcfa_param(&pcfa_hdr->ecf, pool, STR_ECF, *it);
     }
 
     pjsip_msg_add_hdr(msg, (pjsip_hdr*)pcfa_hdr);
@@ -2285,10 +2300,10 @@ void PJUtils::add_pcfa_param(pj_list_type *cf_list,
 
   // Check whether we need to quote the value.  We'll need to do this if
   // - its not already quoted
-  // - it contains characters other than those allowed for a host or 
+  // - it contains characters other than those allowed for a host or
   //   token (see RFC 3455, section 5.5)
-  // Note that we assume for simplicity that if the value starts with '[', 
-  // its an ipv6 address (int_parse_host in sip_parser.c makes the same 
+  // Note that we assume for simplicity that if the value starts with '[',
+  // its an ipv6 address (int_parse_host in sip_parser.c makes the same
   // assumption and the pjsip_HOST_SPEC doesn't cover IPv6 parsing).
   const char *inbuf = value.c_str();
   bool quote = false;
@@ -2313,13 +2328,13 @@ void PJUtils::add_pcfa_param(pj_list_type *cf_list,
   else
   {
     TRC_DEBUG("Use unquoted cf value %s", inbuf);
-    final_value = value;    
+    final_value = value;
   }
 
   new_param->value = pj_strdup3(pool, final_value.c_str());
 
-  pj_list_insert_before(cf_list, new_param);      
-}                             
+  pj_list_insert_before(cf_list, new_param);
+}
 
 /// Takes a SIP URI and turns it into its equivalent tel URI. This is used
 /// for SIP URIs that actually represent phone numbers, i.e. SIP URIs that
@@ -2827,6 +2842,37 @@ void PJUtils::add_top_header(pjsip_msg* msg, pjsip_hdr* hdr)
   }
 }
 
+bool PJUtils::is_param_in_generic_array_hdr(pjsip_msg* msg, pjsip_hdr_e htype, const pj_str_t* param_name)
+{
+  bool found = false;
+  pjsip_generic_array_hdr* hdr = (pjsip_generic_array_hdr*)
+                                 pjsip_msg_find_hdr(msg, htype, NULL);
+
+  while ((hdr != NULL) && !found)
+  {
+    for (unsigned int i = 0; i < hdr->count; i++)
+    {
+      found = (pj_stricmp(&hdr->values[i], param_name) == 0);
+      if (found) break;
+    }
+    hdr = (pjsip_generic_array_hdr*)
+                  pjsip_msg_find_hdr(msg, htype, hdr->next);
+  }
+  return found;
+}
+
+pjsip_routing_hdr* PJUtils::msg_get_last_routing_hdr_by_name(pjsip_msg* msg, const pj_str_t* name)
+{
+  pjsip_routing_hdr* hdr = NULL;
+  for (pjsip_routing_hdr* h = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, name, NULL);
+       h != NULL;
+      h = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, name, h->next))
+  {
+    hdr = h;
+  }
+  return hdr;
+}
+
 SIPEventPriorityLevel PJUtils::get_priority_of_message(const pjsip_msg* msg,
                                                        RPHService* rph_service,
                                                        SAS::TrailId trail)
@@ -2890,4 +2936,20 @@ SIPEventPriorityLevel PJUtils::get_priority_of_message(const pjsip_msg* msg,
   }
 
   return priority;
+}
+
+int PJUtils::expiry_for_binding(pjsip_contact_hdr* contact,
+                                pjsip_expires_hdr* expires,
+                                int max_expires)
+{
+  int expiry = (contact->expires != -1) ? contact->expires :
+               (expires != NULL) ? expires->ivalue :
+               max_expires;
+  if (expiry > max_expires)
+  {
+    // Expiry is too long, set it to the maximum.
+    expiry = max_expires;
+  }
+
+  return expiry;
 }

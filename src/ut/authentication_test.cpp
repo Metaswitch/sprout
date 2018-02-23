@@ -34,6 +34,7 @@ extern "C" {
 #include "md5.h"
 #include "fakesnmp.hpp"
 #include "mock_sas.h"
+#include "mock_snmp_counter_table.hpp"
 
 using namespace std;
 using namespace std;
@@ -99,8 +100,12 @@ public:
                                           PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                           "sprout.homedomain",
                                           additional_home_domains,
+                                          std::unordered_set<std::string>(),
+                                          true,
                                           sproutlets,
-                                          std::set<std::string>());
+                                          std::set<std::string>(),
+                                          nullptr,
+                                          nullptr);
 
     _tp = new TransportFlow(TransportFlow::Protocol::TCP,
                             stack_data.scscf_port,
@@ -160,7 +165,7 @@ public:
   void check_sas_correlator(std::string value, bool present=true)
   {
     bool found_value = false;
-    std::vector<MockSASMessage*> markers = mock_sas_find_marker_multiple(MARKED_ID_GENERIC_CORRELATOR);
+    std::vector<MockSASMessage*> markers = mock_sas_find_marker_multiple(MARKER_ID_GENERIC_CORRELATOR);
     for (MockSASMessage* marker : markers)
     {
       EXPECT_EQ(marker->var_params.size(), 1u);

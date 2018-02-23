@@ -83,7 +83,9 @@ get_settings()
         scscf=5054
         mmtel=5055
 
-        alias_list=""
+        local_alias_list=""
+        remote_alias_list=""
+        always_serve_remote_aliases="Y"
         default_session_expires=600
         signaling_dns_server=127.0.0.1
         blacklisted_scscf_uris=""
@@ -180,13 +182,14 @@ get_daemon_args()
         [ -z "$sprout_min_token_rate" ] || min_token_rate_arg="--min-token-rate=$sprout_min_token_rate"
         [ -z "$sprout_max_token_rate" ] || max_token_rate_arg="--max-token-rate=$sprout_max_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
-        [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
         [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
         [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
         [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
         [ -z "$dummy_app_server" ] || dummy_app_server_arg="--dummy-app-server=$dummy_app_server"
         [ -z "$sprout_request_on_queue_timeout" ] || request_on_queue_timeout_arg="--request-on-queue-timeout=$sprout_request_on_queue_timeout"
+        [ -z "$alias_list" ] || deprecated_alias_list_arg="--alias=$alias_list"
+        [ "$always_serve_remote_aliases" != "Y" ] || always_serve_remote_aliases_arg="--always-serve-remote-aliases"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -212,7 +215,6 @@ get_daemon_args()
                      --http-threads=$num_http_threads
                      --record-routing-model=$sprout_rr_level
                      --default-session-expires=$default_session_expires
-                     $max_session_expires_arg
                      $target_latency_us_arg
                      $max_tokens_arg
                      $init_token_rate_arg
@@ -237,7 +239,10 @@ get_daemon_args()
                      --analytics=$log_directory
                      --log-file=$log_directory
                      --log-level=$log_level
-                     --alias=$public_ip,$public_hostname,$alias_list
+                     $deprecated_alias_list_arg
+                     --local-alias-list=$public_ip,$public_hostname,$local_alias_list
+                     --remote-alias-list=$remote_alias_list
+                     $always_serve_remote_aliases_arg
                      --homestead-timeout=$sprout_homestead_timeout_ms"
 
         if [ -n "$reg_max_expires" ]

@@ -63,7 +63,6 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                                         const std::string& state,
                                         std::string subxml,
                                         std::string extra_params,
-                                        const std::string& wildcard,
                                         std::string chargingaddrsxml)
 {
   set_impu_result_internal(impu,
@@ -72,7 +71,6 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                            "",
                            subxml,
                            extra_params,
-                           wildcard,
                            chargingaddrsxml);
 }
 
@@ -82,7 +80,6 @@ void FakeHSSConnection::set_impu_result_with_prev(const std::string& impu,
                                                   const std::string& prev_state,
                                                   std::string subxml,
                                                   std::string extra_params,
-                                                  const std::string& wildcard,
                                                   std::string chargingaddrsxml)
 {
   set_impu_result_internal(impu,
@@ -91,7 +88,6 @@ void FakeHSSConnection::set_impu_result_with_prev(const std::string& impu,
                            prev_state,
                            subxml,
                            extra_params,
-                           wildcard,
                            chargingaddrsxml);
 }
 
@@ -101,7 +97,6 @@ void FakeHSSConnection::set_impu_result_internal(const std::string& impu,
                                                  const std::string& prev_state,
                                                  std::string subxml,
                                                  std::string extra_params,
-                                                 const std::string& wildcard,
                                                  std::string chargingaddrsxml)
 {
   std::string url = "/impu/" + Utils::url_escape(impu) + "/reg-data" + extra_params;
@@ -143,10 +138,10 @@ void FakeHSSConnection::delete_result(const std::string& url)
   _results.erase(url);
 }
 
-long FakeHSSConnection::put_for_xml_object(const std::string& path, 
-                                           std::string body, 
-                                           const bool& cache_allowed, 
-                                           rapidxml::xml_document<>*& root, 
+long FakeHSSConnection::put_for_xml_object(const std::string& path,
+                                           std::string body,
+                                           const bool& cache_allowed,
+                                           rapidxml::xml_document<>*& root,
                                            SAS::TrailId trail)
 {
   return FakeHSSConnection::get_xml_object(path,
@@ -270,7 +265,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   return http_code;
 }
 
-bool FakeHSSConnection::url_was_requested(const std::string& url, 
+bool FakeHSSConnection::url_was_requested(const std::string& url,
                                           const std::string& body)
 {
   return (_calls.find(UrlBody(url, body)) != _calls.end());

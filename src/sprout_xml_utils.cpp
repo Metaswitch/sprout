@@ -159,7 +159,12 @@ bool parse_ims_subscription(const std::string public_user_identity,
                             SAS::TrailId trail)
 {
   // The set of aliases consists of the set of public identities in the same
-  // Service Profile. It is a subset of the associated URIs.
+  // Service Profile, which also share the same service-specific data (ie. any
+  // AS that they are sent to will treat them in the same way).  It is a subset
+  // of the associated URIs.
+  // TODO - There is no way we can be certain that two identities in the same
+  // service profile are actually aliases, so we should rename our "aliases"
+  // variable to avoid confusion.
 
   // In order to find the set of aliases we want, we need to find the Service
   // Profile containing our public identity and then save off all of the public
@@ -263,8 +268,8 @@ bool parse_ims_subscription(const std::string public_user_identity,
           {
             current_sp_contains_public_id = true;
           }
-          else if (WildcardUtils::check_users_equivalent(
-                                                     identity_uri, public_user_identity))
+          else if (WildcardUtils::check_users_equivalent(identity_uri,
+                                                         public_user_identity))
           {
             found_multiple_matches = maybe_found_aliases;
             current_sp_maybe_contains_public_id = true;
@@ -296,10 +301,8 @@ bool parse_ims_subscription(const std::string public_user_identity,
       temp_aliases = sp_identities;
       maybe_found_aliases = true;
     }
-    else
-    {
-      sp_identities.clear();
-    }
+
+    sp_identities.clear();
   }
 
   if (aliases.empty())

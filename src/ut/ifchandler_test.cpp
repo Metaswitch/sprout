@@ -21,7 +21,6 @@
 #include "fakechronosconnection.hpp"
 
 #include "ifchandler.h"
-#include "registration_utils.h"
 
 using namespace std;
 
@@ -33,7 +32,6 @@ public:
   static FakeHSSConnection* _hss_connection;
   static AstaireAoRStore* _local_aor_store;
   static LocalStore* _local_data_store;
-  static SubscriberDataManager* _sdm;
   static IfcHandler* _ifc_handler;
   pjsip_msg* TEST_MSG;
 
@@ -45,13 +43,11 @@ public:
     _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
     _local_aor_store = new AstaireAoRStore(_local_data_store);
-    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _ifc_handler = new IfcHandler();
   }
 
   static void TearDownTestCase()
   {
-    delete _sdm; _sdm = NULL;
     delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _ifc_handler; _ifc_handler = NULL;
@@ -105,6 +101,13 @@ public:
   {
   }
 
+  void interpret_ifcs(Ifcs& ifcs,
+                      const SessionCase& session_case,
+                      bool is_registered,
+                      bool is_initial_registration,
+                      pjsip_msg* msg,
+                      std::vector<AsInvocation>& application_servers);
+
   void doBaseTest(string description,
                   string ifc,
                   pjsip_msg* msg,
@@ -132,7 +135,6 @@ FakeChronosConnection* IfcHandlerTest::_chronos_connection;
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
 LocalStore* IfcHandlerTest::_local_data_store;
 AstaireAoRStore* IfcHandlerTest::_local_aor_store;
-SubscriberDataManager* IfcHandlerTest::_sdm;
 IfcHandler* IfcHandlerTest::_ifc_handler;
 
 TEST_F(IfcHandlerTest, ServedUser)
@@ -196,6 +198,27 @@ TEST_F(IfcHandlerTest, ServedUser)
   EXPECT_EQ("tel:5755550099", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 }
 
+// Gets the application servers matched from the iFCs provided.
+void IfcHandlerTest::interpret_ifcs(Ifcs& ifcs,
+                                    const SessionCase& session_case,
+                                    bool is_registered,
+                                    bool is_initial_registration,
+                                    pjsip_msg* msg,
+                                    std::vector<AsInvocation>& application_servers)
+{
+  for (Ifc ifc : ifcs.ifcs_list())
+  {
+    if (ifc.filter_matches(session_case,
+                           is_registered,
+                           is_initial_registration,
+                           msg,
+                           0))
+    {
+      application_servers.push_back(ifc.as_invocation());
+    }
+  }
+}
+
 /// Test an iFC.
 void IfcHandlerTest::doBaseTest(string description,
                                 string ifc,
@@ -214,17 +237,12 @@ void IfcHandlerTest::doBaseTest(string description,
   char* cstr_ifc = strdup(ifc.c_str());
   root->parse<0>(cstr_ifc);
   Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
-  bool found_match;
-  RegistrationUtils::interpret_ifcs(*ifcs,
-                                    {},
-                                    IFCConfiguration(false,false,"",NULL,NULL),
-                                    sescase,
-                                    reg,
-                                    initial_registration,
-                                    msg,
-                                    application_servers,
-                                    found_match,
-                                    0);
+  interpret_ifcs(*ifcs,
+                 sescase,
+                 reg,
+                 initial_registration,
+                 msg,
+                 application_servers);
   delete ifcs;
   free(cstr_ifc);
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());

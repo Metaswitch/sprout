@@ -467,6 +467,7 @@ void Flow::set_identity(const pjsip_uri* uri,
 
 
 /// Called when the expiry timer pops.
+// LCOV_EXCL_START
 void Flow::expiry_timer()
 {
   // Scan through all the identities deleting any that have passed their
@@ -532,7 +533,7 @@ void Flow::expiry_timer()
 
   pthread_mutex_unlock(&_flow_lock);
 }
-
+// LCOV_EXCL_STOP
 
 /// Scan the list of identity for a default candidate.
 void Flow::select_default_identity()
@@ -543,8 +544,10 @@ void Flow::select_default_identity()
   {
     if (i->second.default_id)
     {
+      // LCOV_EXCL_START
       // Found a candidate default identity.
       _default_id = i->first;
+      // LCOV_EXCL_STOP
     }
   }
 }
@@ -635,6 +638,7 @@ void Flow::on_transport_state_changed(pjsip_transport *tp,
 
 
 /// Called by PJSIP when the expiry/idle timer expires.
+// LCOV_EXCL_START
 void Flow::on_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e)
 {
   TRC_DEBUG("%s timer expired for flow %p",
@@ -652,4 +656,4 @@ void Flow::on_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e)
     ((Flow*)e->user_data)->dec_ref();
   }
 }
-
+// LCOV_EXCL_STOP

@@ -12,7 +12,6 @@
 #include "constants.h"
 #include "sproutsasevent.h"
 #include "authenticationsproutlet.h"
-#include "registration_utils.h"
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
@@ -334,9 +333,9 @@ int AuthenticationSproutletTsx::calculate_challenge_expiration_time(pjsip_msg* r
        contact_hdr = (pjsip_contact_hdr*)
           pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
   {
-    expires = std::max(expires, RegistrationUtils::expiry_for_binding(contact_hdr,
-                                                                      expires_hdr,
-                                                                      _authentication->_max_expires));
+    expires = std::max(expires, PJUtils::expiry_for_binding(contact_hdr,
+                                                            expires_hdr,
+                                                            _authentication->_max_expires));
   }
 
   return expires + time(NULL);
@@ -685,7 +684,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     std::string opaque;
     opaque.assign(buf, sizeof(buf));
     TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
-    SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 1u);
+    SAS::Marker opaque_marker(trail(), MARKER_ID_GENERIC_CORRELATOR, 1u);
     opaque_marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
     opaque_marker.add_var_param(opaque);
     SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
@@ -1051,7 +1050,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       std::string opaque = PJUtils::pj_str_to_string(&credentials->opaque);
       TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
-      SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 2u);
+      SAS::Marker opaque_marker(trail(), MARKER_ID_GENERIC_CORRELATOR, 2u);
       opaque_marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
       opaque_marker.add_var_param(opaque);
       SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);

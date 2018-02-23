@@ -65,6 +65,8 @@ std::string pj_status_to_string(const pj_status_t status);
 
 std::string hdr_to_string(void* hdr);
 
+std::string body_to_string(pjsip_msg_body* body);
+
 std::string extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_uri* impu_uri);
 
 std::string public_id_from_uri(const pjsip_uri* uri);
@@ -194,14 +196,42 @@ public:
   virtual ~Callback() {}
 };
 
+/// @brief An implementation of a Callback that simply runs a callable function
+/// object that it has been passed.
+class FunctorCallback : public Callback
+{
+public:
+  /// Constructor.
+  ///
+  /// @param [in] fn - The function object to call when the callback is run. To
+  ///                  avoid implicitly copying large objects, this only takes a
+  ///                  function object by move (meaning the version owned by the
+  ///                  caller of the constructor is moved into the callback and
+  ///                  is no longer available to the caller).
+  FunctorCallback(std::function<void()>&& fn): _fn(fn) {}
+
+  /// Executes the stored callback.
+  void run() { return _fn(); }
+
+private:
+  /// The stored function object.
+  std::function<void()> _fn;
+};
+
 // A function that takes a token and a pjsip_event, and returns a Callback
 // object that can safely be run on another thread.
 typedef Callback* (*send_callback_builder)(void* token, pjsip_event* event);
 
 // Runs the specified callback on a worker thread.
 // `is_pjsip_thread` is used to allow a non-PJSIP owned thread (e.g. an HTTP
-// thread) to indicate that it can't possibly be the transport thread.
+// thread) to indicate that it can't possibly be the transport thread).
 void run_callback_on_worker_thread(PJUtils::Callback* cb,
+                                   bool is_pjsip_thread = true);
+
+// Runs the specified callable function object on a worker thread.
+// `is_pjsip_thread` is used to allow a non-PJSIP owned thread (e.g. an HTTP
+// thread) to indicate that it can't possibly be the transport thread).
+void run_callback_on_worker_thread(std::function<void()>&& fn,
                                    bool is_pjsip_thread = true);
 
 pj_status_t send_request(pjsip_tx_data* tdata,
@@ -388,6 +418,24 @@ bool is_param_in_top_route(const pjsip_msg* req,
 /// @param hdr        - The header to add
 void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
 
+/// Check whether a parameter is present in a specified pjsip_generic_array_hdr
+/// header of a message.
+//
+/// @param msg       the message to be searched
+/// @param htype     type of pjsip_generic_array_hdr header to be serached
+/// @param pname     name of the parameter to be searched for
+///
+/// @return          boolean indicating whether the parameter was found (true if found)
+bool is_param_in_generic_array_hdr(pjsip_msg* msg, pjsip_hdr_e htype, const pj_str_t* param_name);
+
+/// Get the last occurence of a pjsip_routing_hdr header from a message
+///
+/// @param msg       the message to be searched
+/// @param name      name of the header
+///
+/// @return          a pointer to the header, NULL pointer if not found
+pjsip_routing_hdr* msg_get_last_routing_hdr_by_name(pjsip_msg* msg, const pj_str_t* name);
+
 /// Gets the priority of a message, based on the Resource-Priority headers.
 /// The priority is an integer between 0 and 15, where 0 is the default
 /// priority and 15 is the highest priority.
@@ -400,6 +448,22 @@ void add_top_header(pjsip_msg* msg, pjsip_hdr* hdr);
 SIPEventPriorityLevel get_priority_of_message(const pjsip_msg* msg,
                                               RPHService* rph_service,
                                               SAS::TrailId trail);
+
+
+/// Get the expiry time for the binding represented by the contact header.
+///
+/// @param[in] contact     - The contact header. If the contact header has an
+///                          expires parameter we take the expiry value from it.
+/// @param[in] expires     - The expires header. May not be present. If it is,
+///                          we use its value if there's nothing on the contact
+///                          header.
+/// @param[in] max_expires - Default value - we use this if there's nothing on
+///                          the contact/expires header.
+///
+/// @return The expiry time for this binding.
+int expiry_for_binding(pjsip_contact_hdr* contact,
+                       pjsip_expires_hdr* expires,
+                       int max_expires);
 
 } // namespace PJUtils
 

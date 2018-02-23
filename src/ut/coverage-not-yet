@@ -3,23 +3,7 @@
 # tests to Sprout, and for which we have not yet written tests. New
 # code and new files should have 100% code coverage (by lines); it may
 # be acceptable to use exclusion markers to achieve this.
-modules/app-servers/include/appserver.h
-modules/app-servers/test/mockappserver.hpp
-
-# We don't fully exercise rapidjson
-modules/rapidjson/include/rapidjson/allocators.h
-modules/rapidjson/include/rapidjson/internal/stack.h
-modules/rapidjson/include/rapidjson/writer.h
-
+src/pjutils.cpp
 src/bono.cpp
 src/sip_connection_pool.cpp
-src/pjutils.cpp
-src/callservices.cpp
-src/stack.cpp
-src/websockets.cpp
-src/dnsresolver.cpp
-src/flowtable.cpp
-src/sipresolver.cpp
 src/sproutletappserver.cpp
-src/mmtel.cpp
-src/pluginloader.cpp
