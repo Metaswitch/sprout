@@ -57,7 +57,8 @@ TEST_F(RalfProcessorTest, RequestComplete)
   rr->message = "message";
   rr->trail = 0;
 
-  EXPECT_CALL(*_mock_client, send_request(AllOf(HasScheme("http"),
+  EXPECT_CALL(*_mock_client, send_request(AllOf(IsPost(),
+                                                HasScheme("http"),
                                                 HasServer("ralf"),
                                                 HasPath("path"),
                                                 HasBody("message"),
