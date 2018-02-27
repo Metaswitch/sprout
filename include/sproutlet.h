@@ -402,7 +402,8 @@ public:
   ///                             the passed in URI does not match a sproutlet.
   ///
   /// @return     The local hostname part of the URI.
-  virtual std::string get_local_hostname(const pjsip_sip_uri* uri) const = 0;
+  virtual std::string get_local_hostname(const pjsip_sip_uri* uri,
+                                         bool default_to_root=false) const = 0;
 };
 
 
@@ -769,9 +770,10 @@ protected:
   ///                             the passed in URI does not match a sproutlet.
   ///
   /// @return     The local hostname part of the URI.
-  std::string get_local_hostname(const pjsip_sip_uri* uri) const
+  std::string get_local_hostname(const pjsip_sip_uri* uri,
+                                 bool default_to_root=false) const
   {
-    return _helper->get_local_hostname(uri);
+    return _helper->get_local_hostname(uri, default_to_root);
   }
 
 protected:

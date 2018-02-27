@@ -557,7 +557,7 @@ public:
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
-  std::string get_local_hostname(const pjsip_sip_uri* uri) const;
+  std::string get_local_hostname(const pjsip_sip_uri* uri, bool default_to_root=false) const;
   bool is_network_func_boundary() const;
   bool is_internal_network_func_boundary() const;
   int get_depth() const { return _depth; };

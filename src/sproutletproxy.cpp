@@ -2098,9 +2098,10 @@ pjsip_sip_uri* SproutletWrapper::get_routing_uri(const pjsip_msg* req) const
   return routing_uri;
 }
 
-std::string SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri) const
+std::string SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri,
+                                                 bool default_to_root) const
 {
-  return _proxy->get_local_hostname(uri);
+  return _proxy->get_local_hostname(uri, default_to_root);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req, int allowed_host_state)
