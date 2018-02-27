@@ -6337,6 +6337,9 @@ TEST_F(SCSCFTest, MmtelCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)";
+
+  // Expect a call to get MMTEL conf for the callee, which returns simservs
+  // including call diversion to a new callee
   EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
     .WillOnce(DoAll(SetArgReferee<1>(simservs),
                     Return(true)));
@@ -6478,6 +6481,9 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                              <incoming-communication-barring active="false"/>
                              <outgoing-communication-barring active="false"/>
                            </simservs>)";
+
+  // Expect a call to get MMTEL conf for the callee, returning simservs that
+  // include call diversion to the forwarded callee
   EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
     .WillOnce(DoAll(SetArgReferee<1>(simservs1),
                     Return(true)));
@@ -6500,6 +6506,9 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                              <incoming-communication-barring active="false"/>
                              <outgoing-communication-barring active="false"/>
                            </simservs>)";
+
+  // Expect a call to get MMTEL conf for the forwarded callee, returning
+  // simservs that include call diversion to another forwarding number
   EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505555678@homedomain",_,_,_))
     .WillOnce(DoAll(SetArgReferee<1>(simservs2),
                     Return(true)));
@@ -6638,6 +6647,8 @@ TEST_F(SCSCFTest, MmtelFlow)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)";
 
+  // Expect a call to get MMTEL conf for the caller, returning a basic set of
+  // simservs, including identity presentation restriction
   EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
     .WillOnce(DoAll(SetArgReferee<1>(simservs),
                     Return(true)));
@@ -6763,6 +6774,8 @@ TEST_F(SCSCFTest, MmtelThenExternal)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)";
 
+  // Expect that we get calls to the XDMS to get simservs(MMTEL config) for
+  // the caller and callee, and return the basic set of service config above.
   EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
     .WillOnce(DoAll(SetArgReferee<1>(simservs),
                     Return(true)));
@@ -6922,6 +6935,8 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)";
 
+  // Expect two sets of calls to get the MMTEL config for caller and callee
+  // as we are testing multiple MMTEL flows here.
   EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
     .Times(2).WillRepeatedly(DoAll(SetArgReferee<1>(simservs),
                                    Return(true)));
@@ -10298,7 +10313,7 @@ class SCSCFTestWithRalf : public SCSCFTestBase
   static void SetUpTestCase()
   {
     SCSCFTestBase::SetUpTestCase();
-    _ralf_processor = new NiceMock<MockRalfProcessor>();
+    _ralf_processor = new MockRalfProcessor();
     _ralf_acr_factory = new RalfACRFactory(_ralf_processor, ACR::SCSCF);
   }
   static void TearDownTestCase()

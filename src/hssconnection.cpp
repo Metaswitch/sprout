@@ -203,10 +203,6 @@ HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
                                            rapidxml::xml_document<>*& root,
                                            SAS::TrailId trail)
 {
-  std::string raw_data;
-  std::map<std::string, std::string> rsp_headers;
-  std::vector<std::string> req_headers;
-
   HttpRequest req = _http->create_request(HttpClient::RequestType::PUT, path);
   req.set_body(body)
      .set_sas_trail(trail);
