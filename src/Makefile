@@ -9,6 +9,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          stack.cpp \
                          dnsparser.cpp \
                          dnscachedresolver.cpp \
+                         static_dns_cache.cpp \
                          baseresolver.cpp \
                          sipresolver.cpp \
                          bono.cpp \

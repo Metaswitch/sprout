@@ -1,5 +1,5 @@
 /**
- * @file enumservice.cpp class implementation for an ENUM service provider
+ * @file dnsresolver.cpp class implementation for a DNS resolver
  *
  * Copyright (C) Metaswitch Networks 2015
  * If license terms are provided to you in a COPYING file in the root directory

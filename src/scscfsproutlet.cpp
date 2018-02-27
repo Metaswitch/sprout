@@ -341,7 +341,7 @@ void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
   }
 }
 
-void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
+uint64_t SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
                                               bool video_call)
 {
   // Calculate how long it has taken to setup the session.
@@ -357,6 +357,8 @@ void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
   {
     _audio_session_setup_time_tbl->accumulate(ringing_usec);
   }
+
+  return ringing_usec;
 }
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
@@ -858,7 +860,15 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
       ((st_code == PJSIP_SC_RINGING) ||
        PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
   {
-    _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+    uint64_t setup_time = _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+    if (setup_time > 2000000)
+    {
+      pjsip_cid_hdr* cid = PJSIP_MSG_CID_HDR(rsp);
+      TRC_VERBOSE("Call setup time exceeded 2 seconds for Call-ID %.*s (was %lu us)",
+                  cid->id.slen,
+                  cid->id.ptr,
+                  setup_time);
+    }
     _record_session_setup_time = false;
   }
 }
@@ -1115,6 +1125,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
           {
             // Send a SIP 504 response if we got a 500/503 HTTP response.
+            TRC_VERBOSE("AS retargeting failed to lookup IFCs for served user");
             status_code = PJSIP_SC_SERVER_TIMEOUT;
           }
           else
@@ -1228,7 +1239,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       }
       else
       {
-        TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
+        TRC_VERBOSE("Failed to retrieve ServiceProfile for %s", served_user.c_str());
 
         if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
         {
