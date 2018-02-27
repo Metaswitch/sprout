@@ -15,19 +15,41 @@
 #include "ifc.h"
 #include "ifchandler.h"
 #include "fifcservice.h"
-#include "base_subscriber_manager.h"
 #include "pjutils.h"
 #include "snmp_success_fail_count_table.h"
 
-/// Registration sender class.
+/// @class RegistrationSender
 ///
 /// This class is responsible for sending 3rd party (de)registrations to
 /// application servers and running callbacks based on the success or failure
-/// of this registrations.
+/// of these registrations.
 class RegistrationSender
 {
 public:
-  /// Registrat sender constructor
+  /// @class DeregistrationEventConsumer
+  ///
+  /// If 3rd party registrations fail the user of the RegistrationSender may
+  /// need to take action to deregister some associated identities. This class
+  /// defines the interface that the user of the RegistrationSender must
+  /// implement in order to receive this notification.
+  class DeregistrationEventConsumer
+  {
+  public:
+    /// Called to notify the consumer that a subscriber must be de-registered.
+    ///
+    /// @param[in] public_id      The public identity to deregister. This is
+    ///                           not necessarily a primary IMPU.
+    /// @param[in] trail          SAS trail ID to use for logging.
+    ///
+    /// @return  HTTPCode indicating the success or failure of the
+    ///          deregistration operation.
+    virtual HTTPCode deregister_subscriber(const std::string& public_id,
+                                           SAS::TrailId trail) = 0;
+
+    virtual ~DeregistrationEventConsumer() {}
+  };
+
+  /// Registration sender constructor
   ///
   /// @param  ifc_configuration iFC configuration for fallback and dummy iFCs
   /// @param  fifc_service      Service to lookup fallback iFCs
@@ -44,12 +66,12 @@ public:
   /// Registration sender destructor
   virtual ~RegistrationSender();
 
-  /// Initializes the registration sender with a reference to the subscriber
-  /// manager
+  /// Initializes the registration sender with a reference to the consumer of
+  /// dregistration events
   ///
-  /// @param[in]  subscriber_manager
-  ///                           The subscriber manager
-  void initialize(BaseSubscriberManager* subscriber_manager);
+  /// @param[in]  dereg_event_consumer
+  ///                           The consumer of deregistration events
+  void register_dereg_event_consumer(DeregistrationEventConsumer* dereg_event_consumer);
 
   /// Registers a subscriber with its application servers
   ///
@@ -58,13 +80,14 @@ public:
   ///                           included in the body of 3rd party registers
   /// @param[in]  ok_response_msg
   ///                           The response to the REGISTER message. This may
-  ///                           be included in teh body of 3rd party registers
+  ///                           be included in the body of 3rd party registers
   /// @param[in]  served_user   The IMPU we are sending 3rd party registers for
   /// @param[in]  ifcs          The iFCs to parse to determine the 3rd party
   ///                           application servers
-  /// @param[in]  expires       The expiry of the received register
+  /// @param[in]  expires       The expiry of the received register. An expiry
+  ///                           of 0 results in a deregistration
   /// @param[in]  is_initial_registration
-  ///                           Whether or not the received registraion is an
+  ///                           Whether or not the received register is an
   ///                           initial registration
   /// @param[out] deregister_subscriber
   ///                           Whether to deregister the subscriber after this
@@ -82,7 +105,6 @@ public:
   /// Deregister a subscriber with its application servers
   ///
   /// @param[in]  served_user   The IMPU we are sending 3rd party deregisters for
-  ///
   /// @param[in]  ifcs          The iFCs to parse to determine the 3rd party
   ///                           application servers.
   /// @param[in]  trail         The SAS trail ID
@@ -91,7 +113,7 @@ public:
                                                    SAS::TrailId trail);
 
 private:
-  BaseSubscriberManager* _subscriber_manager;
+  DeregistrationEventConsumer* _dereg_event_consumer;
   IFCConfiguration _ifc_configuration;
   FIFCService* _fifc_service;
   SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
@@ -104,10 +126,10 @@ private:
   ///                           The received register message
   /// @param[in]  ifcs          The iFCs to parse to determine the 3rd party
   ///                           application servers
-  /// @param[in]  fallback_ifcs Any fallbakc iFCs that may appply to this
+  /// @param[in]  fallback_ifcs Any fallbakc iFCs that may apply to this
   ///                           register
   /// @param[in]  is_initial_registration
-  ///                           Whether or not the received registraion is an
+  ///                           Whether or not the received register is an
   ///                           initial registration
   /// @param[out] application_servers
   ///                           The matched application servers. Does not
@@ -120,7 +142,7 @@ private:
                                  const std::vector<Ifc>& fallback_ifcs,
                                  bool is_initial_registration,
                                  std::vector<AsInvocation>& application_servers,
-                                 bool& match_dummy_as,
+                                 bool& matched_dummy_as,
                                  SAS::TrailId trail);
 
   /// Sends a 3rd party register to an application server
@@ -130,13 +152,13 @@ private:
   ///                           included in the body of 3rd party registers
   /// @param[in]  ok_response_msg
   ///                           The response to the REGISTER message. This may
-  ///                           be included in teh body of 3rd party registers
+  ///                           be included in the body of 3rd party registers
   /// @param[in]  served_user   The IMPU we are sending 3rd party registers for
   /// @param[in]  as            The application server we are sending a 3rd
   ///                           party register to
   /// @param[in]  expires       The expiry of the received register
   /// @param[in]  is_initial_registration
-  ///                           Whether or not the received registraion is an
+  ///                           Whether or not the received register is an
   ///                           initial registration
   /// @param[in]  trail         The SAS trail ID
   void send_register_to_as(pjsip_msg* received_register_msg,
@@ -160,7 +182,7 @@ private:
   struct ThirdPartyRegData
   {
     RegistrationSender* registration_sender;
-    BaseSubscriberManager* subscriber_manager;
+    DeregistrationEventConsumer* dereg_event_consumer;
     std::string served_user;
     DefaultHandling default_handling;
     int expires;

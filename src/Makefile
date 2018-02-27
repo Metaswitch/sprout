@@ -9,10 +9,11 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          stack.cpp \
                          dnsparser.cpp \
                          dnscachedresolver.cpp \
+                         static_dns_cache.cpp \
                          baseresolver.cpp \
                          sipresolver.cpp \
                          bono.cpp \
-                         hss_sip_mapping.cpp \
+                         sm_sip_mapping.cpp \
                          options.cpp \
                          sip_connection_pool.cpp \
                          flowtable.cpp \
@@ -154,6 +155,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        options_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
+                       ifchandler_test.cpp \
                        sip_parser_test.cpp \
                        connection_tracker_test.cpp \
                        quiescing_manager_test.cpp \
@@ -163,6 +165,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
+                       registrar_test.cpp \
                        subscription_test.cpp \
                        handlers_test.cpp \
                        chronoshandlers_test.cpp \
@@ -208,10 +211,12 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        sprout_xml_utils_test.cpp \
                        notify_sender_test.cpp \
                        mock_notify_sender.cpp \
-                       registration_sender_test.cpp
+                       registration_sender_test.cpp \
+                       mock_registration_sender.cpp \
+                       sprout_fv_test.cpp
 
 COVERAGE_ROOT := ..
-sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/clearwater-s4/src/ut
+sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/clearwater-s4/src/ut|^modules/app-servers/include/|modules/app-servers/test/
 
 SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
                           -I../include \

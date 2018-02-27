@@ -147,6 +147,7 @@ public:
          registration;
          registration = registration->next_sibling("registration"), num_reg++)
     {
+      TRC_DEBUG("Checking notify for registration node");
       // Check if the registration element should have a wildcard identity. We pass
       // this in as a simple bool rather than use is_wildcard_identity, as using
       // the function in UT and production code will mask any issues with it.
@@ -175,6 +176,7 @@ public:
            contact;
            contact = contact->next_sibling("contact"), num_contacts++)
       {
+        TRC_DEBUG("Checking notify for each contact");
         EXPECT_EQ(contact_values[num_contacts].first, std::string(contact->first_attribute("state")->value()));
         EXPECT_EQ(contact_values[num_contacts].second, std::string(contact->first_attribute("event")->value()));
       }
@@ -233,7 +235,7 @@ private:
 
 // This test covers a mainline NOTIFY case. It checks the NOTIFY in detail,
 // covering the headers and the NOTIFY body.
-TEST_F(NotifySenderTest, NotifyCheckInDetails)
+TEST_F(NotifySenderTest, NotifyCheckInDetail)
 {
   // Create the two AoRs to pass in. The original AoR is empty, the new AoR
   // has a single binding and single subscription. We set the interesting
@@ -310,6 +312,7 @@ TEST_F(NotifySenderTest, NotifySubscriberAdminDeregister)
   std::string aor_id = "sip:1234567890@homedomain";
   AoR* orig_aor = AoRTestUtils::create_simple_aor(aor_id);
   AoR* updated_aor = new AoR(aor_id);
+  updated_aor->_associated_uris.add_uri(aor_id, false);
 
   _notify_sender->send_notifys(aor_id,
                                *orig_aor,
@@ -325,7 +328,6 @@ TEST_F(NotifySenderTest, NotifySubscriberAdminDeregister)
   // subscription is correct.
   check_subscription_state_header(out, "terminated;reason=deactivated");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, TERMINATED, {TERMINATED_DEACTIVATED}, impus);
@@ -404,6 +406,60 @@ TEST_F(NotifySenderTest, MainlineNoChanges)
   delete updated_aor; updated_aor = NULL;
 }
 
+// A NOTIFY will be sent for refreshed subscription
+TEST_F(NotifySenderTest, NotifySubscriberRefreshedSubscription)
+{
+  std::string aor_id = "sip:1234567890@homedomain";
+  AoR* orig_aor = AoRTestUtils::create_simple_aor(aor_id, true);
+  AoR* updated_aor = AoRTestUtils::create_simple_aor(aor_id, true);
+  updated_aor->get_subscription(AoRTestUtils::SUBSCRIPTION_ID)->_refreshed = true;
+
+  _notify_sender->send_notifys(aor_id,
+                               *orig_aor,
+                               *updated_aor,
+                               SubscriberDataUtils::EventTrigger::ADMIN,
+                               time(NULL),
+                               0);
+
+  // NOTIFY will be sent despite no change in binding
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  check_subscription_state_header(out, "active;expires=300");
+
+  // Tidy up
+  delete orig_aor; orig_aor = NULL;
+  delete updated_aor; updated_aor = NULL;
+}
+
+// A NOTIFY will be sent for shortened subscription - check the expiry of the
+// subscription.
+TEST_F(NotifySenderTest, NotifySubscriberShortenedSubscription)
+{
+  std::string aor_id = "sip:1234567890@homedomain";
+  AoR* orig_aor = AoRTestUtils::create_simple_aor(aor_id, true);
+  AoR* updated_aor = AoRTestUtils::create_simple_aor(aor_id, true);
+  updated_aor->get_subscription(AoRTestUtils::SUBSCRIPTION_ID)->_expires -= 10;
+
+  _notify_sender->send_notifys(aor_id,
+                               *orig_aor,
+                               *updated_aor,
+                               SubscriberDataUtils::EventTrigger::ADMIN,
+                               time(NULL),
+                               0);
+
+  // NOTIFY will be sent despite no change in binding
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the expiry of the subscription has been shortened.
+  pjsip_msg* out = current_txdata()->msg;
+  check_subscription_state_header(out, "active;expires=290");
+
+  // Tidy up
+  inject_msg(respond_to_current_txdata(200));
+  delete orig_aor; orig_aor = NULL;
+  delete updated_aor; updated_aor = NULL;
+}
+
 // Change the Associated URIs - the NOTIFY should contain the correct
 // associated URIs, and the bindings should be unchanged.
 TEST_F(NotifySenderTest, NotifyChangedAssociatedURIs)
@@ -427,7 +483,6 @@ TEST_F(NotifySenderTest, NotifyChangedAssociatedURIs)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED}, impus);
@@ -465,7 +520,6 @@ TEST_F(NotifySenderTest, NotifyBarredAssociatedURIs)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   impus.push_back(std::make_pair("sip:1234567892@homedomain", false));
@@ -503,7 +557,6 @@ TEST_F(NotifySenderTest, NotifyWildcardAssociatedURIs)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   impus.push_back(std::make_pair("sip:!.*!", true));
@@ -544,7 +597,6 @@ TEST_F(NotifySenderTest, NotifyBarredAndWildcardedAssociatedURIs)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   impus.push_back(std::make_pair("sip:1234567892@homedomain", false));
@@ -580,10 +632,42 @@ TEST_F(NotifySenderTest, NotifySubscriberShortenedBinding)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_SHORTENED}, impus);
+
+  // Tidy up
+  inject_msg(respond_to_current_txdata(200));
+  delete doc;
+  delete orig_aor; orig_aor = NULL;
+  delete updated_aor; updated_aor = NULL;
+}
+
+// Test a NOTIFY when contact URI is changed - the contact will be deactivated
+// first, and the new contact will be created
+TEST_F(NotifySenderTest, NotifySubscriberChangedBinding)
+{
+  std::string aor_id = "sip:1234567890@homedomain";
+  AoR* orig_aor = AoRTestUtils::create_simple_aor(aor_id);
+  AoR* updated_aor = AoRTestUtils::create_simple_aor(aor_id);
+  updated_aor->get_binding(AoRTestUtils::BINDING_ID)->_uri = "sip:somethingelse@homedomain";
+
+  _notify_sender->send_notifys(aor_id,
+                               *orig_aor,
+                               *updated_aor,
+                               SubscriberDataUtils::EventTrigger::ADMIN,
+                               time(NULL),
+                               0);
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+
+  // Check the NOTIFY body - the regitration includes a deactivated contact and
+  // a created contact.
+  rapidxml::xml_document<>* doc = parse_notify_body(out);
+  std::vector<std::pair<std::string, bool>> impus;
+  impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
+  check_notify_registration_nodes(doc, ACTIVE, {TERMINATED_DEACTIVATED, ACTIVE_CREATED}, impus);
 
   // Tidy up
   inject_msg(respond_to_current_txdata(200));
@@ -614,7 +698,6 @@ TEST_F(NotifySenderTest, NotifySubscriberRefreshedBinding)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REFRESHED}, impus);
@@ -651,7 +734,6 @@ TEST_F(NotifySenderTest, NotifySubscriberExpiredBinding)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {TERMINATED_EXPIRED, ACTIVE_REGISTERED}, impus);
@@ -688,7 +770,6 @@ TEST_F(NotifySenderTest, NotifySubscriberUnregisteredBinding)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {TERMINATED_UNREGISTERED, ACTIVE_REGISTERED}, impus);
@@ -722,7 +803,6 @@ TEST_F(NotifySenderTest, NotifySubscriberUserRemoveSubscription)
   // subscription is correct.
   check_subscription_state_header(out, "terminated;reason=timeout");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED}, impus);
@@ -756,7 +836,6 @@ TEST_F(NotifySenderTest, NotifySubscriberExpiredSubscription)
   // subscription is correct.
   check_subscription_state_header(out, "terminated;reason=timeout");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED}, impus);
@@ -797,7 +876,6 @@ TEST_F(NotifySenderTest, NotifyEmergencyBinding)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED}, impus);
@@ -836,7 +914,6 @@ TEST_F(NotifySenderTest, NotifyMultipleBindingChanges)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {TERMINATED_UNREGISTERED, ACTIVE_REGISTERED, ACTIVE_CREATED}, impus);
@@ -872,7 +949,6 @@ TEST_F(NotifySenderTest, NotifyTwoSubscriptions)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED}, impus);
@@ -885,7 +961,6 @@ TEST_F(NotifySenderTest, NotifyTwoSubscriptions)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED}, impus);
 
   // Tidy up
@@ -927,7 +1002,6 @@ TEST_F(NotifySenderTest, NotifyOneNotifyIfOneSubscriptionChanged)
   EXPECT_EQ("From: <sip:12345@cw-ngv.com>;tag=1234", get_headers(out, "From"));
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED}, impus);
@@ -968,7 +1042,6 @@ TEST_F(NotifySenderTest, NotifyTwoSubscriptionsBindingChange)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   rapidxml::xml_document<>* doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   std::vector<std::pair<std::string, bool>> impus;
   impus.push_back(std::make_pair("sip:1234567890@homedomain", false));
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED, ACTIVE_CREATED}, impus);
@@ -981,7 +1054,6 @@ TEST_F(NotifySenderTest, NotifyTwoSubscriptionsBindingChange)
   // subscription is correct.
   check_subscription_state_header(out, "active;expires=300");
   doc = parse_notify_body(out);
-  check_notify_general_info(doc);
   check_notify_registration_nodes(doc, ACTIVE, {ACTIVE_REGISTERED, ACTIVE_CREATED}, impus);
 
   // Tidy up

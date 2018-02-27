@@ -215,7 +215,7 @@ public:
   {
     if (_flush_required)
     {
-      SAS::Marker flush_marker(_trail, MARKED_ID_FLUSH);
+      SAS::Marker flush_marker(_trail, MARKER_ID_FLUSH);
       SAS::report_marker(flush_marker);
     }
   }

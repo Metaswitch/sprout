@@ -22,12 +22,12 @@ extern "C" {
 #include "aor.h"
 #include "handlers.h"
 #include "log.h"
-#include "ifchandler.h"
 #include "stack.h"
 #include "pjutils.h"
 #include "sproutsasevent.h"
 #include "uri_classifier.h"
 #include "sprout_xml_utils.h"
+#include "subscriber_data_utils.h"
 
 
 static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_str)
@@ -149,11 +149,14 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
 
 HTTPCode DeregistrationTask::handle_request()
 {
+  TRC_DEBUG("Handling deregistration request");
+
   HTTPCode rc = HTTP_OK;
   std::set<std::string> impis_to_delete;
 
   for (std::pair<std::string, std::string> binding : _bindings)
   {
+    TRC_DEBUG("Deregister binding %s via subscriber manager", binding.first.c_str());
     rc = deregister_bindings(binding.first,
                              binding.second,
                              impis_to_delete);
@@ -161,16 +164,14 @@ HTTPCode DeregistrationTask::handle_request()
   }
 
   // Delete IMPIs from the store.
-  for(std::set<std::string>::iterator impi = impis_to_delete.begin();
-      impi != impis_to_delete.end();
-      ++impi)
+  for(std::string impi : impis_to_delete)
   {
-    TRC_DEBUG("Delete %s from the IMPI store(s)", impi->c_str());
+    TRC_DEBUG("Delete %s from the IMPI store(s)", impi.c_str());
 
-    delete_impi_from_store(_cfg->_local_impi_store, *impi);
+    delete_impi_from_store(_cfg->_local_impi_store, impi);
     for (ImpiStore* store: _cfg->_remote_impi_stores)
     {
-      delete_impi_from_store(store, *impi);
+      delete_impi_from_store(store, impi);
     }
   }
 
@@ -207,38 +208,45 @@ HTTPCode DeregistrationTask::deregister_bindings(
                                          std::set<std::string>& impis_to_delete)
 {
   Bindings bindings;
+  std::vector<std::string> binding_ids;
+  Bindings unused_bindings;
 
-  HTTPCode rc = _cfg->_sm->get_bindings(aor_id,
-                                        bindings,
-                                        trail());
+  // Get bindings in this AoR from database
+  HTTPCode rc = _cfg->_sm->get_bindings(aor_id, bindings, trail());
   if (rc != HTTP_OK)
   {
     return rc;
   }
 
-  std::vector<std::string> binding_ids;
-
+  // Go through bindings to find those to remove from database and IMPIs to
+  // delete from store
   for (BindingPair binding : bindings)
   {
     if (private_id.empty() || private_id == binding.second->_private_id)
     {
       if (!binding.second->_private_id.empty())
       {
-        // Record the IMPIs that we need to delete as a result of deleting
-        // this binding.
+        TRC_DEBUG("IMPI %s needs to be deleted", binding.second->_private_id.c_str());
         impis_to_delete.insert(binding.second->_private_id);
       }
 
+      TRC_DEBUG("Binding %s needs to be removed", binding.first.c_str());
       binding_ids.push_back(binding.first);
     }
   }
 
-  Bindings unused_bindings;
-  return _cfg->_sm->remove_bindings(aor_id,
-                                    binding_ids,
-                                    SubscriberDataUtils::EventTrigger::HSS,
-                                    unused_bindings,
-                                    trail());
+  SubscriberDataUtils::delete_bindings(bindings);
+
+  // Remove these bindings via subscriber manager
+  rc = _cfg->_sm->remove_bindings(aor_id,
+                                  binding_ids,
+                                  SubscriberDataUtils::EventTrigger::HSS,
+                                  unused_bindings,
+                                  trail());
+
+  SubscriberDataUtils::delete_bindings(unused_bindings);
+
+  return rc;
 }
 
 HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
@@ -324,6 +332,18 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
+// Extract IMPU from HTTP request
+std::string extract_impu(HttpStack::Request& request)
+{
+  // URL is formatted as /impu/<public ID>/<element>
+  const std::string prefix = "/impu/";
+  std::string full_path = request.full_path();
+  size_t end_of_impu = full_path.find('/', prefix.length());
+  std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
+  TRC_DEBUG("Extracted impu %s", impu.c_str());
+  return impu;
+}
+
 // Get cached bindings.
 void GetBindingsTask::run()
 {
@@ -338,14 +358,7 @@ void GetBindingsTask::run()
   SAS::Marker start_marker(trail(), MARKER_ID_START, 3u);
   SAS::report_marker(start_marker);
 
-  // Extract the IMPU that has been requested. The URL is of the form
-  //   /impu/<public ID>/<element>
-  // When <element> is either "bindings" or "subscriptions"
-  const std::string prefix = "/impu/";
-  std::string full_path = _req.full_path();
-  size_t end_of_impu = full_path.find('/', prefix.length());
-  std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
-  TRC_DEBUG("Extracted impu %s", impu.c_str());
+  std::string impu = extract_impu(_req);
 
   Bindings bindings;
   HTTPCode rc = _cfg->_sm->get_bindings(impu, bindings, trail());
@@ -354,52 +367,7 @@ void GetBindingsTask::run()
 
   send_http_reply(rc);
 
-  for (BindingPair b : bindings)
-  {
-    delete b.second; b.second = NULL;
-  }
-
-  SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
-  SAS::report_marker(end_marker);
-
-  delete this;
-  return;
-}
-
-// Get cached subscriptions.
-void GetSubscriptionsTask::run()
-{
-  // This interface is read only so reject any non-GETs.
-  if (_req.method() != htp_method_GET)
-  {
-    send_http_reply(HTTP_BADMETHOD);
-    delete this;
-    return;
-  }
-
-  SAS::Marker start_marker(trail(), MARKER_ID_START, 3u);
-  SAS::report_marker(start_marker);
-
-  // Extract the IMPU that has been requested. The URL is of the form
-  //   /impu/<public ID>/<element>
-  // When <element> is either "bindings" or "subscriptions"
-  const std::string prefix = "/impu/";
-  std::string full_path = _req.full_path();
-  size_t end_of_impu = full_path.find('/', prefix.length());
-  std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
-  TRC_DEBUG("Extracted impu %s", impu.c_str());
-
-  Subscriptions subscriptions;
-  HTTPCode rc = _cfg->_sm->get_subscriptions(impu, subscriptions, trail());
-  std::string content = serialize_data(subscriptions);
-  _req.add_content(content);
-
-  send_http_reply(rc);
-
-  for (SubscriptionPair s : subscriptions)
-  {
-    delete s.second; s.second = NULL;
-  }
+  SubscriberDataUtils::delete_bindings(bindings);
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
@@ -430,6 +398,38 @@ std::string GetBindingsTask::serialize_data(
   writer.EndObject();
 
   return sb.GetString();
+}
+
+// Get cached subscriptions.
+void GetSubscriptionsTask::run()
+{
+  // This interface is read only so reject any non-GETs.
+  if (_req.method() != htp_method_GET)
+  {
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 3u);
+  SAS::report_marker(start_marker);
+
+  std::string impu = extract_impu(_req);
+
+  Subscriptions subscriptions;
+  HTTPCode rc = _cfg->_sm->get_subscriptions(impu, subscriptions, trail());
+  std::string content = serialize_data(subscriptions);
+  _req.add_content(content);
+
+  send_http_reply(rc);
+
+  SubscriberDataUtils::delete_subscriptions(subscriptions);
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
+  SAS::report_marker(end_marker);
+
+  delete this;
+  return;
 }
 
 std::string GetSubscriptionsTask::serialize_data(
@@ -479,7 +479,6 @@ void DeleteImpuTask::run()
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
   HTTPCode sc = _cfg->_sm->deregister_subscriber(impu,
-                                                 SubscriberDataUtils::EventTrigger::ADMIN,
                                                  trail());
 
   send_http_reply(sc);

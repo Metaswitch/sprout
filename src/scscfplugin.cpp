@@ -180,14 +180,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
                                                                       ".1.2.826.0.1.1578918.9.3.11");
 
-    // EM-TODO delete these (now created in main).
-    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
-                                                                                   ".1.2.826.0.1.1578918.9.3.12");
-    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
-                                                                                 ".1.2.826.0.1.1578918.9.3.13");
-    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
-                                                                                 ".1.2.826.0.1.1578918.9.3.14");
-
     _registrar_sproutlet = new RegistrarSproutlet(REGISTRAR_SERVICE_NAME,
                                                   0,
                                                   "",
@@ -197,9 +189,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                   subscriber_manager,
                                                   scscf_acr_factory,
                                                   opt.reg_max_expires,
-                                                  opt.force_third_party_register_body,
-                                                  &reg_stats_tbls,
-                                                  &third_party_reg_stats_tbls); // EM-TODO remove third party reg arguments
+                                                  &reg_stats_tbls);
 
     ok = ok && _registrar_sproutlet->init();
     sproutlets.push_front(_registrar_sproutlet);

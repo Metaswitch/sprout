@@ -89,6 +89,7 @@ extern "C" {
 #include "sprout_alarmdefinition.h"
 #include "sproutlet_options.h"
 #include "astaire_impistore.h"
+#include "updater.h"
 
 enum OptionTypes
 {
@@ -104,7 +105,6 @@ enum OptionTypes
   OPT_MIN_TOKEN_RATE,
   OPT_MAX_TOKEN_RATE,
   OPT_EXCEPTION_MAX_TTL,
-  OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
   OPT_HTTP_BLACKLIST_DURATION,
   OPT_ASTAIRE_BLACKLIST_DURATION,
@@ -170,7 +170,6 @@ const static struct pj_getopt_option long_opt[] =
   { "hss",                          required_argument, 0, 'H'},
   { "record-routing-model",         required_argument, 0, 'C'},
   { "default-session-expires",      required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-  { "max-session-expires",          required_argument, 0, OPT_MAX_SESSION_EXPIRES},
   { "target-latency-us",            required_argument, 0, OPT_TARGET_LATENCY_US},
   { "xdms",                         required_argument, 0, 'X'},
   { "ralf",                         required_argument, 0, 'G'},
@@ -339,9 +338,6 @@ static void usage(void)
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request\n"
-       "                            (in seconds. Min 90. Defaults to 600)\n"
-       "     --max-session-expires <expiry>\n"
-       "                            The maximum allowed session expiry period.\n"
        "                            (in seconds. Min 90. Defaults to 600)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
@@ -981,25 +977,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
           TRC_WARNING("Invalid value for default session expiry: '%s'. "
                       "The default value of %d will be used.",
                       pj_optarg, options->default_session_expires);
-        }
-      }
-      break;
-
-    case OPT_MAX_SESSION_EXPIRES:
-      {
-        int max_session_expires;
-        bool rc = validated_atoi(pj_optarg, max_session_expires);
-
-        if ((rc) && max_session_expires >= MIN_SESSION_EXPIRES)
-        {
-          options->max_session_expires = max_session_expires;
-          TRC_INFO("Max session expiry time set to %d", max_session_expires);
-        }
-        else
-        {
-          TRC_WARNING("Invalid value for max session expiry: '%s'. "
-                      "The default value of %d will be used.",
-                      pj_optarg, options->max_session_expires);
         }
       }
       break;
@@ -1697,7 +1674,6 @@ int main(int argc, char* argv[])
   opt.sas_server = "0.0.0.0";
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
-  opt.max_session_expires = 10 * 60;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
   opt.http_address = "127.0.0.1";
@@ -2058,7 +2034,15 @@ int main(int argc, char* argv[])
                                            hc);
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
+  dns_resolver = new DnsCachedResolver(opt.dns_servers,
+                                       opt.dns_timeout,
+                                       "/etc/clearwater/dns.json");
+
+  // Reload dns.json on SIGHUP
+  Updater<void, DnsCachedResolver>* dns_updater =
+         new Updater<void, DnsCachedResolver>(dns_resolver,
+                                              std::mem_fun(&DnsCachedResolver::reload_static_records));
+
   if (opt.pcscf_enabled)
   {
     sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration, 0);
@@ -2093,7 +2077,6 @@ int main(int argc, char* argv[])
                       sip_resolver,
                       opt.record_routing_model,
                       opt.default_session_expires,
-                      opt.max_session_expires,
                       opt.sip_tcp_connect_timeout,
                       opt.sip_tcp_send_timeout,
                       quiescing_mgr,
@@ -2277,11 +2260,11 @@ int main(int argc, char* argv[])
   // Set up the SM and S4s
   for (AoRStore* store : remote_aor_stores)
   {
-    S4* remote_s4 = new S4("TODO SITE NAME", store);
+    S4* remote_s4 = new S4("Remote S4", store);
     remote_s4s.push_back(remote_s4);
   }
 
-  s4 = new S4("TODO LOCAL SITE NAME",
+  s4 = new S4("Local S4",
               chronos_connection,
               "/timers",
               local_aor_store,
@@ -2621,6 +2604,7 @@ int main(int argc, char* argv[])
   delete enum_service;
   delete scscf_acr_factory;
 
+  delete dns_updater;
   delete sip_resolver;
   delete http_resolver;
   delete astaire_resolver;

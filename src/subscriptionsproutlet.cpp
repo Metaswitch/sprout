@@ -31,7 +31,7 @@ extern "C" {
 #include "contact_filtering.h"
 #include "subscriptionsproutlet.h"
 #include "uri_classifier.h"
-#include "hss_sip_mapping.h"
+#include "sm_sip_mapping.h"
 
 /// SubscriptionSproutlet constructor
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
@@ -332,9 +332,11 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     TRC_DEBUG("Adding/updating the subscription with ID %s",
               new_subscription->get_id().c_str());
 
-    rc = _subscription->_sm->update_subscription(
+    Subscriptions new_subscriptions;
+    new_subscriptions.insert(std::make_pair(new_subscription->get_id(), new_subscription));
+    rc = _subscription->_sm->update_subscriptions(
                    public_id,
-                   std::make_pair(new_subscription->get_id(), new_subscription),
+                   new_subscriptions,
                    irs_info,
                    trail_id);
   }
@@ -343,13 +345,14 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     TRC_DEBUG("Removing the subscription with ID %s",
               new_subscription->get_id().c_str());
 
-    rc = _subscription->_sm->remove_subscription(public_id,
-                                                 new_subscription->get_id(),
-                                                 irs_info,
-                                                 trail_id);
+    rc = _subscription->_sm->remove_subscriptions(public_id,
+                                                  {new_subscription->get_id()},
+                                                  irs_info,
+                                                  trail_id);
   }
 
-  pjsip_status_code st_code = subscribe_convert_to_sip(rc);
+  pjsip_status_code st_code =
+                 determine_sm_sip_response(rc, irs_info._regstate, "SUBSCRIBE");
 
   pjsip_msg* rsp = create_response(req, st_code);
 
@@ -365,6 +368,13 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(get_pool(rsp),
                                                               expiry);
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)expires_hdr);
+
+    // Add the contact header
+    pjsip_contact_hdr* contact_hdr = pjsip_contact_hdr_create(get_pool(rsp));
+    pjsip_name_addr* contact_uri = pjsip_name_addr_create(get_pool(rsp));
+    contact_uri->uri = (pjsip_uri*)stack_data.scscf_uri;
+    contact_hdr->uri = (pjsip_uri*)contact_uri;
+    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)contact_hdr);
 
     // Add a P-Charging-Function-Addresses header to the successful SUBSCRIBE
     // response containing the charging addresses returned by the HSS.
@@ -495,32 +505,4 @@ Subscription* SubscriptionSproutletTsx::create_subscription(pjsip_msg* req,
   subscription->_expires = now + expiry;
 
   return subscription;
-}
-
-// Convert the HTTPCode from the subscriber manager to the SIP code to send to
-// the caller.
-pjsip_status_code SubscriptionSproutletTsx::subscribe_convert_to_sip(HTTPCode rc)
-{
-  pjsip_status_code st_code;
-
-  switch (rc)
-  {
-    case HTTP_OK:
-      st_code = PJSIP_SC_OK;
-      break;
-    case HTTP_NOT_FOUND:
-    case HTTP_FORBIDDEN:
-      st_code = PJSIP_SC_FORBIDDEN;
-      break;
-    case HTTP_TEMP_UNAVAILABLE:
-      st_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
-      break;
-    case HTTP_SERVER_ERROR:
-      st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-      break;
-    default:
-      st_code = PJSIP_SC_SERVER_TIMEOUT;
-  }
-
-  return st_code;
 }

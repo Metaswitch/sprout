@@ -194,16 +194,17 @@ string SubscribeMessage::get()
   return ret;
 }
 
-/// Save off the SubscriptionPair. We can't just use SaveArg, as this only
-/// saves off the SubscriptionPair, not the SubscriptionPair members. This
-/// means that the subscription object has been deleted before we can
-/// check it. This allows us to create a copy of the Subscription object
-/// we can check against. The caller is responsible for deleting the copied
-/// object.
-ACTION_P2(SaveSubscriptionPair, first, second)
+/// Save off the SubscriptionPair in the Subscriptions map. We can't just use
+/// SaveArg, as this only saves off the SubscriptionPair, not the
+/// SubscriptionPair members. This means that the subscription object has been
+/// deleted before we can check it. This allows us to create a copy of the
+/// Subscription object we can check against. The caller is responsible for
+/// deleting the copied object.
+ACTION_P2(SaveSubscription, first, second)
 {
-  *first = arg1.first;
-  *second = Subscription(*(arg1.second));
+  // There should only ever be one SubscriptionPair in the Subscriptions map.
+  *first = arg1.begin()->first;
+  *second = Subscription(*(arg1.begin()->second));
 }
 
 class SubscriptionTest : public SipTest
@@ -332,9 +333,10 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
   HSSConnection::irs_info irs_info;
   irs_info._ccfs.push_back("CCF TEST");
   irs_info._ecfs.push_back("ECF TEST");
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
 
-  EXPECT_CALL(*_sm, update_subscription("sip:6505550231@homedomain", _, _, _))
-    .WillOnce(DoAll(SaveSubscriptionPair(&subscription_id, &subscription),
+  EXPECT_CALL(*_sm, update_subscriptions("sip:6505550231@homedomain", _, _, _))
+    .WillOnce(DoAll(SaveSubscription(&subscription_id, &subscription),
                     SetArgReferee<2>(irs_info),
                     Return(HTTP_OK)));
 
@@ -347,10 +349,11 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
 
-  // Check the Charging, From and Expires headers.
+  // Check the Charging, From, Expires, and Contact headers.
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=\"CCF TEST\";ecf=\"ECF TEST\"", get_headers(out, "P-Charging-Function-Addresses"));
   EXPECT_EQ("Expires: 300", get_headers(out, "Expires"));
+  EXPECT_EQ("Contact: <sip:all.the.sprout.nodes:5058;transport=TCP>", get_headers(out, "Contact"));
 
   // Pull out the to tag on the OK
   std::vector<std::string> to_params;
@@ -380,7 +383,8 @@ TEST_F(SubscriptionTest, MainlineAddAndRemoveSubscription)
 
   // Now expire the same subscription. The subscription ID is the to tag from
   // 200 OK.
-  EXPECT_CALL(*_sm, remove_subscription("sip:6505550231@homedomain", to_tag, _, _))
+  std::vector<std::string> subscription_ids = {to_tag};
+  EXPECT_CALL(*_sm, remove_subscriptions("sip:6505550231@homedomain", subscription_ids, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(irs_info),
                     Return(HTTP_OK)));
 
@@ -505,7 +509,11 @@ TEST_F(SubscriptionTest, IncorrectAcceptsHeader)
 // Test that a subscribe with no Accept header is processed successfully.
 TEST_F(SubscriptionTest, EmptyAcceptsHeader)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
   SubscribeMessage msg;
   msg._accepts = "";
@@ -518,7 +526,11 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
 // application/reginfo+xml is processed succesfully
 TEST_F(SubscriptionTest, CorrectAcceptsHeader)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
   SubscribeMessage msg;
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
@@ -527,60 +539,51 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   check_subscribe_response(200, "OK");
 }
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Server Error).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerServerError)
+// Test that subscribing to an unregistered subscriber fails
+TEST_F(SubscriptionTest, UnregisteredSubscribee)
 {
-  SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_SERVER_ERROR));
-  inject_msg(msg.get());
-  check_subscribe_response(500, "Internal Server Error");
-}
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_UNREGISTERED;
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Unavailable).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerUnavailable)
-{
   SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_TEMP_UNAVAILABLE));
   inject_msg(msg.get());
+
   check_subscribe_response(480, "Temporarily Unavailable");
 }
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Forbidden).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerForbidden)
+// Test that subscribing fails when the connection to the HSS times out.
+TEST_F(SubscriptionTest, HSSConnectionTimeout)
 {
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).WillOnce(Return(HTTP_GATEWAY_TIMEOUT));
+
   SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_FORBIDDEN));
   inject_msg(msg.get());
-  check_subscribe_response(403, "Forbidden");
+
+  check_subscribe_response(504, "Server Timeout");
 }
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Not Found).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerNotFound)
+// Test that subscribing fails when the connection to the HSS fails.
+TEST_F(SubscriptionTest, HSSConnectionError)
 {
-  SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_FORBIDDEN));
-  inject_msg(msg.get());
-  check_subscribe_response(403, "Forbidden");
-}
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).WillOnce(Return(HTTP_TEMP_UNAVAILABLE));
 
-// Test that errors from the subscriber manager are correctly converted into
-// client responses (Timeout).
-TEST_F(SubscriptionTest, ErrorConversionSMToCallerTimeout)
-{
   SubscribeMessage msg;
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_SERVER_UNAVAILABLE));
   inject_msg(msg.get());
+
   check_subscribe_response(504, "Server Timeout");
 }
 
 // Test that nothing goes wrong if the subscribe is from a Tel URI
 TEST_F(SubscriptionTest, TelURI)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
   SubscribeMessage msg;
   msg._scheme = "tel";
@@ -592,7 +595,11 @@ TEST_F(SubscriptionTest, TelURI)
 // Test that nothing goes wrong if the ReqURI is a Tel URI
 TEST_F(SubscriptionTest, ReqUriTelUri)
 {
-  EXPECT_CALL(*_sm, update_subscription(_, _, _, _)).WillOnce(Return(HTTP_OK));
+  HSSConnection::irs_info irs_info;
+  irs_info._regstate = RegDataXMLUtils::STATE_REGISTERED;
+  EXPECT_CALL(*_sm, update_subscriptions(_, _, _, _)).
+    WillOnce(DoAll(SetArgReferee<2>(irs_info),
+                   Return(HTTP_OK)));
 
   SubscribeMessage msg;
   msg._domain = "example.domain.org";

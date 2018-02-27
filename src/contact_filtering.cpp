@@ -235,10 +235,8 @@ bool binding_to_target(const std::string& aor,
   }
   else
   {
-    // Fill in the paths parameter for the target. If _path_headers is non-empty
-    // we use that, otherwise we use the _path_uris field.
-    //
-    // SDM-REFACTOR-TODO: _path_uris is unncessary upgrade code now, delete it.
+    // Fill in the paths parameter for the target.
+    // If _path_headers is empty no paths parameter is set.
     if (!binding._path_headers.empty())
     {
       for (std::string path : binding._path_headers)
@@ -268,8 +266,9 @@ bool binding_to_target(const std::string& aor,
     }
     else
     {
-      TRC_WARNING("Empty path headers field for contact %s, implying no path headers were present on a register",
-                  binding._uri.c_str());
+      TRC_DEBUG("Empty path headers field for contact %s, implying no path "
+                "headers were present on a register (which is valid)",
+                binding._uri.c_str());
     }
   }
 

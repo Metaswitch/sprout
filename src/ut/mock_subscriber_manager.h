@@ -21,14 +21,16 @@ public:
   MockSubscriberManager();
   virtual ~MockSubscriberManager();
 
-  MOCK_METHOD6(register_subscriber, HTTPCode(const std::string& aor_id,
+  MOCK_METHOD7(register_subscriber, HTTPCode(const std::string& aor_id,
                                              const std::string& server_name,
                                              const AssociatedURIs& associated_uris,
                                              const Bindings& add_bindings,
                                              Bindings& all_bindings,
+                                             HSSConnection::irs_info& irs_info,
                                              SAS::TrailId trail));
 
-  MOCK_METHOD7(reregister_subscriber, HTTPCode(const std::string& aor_id,
+  MOCK_METHOD8(reregister_subscriber, HTTPCode(const std::string& aor_id,
+                                               const std::string& server_name,
                                                const AssociatedURIs& associated_uris,
                                                const Bindings& updated_bindings,
                                                const std::vector<std::string>& binding_ids_to_remove,
@@ -42,18 +44,17 @@ public:
                                          Bindings& bindings,
                                          SAS::TrailId trail));
 
-  MOCK_METHOD4(update_subscription, HTTPCode(const std::string& public_id,
-                                             const SubscriptionPair& subscription,
-                                             HSSConnection::irs_info& irs_info,
-                                             SAS::TrailId trail));
+  MOCK_METHOD4(update_subscriptions, HTTPCode(const std::string& public_id,
+                                              const Subscriptions& subscriptions,
+                                              HSSConnection::irs_info& irs_info,
+                                              SAS::TrailId trail));
 
-  MOCK_METHOD4(remove_subscription, HTTPCode(const std::string& public_id,
-                                             const std::string& subscription_id,
-                                             HSSConnection::irs_info& irs_info,
-                                             SAS::TrailId trail));
+  MOCK_METHOD4(remove_subscriptions, HTTPCode(const std::string& public_id,
+                                              const std::vector<std::string>& subscription_ids,
+                                              HSSConnection::irs_info& irs_info,
+                                              SAS::TrailId trail));
 
-  MOCK_METHOD3(deregister_subscriber, HTTPCode(const std::string& public_id,
-                                               const SubscriberDataUtils::EventTrigger& event_trigger,
+  MOCK_METHOD2(deregister_subscriber, HTTPCode(const std::string& public_id,
                                                SAS::TrailId trail));
 
   MOCK_METHOD3(get_bindings, HTTPCode(const std::string& public_id,
@@ -88,10 +89,12 @@ public:
                                                        SAS::TrailId trail));
 };
 
-// Custom matchers to see what public identity or wildcard was on the irs_query
-// that the mock subscriber manager was called with.
+// Custom matchers to see what public identity, wildcard, private identity or
+// registration state was on the irs_query that the mock subscriber manager was
+// called with.
 MATCHER_P(IrsQueryWithPublicId, pub_id, "") { return (arg._public_id == pub_id); }
 MATCHER_P(IrsQueryWithWildcard, wildcard, "") { return (arg._wildcard == wildcard); }
-MATCHER_P(TestAutoRegIrsQuery, private_id, "") { return (arg._private_id == private_id && arg._req_type == HSSConnection::REG); }
+MATCHER_P(IrsQueryWithPrivateId, private_id, "") { return (arg._private_id == private_id); }
+MATCHER_P(IrsQueryWithReqType, request_type, "") { return (arg._req_type == request_type); }
 
 #endif

@@ -658,7 +658,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     std::string opaque;
     opaque.assign(buf, sizeof(buf));
     TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
-    SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 1u);
+    SAS::Marker opaque_marker(trail(), MARKER_ID_GENERIC_CORRELATOR, 1u);
     opaque_marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
     opaque_marker.add_var_param(opaque);
     SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
@@ -844,7 +844,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // We've failed to store the nonce in memcached, so we have no hope of
       // successfully authenticating any repsonse to a 401 Unauthorized.  Send
       // a 500 Server Internal Error instead.
-      TRC_DEBUG("Failed to store nonce in memcached");
+      TRC_DEBUG("Failed to store nonce in memcached, for impi %s", impi.c_str());
       rsp->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
       rsp->line.status.reason = *pjsip_get_status_text(PJSIP_SC_INTERNAL_SERVER_ERROR);
 
@@ -1024,7 +1024,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       std::string opaque = PJUtils::pj_str_to_string(&credentials->opaque);
       TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
-      SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 2u);
+      SAS::Marker opaque_marker(trail(), MARKER_ID_GENERIC_CORRELATOR, 2u);
       opaque_marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
       opaque_marker.add_var_param(opaque);
       SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
