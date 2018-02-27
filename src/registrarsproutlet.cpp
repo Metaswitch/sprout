@@ -262,6 +262,12 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     SAS::report_event(event);
   }
 
+  if (emergency_registration)
+  {
+    SAS::Event event(trail(), SASEvent::REGISTER_EMERGENCY, 0);
+    SAS::report_event(event);
+  }
+
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri =
