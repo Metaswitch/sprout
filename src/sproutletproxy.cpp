@@ -672,6 +672,7 @@ SproutletProxy::UASTsx::Callback::Callback(UASTsx* tsx, std::function<void()> ru
   // Whenever we create a Callback we expect it to be run, so increase the count
   // of _pending_callbacks on the UASTsx
   _tsx->_pending_callbacks++;
+  TRC_DEBUG("Increment pending callbacks to: %d", _tsx->_pending_callbacks);
 }
 
 void SproutletProxy::UASTsx::Callback::run()
@@ -681,6 +682,7 @@ void SproutletProxy::UASTsx::Callback::run()
   // Now that we are running a Callback, we can decrement the count of pending
   // callbacks
   _tsx->_pending_callbacks--;
+  TRC_DEBUG("Decrement pending callbacks to: %d", _tsx->_pending_callbacks);
 
   // _run_fn() contains that actual work that we need to do for this Callback
   _run_fn();
@@ -1157,6 +1159,12 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
   if (scheduled)
   {
     _pending_timers.insert(tentry);
+
+    // We don't know when this timer is going to pop, so increment the
+    // _pending_callbacks count now and only decrement it when the timer
+    // pops or when we know we've cancelled it successfully.
+    _pending_callbacks++;
+    TRC_DEBUG("Increment pending callbacks to: %d", _pending_callbacks);
   }
   return scheduled;
 }
@@ -1166,7 +1174,13 @@ bool SproutletProxy::UASTsx::cancel_timer(TimerID id)
   pj_timer_entry* tentry = (pj_timer_entry*)id;
 
   // Cancel the timer at PJSIP
-  _sproutlet_proxy->cancel_timer(tentry);
+  if (_sproutlet_proxy->cancel_timer(tentry))
+  {
+    // Successfully cancelled.  Decrement the pending callbacks count
+    // incremented above.
+    _pending_callbacks--;
+    TRC_DEBUG("Decrement pending callbacks to: %d", _pending_callbacks);
+  }
 
   // Always attempt to remove the timer entry from the _pending_timers
   // set, regardless of whether the attempt to cancel the timer at PJSIP
@@ -1204,6 +1218,10 @@ void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
 void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
 {
   enter_context();
+
+  // Timer callback has been made so decrement the pending callback count.
+  _pending_callbacks--;
+  TRC_DEBUG("Decrement pending callbacks to: %d", _pending_callbacks);
 
   if (_pending_timers.erase(tentry) != 0)
   {
