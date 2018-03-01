@@ -260,7 +260,7 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   event.add_static_param(pjsip_transport_get_type_from_flag(rdata->tp_info.transport->flag));
   event.add_static_param(rdata->pkt_info.src_port);
   event.add_var_param(rdata->pkt_info.src_name);
-  event.add_compressed_param(rdata->msg_info.len, rdata->msg_info.msg_buf, &SASEvent::PROFILE_SIP);
+  event.add_var_param(rdata->msg_info.len, rdata->msg_info.msg_buf);
   SAS::report_event(event);
 }
 
@@ -290,9 +290,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
     event.add_static_param(pjsip_transport_get_type_from_flag(tdata->tp_info.transport->flag));
     event.add_static_param(tdata->tp_info.dst_port);
     event.add_var_param(tdata->tp_info.dst_name);
-    event.add_compressed_param((int)(tdata->buf.cur - tdata->buf.start),
-                               tdata->buf.start,
-                               &SASEvent::PROFILE_SIP);
+    event.add_var_param((int)(tdata->buf.cur - tdata->buf.start), tdata->buf.start);
     SAS::report_event(event);
   }
   else
