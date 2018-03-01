@@ -1217,7 +1217,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
                                                                  _scscf->_scscf_cluster_uri);
       pjsip_sip_uri* routing_uri = get_routing_uri(req);
-      if (routing_uri != NULL)
+
+      // If the URI that routed to this Sproutlet isn't reflexive, just ignore it
+      // and use the configured scscf uri
+      if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
       {
         SCSCFUtils::get_scscf_uri(get_pool(req),
                                   get_local_hostname(routing_uri),

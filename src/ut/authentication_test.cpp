@@ -40,6 +40,7 @@ using namespace std;
 using namespace std;
 using testing::StrEq;
 using testing::ElementsAre;
+using testing::Expectation;
 using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
@@ -578,7 +579,7 @@ string AuthenticationMessage::get()
                    "User-Agent: X-Lite release 5.0.0 stamp 67284\r\n"
                    "Contact: <sip:%2$s@uac.example.com:5060;rinstance=f0b20987985b61df;transport=TCP%4$s>\r\n"
                    "%5$s"
-                   "Route: <%10$s>\r\n"
+                   "%10$s"
                    "%6$s"
                    "%7$s"
                    "Content-Length: 0\r\n"
@@ -622,7 +623,7 @@ string AuthenticationMessage::get()
                               "",
                     /* 8 */ _cseq,
                     /* 9 */ _to_tag.c_str(),
-                    /* 10 */ _route_uri.c_str()
+                    /* 10 */ _route_uri.empty() ? "" : string("Route: <").append(_route_uri).append(string(">\r\n")).c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -2329,6 +2330,43 @@ TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
+// Tests that if we receive a request that has no Route header (and hence is
+// routed to the Auth Sproutlet by the port), we set the server-name in our
+// request to Homestead to be the root URI of the Auth Sproutlet
+TEST_F(AuthenticationTest, PortMatchedRouteHeaderUsesConfiguredServerName)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a REGISTER message with no Route header and a domain that doesn't
+  // match our home domain.
+  // It has no auth header, so will trigger the sproutlet to talk to Homestead
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  msg1._route_uri = "";
+  msg1._domain = "somemadeupdomain.com";
+
+  // The domain doesn't match, so we expect Homestead to reject the request.
+  // Let's say 404, though we don't really care
+  _hss_connection->set_rc("/impi/6505550001%40somemadeupdomain.com/av?impu=sip%3A6505550001%40somemadeupdomain.com&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                          404);
+
+  // Send in the REGISTER
+  inject_msg(msg1.get());
+
+  // Check that Sprout made the correct request to Homestead. Specifically, the
+  // server-name should be the Auth Sproutlet's root URI
+  bool requested = _hss_connection->url_was_requested("/impi/6505550001%40somemadeupdomain.com/av?impu=sip%3A6505550001%40somemadeupdomain.com&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                                                      "");
+  EXPECT_TRUE(requested);
+
+  // The request is rejected with 403
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+
+  _hss_connection->delete_rc("/impi/6505550001%40somemadeupdomain.com/av?impu=sip%3A6505550001%40somemadeupdomain.com&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+}
+
 TEST_F(AuthenticationTest, ServiceRouteWithMD5Algorithm)
 {
   pjsip_tx_data* tdata;
@@ -3016,6 +3054,64 @@ TEST_F(AuthenticationTest, DigestAuthFailureWithSetError)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(500).matches(tdata->msg);
+}
+
+// Test that parameters on a Route header are copied onto the next hop URI when
+// the AuthenticationSproutlet declares itself uninterested in a request, when
+// the Route header is matched on the service name
+TEST_F(AuthenticationTest, GetTsxParamsPreservedOnNextHop)
+{
+  // Create an INVITE with a Route header specifying the "orig" param
+  AuthenticationMessage msg("INVITE");
+  msg._route_uri = "sip:authentication.sprout.homedomain:5058;transport=TCP;orig";
+  pjsip_msg* pj_msg = parse_msg(msg.get());
+
+  // Offer it to the AuthenticationSproutlet
+  pjsip_sip_uri* next_hop = nullptr;
+  SproutletHelper* helper = (SproutletHelper*)_sproutlet_proxy;
+  SproutletTsx* tsx = _auth_sproutlet->get_tsx(helper,
+                                               "",
+                                               pj_msg,
+                                               next_hop,
+                                               stack_data.pool,
+                                               0L);
+
+  // Expect that the AuthenticationSprout was not interested in the message
+  EXPECT_EQ(nullptr, tsx);
+
+  // Check that the next_hop URI contains the "orig" parameter
+  bool has_orig_param = (pjsip_param_find(&next_hop->other_param, &STR_ORIG) != nullptr);
+  EXPECT_TRUE(has_orig_param);
+}
+
+// Test that parameters on a Route header are copied onto the next hop URI when
+// the AuthenticationSproutlet declares itself uninterested in a request, when
+// the Route header is not matched on the service name
+TEST_F(AuthenticationTest, GetTsxParamsPreservedOnNextHopPortMatch)
+{
+  // Create an INVITE with a Route header specifying the "orig" param, but which
+  // doesn't match the service name of the AuthenticationSproutlet (and is only
+  // matched on the port)
+  AuthenticationMessage msg("INVITE");
+  msg._route_uri = "sip:madeuphomedomain:5058;transport=TCP;orig";
+  pjsip_msg* pj_msg = parse_msg(msg.get());
+
+  // Offer it to the AuthenticationSproutlet
+  pjsip_sip_uri* next_hop = nullptr;
+  SproutletHelper* helper = (SproutletHelper*)_sproutlet_proxy;
+  SproutletTsx* tsx = _auth_sproutlet->get_tsx(helper,
+                                               "",
+                                               pj_msg,
+                                               next_hop,
+                                               stack_data.pool,
+                                               0L);
+
+  // Expect that the AuthenticationSprout was not interested in the message
+  EXPECT_EQ(nullptr, tsx);
+
+  // Check that the next_hop URI contains the "orig" parameter
+  bool has_orig_param = (pjsip_param_find(&next_hop->other_param, &STR_ORIG) != nullptr);
+  EXPECT_TRUE(has_orig_param);
 }
 
 //
