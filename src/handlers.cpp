@@ -423,8 +423,6 @@ void GetSubscriptionsTask::run()
 
   send_http_reply(rc);
 
-  SubscriberDataUtils::delete_subscriptions(subscriptions);
-
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
 
