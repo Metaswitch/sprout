@@ -10190,6 +10190,30 @@ TEST_F(SCSCFTest, SCSCFHandlesInvalidUriTerm)
   free_txdata();
 }
 
+// Tests that, if we have a request whose Route header matches only on the port,
+// the IRS query uses the configured S-CSCF URI as the server name
+TEST_F(SCSCFTest, PortMatchedRouteHeaderUsesConfiguredServerName)
+{
+  // Create an INVITE with a Route header that matches only on the port
+  SCSCFMessage msg;
+  msg._route = "Route: <sip:homedomain:5058>";
+
+  // Save the IRS query and return NOT_FOUND to prevent further processing
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SaveArg<0>(&irs_query),
+                    Return(HTTP_NOT_FOUND)));
+
+  // The call will fail
+  doSlowFailureFlow(msg, 404);
+
+  // Check that the query was made for the correct subscriber
+  EXPECT_EQ("sip:6505551234@homedomain",irs_query._public_id);
+  EXPECT_EQ("call", irs_query._req_type);
+
+  // Check that the server name used was the configured S-CSCF URI
+  EXPECT_EQ("sip:scscf.sprout.homedomain:5058;transport=TCP", irs_query._server_name);
+}
 
 class SCSCFTestWithoutICSCF : public SCSCFTestBase
 {

@@ -53,7 +53,7 @@ public:
   MOCK_CONST_METHOD3(next_hop_uri, pjsip_sip_uri*(const std::string& service,
                                                   const pjsip_sip_uri* base_uri,
                                                   pj_pool_t* pool));
-  MOCK_CONST_METHOD1(get_local_hostname, std::string(const pjsip_sip_uri* uri));
+  MOCK_CONST_METHOD2(get_local_hostname, std::string(const pjsip_sip_uri* uri, bool default_to_root));
 };
 
 #endif
