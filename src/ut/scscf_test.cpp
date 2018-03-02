@@ -2233,7 +2233,7 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
 // We can run with no ENUM service - in this case we expect the Request-URI to
 // be unchanged (as there's no lookup which can change it) and for it to just
 // be routed normally to the I-CSCF.
-TEST_F(SCSCFTest, TestWithoutEnum)
+TEST_F(SCSCFTest, TestWithoutEnumUserPhone)
 {
   SCOPED_TRACE("");
 
@@ -2263,13 +2263,39 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:sprout.homedomain;orig>";
-  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
 
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@10.114.61.213:5061;transport=tcp;.*"), hdrs);
+}
+
+TEST_F(SCSCFTest, TestWithoutEnumOffnet)
+{
+  SCOPED_TRACE("");
+
+  // Disable ENUM.
+  _scscf_sproutlet->_enum_service = NULL;
+
+  SCSCFMessage msg;
+  msg._to = "+15108580271";
+  msg._todomain = "ut.cw-ngv.com";
+
+  // IFCs for originating call
+  HSSConnection::irs_info irs_info_1;
+  setup_irs_info(irs_info_1, "+16505551000", "homedomain");
+  expect_get_subscriber_state(irs_info_1, "sip:+16505551000@homedomain");
+
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+
+  // Check that we didn't send an LIR
+  ASSERT_EQ(_hss_connection->request_count(), 0);
 }
 
 /// Test a forked flow - setup phase.

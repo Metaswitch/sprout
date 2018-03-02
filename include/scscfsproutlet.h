@@ -349,7 +349,10 @@ private:
   void route_to_icscf(pjsip_msg* req);
 
   /// Route the request to the BGCF.
-  void route_to_bgcf(pjsip_msg* req);
+  ///
+  /// @param req      - The request to route
+  /// @param reason   - The SAS Event ID to log as the reason
+  void route_to_bgcf(pjsip_msg* req, int reason);
 
   /// Route the request to the terminating side S-CSCF.
   void route_to_term_scscf(pjsip_msg* req);
@@ -601,12 +604,18 @@ private:
   /// Get the base request that the S-CSCF should use when retrying a request.
   pjsip_msg* get_base_request();
 
-  /// SAS logs that the next hop URI is invalid and rejects the request with a
+  /// SAS logs that the request URI is invalid and rejects the request with a
   /// 400 Bad Request error (which also frees the request).
   ///
   /// @param req      - The request to reject
-  /// @param uri_str  - The URI string to add to the SAS log
-  void reject_invalid_uri(pjsip_msg* req, const std::string& uri_str);
+  void reject_invalid_uri(pjsip_msg* req);
+
+  /// SAS logs that the next hop URI is invalid and rejects the request with a
+  /// 400 Bad Request error (which also frees the request).
+  ///
+  /// @param req         - The request to reject
+  /// @param invalid_uri - The URI which caused it to be rejected
+  void reject_invalid_uri(pjsip_msg* req, const std::string& invalid_uri);
 
   /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
   /// HSS. This field should not be changed once it has been set by the
