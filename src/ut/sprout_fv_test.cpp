@@ -22,7 +22,6 @@
 #include "analyticslogger.h"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
-#include "fakexdmconnection.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
 #include "scscfsproutlet.h"
@@ -106,7 +105,6 @@ public:
     _sm = new SubscriberManager(_s4, _hss_connection, _analytics, _notify_sender, _registration_sender);
     _registration_sender->register_dereg_event_consumer(_sm);
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
-    _xdm_connection = new FakeXDMConnection();
     _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
     _sess_cont_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
@@ -171,7 +169,7 @@ public:
                                         false);
 
     // Create the MMTEL AppServer.
-    _mmtel = new Mmtel("mmtel", _xdm_connection);
+    _mmtel = new Mmtel("mmtel", nullptr);
     _mmtel_sproutlet = new SproutletAppServerShim(_mmtel,
                                                   5055,
                                                   "sip:mmtel.homedomain:5058;transport=tcp",
@@ -234,7 +232,6 @@ public:
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
     delete _hss_connection; _hss_connection = NULL;
-    delete _xdm_connection; _xdm_connection = NULL;
     delete _sess_cont_comm_tracker; _sess_cont_comm_tracker = NULL;
     delete _sess_term_comm_tracker; _sess_term_comm_tracker = NULL;
   }
@@ -299,7 +296,6 @@ protected:
   NotifySender* _notify_sender;
   AnalyticsLogger* _analytics;
   FakeHSSConnection* _hss_connection;
-  FakeXDMConnection* _xdm_connection;
   BgcfService* _bgcf_service;
   EnumService* _enum_service;
   ACRFactory* _acr_factory;

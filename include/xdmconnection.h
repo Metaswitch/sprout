@@ -9,9 +9,6 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-///
-///
-
 #ifndef XDMCONNECTION_H__
 #define XDMCONNECTION_H__
 
@@ -34,9 +31,10 @@ public:
   XDMConnection(HttpConnection* http, SNMP::EventAccumulatorTable* xdm_latency);
   virtual ~XDMConnection();
 
-  bool get_simservs(const std::string& user, std::string& xml_data, const std::string& password, SAS::TrailId trail);
+  virtual bool get_simservs(const std::string& user, std::string& xml_data, const std::string& password, SAS::TrailId trail);
 
 private:
+  HttpClient* _client;
   HttpConnection* _http;
   SNMP::EventAccumulatorTable* _latency_tbl;
 };

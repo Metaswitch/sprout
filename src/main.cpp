@@ -1571,6 +1571,8 @@ int create_astaire_stores(struct options opt,
 }
 
 void create_chronos_connection(struct options opt,
+                               HttpClient*& chronos_http_client,
+                               HttpConnection*& chronos_http_conn,
                                CommunicationMonitor*& chronos_comm_monitor)
 {
   chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
@@ -1615,10 +1617,17 @@ void create_chronos_connection(struct options opt,
   TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
              chronos_service.c_str(),
              chronos_callback_host.c_str());
-  chronos_connection = new ChronosConnection(chronos_service,
-                                             chronos_callback_host,
-                                             http_resolver,
-                                             chronos_comm_monitor);
+
+  chronos_http_client = new HttpClient(false,
+                                       http_resolver,
+                                       SASEvent::HttpLogLevel::DETAIL,
+                                       chronos_comm_monitor);
+
+  chronos_http_conn = new HttpConnection(chronos_service,
+                                         chronos_http_client);
+
+  chronos_connection = new ChronosConnection(chronos_callback_host,
+                                             chronos_http_conn);
 
 }
 
@@ -1631,12 +1640,15 @@ int main(int argc, char* argv[])
   struct options opt;
 
   SIPResolver* sip_resolver = NULL;
+  HttpClient* ralf_client = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
   SproutletProxy* sproutlet_proxy = NULL;
   std::list<Sproutlet*> sproutlets;
+  HttpClient* chronos_http_client = NULL;
+  HttpConnection* chronos_http_conn = NULL;
   CommunicationMonitor* chronos_comm_monitor = NULL;
   CommunicationMonitor* enum_comm_monitor = NULL;
   CommunicationMonitor* hss_comm_monitor = NULL;
@@ -2111,15 +2123,18 @@ int main(int argc, char* argv[])
   if (opt.ralf_server != "")
   {
     // Create HttpConnection pool for Ralf Rf billing interface.
+    ralf_client = new HttpClient(false,
+                                 http_resolver,
+                                 nullptr,
+                                 load_monitor,
+                                 SASEvent::HttpLogLevel::PROTOCOL,
+                                 ralf_comm_monitor,
+                                 !opt.http_acr_logging);
+
     ralf_connection = new HttpConnection(opt.ralf_server,
-                                         false,
-                                         http_resolver,
-                                         NULL, // No SNMP table for connected Ralfs
-                                         load_monitor,
-                                         SASEvent::HttpLogLevel::PROTOCOL,
-                                         ralf_comm_monitor,
-                                         "http",
-                                         !opt.http_acr_logging);
+                                         ralf_client,
+                                         "http");
+
     ralf_processor = new RalfProcessor(ralf_connection,
                                        exception_handler,
                                        opt.ralf_threads);
@@ -2241,6 +2256,8 @@ int main(int argc, char* argv[])
   }
 
   create_chronos_connection(opt,
+                            chronos_http_client,
+                            chronos_http_conn,
                             chronos_comm_monitor);
 
   scscf_acr_factory = (ralf_processor != NULL) ?
@@ -2601,6 +2618,7 @@ int main(int argc, char* argv[])
 
   delete ralf_processor;
   delete ralf_connection;
+  delete ralf_client;
   delete enum_service;
   delete scscf_acr_factory;
 
@@ -2611,6 +2629,9 @@ int main(int argc, char* argv[])
   delete dns_resolver;
 
   delete analytics_logger;
+
+  delete chronos_http_conn;
+  delete chronos_http_client;
 
   // Delete Sprout's alarm objects
   delete chronos_comm_monitor;

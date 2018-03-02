@@ -75,7 +75,7 @@ class BasicS4Test : public ::testing::Test
     _aor_store1 = new AstaireAoRStore(_mock_store1);
     _aor_store2 = new AstaireAoRStore(_mock_store2);
     _aor_store3 = new AstaireAoRStore(_mock_store3);
-    _mock_chronos = new MockChronosConnection("chronos");
+    _mock_chronos = new MockChronosConnection();
     _remote_s4_1 = new S4("site2", _aor_store2);
     _remote_s4_2 = new S4("site3", _aor_store3);
     _s4 = new S4("site1",

@@ -371,7 +371,7 @@ class MockChronosConnectionHelper
 {
   static void create_chronos_connection()
   {
-    _mock_chronos_connection = new MockChronosConnection("localhost");
+    _mock_chronos_connection = new MockChronosConnection();
   }
 
   static MockChronosConnection* get_chronos_connection()
