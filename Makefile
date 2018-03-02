@@ -106,6 +106,7 @@ $(foreach target,$(PLUGIN_TARGETS),$(eval $(call plugin_target_template,$(target
 # Debian file handling.
 #
 include build-infra/cw-deb.mk
+include build-infra/doxygen.mk
 
 deb-only: plugins-deb-only
 
