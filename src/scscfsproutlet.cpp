@@ -744,11 +744,12 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     }
   }
 
-  if ((st_code >= PJSIP_SC_OK) && (_hss_data_cached))
+  if ((st_code > PJSIP_SC_TRYING) && _hss_data_cached)
   {
-    // Final response. Add a P-Charging-Function-Addresses header if one is
-    // not already present for some reason. We only do this if we have
-    // the charging addresses cached (which we should do).
+    // We add a P-Charging-Function-Addresses header if one is not already present.
+    //  We only do this if we have the charging addresses cached (which we should do).
+    // According to TS 24.229, PCFAs should not be added to responses being sent to ASes,
+    // except in some very specific cases, but this is unlikely to cause inter-op issues.
     PJUtils::add_pcfa_header(rsp,
                              get_pool(rsp),
                              _irs_info._ccfs,
@@ -793,18 +794,34 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
           bypass_As.add_var_param(st_code == PJSIP_SC_REQUEST_TIMEOUT ?
                                   "Timed out waiting for response to INVITE request from AS" :
                                   "AS returned 5xx response");
+          bypass_As.add_static_param(_as_chain_link.complete());
           SAS::report_event(bypass_As);
 
-          _as_chain_link = _as_chain_link.next();
-          pjsip_msg* req = get_base_request();
-          _record_routed = false;
-          if (_session_case->is_originating())
+          // Check that we aren't about to iterate through the AS chain if we're
+          // already complete (which would cause "index out of range" crashes).  
+          // This shouldn't happen in normal operation, but there have 
+          // historically been problems when AS timers couldn't be cancelled because
+          // they'd already popped, with the result that we get too many callbacks
+          // changing the state of the AS chain.
+          if (_as_chain_link.complete())
           {
-            apply_originating_services(req);
+            // LCOV_EXCL_START
+            TRC_ERROR("Unexpected response for complete AS Chain. SAS TrailID: %lu", trail());
+            // LCOV_EXCL_STOP
           }
           else
           {
-            apply_terminating_services(req);
+            _as_chain_link = _as_chain_link.next();
+            pjsip_msg* req = get_base_request();
+            _record_routed = false;
+            if (_session_case->is_originating())
+            {
+              apply_originating_services(req);
+            }
+            else
+            {
+              apply_terminating_services(req);
+            }
           }
 
           // Free off the response as we no longer need it.
@@ -2178,18 +2195,34 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
       TRC_DEBUG("Trigger default_handling=CONTINUED processing");
       SAS::Event bypass_as(trail(), SASEvent::BYPASS_AS, 0);
       bypass_as.add_var_param("AS liveness timer expired");
+      bypass_as.add_static_param(_as_chain_link.complete());
       SAS::report_event(bypass_as);
 
-      _as_chain_link = _as_chain_link.next();
-      pjsip_msg* req = get_base_request();
-      _record_routed = false;
-      if (_session_case->is_originating())
+      // Check that we aren't about to iterate through the AS chain if we're
+      // already complete (which would cause "index out of range" crashes).  
+      // If this happens, it means there's a bug elsewhere, but there have 
+      // historically been problems when AS timers couldn't be cancelled because
+      // they'd already popped, with the result that we get too many callbacks
+      // changing the state of the AS chain.
+      if (_as_chain_link.complete())
       {
-        apply_originating_services(req);
+        // LCOV_EXCL_START
+        TRC_ERROR("Unexpected timeout for complete AS Chain. SAS TrailID: %lu", trail());
+        // LCOV_EXCL_STOP
       }
       else
       {
-        apply_terminating_services(req);
+        _as_chain_link = _as_chain_link.next();
+        pjsip_msg* req = get_base_request();
+        _record_routed = false;
+        if (_session_case->is_originating())
+        {
+          apply_originating_services(req);
+        }
+        else
+        {
+          apply_terminating_services(req);
+        }
       }
     }
     else

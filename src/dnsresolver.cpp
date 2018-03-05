@@ -117,7 +117,11 @@ void DNSResolver::destroy(DNSResolver* resolver)
 int DNSResolver::perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail)
 {
   send_naptr_query(domain, trail);
-  wait_for_response();
+  CW_IO_STARTS("DNS NAPTR query")
+  {
+    wait_for_response();
+  }
+  CW_IO_COMPLETES()
 
   // Save off the results...
   naptr_reply = _naptr_reply;

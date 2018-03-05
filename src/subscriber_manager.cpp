@@ -364,7 +364,7 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
       return HTTP_OK;
     }
 
-    TRC_DEBUG("Removing bindings for AoR %s failed during GET with return code %s",
+    TRC_DEBUG("Removing bindings for AoR %s failed during GET with return code %d",
               aor_id.c_str(),
               rc);
     return rc;
@@ -399,7 +399,7 @@ HTTPCode SubscriberManager::remove_bindings(const std::string& public_id,
 
   if (rc != HTTP_OK)
   {
-    TRC_DEBUG("Removing bindings for AoR %s failed during PATCH with return code %s",
+    TRC_DEBUG("Removing bindings for AoR %s failed during PATCH with return code %d",
               aor_id.c_str(),
               rc);
     delete orig_aor; orig_aor = NULL;
@@ -509,7 +509,7 @@ HTTPCode SubscriberManager::modify_subscriptions(
   if (rc != HTTP_OK)
   {
     TRC_DEBUG("Unable to modify subscription for %s - HSS lookup failed with "
-              " return code %s",
+              " return code %d",
               public_id.c_str(), rc);
     return rc;
   }
@@ -525,7 +525,7 @@ HTTPCode SubscriberManager::modify_subscriptions(
   if (rc != HTTP_OK)
   {
     TRC_DEBUG("Modifying subscription for AoR %s failed during S4 lookup "
-              "with return code %s",
+              "with return code %d",
               aor_id.c_str(),
               rc);
     return rc;
@@ -547,7 +547,7 @@ HTTPCode SubscriberManager::modify_subscriptions(
   if (rc != HTTP_OK)
   {
     TRC_DEBUG("Modifying subscription for AoR %s failed during S4 update with "
-              "return code %s",
+              "return code %d",
               aor_id.c_str(),
               rc);
   }

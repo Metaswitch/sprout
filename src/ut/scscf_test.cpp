@@ -726,6 +726,7 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   // Extra fields to insert in all requests and responses.
   string pani = "P-Access-Network-Info: ietf-carrier-pigeon;rfc=1149";
   string pvni = "P-Visited-Network-Id: other.net, \"Other Network\"";
+  string pcfa = "P-Charging-Function-Addresses: ccf=\"CCF TEST\";ecf=\"ECF TEST 1\";ecf=\"ECF TEST 2\"";
   string pvani = pani + "\r\n" + pvni;
 
   if (!msg._extra.empty())
@@ -757,6 +758,10 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
     RespMatcher(100).matches(out);
     tpA->expect_target(current_txdata(), true);  // Requests always come back on same transport
     msg.convert_routeset(out);
+
+    // 100 responses should never contain the PCFA and PCV headers
+    EXPECT_EQ("", get_headers(out, "P-Charging-Function-Addresses"));
+    EXPECT_EQ("", get_headers(out, "P-Charging-Vector"));
 
     // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id,
     // because they never get inserted into such messages.
@@ -802,11 +807,12 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   msg.convert_routeset(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info and P-Visited-Network-Id
+  // Check P-Access-Network-Info, P-Visited-Network-Id and P-Charging-Function-Addresses
   EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "183 Session Progress";
   EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "183 Session Progress";
+  EXPECT_EQ(pcfa, get_headers(out, "P-Charging-Function-Addresses")) << "183 Session Progress";
 
   free_txdata();
 
@@ -863,11 +869,12 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   msg.convert_routeset(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  // Check P-Access-Network-Info, P-Visited-Network-Id and P-Charging-Function-Addresses.
   EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE)";
   EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE)";
+  EXPECT_EQ(pcfa, get_headers(out, "P-Charging-Function-Addresses")) << "200 OK (INVITE)";
 
   free_txdata();
 
@@ -1011,11 +1018,12 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   msg.convert_routeset(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  // Check P-Access-Network-Info and P-Visited-Network-Id and P-Charging-Function-Addresses.
   EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "404 Not Found (INVITE #2)";
   EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "404 Not Found (INVITE #2)";
+  EXPECT_EQ(pcfa, get_headers(out, "P-Charging-Function-Addresses")) << "404 Not Found (INVITE #2)";
 
   free_txdata();
 
@@ -10356,7 +10364,6 @@ TEST_F(SCSCFTestWithoutICSCF, TestRouteWithoutICSCF)
   // TODO:Route hdr should contain SCSCF URI rather than ICSCF URI, not checked here
   doSlowFailureFlow(msg, 404);
 }
-
 
 class SCSCFTestWithRalf : public SCSCFTestBase
 {
