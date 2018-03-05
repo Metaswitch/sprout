@@ -54,7 +54,7 @@ TEST_F(SipParserTest, PChargingVector)
              "Max-Forwards: 63\n"
              "From: <sip:6505551234@homedomain>;tag=1234\n"
              "To: <sip:6505554321@homedomain>\n"
-             "P-Charging-Vector: icid-value=4815162542; orig-ioi=homedomain; term-ioi=remotedomain; icid-generated-at=edge.proxy.net; other-param=test-value\n"
+             "P-Charging-Vector: icid-value=4815162542; orig-ioi=\"home;domain\"; term-ioi=\"remote;domain\"; icid-generated-at=edge.proxy.net; eps-info=\"eps-item=1;eps-sig=yes;ecid=32333631313536313937,eps-item=2;eps-sig=yes;ecid=432100AB00;flow-id=({0,0})\"\n"
              "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
              "Call-ID: 1-13919@10.151.20.48\n"
              "CSeq: 1 INVITE\n"
@@ -73,8 +73,8 @@ TEST_F(SipParserTest, PChargingVector)
   pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)hdr;
 
   EXPECT_PJEQ(pcv->icid, "4815162542");
-  EXPECT_PJEQ(pcv->orig_ioi, "homedomain");
-  EXPECT_PJEQ(pcv->term_ioi, "remotedomain");
+  EXPECT_PJEQ(pcv->orig_ioi, "home;domain");
+  EXPECT_PJEQ(pcv->term_ioi, "remote;domain");
   EXPECT_PJEQ(pcv->icid_gen_addr, "edge.proxy.net");
   EXPECT_EQ(1u, pj_list_size(&pcv->other_param));
 
@@ -82,16 +82,16 @@ TEST_F(SipParserTest, PChargingVector)
   pjsip_p_c_v_hdr* pcv_clone = (pjsip_p_c_v_hdr*)hdr->vptr->clone(stack_data.pool, (void*)hdr);
 
   EXPECT_PJEQ(pcv_clone->icid, "4815162542");
-  EXPECT_PJEQ(pcv_clone->orig_ioi, "homedomain");
-  EXPECT_PJEQ(pcv_clone->term_ioi, "remotedomain");
+  EXPECT_PJEQ(pcv_clone->orig_ioi, "home;domain");
+  EXPECT_PJEQ(pcv_clone->term_ioi, "remote;domain");
   EXPECT_PJEQ(pcv_clone->icid_gen_addr, "edge.proxy.net");
   EXPECT_EQ(1u, pj_list_size(&pcv_clone->other_param));
 
   pjsip_p_c_v_hdr* pcv_sclone = (pjsip_p_c_v_hdr*)hdr->vptr->shallow_clone(stack_data.pool, (void*)hdr);
 
   EXPECT_PJEQ(pcv_sclone->icid, "4815162542");
-  EXPECT_PJEQ(pcv_sclone->orig_ioi, "homedomain");
-  EXPECT_PJEQ(pcv_sclone->term_ioi, "remotedomain");
+  EXPECT_PJEQ(pcv_sclone->orig_ioi, "home;domain");
+  EXPECT_PJEQ(pcv_sclone->term_ioi, "remote;domain");
   EXPECT_PJEQ(pcv_sclone->icid_gen_addr, "edge.proxy.net");
   EXPECT_EQ(1u, pj_list_size(&pcv_sclone->other_param));
 
@@ -104,8 +104,8 @@ TEST_F(SipParserTest, PChargingVector)
     written = hdr->vptr->print_on(hdr, buf, i);
     i++;
   }
-  EXPECT_EQ(written, 140);
-  EXPECT_STREQ("P-Charging-Vector: icid-value=\"4815162542\";orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
+  EXPECT_EQ(written, 238);
+  EXPECT_STREQ("P-Charging-Vector: icid-value=\"4815162542\";orig-ioi=\"home;domain\";term-ioi=\"remote;domain\";icid-generated-at=edge.proxy.net;eps-info=\"eps-item=1;eps-sig=yes;ecid=32333631313536313937,eps-item=2;eps-sig=yes;ecid=432100AB00;flow-id=({0,0})\"", buf);
 }
 
 TEST_F(SipParserTest, PChargingVectorQuotedIcidValue)

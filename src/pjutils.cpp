@@ -2288,6 +2288,34 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
   }
 }
 
+// Determine whether a parameter whose BNF describes it as a
+// "gen-value" needs quoting (i.e. is not a valid "token" or "host")
+bool PJUtils::needs_quoting(const char *inbuf,
+                            size_t length)
+{
+  // Check whether we need to quote the value.  We'll need to do this if
+  // - its not already quoted
+  // - it contains characters other than those allowed for a host or
+  //   token (see RFC 3455, section 5.5)
+  // Note that we assume for simplicity that if the value starts with '[',
+  // its an ipv6 address (int_parse_host in sip_parser.c makes the same
+  // assumption and the pjsip_HOST_SPEC doesn't cover IPv6 parsing).
+  bool quote = false;
+
+  // Check whether the value already quoted, or an IPv6 address
+  if ((inbuf[0] != '"') && (inbuf[0] != '['))
+  {
+    const pjsip_parser_const_t *pc = pjsip_parser_const();
+    for (size_t index = 0; index < length; index++)
+    {
+      quote = quote || (!pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) &&
+                        !pj_cis_match(&pc->pjsip_HOST_SPEC, inbuf[index]));
+    }
+  }
+
+  return quote;
+}
+
 // Add Changing Function param to the list for a PCFA header
 void PJUtils::add_pcfa_param(pj_list_type *cf_list,
                              pj_pool_t* pool,
@@ -2297,27 +2325,8 @@ void PJUtils::add_pcfa_param(pj_list_type *cf_list,
   pjsip_param* new_param =
             (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
   new_param->name = name;
-
-  // Check whether we need to quote the value.  We'll need to do this if
-  // - its not already quoted
-  // - it contains characters other than those allowed for a host or
-  //   token (see RFC 3455, section 5.5)
-  // Note that we assume for simplicity that if the value starts with '[',
-  // its an ipv6 address (int_parse_host in sip_parser.c makes the same
-  // assumption and the pjsip_HOST_SPEC doesn't cover IPv6 parsing).
   const char *inbuf = value.c_str();
-  bool quote = false;
-
-  // Check whether the value already quoted, or an IPv6 address
-  if ((inbuf[0] != '"') && (inbuf[0] != '['))
-  {
-    const pjsip_parser_const_t *pc = pjsip_parser_const();
-    for (size_t index = 0; index < value.length(); index++)
-    {
-      quote = quote || (!pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) &&
-                        !pj_cis_match(&pc->pjsip_HOST_SPEC, inbuf[index]));
-    }
-  }
+  bool quote = needs_quoting(inbuf, value.length());
 
   std::string final_value;
   if (quote)
