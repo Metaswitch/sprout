@@ -34,10 +34,6 @@ extern "C" {
 #include "registration_sender.h"
 #include "subscriber_data_utils.h"
 
-// SDM-REFACTOR-TODO:
-//  - Add Doxygen return
-//  - Add overall comment.
-
 /// @class SubscriberManager
 ///
 /// This class manages subscriber state. Its API exposes methods for clients
