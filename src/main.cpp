@@ -2264,7 +2264,7 @@ int main(int argc, char* argv[])
                     (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
                     new ACRFactory();
 
-  // Create the SDM and IMPI stores
+  // Create the IMPI stores
   int rc = create_astaire_stores(opt,
                                  astaire_resolver,
                                  astaire_comm_monitor,
