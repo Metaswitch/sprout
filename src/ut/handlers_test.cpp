@@ -115,7 +115,7 @@ class DeregistrationTaskTest : public SipTest
 
     EXPECT_CALL(*_subscriber_manager,
                 remove_bindings(aor_id, _, SubscriberDataUtils::EventTrigger::HSS, _, _))
-          .WillOnce(DoAll(SaveArg<1>(&binding_ids), 
+          .WillOnce(DoAll(SaveArg<1>(&binding_ids),
                           SetArgReferee<3>(Bindings()),
                           Return(HTTP_OK)));
   }
@@ -622,7 +622,7 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
   std::string uri = actual_subscription->_req_uri;
 
   Subscriptions subscriptions;
-  subscriptions[to_tag] = actual_subscription;
+  subscriptions.insert(std::make_pair(to_tag, actual_subscription));
 
   {
     InSequence s;
@@ -680,8 +680,8 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
   std::string to_tag_2 = subscription_2->_to_tag;
 
   Subscriptions subscriptions;
-  subscriptions[to_tag_1] = subscription_1;
-  subscriptions[to_tag_2] = subscription_2;
+  subscriptions.insert(std::make_pair(to_tag_1, subscription_1));
+  subscriptions.insert(std::make_pair(to_tag_2, subscription_2));
 
   // Set up subscriber manager expectations
   EXPECT_CALL(*sm, get_subscriptions(aor_id, _, _))
@@ -799,7 +799,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
   ASSERT_EQ(impu, actual_impu);
 }
 
-// Test a Delete Impu request that encounters store failure 
+// Test a Delete Impu request that encounters store failure
 TEST_F(DeleteImpuTaskTest, StoreFailure)
 {
   std::string impu = "sip:6505550231@homedomain";

@@ -1083,7 +1083,7 @@ TEST_F(SubscriberManagerTest, TestAddSubscription)
   EXPECT_EQ(rc, HTTP_OK);
   ASSERT_NE(patch_object._update_subscriptions.find(AoRTestUtils::SUBSCRIPTION_ID),
             patch_object._update_subscriptions.end());
-  EXPECT_TRUE(*(patch_object._update_subscriptions[AoRTestUtils::SUBSCRIPTION_ID]) ==
+  EXPECT_TRUE(*(patch_object._update_subscriptions.find(AoRTestUtils::SUBSCRIPTION_ID)->second) ==
               *(updated_subscriptions.begin()->second));
   EXPECT_TRUE(patch_object._increment_cseq);
 
@@ -1512,9 +1512,6 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   // Check that there is one subscription with the correct IDs.
   EXPECT_EQ(all_subscriptions.size(), 1);
   EXPECT_TRUE(all_subscriptions.find(AoRTestUtils::SUBSCRIPTION_ID) != all_subscriptions.end());
-
-  // Delete the subscriptions passed out.
-  SubscriberDataUtils::delete_subscriptions(all_subscriptions);
 }
 
 // Tests that expired subscriptions are not returned.
