@@ -144,7 +144,8 @@ enum OptionTypes
   OPT_BLACKLISTED_SCSCFS,
   OPT_LOCAL_ALIASES,
   OPT_REMOTE_ALIASES,
-  OPT_ALWAYS_SERVE_REMOTE_ALIASES
+  OPT_ALWAYS_SERVE_REMOTE_ALIASES,
+  OPT_RAM_RECORD_EVERYTHING,
 };
 
 
@@ -235,6 +236,7 @@ const static struct pj_getopt_option long_opt[] =
   { "request-on-queue-timeout",     required_argument, 0, OPT_REQUEST_ON_QUEUE_TIMEOUT},
   { "blacklisted-scscfs",           required_argument, 0, OPT_BLACKLISTED_SCSCFS},
   { "enable-orig-sip-to-tel-coerce",no_argument,       0, OPT_ORIG_SIP_TO_TEL_COERCE},
+  { "ram-record-everything",        no_argument,       0, OPT_RAM_RECORD_EVERYTHING},
   { NULL,                           0,                 0, 0}
 };
 
@@ -574,6 +576,10 @@ static pj_status_t init_logging_options(int argc, char* argv[], struct options* 
 
     case 't':
       options->interactive = PJ_TRUE;
+      break;
+
+    case OPT_RAM_RECORD_EVERYTHING:
+      options->ram_record_everything = true;
       break;
 
     default:
@@ -959,7 +965,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'F':
     case 'd':
     case 't':
-      // Ignore L, F, d and t - these are handled by init_logging_options
+    case OPT_RAM_RECORD_EVERYTHING:
+      // Ignore options that are handled by init_logging_options
       break;
 
     case OPT_DEFAULT_SESSION_EXPIRES:
@@ -1290,7 +1297,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       return -1;
 
     default:
-      TRC_ERROR("Unknown option. Run with --help for help.");
+      TRC_ERROR("Unknown option (%d). Run with --help for help.", c);
       return -1;
     }
   }
@@ -1738,6 +1745,7 @@ int main(int argc, char* argv[])
   opt.homestead_timeout = 750;
   opt.enable_orig_sip_to_tel_coerce = false;
   opt.request_on_queue_timeout = 4000;
+  opt.ram_record_everything = false;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1758,6 +1766,12 @@ int main(int argc, char* argv[])
                           opt.log_directory,
                           opt.log_level,
                           opt.log_to_file);
+
+  if (opt.ram_record_everything)
+  {
+    TRC_INFO("RAM record everything enabled");
+    Log::enableRamRecordEverything();
+  }
 
   // We should now have a connection to syslog so we can write the started ENT
   // log.
