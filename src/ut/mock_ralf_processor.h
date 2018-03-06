@@ -14,13 +14,12 @@
 
 #include "gmock/gmock.h"
 #include "ralf_processor.h"
-#include "mockhttpconnection.h"
 
 class MockRalfProcessor : public RalfProcessor 
 {
 public:
-    MockRalfProcessor(HttpConnection* ralf_connection) : 
-      RalfProcessor(ralf_connection, NULL, 2){};
+    MockRalfProcessor() :
+      RalfProcessor(NULL, NULL, 2){};
 
     virtual ~MockRalfProcessor(){};
 

@@ -41,7 +41,7 @@ public:
     std::string _wildcard;
     bool _cache_allowed;
 
-    irs_query() : 
+    irs_query() :
       _public_id(""),
       _private_id(""),
       _req_type(""),
@@ -62,7 +62,7 @@ public:
     std::deque<std::string> _ccfs;
     std::deque<std::string> _ecfs;
 
-    irs_info() : 
+    irs_info() :
       _regstate(""),
       _prev_regstate(""),
       _service_profiles(),
@@ -144,6 +144,7 @@ private:
                              std::shared_ptr<rapidxml::xml_document<>>& root,
                              SAS::TrailId trail);
 
+  HttpClient* _client;
   HttpConnection* _http;
   SNMP::EventAccumulatorTable* _latency_tbl;
   SNMP::EventAccumulatorTable* _mar_latency_tbl;

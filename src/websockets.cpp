@@ -62,6 +62,9 @@ struct ws_transport
   pj_bool_t		is_paused;
 };
 
+
+// LCOV_EXCL_START - No websockets UTs
+
 /*
  * This callback is called by transport manager to send SIP message
  */
@@ -535,3 +538,4 @@ void destroy_websockets()
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_ws_transport);
 }
 
+// LCOV_EXCL_STOP

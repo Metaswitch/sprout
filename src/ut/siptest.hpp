@@ -26,9 +26,9 @@ extern "C" {
 #include "constants.h"
 #include "dnscachedresolver.h"
 #include "localstore.h"
-#include "subscriber_data_manager.h"
 #include "fakelogger.h"
 #include "fakehssconnection.hpp"
+#include "subscriber_manager.h"
 
 using std::string;
 using testing::MatchesRegex;
@@ -159,14 +159,13 @@ protected:
   static SipTest* _current_instance;
 
   /// Register the specified URI.
-  void register_uri(SubscriberDataManager* sdm,
+  void register_uri(SubscriberManager* sm,
                     FakeHSSConnection* hss,
                     const string& user,
                     const string& domain,
                     const string& contact,
-                    int lifetime = 3600,
-                    string instance_id="",
-                    bool emergency=false);
+                    bool add_subscription = true,
+                    bool add_tel = true);
 
   /// Build an incoming SIP packet.
   pjsip_rx_data* build_rxdata(const string& msg, TransportFlow* tp = _tp_default, pj_pool_t* rdata_pool = NULL);

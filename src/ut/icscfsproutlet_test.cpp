@@ -20,11 +20,13 @@
 #include "utils.h"
 #include "test_utils.hpp"
 #include "icscfsproutlet.h"
+#include "mock_sas.h"
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
 #include "testingcommon.h"
+#include "mock_snmp_counter_table.hpp"
 
 using namespace std;
 using testing::StrEq;
@@ -90,8 +92,12 @@ public:
                                       PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                       "homedomain",
                                       std::unordered_set<std::string>(),
+                                      std::unordered_set<std::string>(),
+                                      true,
                                       sproutlets,
-                                      std::set<std::string>());
+                                      std::set<std::string>(),
+                                      nullptr,
+                                      nullptr);
   }
 
   ~ICSCFSproutletTestBase()
@@ -121,6 +127,23 @@ public:
 
     delete _icscf_proxy; _icscf_proxy = NULL;
     delete _icscf_sproutlet; _icscf_sproutlet = NULL;
+  }
+
+  /// Check that we logged an ICID to SAS.
+  void check_sas_correlator_icid(std::string value, bool present=true)
+  {
+    bool found_value = false;
+    std::vector<MockSASMessage*> markers = mock_sas_find_marker_multiple(MARKER_ID_IMS_CHARGING_ID);
+    for (MockSASMessage* marker : markers)
+    {
+      EXPECT_EQ(marker->var_params.size(), 1u);
+      if (marker->var_params[0] == value)
+      {
+        found_value = true;
+        break;
+      }
+    }
+    EXPECT_EQ(found_value, present);
   }
 
 protected:
@@ -1591,8 +1614,10 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
-  // Inject a INVITE request with orig in the Route header and a P-Served-User
-  // header.
+  // Inject a INVITE request with orig in the Route header, a P-Served-User
+  // header and a P-Charging-Vector header. Check the ICID from the PCV is
+  // logged to SAS.
+  mock_sas_collect_messages(true);
   Message msg1;
   msg1._first_hop = true;
   msg1._method = "INVITE";
@@ -1600,9 +1625,13 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
   msg1._extra = "Contact: sip:6505551000@" +
                 tp->to_string(true) +
                 ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
-  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>\r\n";
+  msg1._extra += "P-Charging-Vector: icid-value=4815152542";
   msg1._route = "Route: <sip:homedomain;orig>";
   inject_msg(msg1.get_request(), tp);
+  check_sas_correlator_icid("4815152542");
+  mock_sas_discard_messages();
+  mock_sas_collect_messages(false);
 
   // Expecting 100 Trying and forwarded INVITE
   ASSERT_EQ(2, txdata_count());

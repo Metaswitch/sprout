@@ -85,6 +85,8 @@ static pjsip_module mod_connection_tracking =
   NULL,                                 /* on_tsx_state()       */
 };
 
+// LCOV_EXCL_START - Stack not tested by UTs
+
 static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 {
   // Notify the connection tracker that the transport is active.
@@ -605,7 +607,6 @@ pj_status_t start_pjsip_thread()
   return PJ_SUCCESS;
 }
 
-
 pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
                        int pcscf_trusted_port,
@@ -619,11 +620,12 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& additional_home_domains,
                        const std::string& scscf_uri,
                        const std::string& sprout_hostname,
-                       const std::string& alias_hosts,
+                       const std::string& deprecated_alias_hosts,
+                       const std::string& local_alias_hosts,
+                       const std::string& remote_alias_hosts,
                        SIPResolver* sipresolver,
                        int record_routing_model,
                        const int default_session_expires,
-                       const int max_session_expires,
                        const int sip_tcp_connect_timeout,
                        const int sip_tcp_send_timeout,
                        QuiescingManager *quiescing_mgr_arg,
@@ -656,7 +658,6 @@ pj_status_t init_stack(const std::string& system_name,
 
   // Copy other functional options to stack data.
   stack_data.default_session_expires = default_session_expires;
-  stack_data.max_session_expires = max_session_expires;
   stack_data.sip_tcp_connect_timeout = sip_tcp_connect_timeout;
   stack_data.sip_tcp_send_timeout = sip_tcp_send_timeout;
   stack_data.enable_orig_sip_to_tel_coerce = enable_orig_sip_to_tel_coerce;
@@ -855,10 +856,10 @@ pj_status_t init_stack(const std::string& system_name,
 
   // Note that we no longer consider 127.0.0.1 and localhost as aliases.
 
-  // Parse the list of alias host names. Also add the Sprout hostname, and the
-  // sproutlet URIs
-  stack_data.aliases = std::unordered_set<std::string>();
-  stack_data.aliases.insert(sprout_hostname);
+  // Parse the list of local alias host names. Also add the Sprout hostname, and
+  // the sproutlet URIs
+  stack_data.local_aliases = std::unordered_set<std::string>();
+  stack_data.local_aliases.insert(sprout_hostname);
   for (std::vector<std::string>::iterator it = sproutlet_uris.begin();
        it != sproutlet_uris.end();
        ++it)
@@ -869,34 +870,57 @@ pj_status_t init_stack(const std::string& system_name,
                                                        false);
     if (sproutlet_uri)
     {
-      stack_data.aliases.insert(PJUtils::pj_str_to_string(&sproutlet_uri->host));
+      stack_data.local_aliases.insert(PJUtils::pj_str_to_string(&sproutlet_uri->host));
     }
   }
 
-  if (alias_hosts != "")
+  if (local_alias_hosts != "")
   {
-    std::list<std::string> aliases;
-    Utils::split_string(alias_hosts, ',', aliases, 0, true);
-    stack_data.aliases.insert(aliases.begin(), aliases.end());
+    std::list<std::string> local_aliases;
+    Utils::split_string(local_alias_hosts, ',', local_aliases, 0, true);
+    stack_data.local_aliases.insert(local_aliases.begin(), local_aliases.end());
   }
 
-  for (std::unordered_set<std::string>::iterator it = stack_data.aliases.begin();
-       it != stack_data.aliases.end();
+  if (deprecated_alias_hosts != "")
+  {
+    TRC_WARNING("Deprecated --alias (-n) used. Adding aliases to local aliases list.");
+    std::list<std::string> aliases;
+    Utils::split_string(deprecated_alias_hosts, ',', aliases, 0, true);
+    stack_data.local_aliases.insert(aliases.begin(), aliases.end());
+  }
+
+  TRC_STATUS("Local host aliases:");
+  for (std::unordered_set<std::string>::iterator it = stack_data.local_aliases.begin();
+       it != stack_data.local_aliases.end();
        ++it)
   {
+    TRC_STATUS(" %s",
+               it->c_str());
     pj_str_t alias_pj_str;
     pj_strdup2(stack_data.pool, &alias_pj_str, it->c_str());
     stack_data.name.push_back(alias_pj_str);
   }
 
-  TRC_STATUS("Local host aliases:");
-  for (std::vector<pj_str_t>::iterator it = stack_data.name.begin();
-       it != stack_data.name.end();
+  // Parse the list of remote alias host names.
+  stack_data.remote_aliases = std::unordered_set<std::string>();
+
+  if (remote_alias_hosts != "")
+  {
+    std::list<std::string> remote_aliases;
+    Utils::split_string(remote_alias_hosts, ',', remote_aliases, 0, true);
+    stack_data.remote_aliases.insert(remote_aliases.begin(), remote_aliases.end());
+  }
+
+  TRC_STATUS("Remote host aliases:");
+  for (std::unordered_set<std::string>::iterator it = stack_data.remote_aliases.begin();
+       it != stack_data.remote_aliases.end();
        ++it)
   {
-    TRC_STATUS(" %.*s",
-               (int)(*it).slen,
-               (*it).ptr);
+    TRC_STATUS(" %s",
+               it->c_str());
+    pj_str_t alias_pj_str;
+    pj_strdup2(stack_data.pool, &alias_pj_str, it->c_str());
+    stack_data.name.push_back(alias_pj_str);
   }
 
   // Set up the Last Value Cache, accumulators and counters.
@@ -984,3 +1008,5 @@ void destroy_stack(void)
   // Terminate PJSIP.
   term_pjsip();
 }
+
+// LCOV_EXCL_STOP

@@ -14,6 +14,7 @@
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
 #include "session_expires_helper.h"
+#include "mock_snmp_counter_table.hpp"
 
 using namespace std;
 using testing::MatchesRegex;
@@ -95,8 +96,12 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "proxy1.homedomain",
                                 std::unordered_set<std::string>(),
+                                std::unordered_set<std::string>(),
+                                true,
                                 _sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                nullptr,
+                                nullptr);
 
     // Schedule timers.
     SipTest::poll();

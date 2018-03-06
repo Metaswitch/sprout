@@ -1,7 +1,7 @@
 /**
- * @file mock_subscriber_data_manager.cpp
+ * @file mock_notify_sender.cpp
  *
- * Copyright (C) Metaswitch Networks 2015
+ * Copyright (C) Metaswitch Networks 2018
  * If license terms are provided to you in a COPYING file in the root directory
  * of the source code repository by which you are accessing this code, then
  * the license outlined in that COPYING file applies to your use.
@@ -9,11 +9,11 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#include "mock_subscriber_data_manager.h"
+#include "mock_notify_sender.h"
 
-MockSubscriberDataManager::MockSubscriberDataManager() :
-  SubscriberDataManager(NULL, NULL, NULL, true)
+MockNotifySender::MockNotifySender() :
+  NotifySender()
 {}
 
-MockSubscriberDataManager::~MockSubscriberDataManager()
+MockNotifySender::~MockNotifySender()
 {}

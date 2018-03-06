@@ -29,30 +29,22 @@ XDMConnection::XDMConnection(const std::string& server,
                              LoadMonitor *load_monitor,
                              SNMP::IPCountTable* xdm_cxn_count,
                              SNMP::EventAccumulatorTable* xdm_latency):
+  _client(new HttpClient(true,
+                         resolver,
+                         xdm_cxn_count,
+                         load_monitor,
+                         SASEvent::HttpLogLevel::PROTOCOL,
+                         NULL)),
   _http(new HttpConnection(server,
-                           true,
-                           resolver,
-                           xdm_cxn_count,
-                           load_monitor,
-                           SASEvent::HttpLogLevel::PROTOCOL,
-                           NULL)),
-  _latency_tbl(xdm_latency)
-{
-}
-
-/// Constructor supplying own connection. For UT use. Ownership passes
-/// to this object.
-XDMConnection::XDMConnection(HttpConnection* http,
-                             SNMP::EventAccumulatorTable* xdm_latency):
-  _http(http),
+                           _client)),
   _latency_tbl(xdm_latency)
 {
 }
 
 XDMConnection::~XDMConnection()
 {
-  delete _http;
-  _http = NULL;
+  delete _http; _http = NULL;
+  delete _client; _client = NULL;
 }
 
 bool XDMConnection::get_simservs(const std::string& user,
@@ -65,7 +57,13 @@ bool XDMConnection::get_simservs(const std::string& user,
 
   std::string url = "/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml";
 
-  HTTPCode http_code = _http->send_get(url, xml_data, user, trail);
+  HttpResponse response = _http->create_request(HttpClient::RequestType::GET, url)
+                          .set_sas_trail(trail)
+                          .set_username(user)
+                          .send();
+  
+  HTTPCode http_code = response.get_rc();
+  xml_data = response.get_body();
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))

@@ -169,6 +169,7 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
     }
   }
 
-  TRC_DEBUG("Classified URI as %d", (int)ret);
+  std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_OTHER, uri);
+  TRC_DEBUG("Classified URI %s as %d", uri_str.c_str(), (int)ret);
   return ret;
 }

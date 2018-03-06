@@ -11,6 +11,7 @@
 #include "contact_filtering.h"
 #include "pjsip.h"
 #include "pjutils.h"
+#include "aor_utils.h"
 
 // Defined in sip_parser.c in pjSIP
 void init_sip_parser(void);
@@ -39,7 +40,7 @@ public:
     pj_shutdown();
   };
 
-  void create_binding(AoR::Binding& binding, std::string instance_id)
+  void create_binding(Binding& binding, std::string instance_id)
   {
     binding._uri = "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931";
     binding._cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
@@ -65,50 +66,50 @@ pjsip_endpoint* GRUUTest::endpt;
 TEST_F(GRUUTest, Simple)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding, "hello");
   ASSERT_EQ("sip:user@domain.com;gr=hello",
-            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)binding.pub_gruu(pool)));
+            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)AoRUtils::pub_gruu(&binding, pool)));
 }
 
 TEST_F(GRUUTest, Proper)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding, "\"<urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6>\"");
   ASSERT_EQ("sip:user@domain.com;gr=urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
-            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)binding.pub_gruu(pool)));
+            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)AoRUtils::pub_gruu(&binding, pool)));
 }
 
 TEST_F(GRUUTest, NeedsEscaping)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding, "hel;lo");
   ASSERT_EQ("sip:user@domain.com;gr=hel%3blo",
-            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)binding.pub_gruu(pool)));
+            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)AoRUtils::pub_gruu(&binding, pool)));
 }
 
 TEST_F(GRUUTest, NoInstanceID)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding, "");
-  ASSERT_EQ(NULL, binding.pub_gruu(pool));
+  ASSERT_EQ(NULL, AoRUtils::pub_gruu(&binding, pool));
 }
 
 TEST_F(GRUUTest, NeedsEscapingQuoted)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding, "hel;lo");
-  ASSERT_EQ("\"sip:user@domain.com;gr=hel%3blo\"", binding.pub_gruu_quoted_string(pool));
+  ASSERT_EQ("\"sip:user@domain.com;gr=hel%3blo\"", AoRUtils::pub_gruu_quoted_string(&binding, pool));
 }
 
 TEST_F(GRUUTest, NoInstanceIDQuoted)
 {
   std::string aor = "sip:user@domain.com";
-  AoR::Binding binding(aor);
+  Binding binding(aor);
   create_binding(binding, "");
-  ASSERT_EQ("", binding.pub_gruu_quoted_string(pool));
+  ASSERT_EQ("", AoRUtils::pub_gruu_quoted_string(&binding, pool));
 }

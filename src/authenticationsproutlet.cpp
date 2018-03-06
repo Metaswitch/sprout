@@ -12,7 +12,6 @@
 #include "constants.h"
 #include "sproutsasevent.h"
 #include "authenticationsproutlet.h"
-#include "registration_utils.h"
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
@@ -334,9 +333,9 @@ int AuthenticationSproutletTsx::calculate_challenge_expiration_time(pjsip_msg* r
        contact_hdr = (pjsip_contact_hdr*)
           pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
   {
-    expires = std::max(expires, RegistrationUtils::expiry_for_binding(contact_hdr,
-                                                                      expires_hdr,
-                                                                      _authentication->_max_expires));
+    expires = std::max(expires, PJUtils::expiry_for_binding(contact_hdr,
+                                                            expires_hdr,
+                                                            _authentication->_max_expires));
   }
 
   return expires + time(NULL);
@@ -685,7 +684,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     std::string opaque;
     opaque.assign(buf, sizeof(buf));
     TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
-    SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 1u);
+    SAS::Marker opaque_marker(trail(), MARKER_ID_GENERIC_CORRELATOR, 1u);
     opaque_marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
     opaque_marker.add_var_param(opaque);
     SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);
@@ -871,7 +870,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // We've failed to store the nonce in memcached, so we have no hope of
       // successfully authenticating any repsonse to a 401 Unauthorized.  Send
       // a 500 Server Internal Error instead.
-      TRC_DEBUG("Failed to store nonce in memcached");
+      TRC_DEBUG("Failed to store nonce in memcached, for impi %s", impi.c_str());
       rsp->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
       rsp->line.status.reason = *pjsip_get_status_text(PJSIP_SC_INTERNAL_SERVER_ERROR);
 
@@ -935,7 +934,10 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
   pjsip_sip_uri* routing_uri = get_routing_uri(req);
-  if (routing_uri != NULL)
+
+  // If the URI that routed to this Sproutlet isn't reflexive, just ignore it
+  // and use the configured scscf uri
+  if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
   {
     SCSCFUtils::get_scscf_uri(get_pool(req),
                               get_local_hostname(routing_uri),
@@ -1051,7 +1053,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       std::string opaque = PJUtils::pj_str_to_string(&credentials->opaque);
       TRC_DEBUG("Log opaque value %s to SAS as a generic correlator", opaque.c_str());
-      SAS::Marker opaque_marker(trail(), MARKED_ID_GENERIC_CORRELATOR, 2u);
+      SAS::Marker opaque_marker(trail(), MARKER_ID_GENERIC_CORRELATOR, 2u);
       opaque_marker.add_static_param((uint32_t)UniquenessScopes::DIGEST_OPAQUE);
       opaque_marker.add_var_param(opaque);
       SAS::report_marker(opaque_marker, SAS::Marker::Scope::Trace);

@@ -1,5 +1,5 @@
 /**
- * @file enumservice.cpp class implementation for an ENUM service provider
+ * @file dnsresolver.cpp class implementation for a DNS resolver
  *
  * Copyright (C) Metaswitch Networks 2015
  * If license terms are provided to you in a COPYING file in the root directory
@@ -58,6 +58,7 @@ DNSResolver::DNSResolver(const std::vector<struct IP46Address>& servers) :
   // Convert our vector of IP46Addresses into the linked list of
   // ares_addr_nodes which ares_set_server takes.
   size_t server_count = std::min((size_t)3u, servers.size());
+
   for (size_t ii = 0;
        ii < server_count;
        ii++)
@@ -65,20 +66,26 @@ DNSResolver::DNSResolver(const std::vector<struct IP46Address>& servers) :
     IP46Address server = servers[ii];
     struct ares_addr_node* ares_addr = &_ares_addrs[ii];
     memset(ares_addr, 0, sizeof(struct ares_addr_node));
+
     if (ii > 0)
     {
+      // LCOV_EXCL_START
       int prev_idx = ii - 1;
       _ares_addrs[prev_idx].next = ares_addr;
+      // LCOV_EXCL_STOP
     }
 
     ares_addr->family = server.af;
+
     if (server.af == AF_INET)
     {
       memcpy(&ares_addr->addr.addr4, &server.addr.ipv4, sizeof(ares_addr->addr.addr4));
     }
     else
     {
+      // LCOV_EXCL_START
       memcpy(&ares_addr->addr.addr6, &server.addr.ipv6, sizeof(ares_addr->addr.addr6));
+      // LCOV_EXCL_STOP
     }
   }
   ares_set_servers(_channel, &(_ares_addrs[0]));
@@ -92,8 +99,10 @@ DNSResolver::~DNSResolver()
   // If we have a left-over NAPTR reply, destroy it.
   if (_naptr_reply != NULL)
   {
+    // LCOV_EXCL_START
     free_naptr_reply(_naptr_reply);
     _naptr_reply = NULL;
+    // LCOV_EXCL_STOP
   }
 }
 
@@ -104,6 +113,7 @@ void DNSResolver::destroy(DNSResolver* resolver)
 }
 
 
+// LCOV_EXCL_START
 int DNSResolver::perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail)
 {
   send_naptr_query(domain, trail);
@@ -121,13 +131,11 @@ int DNSResolver::perform_naptr_query(const std::string& domain, struct ares_napt
   return status;
 }
 
-
 void DNSResolver::free_naptr_reply(struct ares_naptr_reply* naptr_reply) const
 {
   // Just call through to ares to free off the data.
   ares_free_data(naptr_reply);
 }
-
 
 void DNSResolver::send_naptr_query(const std::string& domain, SAS::TrailId trail)
 {
@@ -148,7 +156,6 @@ void DNSResolver::send_naptr_query(const std::string& domain, SAS::TrailId trail
              DNSResolver::ares_callback,
              this);
 }
-
 
 void DNSResolver::wait_for_response()
 {
@@ -214,7 +221,6 @@ void DNSResolver::wait_for_response()
   }
 }
 
-
 void DNSResolver::ares_callback(void* arg,
                                 int status,
                                 int timeouts,
@@ -263,3 +269,4 @@ DNSResolver* DNSResolverFactory::new_resolver(const std::vector<struct IP46Addre
 {
   return new DNSResolver(servers);
 }
+// LCOV_EXCL_STOP

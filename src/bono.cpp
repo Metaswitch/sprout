@@ -94,7 +94,6 @@ extern "C" {
 #include "ifchandler.h"
 #include "hssconnection.h"
 #include "aschain.h"
-#include "registration_utils.h"
 #include "custom_headers.h"
 #include "dialog_tracker.hpp"
 #include "quiescing_manager.h"
@@ -216,7 +215,7 @@ public:
   {
     if (_flush_required)
     {
-      SAS::Marker flush_marker(_trail, MARKED_ID_FLUSH);
+      SAS::Marker flush_marker(_trail, MARKER_ID_FLUSH);
       SAS::report_marker(flush_marker);
     }
   }

@@ -403,6 +403,7 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         // capabilitires, or the HSS is temporarily unavailable). There was at
         // least one valid S-CSCF (as this is retry processing). The I-CSCF
         // must return 504 (TS 24.229, 5.3.1.3) in this case.
+        TRC_ERROR("I-CSCF can't select an S-CSCF for REGISTER request");
         rsp->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
         rsp->line.status.reason =
           *pjsip_get_status_text(rsp->line.status.code);
@@ -754,6 +755,11 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
 
     PJUtils::add_route_header(req, scscf_sip_uri, get_pool(req));
+
+    // We might be invoking a directly attached AS here, so we should log the
+    // ICID if it exists
+    PJUtils::mark_icid(trail(), req);
+
     send_request(req);
   }
   else if ((uri_class == OFFNET_SIP_URI) ||
