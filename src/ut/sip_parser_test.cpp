@@ -47,6 +47,7 @@ public:
   std::string parse_and_print_one(std::string header, std::string hname, CloneType ct = CloneType::None);
 };
 
+// Verify the function of the P-Charging-Vector parse and print functions
 TEST_F(SipParserTest, PChargingVector)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"

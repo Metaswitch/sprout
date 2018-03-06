@@ -2300,7 +2300,7 @@ bool PJUtils::needs_quoting(const char *inbuf,
   // Note that we assume for simplicity that if the value starts with '[',
   // its an ipv6 address (int_parse_host in sip_parser.c makes the same
   // assumption and the pjsip_HOST_SPEC doesn't cover IPv6 parsing).
-  bool quote = false;
+  bool needs_quoting = false;
 
   // Check whether the value already quoted, or an IPv6 address
   if ((inbuf[0] != '"') && (inbuf[0] != '['))
@@ -2308,12 +2308,13 @@ bool PJUtils::needs_quoting(const char *inbuf,
     const pjsip_parser_const_t *pc = pjsip_parser_const();
     for (size_t index = 0; index < length; index++)
     {
-      quote = quote || (!pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) &&
+      needs_quoting = needs_quoting ||
+                       (!pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) &&
                         !pj_cis_match(&pc->pjsip_HOST_SPEC, inbuf[index]));
     }
   }
 
-  return quote;
+  return needs_quoting;
 }
 
 // Add Changing Function param to the list for a PCFA header
