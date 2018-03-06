@@ -90,6 +90,7 @@ extern "C" {
 #include "sproutlet_options.h"
 #include "astaire_impistore.h"
 #include "updater.h"
+#include "sasservice.h"
 
 enum OptionTypes
 {
@@ -2058,7 +2059,7 @@ int main(int argc, char* argv[])
   quiescing_mgr = new QuiescingManager();
   quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
-  // Initialise the SasService, to read the Sas config to pass into SAS::Init
+  // Initialise the SasService, to read the SAS config to pass into SAS::Init
   SasService* sas_service = new SasService();
 
   // Initialize the PJSIP stack and associated subsystems.
