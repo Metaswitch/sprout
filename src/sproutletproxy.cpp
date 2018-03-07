@@ -1162,7 +1162,18 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
 
     // We don't know when this timer is going to pop, so increment the
     // _pending_callbacks count now and only decrement it when the timer
-    // pops or when we know we've cancelled it successfully.
+    // pops or when we know we've cancelled it successfully.  We could have
+    // implemented this by incrementing _pending_callbacks for the lifetime
+    // of the TimerCallback object instead (in which case we wouldn't have had
+    // to decrement it in both the cancel and pop routines below), but this
+    // would have meant making _pending_callbacks an atomic integer because
+    // it would have needed to be incremented outside the transaction lock.
+    // Swings and roundabouts.
+    //
+    // We need _pending_callbacks to take account of timers in flight, because
+    // otherwise the Tsx object might be destroyed after the timer has popped
+    // but before its had a chance to run, in which case we'd end up
+    // threading a destroyed object.
     _pending_callbacks++;
     TRC_DEBUG("Increment pending callbacks to: %d", _pending_callbacks);
   }
@@ -1177,7 +1188,9 @@ bool SproutletProxy::UASTsx::cancel_timer(TimerID id)
   if (_sproutlet_proxy->cancel_timer(tentry))
   {
     // Successfully cancelled.  Decrement the pending callbacks count
-    // incremented above.
+    // incremented in SproutletProxy::UASTsx::schedule_timer.  Note that
+    // if the cancel failed, it will be because the timer has popped, in which
+    // case _pending_callbacks will be decremented by process_timer_pop below
     _pending_callbacks--;
     TRC_DEBUG("Decrement pending callbacks to: %d", _pending_callbacks);
   }
@@ -1220,6 +1233,10 @@ void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
   enter_context();
 
   // Timer callback has been made so decrement the pending callback count.
+  // Note that we need to decrement _pending_callbacks both in this routine
+  // and in SproutletProxy::UASTsx::cancel_timer, the latter IFF the PJSIP
+  // cancel call did not fail (if it failed, then the timer will have popped,
+  // in which case this routine will eventually get called).
   _pending_callbacks--;
   TRC_DEBUG("Decrement pending callbacks to: %d", _pending_callbacks);
 
@@ -1354,11 +1371,21 @@ void SproutletProxy::UASTsx::check_destroy()
       (_pending_req_q.empty()) &&
       (_pending_timers.empty()) &&
       (_tsx == NULL) &&
-      (_pending_callbacks == 0))
+      (_pending_callbacks <= 0))
   {
     // UAS transaction has been destroyed and all Sproutlets are complete.
     TRC_DEBUG("Safe for UASTsx to suicide");
     _pending_destroy = true;
+
+    // _pending_callbacks should never go negative, so make an error log with
+    // the trail ID so that we have diagnostics should this ever happen.
+    if (_pending_callbacks < 0)
+    {
+      //LCOV_EXCL_START
+      TRC_ERROR("Pending callbacks count is negative (%d) for trail ID %lu",
+                                               _pending_callbacks, trail());
+      //LCOV_EXCL_STOP
+    }
   }
 }
 
