@@ -738,9 +738,8 @@ HTTPCode SubscriberManager::get_subscriptions(const std::string& aor_id,
   }
 
   // Set the subscriptions to return to the caller.
-  subscriptions = SubscriberDataUtils::copy_active_subscriptions(aor->subscriptions(),
-                                                                 time(NULL),
-                                                                 trail);
+  subscriptions = aor->subscriptions();
+  aor->_subscriptions.clear();
 
   delete aor; aor = NULL;
   return HTTP_OK;
