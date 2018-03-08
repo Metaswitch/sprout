@@ -20,6 +20,7 @@ extern "C" {
 #include "log.h"
 #include "constants.h"
 #include "custom_headers.h"
+#include "pjutils.h"
 
 /// Custom parser for Privacy header. This is registered with PJSIP below
 /// in register_custom_headers().
@@ -853,11 +854,12 @@ void *pjsip_p_c_v_hdr_shallow_clone(pj_pool_t* pool, const void* o)
 
 int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
 {
-  const pjsip_parser_const_t *pc = pjsip_parser_const();
   pjsip_p_c_v_hdr* hdr = (pjsip_p_c_v_hdr*)h;
   char* p = buf;
 
   // Check the fixed parts of the header will fit.
+  // We always need an icid-value for the header to be valid (even if icid.slen
+  // is 0), so we always quote this to give us a guaranteed valid parameter value.
   int needed = 0;
   needed += hdr->name.slen; // Header name
   needed += 2;              // : and space
@@ -865,26 +867,51 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   needed += 2;              // Quote the icid-value
   needed += hdr->icid.slen; // <icid>
   needed += 1;              // ;
+
+  // For the other parameters, check whether we need to quote them
   if (hdr->orig_ioi.slen) {
     needed += 9;              // orig-ioi=
     needed += hdr->orig_ioi.slen; // <orig-ioi>
+    if (PJUtils::needs_quoting(hdr->orig_ioi.ptr, hdr->orig_ioi.slen))
+    {
+      needed += 2;            // quotes
+    }
     needed += 1;              // ;
   }
   if (hdr->term_ioi.slen) {
     needed += 9;              // term-ioi=
     needed += hdr->term_ioi.slen; // <term-ioi>
+    if (PJUtils::needs_quoting(hdr->term_ioi.ptr, hdr->term_ioi.slen))
+    {
+      needed += 2;            // quotes
+    }
     needed += 1;              // ;
   }
+
+  // Quoting is not an option for the icid-gen-addr parameter
   if (hdr->icid_gen_addr.slen) {
     needed += 18;              // icid-generated-at=
     needed += hdr->icid_gen_addr.slen; // <icid-generated-at>
+    needed += 1;               // ;
   }
 
+  for (pjsip_param* op = hdr->other_param.next;
+        (op != NULL) && (op != &hdr->other_param);
+        op = op->next)
+  {
+    needed += op->name.slen + 1;  // <other param>=
+    needed += op->value.slen;     // "<other param value>"
+    if (PJUtils::needs_quoting(op->value.ptr, op->value.slen))
+    {
+      needed += 2;                // quotes
+    }
+    needed += 1;                  // ;
+  }
   if (needed > (pj_ssize_t)len) {
     return -1;
   }
 
-  // Now write the fixed header out.
+  // Now write the fixed header and icid-value out.
   pj_memcpy(p, hdr->name.ptr, hdr->name.slen);
   p += hdr->name.slen;
   *p++ = ':';
@@ -897,36 +924,69 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   }
   p += hdr->icid.slen;
   *p++ = '"';
+
+  // Write out the other parameters, quoting as necessary
   if (hdr->orig_ioi.slen) {
     *p++ = ';';
     pj_memcpy(p, "orig-ioi=", 9);
     p += 9;
+    bool quote_me = PJUtils::needs_quoting(hdr->orig_ioi.ptr, hdr->orig_ioi.slen);
+    if (quote_me)
+    {
+      *p++ = '"';
+    }
     pj_memcpy(p, hdr->orig_ioi.ptr, hdr->orig_ioi.slen);
     p += hdr->orig_ioi.slen;
+    if (quote_me)
+    {
+      *p++ = '"';
+    }
   }
   if (hdr->term_ioi.slen) {
     *p++ = ';';
     pj_memcpy(p, "term-ioi=", 9);
     p += 9;
+    bool quote_me = PJUtils::needs_quoting(hdr->term_ioi.ptr, hdr->term_ioi.slen);
+    if (quote_me)
+    {
+      *p++ = '"';
+    }
     pj_memcpy(p, hdr->term_ioi.ptr, hdr->term_ioi.slen);
     p += hdr->term_ioi.slen;
+    if (quote_me)
+    {
+      *p++ = '"';
+    }
   }
   if (hdr->icid_gen_addr.slen) {
     *p++ = ';';
     pj_memcpy(p, "icid-generated-at=", 18);
     p += 18;
+    // No quoting possible - this is always a "host"
     pj_memcpy(p, hdr->icid_gen_addr.ptr, hdr->icid_gen_addr.slen);
     p += hdr->icid_gen_addr.slen;
   }
 
-  // Attempt to write out the other params.
-  pj_ssize_t printed = pjsip_param_print_on(&hdr->other_param, p, buf+len-p,
-                                            &pc->pjsip_TOKEN_SPEC,
-                                            &pc->pjsip_TOKEN_SPEC, ';');
-  if (printed < 0) {
-    return -1;
+  for (pjsip_param* op = hdr->other_param.next;
+        (op != NULL) && (op != &hdr->other_param);
+        op = op->next)
+  {
+    *p++ = ';';
+    pj_memcpy(p, op->name.ptr, op->name.slen);
+    p += op->name.slen;
+    *p++ = '=';
+    bool quote_me = PJUtils::needs_quoting(op->value.ptr, op->value.slen);
+    if (quote_me)
+    {
+      *p++ = '"';
+    }
+    pj_memcpy(p, op->value.ptr, op->value.slen);
+    p += op->value.slen;
+    if (quote_me)
+    {
+      *p++ = '"';
+    }
   }
-  p += printed;
   *p = '\0';
 
   return p - buf;
