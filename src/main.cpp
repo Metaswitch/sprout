@@ -1332,7 +1332,7 @@ void signal_handler(int sig)
   // will trigger the log files to be copied to the diags bundle
   TRC_COMMIT();
 
-  Log::dumpRamRecorder("/var/log/sprout");
+  RamRecorder::dump("/var/log/sprout");
 
   // Dump a core.
   abort();
@@ -1765,7 +1765,7 @@ int main(int argc, char* argv[])
   if (opt.ram_record_everything)
   {
     TRC_INFO("RAM record everything enabled");
-    Log::enableRamRecordEverything();
+    RamRecorder::recordEverything();
   }
 
   // We should now have a connection to syslog so we can write the started ENT
