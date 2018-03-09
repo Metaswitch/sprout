@@ -302,7 +302,10 @@ protected:
     virtual void on_tsx_state(pjsip_event* event);
 
     // A count of the number of pending Callbacks that are queued for this
-    // UASTsx plus the number of outstanding PJSIP timers.
+    // UASTsx plus the number of outstanding timer callbacks, where this
+    // includes timer callbacks outstanding in PJSIP, and timer callbacks
+    // which have been popped by PJSIP, but whose callback is awaiting 
+    // scheduling on a worker thread.
     // A non-zero count prevents the UASTsx from being destroyed
     int _pending_callbacks = 0;
 
