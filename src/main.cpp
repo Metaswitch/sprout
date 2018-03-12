@@ -37,7 +37,6 @@ extern "C" {
 #include "logger.h"
 #include "utils.h"
 #include "cfgoptions.h"
-#include "sasevent.h"
 #include "analyticslogger.h"
 #include "subscriber_manager.h"
 #include "stack.h"
@@ -2059,16 +2058,15 @@ int main(int argc, char* argv[])
   quiescing_mgr = new QuiescingManager();
   quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
+  std::string system_type_sas = (opt.pcscf_trusted_port != 0) ? "bono" : "sprout";
+
   // Initialise the SasService, to read the SAS config to pass into SAS::Init
-  SasService* sas_service = new SasService();
+  SasService* sas_service = new SasService(opt.sas_system_name, system_type_sas, opt.sas_signaling_if);
 
   // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.sas_system_name,
-                      sas_service->get_single_sas_server(),
-                      opt.pcscf_trusted_port,
+  status = init_stack(opt.pcscf_trusted_port,
                       opt.pcscf_untrusted_port,
                       opt.port_scscf,
-                      opt.sas_signaling_if,
                       opt.sproutlet_ports,
                       opt.local_host,
                       opt.public_host,
