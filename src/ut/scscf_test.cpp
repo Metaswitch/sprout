@@ -1152,10 +1152,16 @@ void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
   RespMatcher(100).matches(out);
   free_txdata();
 
-  // error goes back
+  // Error goes back
   out = current_txdata()->msg;
   RespMatcher(st_code, body, reason).matches(out);
   free_txdata();
+
+  // Send ACK to finish transaction.
+  msg._method = "ACK";
+  msg._in_dialog = true;
+  inject_msg(msg.get_request());
+  poll();
 }
 
 // Fill in the irs info object to be returned by the mock subscriber manager.

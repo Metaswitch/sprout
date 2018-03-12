@@ -175,6 +175,19 @@ TEST_F(ThreadDispatcherTest, OverloadedInviteTest)
   inject_msg_thread(msg.get_request());
 }
 
+// Messages should be rejected with a 503 if the load monitor returns false.
+TEST_F(ThreadDispatcherTest, OverloadedMessageTest)
+{
+  TestingCommon::Message msg;
+  msg._method = "MESSAGE";
+
+  EXPECT_CALL(load_monitor, admit_request(_, false)).WillOnce(Return(false));
+  EXPECT_CALL(load_monitor, get_target_latency_us()).WillOnce(Return(100000));
+  EXPECT_CALL(*mod_mock, on_tx_response(ResultOf(get_tx_status_code, 503)));
+
+  inject_msg_thread(msg.get_request());
+}
+
 // Invites older than the specified request_on_queue_timeout parameter should
 // be rejected with a 503.
 TEST_F(ThreadDispatcherTest, RejectOldInviteTest)

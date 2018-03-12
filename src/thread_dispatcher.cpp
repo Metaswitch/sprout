@@ -503,19 +503,53 @@ static SIPEventPriorityLevel get_rx_msg_priority(pjsip_rx_data* rdata,
   // Determine the priority of the request based on any Resource-Priority
   // headers. This function call returns the default priority if the message
   // does not require prioritization.
-  return PJUtils::get_priority_of_message(rdata->msg_info.msg, rph_service, trail);
+  return PJUtils::get_priority_of_message(rdata->msg_info.msg,
+                                          rph_service,
+                                          trail);
 }
 
 static pj_status_t reject_with_retry_header(pjsip_rx_data* rdata,
                                             pjsip_status_code code)
 {
-  pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
-  return PJUtils::respond_stateless(stack_data.endpt,
-                                    rdata,
-                                    code,
-                                    NULL,
-                                    (pjsip_hdr*)retry_after,
-                                    NULL);
+  pjsip_retry_after_hdr* retry_after =
+                           pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
+
+  if (rdata->msg_info.msg->line.req.method.id == PJSIP_INVITE_METHOD)
+  {
+    pjsip_transaction* invite_tsx;
+    pj_status_t status = pjsip_tsx_create_uas(NULL, rdata, &invite_tsx);
+
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START - Don't test PJSIP failures in the Sprout UTs
+      return PJUtils::respond_stateless(stack_data.endpt,
+                                        rdata,
+                                        code,
+                                        NULL,
+                                        (pjsip_hdr*)retry_after,
+                                        NULL);
+      // LCOV_EXCL_STOP
+    }
+
+    set_trail(invite_tsx, get_trail(rdata));
+    pjsip_tsx_recv_msg(invite_tsx, rdata);
+    return PJUtils::respond_stateful(stack_data.endpt,
+                                     invite_tsx,
+                                     rdata,
+                                     code,
+                                     NULL,
+                                     (pjsip_hdr*)retry_after,
+                                     NULL);
+  }
+  else
+  {
+    return PJUtils::respond_stateless(stack_data.endpt,
+                                      rdata,
+                                      code,
+                                      NULL,
+                                      (pjsip_hdr*)retry_after,
+                                      NULL);
+  }
 }
 
 // Reject a SIP message with a 503 Service Unavailable
