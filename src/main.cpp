@@ -37,7 +37,6 @@ extern "C" {
 #include "logger.h"
 #include "utils.h"
 #include "cfgoptions.h"
-#include "sasevent.h"
 #include "analyticslogger.h"
 #include "subscriber_manager.h"
 #include "stack.h"
@@ -90,6 +89,7 @@ extern "C" {
 #include "sproutlet_options.h"
 #include "astaire_impistore.h"
 #include "updater.h"
+#include "sasservice.h"
 
 enum OptionTypes
 {
@@ -301,10 +301,8 @@ static void usage(void)
        "                            authentication vectors. There is currently no geo-redundant storage\n"
        "                            for authentication vectors. If this option isn't provided, Sprout uses\n"
        "                            the local site registration store.\n"
-       " -S, --sas <ipv4>,<system name>\n"
-       "                            Use specified host as Service Assurance Server and specified\n"
-       "                            system name to identify this system to SAS.  If this option isn't\n"
-       "                            specified SAS is disabled\n"
+       " -S, --sas <system name>\n"
+       "                            Use specified system name to identify this system to SAS.\n"
        " -H, --hss <server>         Name/IP address of the Homestead cluster\n"
        " -C, --record-routing-model <model>\n"
        "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
@@ -784,22 +782,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case 'S':
       {
-        std::vector<std::string> sas_options;
-        Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
-
-        if ((sas_options.size() == 2) &&
-            !sas_options[0].empty() &&
-            !sas_options[1].empty())
-        {
-          options->sas_server = sas_options[0];
-          options->sas_system_name = sas_options[1];
-          TRC_INFO("SAS set to %s", options->sas_server.c_str());
-          TRC_INFO("System name is set to %s", options->sas_system_name.c_str());
-        }
-        else
-        {
-          TRC_WARNING("Invalid --sas option: %s", pj_optarg);
-        }
+        options->sas_system_name = std::string(pj_optarg);;
+        TRC_INFO("SAS system name is set to %s", options->sas_system_name.c_str());
       }
       break;
 
@@ -1416,6 +1400,7 @@ AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
+SasService* sas_service = NULL;
 IFCConfiguration ifc_configuration = {};
 
 int create_astaire_stores(struct options opt,
@@ -1683,7 +1668,6 @@ int main(int argc, char* argv[])
   opt.reg_max_expires = 300;
 
   opt.sub_max_expires = 0;
-  opt.sas_server = "0.0.0.0";
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
   opt.worker_threads = 1;
@@ -1811,12 +1795,6 @@ int main(int argc, char* argv[])
 
   std::vector<std::string> sproutlet_uris;
   SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
-
-  if (opt.sas_server == "0.0.0.0")
-  {
-    TRC_WARNING("SAS server option was invalid or not configured - SAS is disabled");
-    CL_SPROUT_INVALID_SAS_OPTION.log();
-  }
 
   if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
   {
@@ -2069,13 +2047,15 @@ int main(int argc, char* argv[])
   quiescing_mgr = new QuiescingManager();
   quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
+  std::string system_type_sas = (opt.pcscf_trusted_port != 0) ? "bono" : "sprout";
+
+  // Initialise the SasService, to read the SAS config to pass into SAS::Init
+  SasService* sas_service = new SasService(opt.sas_system_name, system_type_sas, opt.sas_signaling_if);
+
   // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.sas_system_name,
-                      opt.sas_server,
-                      opt.pcscf_trusted_port,
+  status = init_stack(opt.pcscf_trusted_port,
                       opt.pcscf_untrusted_port,
                       opt.port_scscf,
-                      opt.sas_signaling_if,
                       opt.sproutlet_ports,
                       opt.local_host,
                       opt.public_host,
@@ -2575,6 +2555,7 @@ int main(int argc, char* argv[])
   delete hss_connection;
   delete fifc_service;
   delete sifc_service;
+  delete sas_service;
   delete rph_service;
   delete quiescing_mgr;
   delete exception_handler;
