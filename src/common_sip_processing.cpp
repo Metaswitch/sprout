@@ -285,12 +285,15 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
       PJUtils::mark_sas_call_branch_ids(trail, tdata->msg);
     }
 
-    if (tdata->msg->type == PJSIP_RESPONSE_MSG && (tdata->msg->line.status.code > 199))
+    // Log a SIP protocol error marker for 4xx, 5xx or 6xx responses, so we can
+    // search by error code.
+    if (tdata->msg->type == PJSIP_RESPONSE_MSG && (tdata->msg->line.status.code > 399))
     {
       SAS::Marker error_marker(trail, MARKER_ID_PROTOCOL_ERROR, 1u);
       error_marker.add_static_param(5); // SIP protocol
-      error_marker.add_static_param(503);
-      error_marker.add_var_param("Bad thing");
+      error_marker.add_static_param(tdata->msg->line.status.code);
+      // We can't give a more specific error string here - it would be a waste of bandwidth.
+      error_marker.add_var_param("");
       SAS::report_marker(error_marker);
     }
 
