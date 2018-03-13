@@ -1,2 +1,3 @@
 usr/lib/*.so usr/share/clearwater/sprout/lib
 usr/lib/*.so.* usr/share/clearwater/sprout/lib
+build/bin/sprout_io_trap.so usr/share/clearwater/sprout/lib

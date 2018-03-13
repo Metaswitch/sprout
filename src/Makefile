@@ -1,4 +1,4 @@
-TARGETS := sprout call-diversion-as.so gemini-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so
+TARGETS := sprout call-diversion-as.so gemini-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so sprout_io_trap.so
 
 TEST_TARGETS := sprout_test
 
@@ -312,6 +312,10 @@ sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
 mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
 mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
+
+sprout_io_trap.so_SOURCES := io_trap.cpp
+sprout_io_trap.so_CPPFLAGS := -fPIC -I../modules/cpp-common/include
+sprout_io_trap.so_LDFLAGS := -shared
 
 VPATH = ../modules/cpp-common/src ../modules/clearwater-s4/src ../modules/clearwater-s4/src/ut ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
 
