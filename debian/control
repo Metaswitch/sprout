@@ -75,6 +75,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: sprout-scscf (= ${binary:Version})
+Recommends: sprout-base-dbg
 Description: Debugging symbols for sprout-scscf, the SIP Router S-CSCF plug-in
 
 Package: sprout-icscf
@@ -88,6 +89,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: sprout-icscf (= ${binary:Version})
+Recommends: sprout-base-dbg
 Description: Debugging symbols for sprout-icscf, the SIP Router I-CSCF plug-in
 
 Package: sprout-bgcf
@@ -101,6 +103,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: sprout-bgcf (= ${binary:Version})
+Recommends: sprout-base-dbg
 Description: Debugging symbols for sprout-bgcf, the SIP Router BGCF plug-in
 
 Package: sprout-mmtel-as
@@ -114,6 +117,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: sprout-mmtel-as (= ${binary:Version})
+Recommends: sprout-base-dbg
 Description: Debugging symbols for sprout-mmtel-as, the SIP Router MMTEL Application Server plug-in
 
 Package: gemini-as
@@ -127,6 +131,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: gemini-as (= ${binary:Version})
+Recommends: sprout-base-dbg
 Description: Debugging symbols for gemini, the Mobile Twinning Application Server plug-in
 
 Package: call-diversion-as
@@ -140,6 +145,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: call-diversion-as (= ${binary:Version})
+Recommends: sprout-base-dbg
 Description: Debugging symbols for the Call Diversion Application Server plug-in
 
 Package: mangelwurzel-as
@@ -153,6 +159,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: mangelwurzel-as (= ${binary:Version})
+Recommends: sprout-base-dbg
 Description: Debugging symbols for mangelwurzel, the B2BUA and SCC-AS emulator
 
 Package: bono-node
