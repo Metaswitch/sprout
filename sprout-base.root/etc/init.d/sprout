@@ -189,6 +189,7 @@ get_daemon_args()
         [ -z "$sprout_request_on_queue_timeout" ] || request_on_queue_timeout_arg="--request-on-queue-timeout=$sprout_request_on_queue_timeout"
         [ -z "$alias_list" ] || deprecated_alias_list_arg="--alias=$alias_list"
         [ "$always_serve_remote_aliases" != "Y" ] || always_serve_remote_aliases_arg="--always-serve-remote-aliases"
+        [ "$ram_record_everything" != "Y" ] || ram_recording_arg="--ram-record-everything"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -242,6 +243,7 @@ get_daemon_args()
                      --local-alias-list=$public_ip,$public_hostname,$local_alias_list
                      --remote-alias-list=$remote_alias_list
                      $always_serve_remote_aliases_arg
+                     $ram_recording_arg
                      --homestead-timeout=$sprout_homestead_timeout_ms"
 
         if [ -n "$reg_max_expires" ]
