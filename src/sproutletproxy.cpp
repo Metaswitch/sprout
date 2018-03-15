@@ -451,10 +451,6 @@ pj_bool_t SproutletProxy::on_rx_response(pjsip_rx_data *rdata)
     pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
     while (hvia != NULL)
     {
-      TRC_DEBUG("found hvia\n");
-      TRC_DEBUG("%s", PJUtils::hdr_to_string(hvia).c_str());
-      TRC_DEBUG("%s", PJUtils::pj_str_to_string(&hvia->sent_by.host).c_str());
-
       std::string local_hostname_unused;
       std::string alias;
 
@@ -470,6 +466,7 @@ pj_bool_t SproutletProxy::on_rx_response(pjsip_rx_data *rdata)
 
       if (match.sproutlet != NULL)
       {
+        TRC_DEBUG("Removing internal Via");
         PJUtils::remove_top_via(tdata);
       }
       else
