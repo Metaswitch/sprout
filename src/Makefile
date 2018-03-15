@@ -105,7 +105,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          s4.cpp \
                          s4_handlers.cpp \
                          s4_chronoshandlers.cpp \
-                         registration_sender.cpp
+                         registration_sender.cpp \
+                         sasservice.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \

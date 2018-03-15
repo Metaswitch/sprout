@@ -695,16 +695,6 @@ TEST_F(AuthenticationTest, NoAuthorizationInDialog)
   auth_sproutlet_allows_request();
 }
 
-TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
-{
-  // Test that the authentication module lets through emergency REGISTER requests
-  AuthenticationMessage msg("REGISTER");
-  msg._auth_hdr = false;
-  msg._sos = true;
-  inject_msg(msg.get());
-  auth_sproutlet_allows_request();
-}
-
 TEST_F(AuthenticationTest, NoAuthorizationDigest)
 {
   // Test that the authentication module lets through non-REGISTER requests that
@@ -770,9 +760,29 @@ TEST_F(AuthenticationTest, IntegrityProtectedIpAssocYes)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
 
+TEST_F(AuthenticationTest, AuthorizationEmergencyReg)
+{
+  // Test that emergency REGISTER requests still require authentication
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  AuthenticationMessage msg("REGISTER");
+  msg._auth_hdr = false;
+  msg._sos = true;
+  inject_msg(msg.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+}
+
 // Tests that authentication is needed on registers that have at least one non
 // emergency contact
-TEST_F(AuthenticationTest, AuthorizationEmergencyReg)
+TEST_F(AuthenticationTest, AuthorizationEmergencyRegExtraContact)
 {
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");

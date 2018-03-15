@@ -72,7 +72,6 @@ setup_environment()
 get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
-        sas_server=0.0.0.0
         sprout_rr_level="pcscf"
 
         # These Sproutlets are enabled by default. They listen on different
@@ -210,7 +209,7 @@ get_daemon_args()
                      $enum_suffix_arg
                      $enum_file_arg
                      $default_tel_uri_translation_arg
-                     --sas=$sas_server,$NAME@$public_hostname
+                     --sas=$NAME@$public_hostname
                      --dns-server=$signaling_dns_server
                      --worker-threads=$num_worker_threads
                      --http-threads=$num_http_threads

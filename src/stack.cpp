@@ -38,9 +38,6 @@ extern "C" {
 #include "eventq.h"
 #include "pjutils.h"
 #include "log.h"
-#include "sas.h"
-#include "saslogger.h"
-#include "sproutsasevent.h"
 #include "stack.h"
 #include "utils.h"
 #include "zmq_lvc.h"
@@ -607,12 +604,9 @@ pj_status_t start_pjsip_thread()
   return PJ_SUCCESS;
 }
 
-pj_status_t init_stack(const std::string& system_name,
-                       const std::string& sas_address,
-                       int pcscf_trusted_port,
+pj_status_t init_stack(int pcscf_trusted_port,
                        int pcscf_untrusted_port,
                        int scscf_port,
-                       bool sas_signaling_if,
                        std::set<int> sproutlet_ports,
                        const std::string& local_host,
                        const std::string& public_host,
@@ -742,21 +736,6 @@ pj_status_t init_stack(const std::string& system_name,
       stack_data.record_route_on_every_hop = true;
     }
   }
-
-  std::string system_name_sas = system_name;
-  std::string system_type_sas = (pcscf_trusted_port != 0) ? "bono" : "sprout";
-  // Initialize SAS logging.
-  if (system_name_sas == "")
-  {
-    system_name_sas = std::string(stack_data.local_host.ptr, stack_data.local_host.slen);
-  }
-  SAS::init(system_name,
-            system_type_sas,
-            SASEvent::CURRENT_RESOURCE_BUNDLE,
-            sas_address,
-            sas_write,
-            sas_signaling_if ? create_connection_in_signaling_namespace
-                             : create_connection_in_management_namespace);
 
   // Initialise PJSIP and all the associated resources.
   status = init_pjsip();
@@ -1002,8 +981,6 @@ void destroy_stack(void)
 
   delete connection_tracker;
   connection_tracker = NULL;
-
-  SAS::term();
 
   // Terminate PJSIP.
   term_pjsip();

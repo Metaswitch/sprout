@@ -132,12 +132,9 @@ extern void init_pjsip_logging(int log_level,
                                pj_bool_t log_to_file,
                                const std::string& directory);
 
-extern pj_status_t init_stack(const std::string& sas_system_name,
-                              const std::string& sas_address,
-                              int pcscf_trusted_port,
+extern pj_status_t init_stack(int pcscf_trusted_port,
                               int pcscf_untrusted_port,
                               int scscf_port,
-                              bool sas_signaling_if,
                               std::set<int> sproutlet_ports,
                               const std::string& local_host,
                               const std::string& public_host,

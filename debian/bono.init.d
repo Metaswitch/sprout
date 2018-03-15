@@ -73,7 +73,6 @@ setup_environment()
 get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
-        sas_server=0.0.0.0
         signaling_dns_server=127.0.0.1
         bono_alias_list=""
         . /etc/clearwater/config
@@ -136,7 +135,7 @@ get_daemon_args()
                      --webrtc-port=5062
                      --routing-proxy=$upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
                      $ralf_arg
-                     --sas=$sas_server,$NAME@$public_hostname
+                     --sas=$NAME@$public_hostname
                      --dns-server=$signaling_dns_server
                      --worker-threads=$num_worker_threads
                      --analytics=$log_directory
