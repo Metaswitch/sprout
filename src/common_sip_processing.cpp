@@ -277,8 +277,9 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   }
   else if (trail != 0)
   {
-    // Raise SAS markers on initial requests only - responses in the same
-    // transaction will have the same trail ID so don't need additional markers
+    // Raise SAS Call-ID, branch ID, To and From markers on initial requests
+    // only - responses in the same transaction will have the same trail ID so
+    // don't need additional markers.
     if (tdata->msg->type == PJSIP_REQUEST_MSG)
     {
       PJUtils::report_sas_to_from_markers(trail, tdata->msg);
@@ -287,12 +288,16 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
     // Log a SIP protocol error marker for 4xx, 5xx or 6xx responses, so we can
     // search by error code.
-    if (tdata->msg->type == PJSIP_RESPONSE_MSG && (tdata->msg->line.status.code > 399))
+    if (tdata->msg->type == PJSIP_RESPONSE_MSG &&
+        (tdata->msg->line.status.code >= PJSIP_SC_BAD_REQUEST))
     {
       SAS::Marker error_marker(trail, MARKER_ID_PROTOCOL_ERROR, 1u);
       error_marker.add_static_param(5); // SIP protocol
       error_marker.add_static_param(tdata->msg->line.status.code);
-      // We can't give a more specific error string here - it would be a waste of bandwidth.
+      // The protocol error marker is defined as taking two static parameters
+      // (protocol and protocol-specific error code) and a variable parameter
+      // (error string), but we can't give a very specific error string at this
+      // point in the code, so leave it empty.
       error_marker.add_var_param("");
       SAS::report_marker(error_marker);
     }
