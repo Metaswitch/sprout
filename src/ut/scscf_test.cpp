@@ -2921,21 +2921,19 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
 
   pjsip_tx_data* txdata = pop_txdata();
 
-  // Send a 180 ringing back down the chain to finish the transaction. This is a
-  // more realistic test of AS communication tracking.
-  send_response_back_through_dialog(respond_to_txdata(txdata, 180), 180, 2);
-
-  // The 180 counts as the session having been setup from a stats perspective.
-  // Check that the stats have been incremented accordingly.
+  // Send the 200 OK through before the 180 to simulate the messages overtaking.
+  // Confirm stats are set correctly
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 
-  // Also send a 200 OK to check that the AS only gets tracked as successful
-  // once.
-  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  // Send in the 180 that was overtaken by the 200. This should be forwarded on
+  // but not sent to sproutlets
+  inject_msg(respond_to_txdata(txdata, 180));
+  printf("\n***********\nShould actually be forwarded - not swallowed\n***********\n");
 
-  // Check that 200 OK hasn't resulted in any more session setup stats being
-  // accumulated.
+  // Check that the there hasn't been any extra incrementing of the stats. 
+  printf("Check that it really should count as a separate session");
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 

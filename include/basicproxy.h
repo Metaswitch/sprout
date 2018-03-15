@@ -46,6 +46,10 @@ public:
 
 protected:
 
+  /// Route a response received outside a transaction.
+  pj_bool_t route_rx_response(pjsip_tx_data *tdata);
+
+
   /// Class holding the details of a calculated target for a transaction.
   class Target
   {
