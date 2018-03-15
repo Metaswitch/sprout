@@ -76,6 +76,15 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
 
     register_sproutlet(*it);
   }
+
+  if (always_serve_remote_aliases)
+  {
+    TRC_DEBUG("SproutletProxy set to always serve remote aliases");
+  }
+  else
+  {
+    TRC_DEBUG("SproutletProxy not set to always serve remote aliases");
+  }
 }
 
 

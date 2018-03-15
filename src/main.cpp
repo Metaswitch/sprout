@@ -1725,6 +1725,7 @@ int main(int argc, char* argv[])
   opt.enable_orig_sip_to_tel_coerce = false;
   opt.request_on_queue_timeout = 4000;
   opt.ram_record_everything = false;
+  opt.always_serve_remote_aliases = false;
 
   status = init_logging_options(argc, argv, &opt);
 
