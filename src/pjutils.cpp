@@ -763,11 +763,12 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
     // Copy the SAS trail across from the request.
     set_trail(*p_tdata, get_trail(rdata));
 
-    // Some headers should always be copied onto responses, like
-    // charging headers.
-    PJUtils::clone_header(&STR_P_C_V, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
-    PJUtils::clone_header(&STR_P_C_F_A, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
-
+    // Charging headers should be copied onto all non-100 responses (see RFC7976 section 3)
+    if (st_code != PJSIP_SC_TRYING)
+    {
+      PJUtils::clone_header(&STR_P_C_V, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
+      PJUtils::clone_header(&STR_P_C_F_A, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
+    }
   }
   return status;
 }
@@ -864,9 +865,12 @@ pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
   // Copy CSeq header. */
   pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_CSEQ_HDR(req_msg)));
 
-  // Some headers should always be copied onto responses, like charging headers.
-  PJUtils::clone_header(&STR_P_C_V, req_msg, msg, tdata->pool);
-  PJUtils::clone_header(&STR_P_C_F_A, req_msg, msg, tdata->pool);
+  // Charging headers should be copied onto all non-100 responses (see RFC7976 section 3)
+  if (st_code != PJSIP_SC_TRYING)
+  {
+    PJUtils::clone_header(&STR_P_C_V, req_msg, msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_C_F_A, req_msg, msg, tdata->pool);
+  }
 
   *p_tdata = tdata;
 
