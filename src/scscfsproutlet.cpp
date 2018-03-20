@@ -746,8 +746,9 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   if ((st_code > PJSIP_SC_TRYING) && _hss_data_cached)
   {
-    // We add a P-Charging-Function-Addresses header if one is not already present.
-    //  We only do this if we have the charging addresses cached (which we should do).
+    // We add a P-Charging-Function-Addresses header to provisional 1xx responses
+    // (but not 100 Trying responses) and final responses if not already present.
+    // We only do this if we have the charging addresses cached (which we should do).
     // According to TS 24.229, PCFAs should not be added to responses being sent to ASes,
     // except in some very specific cases, but this is unlikely to cause inter-op issues.
     PJUtils::add_pcfa_header(rsp,
