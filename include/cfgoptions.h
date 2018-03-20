@@ -142,6 +142,7 @@ struct options
   int                                  request_on_queue_timeout;
   std::set<std::string>                blacklisted_scscfs;
   bool                                 enable_orig_sip_to_tel_coerce;
+  bool                                 ram_record_everything;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
