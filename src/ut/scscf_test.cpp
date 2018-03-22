@@ -3048,7 +3048,7 @@ TEST_F(SCSCFTest, Overtaken180)
 
   inject_msg(respond_to_txdata(txdata, 180));
   out = current_txdata()->msg;
-  RespMatcher(190).matches(out);
+  RespMatcher(180).matches(out);
 
   // Check that the there hasn't been any extra incrementing of the stats.
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);

@@ -289,7 +289,6 @@ protected:
     /// Handle a timer pop.
     static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
 
-
   protected:
 
     // A Callback object to be run on a worker thread
