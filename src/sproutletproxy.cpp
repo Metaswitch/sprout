@@ -1437,7 +1437,8 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
       SAS::Event event(trail(), SASEvent::SPROUTLET_REMOTE_ALIAS_MATCH_REJECT, 0);
       event.add_var_param(match.sproutlet->service_name());
       event.add_var_param(alias);
-
+      SAS::report_event(event);
+      
       // In the case that we've rejected a remote alias match, we increment
       // the relevant statistic.
       if (_sproutlet_proxy->_route_to_remote_alias_tbl)
