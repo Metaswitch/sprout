@@ -80,7 +80,7 @@ public:
                               pj_pool_t* pool) const;
 
   /// Handles responses that are received outside a transaction.
-  pj_bool_t on_rx_response(pjsip_rx_data *rdata);
+  pj_bool_t on_rx_response(pjsip_rx_data *rdata) override;
 
   enum SPROUTLET_SELECTION_TYPES
   {

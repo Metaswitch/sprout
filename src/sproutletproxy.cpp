@@ -428,9 +428,9 @@ pjsip_sip_uri* SproutletProxy::next_hop_uri(const std::string& service,
 
 pj_bool_t SproutletProxy::on_rx_response(pjsip_rx_data *rdata)
 {
-  TRC_DEBUG("Received response after transaction completed.");
+  TRC_DEBUG("Received response (%p) after transaction completed.", rdata);
 
-  // Only forward responses to INVITES.
+  // Only forward responses to INVITES (see RFC 3261 - 18.2.1)
   if (rdata->msg_info.cseq->method.id == PJSIP_INVITE_METHOD)
   {
     // Create response to be forwarded upstream (Via will be stripped here)
@@ -448,8 +448,9 @@ pj_bool_t SproutletProxy::on_rx_response(pjsip_rx_data *rdata)
     // This transaction is complete and so there's nothing more we can do
     // locally. Remove any local Via headers, then pass on to BasicProxy to
     // send on.
-    pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
-    while (hvia != NULL)
+    for (pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+         hvia != NULL;
+         hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL))
     {
       std::string local_hostname_unused;
       std::string alias;
@@ -474,12 +475,11 @@ pj_bool_t SproutletProxy::on_rx_response(pjsip_rx_data *rdata)
         // We've only got non-sproutlet Vias left so can continue routing now.
         break;
       }
-
-      hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
     }
 
-    return  BasicProxy::route_rx_response(tdata);
+    BasicProxy::route_rx_response(tdata);
   }
+
   return PJ_TRUE;
 }
 

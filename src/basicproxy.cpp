@@ -74,7 +74,7 @@ pj_bool_t BasicProxy::on_rx_request(pjsip_rx_data* rdata)
 
 
 // Statelessly route a response received outside of a transaction.
-pj_bool_t BasicProxy::route_rx_response(pjsip_tx_data *tdata)
+void BasicProxy::route_rx_response(pjsip_tx_data *tdata)
 {
   // Get topmost Via header.
   pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
@@ -82,15 +82,14 @@ pj_bool_t BasicProxy::route_rx_response(pjsip_tx_data *tdata)
   {
     // Invalid response! Just drop it.
     pjsip_tx_data_dec_ref(tdata);
-    return PJ_TRUE;
+    return;
   }
 
   // Calculate the address to forward the response.
   pjsip_response_addr res_addr;
   pj_bzero(&res_addr, sizeof(res_addr));
   res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
-  res_addr.dst_host.flag =
-                   pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
+  res_addr.dst_host.flag = pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
 
   // Destination address is Via's received param.
   res_addr.dst_host.addr.host = hvia->recvd_param;
@@ -121,11 +120,11 @@ pj_bool_t BasicProxy::route_rx_response(pjsip_tx_data *tdata)
     // LCOV_EXCL_START
     TRC_ERROR("Error forwarding response, %s",
               PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
+    return;
     // LCOV_EXCL_STOP
   }
 
-  return PJ_TRUE;
+  return;
 }
 
 
@@ -155,7 +154,7 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
       // LCOV_EXCL_STOP
     }
 
-    return route_rx_response(tdata);
+    route_rx_response(tdata);
   }
 
   return PJ_TRUE;
