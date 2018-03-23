@@ -435,6 +435,64 @@ pjsip_sip_uri* SproutletProxy::next_hop_uri(const std::string& service,
 }
 
 
+pj_bool_t SproutletProxy::on_rx_response(pjsip_rx_data *rdata)
+{
+  TRC_DEBUG("Received response (%p) after transaction completed.", rdata);
+
+  // Only forward responses to INVITES (see RFC 3261 - 18.2.1)
+  if (rdata->msg_info.cseq->method.id == PJSIP_INVITE_METHOD)
+  {
+    // Create response to be forwarded upstream (Via will be stripped here)
+    pjsip_tx_data *tdata;
+    pj_status_t status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START
+      TRC_ERROR("Error creating response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
+    }
+
+    // This transaction is complete and so there's nothing more we can do
+    // locally. Remove any local Via headers, then pass on to BasicProxy to
+    // send on.
+    for (pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+         hvia != NULL;
+         hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL))
+    {
+      std::string local_hostname_unused;
+      std::string alias;
+
+      SPROUTLET_SELECTION_TYPES selection_type = NONE_SELECTED;
+      std::string domain = PJUtils::pj_str_to_string(&hvia->sent_by.host);
+      pjsip_uri* uri = PJUtils::uri_from_string("sip:" + domain,
+                                                stack_data.pool,
+                                                false);
+      SproutletMatch match = match_sproutlet_from_uri(uri,
+                                                      alias,
+                                                      local_hostname_unused,
+                                                      selection_type);
+
+      if (match.sproutlet != NULL)
+      {
+        TRC_DEBUG("Removing internal Via");
+        PJUtils::remove_top_via(tdata);
+      }
+      else
+      {
+        // We've only got non-sproutlet Vias left so can continue routing now.
+        break;
+      }
+    }
+
+    BasicProxy::route_rx_response(tdata);
+  }
+
+  return PJ_TRUE;
+}
+
+
 pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
                                                     Sproutlet* sproutlet) const
 {

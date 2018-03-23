@@ -79,6 +79,9 @@ public:
                               const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
 
+  /// Handles responses that are received outside a transaction.
+  pj_bool_t on_rx_response(pjsip_rx_data *rdata) override;
+
   enum SPROUTLET_SELECTION_TYPES
   {
     SERVICE_NAME=0,
@@ -561,6 +564,7 @@ public:
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
+  pj_bool_t on_rx_response(pjsip_rx_data *rdata);
   std::string get_local_hostname(const pjsip_sip_uri* uri, bool default_to_root=false) const;
   bool is_network_func_boundary() const;
   bool is_internal_network_func_boundary() const;

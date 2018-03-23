@@ -73,6 +73,61 @@ pj_bool_t BasicProxy::on_rx_request(pjsip_rx_data* rdata)
 }
 
 
+// Statelessly route a response received outside of a transaction.
+void BasicProxy::route_rx_response(pjsip_tx_data *tdata)
+{
+  // Get topmost Via header.
+  pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+  if (hvia == NULL)
+  {
+    // Invalid response! Just drop it.
+    pjsip_tx_data_dec_ref(tdata);
+    return;
+  }
+
+  // Calculate the address to forward the response.
+  pjsip_response_addr res_addr;
+  pj_bzero(&res_addr, sizeof(res_addr));
+  res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
+  res_addr.dst_host.flag = pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
+
+  // Destination address is Via's received param.
+  res_addr.dst_host.addr.host = hvia->recvd_param;
+  if (res_addr.dst_host.addr.host.slen == 0)
+  {
+    // Someone has messed up our Via header!
+    res_addr.dst_host.addr.host = hvia->sent_by.host;
+  }
+
+  // Destination port is the rport.
+  if (hvia->rport_param != 0 && hvia->rport_param != -1)
+  {
+    res_addr.dst_host.addr.port = hvia->rport_param;
+  }
+
+  if (res_addr.dst_host.addr.port == 0)
+  {
+    // Ugh, original sender didn't put rport!
+    // At best, can only send the response to the port in Via.
+    res_addr.dst_host.addr.port = hvia->sent_by.port;
+  }
+
+  // Forward response.
+  pj_status_t status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
+
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START
+    TRC_ERROR("Error forwarding response, %s",
+              PJUtils::pj_status_to_string(status).c_str());
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  return;
+}
+
+
 // Callback to be called to handle incoming response outside
 // any transactions. This happens for example when 2xx/OK
 // for INVITE is received and transaction will be destroyed
@@ -81,8 +136,6 @@ pj_bool_t BasicProxy::on_rx_request(pjsip_rx_data* rdata)
 pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
 {
   pjsip_tx_data *tdata;
-  pjsip_response_addr res_addr;
-  pjsip_via_hdr *hvia;
   pj_status_t status;
 
   TRC_DEBUG("Statelessly forwarding late response");
@@ -101,53 +154,7 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
       // LCOV_EXCL_STOP
     }
 
-    // Get topmost Via header.
-    hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
-    if (hvia == NULL)
-    {
-      // Invalid response! Just drop it.
-      pjsip_tx_data_dec_ref(tdata);
-      return PJ_TRUE;
-    }
-
-    // Calculate the address to forward the response.
-    pj_bzero(&res_addr, sizeof(res_addr));
-    res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
-    res_addr.dst_host.flag =
-                     pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
-
-    // Destination address is Via's received param.
-    res_addr.dst_host.addr.host = hvia->recvd_param;
-    if (res_addr.dst_host.addr.host.slen == 0)
-    {
-      // Someone has messed up our Via header!
-      res_addr.dst_host.addr.host = hvia->sent_by.host;
-    }
-
-    // Destination port is the rport.
-    if (hvia->rport_param != 0 && hvia->rport_param != -1)
-    {
-      res_addr.dst_host.addr.port = hvia->rport_param;
-    }
-
-    if (res_addr.dst_host.addr.port == 0)
-    {
-      // Ugh, original sender didn't put rport!
-      // At best, can only send the response to the port in Via.
-      res_addr.dst_host.addr.port = hvia->sent_by.port;
-    }
-
-    // Forward response.
-    status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
-
-    if (status != PJ_SUCCESS)
-    {
-      // LCOV_EXCL_START
-      TRC_ERROR("Error forwarding response, %s",
-                PJUtils::pj_status_to_string(status).c_str());
-      return PJ_TRUE;
-      // LCOV_EXCL_STOP
-    }
+    route_rx_response(tdata);
   }
 
   return PJ_TRUE;

@@ -2950,6 +2950,121 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
 
+// Test a 180 being overtaken by a 200
+// request.
+TEST_F(SCSCFTest, Overtaken180)
+{
+  // Set up info about the caller.
+  HSSConnection::irs_info irs_info_1;
+  setup_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._regstate = "UNREGISTERED";
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
+
+  // Setup info about callee.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  expect_get_callee_info(irs_info_2, bindings);
+
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
+  // Only expect one call into the AS communication tracker despite receiving
+  // multiple responses to the same request.
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCalleeBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig;service=scscf>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=unreg"));
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
+
+  // INVITE passed to final destination (to bono set up in callee's bindings)
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+  tpCalleeBono.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send the 200 OK through before the 180 to simulate the messages overtaking.
+  // Confirm stats are set correctly
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+
+  inject_msg(respond_to_txdata(txdata, 180));
+  out = current_txdata()->msg;
+  RespMatcher(180).matches(out);
+
+  // Check that the there hasn't been any extra incrementing of the stats.
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
 
 // Test that, if we change a SIP URI to an aliased TEL URI, it doesn't count as
 // a retarget for originating-cdiv purposes.
