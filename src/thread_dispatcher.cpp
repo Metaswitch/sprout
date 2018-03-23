@@ -356,6 +356,11 @@ int worker_thread(void* p)
 {
   TRC_DEBUG("Worker thread started");
 
+  // This thread is not allowed to do IO without using the CW_IO_START and
+  // CW_IO_COMPLETES macros. Doing so means that sprout's overload algorithms
+  // will not work properly.
+  CW_IO_CALLS_REQUIRED();
+
   bool rc = true;
 
   while (rc) {
