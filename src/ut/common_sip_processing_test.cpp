@@ -23,6 +23,7 @@
 #include "common_sip_processing.h"
 #include "counter.h"
 #include "fakesnmp.hpp"
+#include "mock_sas.h"
 #include "testingcommon.h"
 
 using namespace std;
@@ -529,4 +530,109 @@ TEST_F(CommonProcessingTest, NoContentLengthDropped)
   // Expect it to just vanish.
   ASSERT_EQ(0, txdata_count());
 }
+
+TEST_F(CommonProcessingTest, SASDNMarkersOnNumericUsername)
+{
+  pjsip_tx_data* tdata;
+  pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
+  mock_sas_collect_messages(true);
+
+  Message msg1;
+  msg1._first_hop = true;
+  msg1._method = "INVITE";
+  msg1._requri = std::string("sip:poll-sip@100.0.0.1:") + std::to_string(ICSCF_PORT);
+  msg1._via = "127.0.0.1";
+  msg1._todomain = std::string("127.0.0.1:") + std::to_string(ICSCF_PORT);
+  msg1._to = "+1234";
+  msg1._fromdomain = "127.0.0.1";
+  msg1._from = "5678";
+  msg1._contentlength = false;
+  msg1._extra = "Contact: <sip:127.0.0.1>\nAccept: application/sdp\nContent-Length: 0";
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect a 200 OK response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher r1(200);
+  r1.matches(tdata->msg);
+
+  free_txdata();
+
+  EXPECT_SAS_MARKER(MARKER_ID_CALLING_DN);
+  EXPECT_SAS_MARKER(MARKER_ID_CALLED_DN);
+
+  mock_sas_collect_messages(false);
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
+}
+
+
+TEST_F(CommonProcessingTest, NoSASDNMarkersOnEmptyUsername)
+{
+  pjsip_tx_data* tdata;
+  pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
+  mock_sas_collect_messages(true);
+
+  Message msg1;
+  msg1._first_hop = true;
+  msg1._method = "INVITE";
+  msg1._requri = std::string("sip:poll-sip@100.0.0.1:") + std::to_string(ICSCF_PORT);
+  msg1._via = "127.0.0.1";
+  msg1._todomain = std::string("127.0.0.1:") + std::to_string(ICSCF_PORT);
+  msg1._to = "";
+  msg1._fromdomain = "127.0.0.1";
+  msg1._from = msg1._to;
+  msg1._contentlength = false;
+  msg1._extra = "Contact: <sip:127.0.0.1>\nAccept: application/sdp\nContent-Length: 0";
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect a 200 OK response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher r1(200);
+  r1.matches(tdata->msg);
+
+  free_txdata();
+
+  EXPECT_NO_SAS_MARKER(MARKER_ID_CALLING_DN);
+  EXPECT_NO_SAS_MARKER(MARKER_ID_CALLED_DN);
+
+  mock_sas_collect_messages(false);
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
+}
+
+
+TEST_F(CommonProcessingTest, NoSASDNMarkersOnNonNumericUsername)
+{
+  pjsip_tx_data* tdata;
+  pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
+  mock_sas_collect_messages(true);
+
+  Message msg1;
+  msg1._first_hop = true;
+  msg1._method = "INVITE";
+  msg1._requri = std::string("sip:poll-sip@100.0.0.1:") + std::to_string(ICSCF_PORT);
+  msg1._via = "127.0.0.1";
+  msg1._todomain = std::string("127.0.0.1:") + std::to_string(ICSCF_PORT);
+  msg1._to = "alice";
+  msg1._fromdomain = "127.0.0.1";
+  msg1._from = "bob";
+  msg1._contentlength = false;
+  msg1._extra = "Contact: <sip:127.0.0.1>\nAccept: application/sdp\nContent-Length: 0";
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect a 200 OK response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher r1(200);
+  r1.matches(tdata->msg);
+
+  free_txdata();
+
+  EXPECT_NO_SAS_MARKER(MARKER_ID_CALLING_DN);
+  EXPECT_NO_SAS_MARKER(MARKER_ID_CALLED_DN);
+
+  mock_sas_collect_messages(false);
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
+}
+
 
