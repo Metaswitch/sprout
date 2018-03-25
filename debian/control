@@ -120,20 +120,6 @@ Depends: sprout-mmtel-as (= ${binary:Version})
 Recommends: sprout-base-dbg
 Description: Debugging symbols for sprout-mmtel-as, the SIP Router MMTEL Application Server plug-in
 
-Package: gemini-as
-Architecture: any
-Depends: sprout-base
-Suggests: gemini-as-dbg
-Description: gemini, the Mobile Twinning Application Server plug-in
-
-Package: gemini-as-dbg
-Architecture: any
-Section: debug
-Priority: extra
-Depends: gemini-as (= ${binary:Version})
-Recommends: sprout-base-dbg
-Description: Debugging symbols for gemini, the Mobile Twinning Application Server plug-in
-
 Package: call-diversion-as
 Architecture: any
 Depends: sprout-base

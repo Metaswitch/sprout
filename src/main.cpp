@@ -37,6 +37,7 @@ extern "C" {
 #include "logger.h"
 #include "utils.h"
 #include "cfgoptions.h"
+#include "cfgoptions_helper.h"
 #include "analyticslogger.h"
 #include "subscriber_manager.h"
 #include "stack.h"
@@ -467,74 +468,6 @@ static void usage(void)
        " -h, --help                 Show this help screen\n"
       );
 }
-
-/// Validate the result we get when using atoi
-bool validated_atoi(const char* char_to_int,
-                    int& char_as_int)
-{
-  char_as_int = atoi(char_to_int);
-  return (char_to_int == std::to_string(char_as_int));
-}
-
-/// Parse a string representing a port.
-/// @returns The port number as an int, or zero if the port is invalid.
-int parse_port(const std::string& port_str)
-{
-  int port;
-  bool rc = validated_atoi(port_str.c_str(), port);
-
-  if ((!rc) || (port < 0) || (port > 0xFFFF))
-  {
-    port = 0;
-  }
-
-  return port;
-}
-
-/// Parse a string representing a port.
-/// @returns whether the port is invalid and sets the port
-bool parse_port(const std::string& port_str, int& port)
-{
-  bool rc = validated_atoi(port_str.c_str(), port);
-
-  if ((!rc) || (port < 0) || (port > 0xFFFF))
-  {
-    return false;
-  }
-
-  return true;
-}
-
-// Macros for validating an integer parameter
-#define VALIDATE_INT_PARAM(PARAMETER, PARAMETER_NAME, TRC_STATEMENT)           \
-  int parameter;                                                               \
-  bool rc = validated_atoi(pj_optarg, parameter);                              \
-                                                                               \
-  if (rc)                                                                      \
-  {                                                                            \
-    PARAMETER = parameter;                                                     \
-    TRC_INFO(""#TRC_STATEMENT" set to %d", parameter);                         \
-  }                                                                            \
-  else                                                                         \
-  {                                                                            \
-    TRC_ERROR("Invalid value for "#PARAMETER_NAME": %s", pj_optarg);           \
-    return -1;                                                                 \
-  }
-
-#define VALIDATE_INT_PARAM_NON_ZERO(PARAMETER, PARAMETER_NAME, TRC_STATEMENT)  \
-  int parameter;                                                               \
-  bool rc = validated_atoi(pj_optarg, parameter);                              \
-                                                                               \
-  if ((rc) && (parameter > 0))                                                 \
-  {                                                                            \
-    PARAMETER = parameter;                                                     \
-    TRC_INFO(""#TRC_STATEMENT" set to %d", parameter);                         \
-  }                                                                            \
-  else                                                                         \
-  {                                                                            \
-    TRC_ERROR("Invalid value for "#PARAMETER_NAME": %s", pj_optarg);           \
-    return -1;                                                                 \
-  }
 
 static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
