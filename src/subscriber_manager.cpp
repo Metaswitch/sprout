@@ -1219,7 +1219,8 @@ void SubscriberManager::build_patch(PatchObject& po,
                                     const std::vector<std::string>& remove_subscriptions,
                                     const AssociatedURIs& associated_uris)
 {
-  po.set_update_subscriptions(SubscriberDataUtils::copy_subscriptions(update_subscriptions));
+  Subscriptions tmp = SubscriberDataUtils::copy_subscriptions(update_subscriptions);
+  po.set_update_subscriptions(tmp);
   po.set_remove_subscriptions(remove_subscriptions);
   po.set_associated_uris(associated_uris);
   po.set_increment_cseq(true);
