@@ -76,6 +76,15 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
 
     register_sproutlet(*it);
   }
+
+  if (always_serve_remote_aliases)
+  {
+    TRC_DEBUG("SproutletProxy set to always serve remote aliases");
+  }
+  else
+  {
+    TRC_DEBUG("SproutletProxy not set to always serve remote aliases");
+  }
 }
 
 
@@ -426,6 +435,64 @@ pjsip_sip_uri* SproutletProxy::next_hop_uri(const std::string& service,
 }
 
 
+pj_bool_t SproutletProxy::on_rx_response(pjsip_rx_data *rdata)
+{
+  TRC_DEBUG("Received response (%p) after transaction completed.", rdata);
+
+  // Only forward responses to INVITES (see RFC 3261 - 18.2.1)
+  if (rdata->msg_info.cseq->method.id == PJSIP_INVITE_METHOD)
+  {
+    // Create response to be forwarded upstream (Via will be stripped here)
+    pjsip_tx_data *tdata;
+    pj_status_t status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START
+      TRC_ERROR("Error creating response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
+    }
+
+    // This transaction is complete and so there's nothing more we can do
+    // locally. Remove any local Via headers, then pass on to BasicProxy to
+    // send on.
+    for (pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+         hvia != NULL;
+         hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL))
+    {
+      std::string local_hostname_unused;
+      std::string alias;
+
+      SPROUTLET_SELECTION_TYPES selection_type = NONE_SELECTED;
+      std::string domain = PJUtils::pj_str_to_string(&hvia->sent_by.host);
+      pjsip_uri* uri = PJUtils::uri_from_string("sip:" + domain,
+                                                stack_data.pool,
+                                                false);
+      SproutletMatch match = match_sproutlet_from_uri(uri,
+                                                      alias,
+                                                      local_hostname_unused,
+                                                      selection_type);
+
+      if (match.sproutlet != NULL)
+      {
+        TRC_DEBUG("Removing internal Via");
+        PJUtils::remove_top_via(tdata);
+      }
+      else
+      {
+        // We've only got non-sproutlet Vias left so can continue routing now.
+        break;
+      }
+    }
+
+    BasicProxy::route_rx_response(tdata);
+  }
+
+  return PJ_TRUE;
+}
+
+
 pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
                                                     Sproutlet* sproutlet) const
 {
@@ -466,7 +533,7 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   // Replace the hostname part of the base URI with the local hostname part of
   // the URI that routed to us. If this doesn't work, then fall back to using
   // the root URI.
-  std::string local_hostname = get_local_hostname(uri);
+  std::string local_hostname = get_local_hostname(uri, true);
   pj_strdup2(pool, &uri->host, local_hostname.c_str());
 
   uri->port = 0;
@@ -489,7 +556,7 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   return uri;
 }
 
-SproutletProxy::AliasMatchLocality SproutletProxy::get_uri_locality(const pjsip_uri* uri)
+SproutletProxy::AliasMatchLocality SproutletProxy::get_uri_locality(const pjsip_uri* uri) const
 {
   AliasMatchLocality best_match = AliasMatchLocality::NO_MATCH;
 
@@ -526,23 +593,20 @@ SproutletProxy::AliasMatchLocality SproutletProxy::get_uri_locality(const pjsip_
 pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req,
                                                const Sproutlet* sproutlet) const
 {
-  // Get the URI that caused us to be routed to this Sproutlet or if no such
-  // URI exists e.g. if the Sproutlet was matched on a port, return NULL.
+  // Get the URI that caused us to be routed to this Sproutlet.
   const pjsip_route_hdr* route = (pjsip_route_hdr*)
                                     pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
   pjsip_sip_uri* routing_uri = NULL;
   if (route != NULL)
   {
-    if ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
-        (is_uri_reflexive(route->name_addr.uri, sproutlet)))
+    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
       routing_uri = (pjsip_sip_uri*)route->name_addr.uri;
     }
   }
   else
   {
-    if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
-        (is_uri_reflexive(req->line.req.uri, sproutlet)))
+    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
       routing_uri = (pjsip_sip_uri*)req->line.req.uri;
     }
@@ -551,10 +615,14 @@ pjsip_sip_uri* SproutletProxy::get_routing_uri(const pjsip_msg* req,
   return routing_uri;
 }
 
-std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
+std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri,
+                                               bool default_to_root) const
 {
   std::string unused_alias, local_hostname;
   SPROUTLET_SELECTION_TYPES unused_selection_type = NONE_SELECTED;
+
+  // If this URI matches a sproutlet, the local_hostname will be filled in with
+  // the sproutlet-specific part removed.
   (void*)match_sproutlet_from_uri((pjsip_uri*)uri,
                                   unused_alias,
                                   local_hostname,
@@ -562,10 +630,20 @@ std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri) const
 
   if (local_hostname.empty())
   {
-    // We assume that the URI passed to this function will route back to a
-    // Sproutlet, so if we have not found a Sproutlet, default the local
-    // hostname to the hostname part of the URI's host.
-    local_hostname = PJUtils::pj_str_to_string(&uri->host);
+    // This URI did not match a sproutlet
+
+    if (!default_to_root)
+    {
+      // We assume that the URI passed to this function will route back to a
+      // Sproutlet, so if we have not found a Sproutlet, default the local
+      // hostname to the hostname part of the URI's host.
+      local_hostname = PJUtils::pj_str_to_string(&uri->host);
+    }
+    else
+    {
+      // We can't assume the URI passed in was local, so use the root URI's host
+      local_hostname = PJUtils::pj_str_to_string(&_root_uri->host);
+    }
   }
 
   return local_hostname;
@@ -672,6 +750,7 @@ SproutletProxy::UASTsx::Callback::Callback(UASTsx* tsx, std::function<void()> ru
   // Whenever we create a Callback we expect it to be run, so increase the count
   // of _pending_callbacks on the UASTsx
   _tsx->_pending_callbacks++;
+  TRC_DEBUG("Incremented pending callbacks to: %d", _tsx->_pending_callbacks);
 }
 
 void SproutletProxy::UASTsx::Callback::run()
@@ -681,6 +760,7 @@ void SproutletProxy::UASTsx::Callback::run()
   // Now that we are running a Callback, we can decrement the count of pending
   // callbacks
   _tsx->_pending_callbacks--;
+  TRC_DEBUG("Decremented pending callbacks to: %d", _tsx->_pending_callbacks);
 
   // _run_fn() contains that actual work that we need to do for this Callback
   _run_fn();
@@ -1157,6 +1237,23 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
   if (scheduled)
   {
     _pending_timers.insert(tentry);
+
+    // We don't know when this timer is going to pop, so increment the
+    // _pending_callbacks count now and only decrement it when the timer
+    // pops or when we know we've cancelled it successfully.  We could have
+    // implemented this by incrementing _pending_callbacks for the lifetime
+    // of the TimerCallback object instead (in which case we wouldn't have had
+    // to decrement it in both the cancel and pop routines below), but this
+    // would have meant making _pending_callbacks an atomic integer because
+    // it would have needed to be incremented outside the transaction lock.
+    // Swings and roundabouts.
+    //
+    // We need _pending_callbacks to take account of timers in flight, because
+    // otherwise the Tsx object might be destroyed after the timer has popped
+    // but before its had a chance to run, in which case we'd end up
+    // threading a destroyed object.
+    _pending_callbacks++;
+    TRC_DEBUG("Incremented pending callbacks to: %d", _pending_callbacks);
   }
   return scheduled;
 }
@@ -1164,11 +1261,27 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
 bool SproutletProxy::UASTsx::cancel_timer(TimerID id)
 {
   pj_timer_entry* tentry = (pj_timer_entry*)id;
-  bool cancelled = _sproutlet_proxy->cancel_timer(tentry);
-  if (cancelled)
+
+  // Cancel the timer at PJSIP
+  if (_sproutlet_proxy->cancel_timer(tentry))
   {
-    _pending_timers.erase(tentry);
+    // Successfully cancelled.  Decrement the pending callbacks count
+    // incremented in SproutletProxy::UASTsx::schedule_timer.  Note that
+    // if the cancel failed, it will be because the timer has popped, in which
+    // case _pending_callbacks will be decremented by process_timer_pop below
+    _pending_callbacks--;
+    TRC_DEBUG("Decremented pending callbacks to: %d", _pending_callbacks);
   }
+
+  // Always attempt to remove the timer entry from the _pending_timers
+  // set, regardless of whether the attempt to cancel the timer at PJSIP
+  // succeeds or fails.  Its possible that the timer has already popped
+  // (in which case the above call will fail), but the timer is still
+  // on the pending list blocked behind the transaction lock, and we need
+  // to make sure that timer callback doesn't find the timer entry when the
+  // lock is released - see process_timer_pop() below.
+  bool cancelled = _pending_timers.erase(tentry);
+
   return cancelled;
 }
 
@@ -1196,6 +1309,14 @@ void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
 void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
 {
   enter_context();
+
+  // Timer callback has been made so decrement the pending callback count.
+  // Note that we need to decrement _pending_callbacks both in this routine
+  // and in SproutletProxy::UASTsx::cancel_timer, the latter IFF the PJSIP
+  // cancel call did not fail (if it failed, then the timer will have popped,
+  // in which case this routine will eventually get called).
+  _pending_callbacks--;
+  TRC_DEBUG("Decremented pending callbacks to: %d", _pending_callbacks);
 
   if (_pending_timers.erase(tentry) != 0)
   {
@@ -1328,11 +1449,21 @@ void SproutletProxy::UASTsx::check_destroy()
       (_pending_req_q.empty()) &&
       (_pending_timers.empty()) &&
       (_tsx == NULL) &&
-      (_pending_callbacks == 0))
+      (_pending_callbacks <= 0))
   {
     // UAS transaction has been destroyed and all Sproutlets are complete.
     TRC_DEBUG("Safe for UASTsx to suicide");
     _pending_destroy = true;
+
+    // _pending_callbacks should never go negative, so make an error log with
+    // the trail ID so that we have diagnostics should this ever happen.
+    if (_pending_callbacks < 0)
+    {
+      //LCOV_EXCL_START
+      TRC_ERROR("Pending callbacks count is negative (%d) for trail ID %lu",
+                                               _pending_callbacks, trail());
+      //LCOV_EXCL_STOP
+    }
   }
 }
 
@@ -1364,7 +1495,8 @@ bool SproutletProxy::UASTsx::accept_sproutlet_match(SproutletMatch match,
       SAS::Event event(trail(), SASEvent::SPROUTLET_REMOTE_ALIAS_MATCH_REJECT, 0);
       event.add_var_param(match.sproutlet->service_name());
       event.add_var_param(alias);
-
+      SAS::report_event(event);
+      
       // In the case that we've rejected a remote alias match, we increment
       // the relevant statistic.
       if (_sproutlet_proxy->_route_to_remote_alias_tbl)
@@ -2062,22 +2194,23 @@ pjsip_sip_uri* SproutletWrapper::next_hop_uri(const std::string& service,
 
 pjsip_sip_uri* SproutletWrapper::get_routing_uri(const pjsip_msg* req) const
 {
-  // Get the URI that caused us to be routed to this Sproutlet or if no such
-  // URI exists e.g. if the Sproutlet was matched on a port, return NULL.
+  // This is slightly different from SproutletProxy::get_routing_uri()
+  // Here, we are finding the top Route header of our saved _req, and will only
+  // use it if it is local.
+  // If not, or if there isn't one, we return the Request URI of the passed in
+  // pjsip_msg, *NOT* our saved _req
   const pjsip_route_hdr* route = route_hdr();
   pjsip_sip_uri* routing_uri = NULL;
   if (route != NULL)
   {
-    if ((PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)) &&
-        (is_uri_reflexive(route->name_addr.uri)))
+    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
       routing_uri = (pjsip_sip_uri*)route->name_addr.uri;
     }
   }
   else
   {
-    if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
-        (is_uri_reflexive(req->line.req.uri)))
+    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
       routing_uri = (pjsip_sip_uri*)req->line.req.uri;
     }
@@ -2086,9 +2219,10 @@ pjsip_sip_uri* SproutletWrapper::get_routing_uri(const pjsip_msg* req) const
   return routing_uri;
 }
 
-std::string SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri) const
+std::string SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri,
+                                                 bool default_to_root) const
 {
-  return _proxy->get_local_hostname(uri);
+  return _proxy->get_local_hostname(uri, default_to_root);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req, int allowed_host_state)

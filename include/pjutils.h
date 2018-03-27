@@ -309,6 +309,9 @@ void add_pcfa_header(pjsip_msg* msg,
                      const std::deque<std::string>& ecfs,
                      const bool replace);
 
+bool needs_quoting(const char* inbuf,
+                   size_t length);
+
 void add_pcfa_param(pj_list_type *cf_list,
                     pj_pool_t* pool,
                     const pj_str_t name,

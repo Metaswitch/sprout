@@ -37,7 +37,6 @@ extern "C" {
 #include "logger.h"
 #include "utils.h"
 #include "cfgoptions.h"
-#include "sasevent.h"
 #include "analyticslogger.h"
 #include "subscriber_manager.h"
 #include "stack.h"
@@ -89,6 +88,8 @@ extern "C" {
 #include "sprout_alarmdefinition.h"
 #include "sproutlet_options.h"
 #include "astaire_impistore.h"
+#include "updater.h"
+#include "sasservice.h"
 
 enum OptionTypes
 {
@@ -143,7 +144,8 @@ enum OptionTypes
   OPT_BLACKLISTED_SCSCFS,
   OPT_LOCAL_ALIASES,
   OPT_REMOTE_ALIASES,
-  OPT_ALWAYS_SERVE_REMOTE_ALIASES
+  OPT_ALWAYS_SERVE_REMOTE_ALIASES,
+  OPT_RAM_RECORD_EVERYTHING,
 };
 
 
@@ -234,6 +236,7 @@ const static struct pj_getopt_option long_opt[] =
   { "request-on-queue-timeout",     required_argument, 0, OPT_REQUEST_ON_QUEUE_TIMEOUT},
   { "blacklisted-scscfs",           required_argument, 0, OPT_BLACKLISTED_SCSCFS},
   { "enable-orig-sip-to-tel-coerce",no_argument,       0, OPT_ORIG_SIP_TO_TEL_COERCE},
+  { "ram-record-everything",        no_argument,       0, OPT_RAM_RECORD_EVERYTHING},
   { NULL,                           0,                 0, 0}
 };
 
@@ -300,10 +303,8 @@ static void usage(void)
        "                            authentication vectors. There is currently no geo-redundant storage\n"
        "                            for authentication vectors. If this option isn't provided, Sprout uses\n"
        "                            the local site registration store.\n"
-       " -S, --sas <ipv4>,<system name>\n"
-       "                            Use specified host as Service Assurance Server and specified\n"
-       "                            system name to identify this system to SAS.  If this option isn't\n"
-       "                            specified SAS is disabled\n"
+       " -S, --sas <system name>\n"
+       "                            Use specified system name to identify this system to SAS.\n"
        " -H, --hss <server>         Name/IP address of the Homestead cluster\n"
        " -C, --record-routing-model <model>\n"
        "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
@@ -575,6 +576,10 @@ static pj_status_t init_logging_options(int argc, char* argv[], struct options* 
       options->interactive = PJ_TRUE;
       break;
 
+    case OPT_RAM_RECORD_EVERYTHING:
+      options->ram_record_everything = true;
+      break;
+
     default:
       // Ignore other options at this point
       break;
@@ -783,22 +788,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case 'S':
       {
-        std::vector<std::string> sas_options;
-        Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
-
-        if ((sas_options.size() == 2) &&
-            !sas_options[0].empty() &&
-            !sas_options[1].empty())
-        {
-          options->sas_server = sas_options[0];
-          options->sas_system_name = sas_options[1];
-          TRC_INFO("SAS set to %s", options->sas_server.c_str());
-          TRC_INFO("System name is set to %s", options->sas_system_name.c_str());
-        }
-        else
-        {
-          TRC_WARNING("Invalid --sas option: %s", pj_optarg);
-        }
+        options->sas_system_name = std::string(pj_optarg);;
+        TRC_INFO("SAS system name is set to %s", options->sas_system_name.c_str());
       }
       break;
 
@@ -958,7 +949,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'F':
     case 'd':
     case 't':
-      // Ignore L, F, d and t - these are handled by init_logging_options
+    case OPT_RAM_RECORD_EVERYTHING:
+      // Ignore options that are handled by init_logging_options
       break;
 
     case OPT_DEFAULT_SESSION_EXPIRES:
@@ -1289,7 +1281,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       return -1;
 
     default:
-      TRC_ERROR("Unknown option. Run with --help for help.");
+      TRC_ERROR("Unknown option (%d). Run with --help for help.", c);
       return -1;
     }
   }
@@ -1323,6 +1315,8 @@ void signal_handler(int sig)
   // Ensure the log files are complete - the core file created by abort() below
   // will trigger the log files to be copied to the diags bundle
   TRC_COMMIT();
+
+  RamRecorder::dump("/var/log/sprout");
 
   // Dump a core.
   abort();
@@ -1415,6 +1409,7 @@ AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
+SasService* sas_service = NULL;
 IFCConfiguration ifc_configuration = {};
 
 int create_astaire_stores(struct options opt,
@@ -1570,6 +1565,8 @@ int create_astaire_stores(struct options opt,
 }
 
 void create_chronos_connection(struct options opt,
+                               HttpClient*& chronos_http_client,
+                               HttpConnection*& chronos_http_conn,
                                CommunicationMonitor*& chronos_comm_monitor)
 {
   chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
@@ -1614,10 +1611,17 @@ void create_chronos_connection(struct options opt,
   TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
              chronos_service.c_str(),
              chronos_callback_host.c_str());
-  chronos_connection = new ChronosConnection(chronos_service,
-                                             chronos_callback_host,
-                                             http_resolver,
-                                             chronos_comm_monitor);
+
+  chronos_http_client = new HttpClient(false,
+                                       http_resolver,
+                                       SASEvent::HttpLogLevel::DETAIL,
+                                       chronos_comm_monitor);
+
+  chronos_http_conn = new HttpConnection(chronos_service,
+                                         chronos_http_client);
+
+  chronos_connection = new ChronosConnection(chronos_callback_host,
+                                             chronos_http_conn);
 
 }
 
@@ -1630,12 +1634,15 @@ int main(int argc, char* argv[])
   struct options opt;
 
   SIPResolver* sip_resolver = NULL;
+  HttpClient* ralf_client = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
   SproutletProxy* sproutlet_proxy = NULL;
   std::list<Sproutlet*> sproutlets;
+  HttpClient* chronos_http_client = NULL;
+  HttpConnection* chronos_http_conn = NULL;
   CommunicationMonitor* chronos_comm_monitor = NULL;
   CommunicationMonitor* enum_comm_monitor = NULL;
   CommunicationMonitor* hss_comm_monitor = NULL;
@@ -1670,7 +1677,6 @@ int main(int argc, char* argv[])
   opt.reg_max_expires = 300;
 
   opt.sub_max_expires = 0;
-  opt.sas_server = "0.0.0.0";
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
   opt.worker_threads = 1;
@@ -1718,6 +1724,8 @@ int main(int argc, char* argv[])
   opt.homestead_timeout = 750;
   opt.enable_orig_sip_to_tel_coerce = false;
   opt.request_on_queue_timeout = 4000;
+  opt.ram_record_everything = false;
+  opt.always_serve_remote_aliases = false;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1738,6 +1746,12 @@ int main(int argc, char* argv[])
                           opt.log_directory,
                           opt.log_level,
                           opt.log_to_file);
+
+  if (opt.ram_record_everything)
+  {
+    TRC_INFO("RAM record everything enabled");
+    RamRecorder::recordEverything();
+  }
 
   // We should now have a connection to syslog so we can write the started ENT
   // log.
@@ -1798,12 +1812,6 @@ int main(int argc, char* argv[])
 
   std::vector<std::string> sproutlet_uris;
   SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
-
-  if (opt.sas_server == "0.0.0.0")
-  {
-    TRC_WARNING("SAS server option was invalid or not configured - SAS is disabled");
-    CL_SPROUT_INVALID_SAS_OPTION.log();
-  }
 
   if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
   {
@@ -2033,7 +2041,15 @@ int main(int argc, char* argv[])
                                            hc);
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
+  dns_resolver = new DnsCachedResolver(opt.dns_servers,
+                                       opt.dns_timeout,
+                                       "/etc/clearwater/dns.json");
+
+  // Reload dns.json on SIGHUP
+  Updater<void, DnsCachedResolver>* dns_updater =
+         new Updater<void, DnsCachedResolver>(dns_resolver,
+                                              std::mem_fun(&DnsCachedResolver::reload_static_records));
+
   if (opt.pcscf_enabled)
   {
     sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration, 0);
@@ -2048,13 +2064,15 @@ int main(int argc, char* argv[])
   quiescing_mgr = new QuiescingManager();
   quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
+  std::string system_type_sas = (opt.pcscf_trusted_port != 0) ? "bono" : "sprout";
+
+  // Initialise the SasService, to read the SAS config to pass into SAS::Init
+  SasService* sas_service = new SasService(opt.sas_system_name, system_type_sas, opt.sas_signaling_if);
+
   // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.sas_system_name,
-                      opt.sas_server,
-                      opt.pcscf_trusted_port,
+  status = init_stack(opt.pcscf_trusted_port,
                       opt.pcscf_untrusted_port,
                       opt.port_scscf,
-                      opt.sas_signaling_if,
                       opt.sproutlet_ports,
                       opt.local_host,
                       opt.public_host,
@@ -2102,15 +2120,18 @@ int main(int argc, char* argv[])
   if (opt.ralf_server != "")
   {
     // Create HttpConnection pool for Ralf Rf billing interface.
+    ralf_client = new HttpClient(false,
+                                 http_resolver,
+                                 nullptr,
+                                 load_monitor,
+                                 SASEvent::HttpLogLevel::PROTOCOL,
+                                 ralf_comm_monitor,
+                                 !opt.http_acr_logging);
+
     ralf_connection = new HttpConnection(opt.ralf_server,
-                                         false,
-                                         http_resolver,
-                                         NULL, // No SNMP table for connected Ralfs
-                                         load_monitor,
-                                         SASEvent::HttpLogLevel::PROTOCOL,
-                                         ralf_comm_monitor,
-                                         "http",
-                                         !opt.http_acr_logging);
+                                         ralf_client,
+                                         "http");
+
     ralf_processor = new RalfProcessor(ralf_connection,
                                        exception_handler,
                                        opt.ralf_threads);
@@ -2232,13 +2253,15 @@ int main(int argc, char* argv[])
   }
 
   create_chronos_connection(opt,
+                            chronos_http_client,
+                            chronos_http_conn,
                             chronos_comm_monitor);
 
   scscf_acr_factory = (ralf_processor != NULL) ?
                     (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
                     new ACRFactory();
 
-  // Create the SDM and IMPI stores
+  // Create the IMPI stores
   int rc = create_astaire_stores(opt,
                                  astaire_resolver,
                                  astaire_comm_monitor,
@@ -2549,6 +2572,7 @@ int main(int argc, char* argv[])
   delete hss_connection;
   delete fifc_service;
   delete sifc_service;
+  delete sas_service;
   delete rph_service;
   delete quiescing_mgr;
   delete exception_handler;
@@ -2592,15 +2616,20 @@ int main(int argc, char* argv[])
 
   delete ralf_processor;
   delete ralf_connection;
+  delete ralf_client;
   delete enum_service;
   delete scscf_acr_factory;
 
+  delete dns_updater;
   delete sip_resolver;
   delete http_resolver;
   delete astaire_resolver;
   delete dns_resolver;
 
   delete analytics_logger;
+
+  delete chronos_http_conn;
+  delete chronos_http_client;
 
   // Delete Sprout's alarm objects
   delete chronos_comm_monitor;

@@ -370,8 +370,9 @@ public:
   ///
   virtual SAS::TrailId trail() const = 0;
 
-  /// Get the URI that caused us to be routed to this Sproutlet or if no such
-  /// URI exists e.g. if the Sproutlet was matched on a port, return NULL.
+  /// Get the SIP URI that caused us to be routed to this Sproutlet (i.e. the
+  /// top Route header or the request URI) or NULL if no such URI exists (e.g.
+  /// the request URI is not a SIP URI)
   ///
   /// @returns            - The URI that routed to this Sproutlet.
   ///
@@ -390,12 +391,19 @@ public:
                                       const pjsip_sip_uri* base_uri,
                                       pj_pool_t* pool) const = 0;
 
-  /// Get the local hostname part of a SIP URI.
+  /// @brief      Gets the local hostname part of a SIP URI.
   ///
-  /// @returns            - The local hostname part of the URI.
+  /// If the passed in URI does not match a sproutlet, then either returns the
+  /// hostname of the URI anyway (assuming it's local), or returns the hostname
+  /// of the _root_uri, depending on the value of `default_to_root`.
   ///
-  /// @param uri          - The SIP URI.
-  virtual std::string get_local_hostname(const pjsip_sip_uri* uri) const = 0;
+  /// @param[in]  uri             The SIP URI
+  /// @param[in]  default_to_root Whether to return the _root_uri's hostname if
+  ///                             the passed in URI does not match a sproutlet.
+  ///
+  /// @return     The local hostname part of the URI.
+  virtual std::string get_local_hostname(const pjsip_sip_uri* uri,
+                                         bool default_to_root=false) const = 0;
 };
 
 
@@ -724,8 +732,9 @@ protected:
   SAS::TrailId trail() const
     {return _helper->trail();}
 
-  /// Get the URI that caused us to be routed to this Sproutlet or if no such
-  /// URI exists e.g. if the Sproutlet was matched on a port, return NULL.
+  /// Get the SIP URI that caused us to be routed to this Sproutlet (i.e. the
+  /// top Route header or the request URI) or NULL if no such URI exists (e.g.
+  /// the request URI is not a SIP URI)
   ///
   /// @returns            - The URI that routed to this Sproutlet.
   ///
@@ -750,14 +759,21 @@ protected:
     return _helper->next_hop_uri(service, base_uri, pool);
   }
 
-  /// Get the local hostname part of a SIP URI.
+  /// @brief      Gets the local hostname part of a SIP URI.
   ///
-  /// @returns            - The local hostname part of the URI.
+  /// If the passed in URI does not match a sproutlet, then either returns the
+  /// hostname of the URI anyway (assuming it's local), or returns the hostname
+  /// of the _root_uri, depending on the value of `default_to_root`.
   ///
-  /// @param uri          - The SIP URI.
-  std::string get_local_hostname(const pjsip_sip_uri* uri) const
+  /// @param[in]  uri             The SIP URI
+  /// @param[in]  default_to_root Whether to return the _root_uri's hostname if
+  ///                             the passed in URI does not match a sproutlet.
+  ///
+  /// @return     The local hostname part of the URI.
+  std::string get_local_hostname(const pjsip_sip_uri* uri,
+                                 bool default_to_root=false) const
   {
-    return _helper->get_local_hostname(uri);
+    return _helper->get_local_hostname(uri, default_to_root);
   }
 
 protected:
@@ -782,8 +798,9 @@ public:
   /// Virtual descrustor.
   virtual ~SproutletHelper() {}
 
-  /// Get the URI that caused us to be routed to this Sproutlet or if no such
-  /// URI exists e.g. if the Sproutlet was matched on a port, return NULL.
+  /// Get the SIP URI that caused us to be routed to this Sproutlet (i.e. the
+  /// top Route header or the request URI) or NULL if no such URI exists (e.g.
+  /// the request URI is not a SIP URI)
   virtual pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
                                          const Sproutlet* sproutlet) const = 0;
 

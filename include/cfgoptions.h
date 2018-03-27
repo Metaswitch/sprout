@@ -73,7 +73,6 @@ struct options
   std::string                          trusted_hosts;
   bool                                 auth_enabled;
   std::string                          auth_realm;
-  std::string                          sas_server;
   std::string                          sas_system_name;
   std::string                          hss_server;
   std::string                          xdm_server;
@@ -143,6 +142,7 @@ struct options
   int                                  request_on_queue_timeout;
   std::set<std::string>                blacklisted_scscfs;
   bool                                 enable_orig_sip_to_tel_coerce;
+  bool                                 ram_record_everything;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

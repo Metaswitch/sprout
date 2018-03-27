@@ -56,7 +56,9 @@ namespace AoRTestUtils
     s->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
     s->_to_tag = to_tag;
     s->_cid = std::string("xyzabc@192.91.191.29");
-    // SDM-REFACTOR-TODO want to change the route URI to a full header not just the URI part.
+    // TODO We should change the route URI to a full header not just the URI
+    // part once the subscription sproutlet is enhanced to store full record-route
+    // headers on SUBSCRIBEs.
     s->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
     s->_expires = now + expiry;
 
