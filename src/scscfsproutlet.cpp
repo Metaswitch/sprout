@@ -341,7 +341,7 @@ void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
   }
 }
 
-void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
+uint64_t SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
                                               bool video_call)
 {
   // Calculate how long it has taken to setup the session.
@@ -357,6 +357,8 @@ void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
   {
     _audio_session_setup_time_tbl->accumulate(ringing_usec);
   }
+
+  return ringing_usec;
 }
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
@@ -742,11 +744,13 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     }
   }
 
-  if ((st_code >= PJSIP_SC_OK) && (_hss_data_cached))
+  if ((st_code > PJSIP_SC_TRYING) && _hss_data_cached)
   {
-    // Final response. Add a P-Charging-Function-Addresses header if one is
-    // not already present for some reason. We only do this if we have
-    // the charging addresses cached (which we should do).
+    // We add a P-Charging-Function-Addresses header to provisional 1xx responses
+    // (but not 100 Trying responses) and final responses if not already present.
+    // We only do this if we have the charging addresses cached (which we should do).
+    // According to TS 24.229, PCFAs should not be added to responses being sent to ASes,
+    // except in some very specific cases, but this is unlikely to cause inter-op issues.
     PJUtils::add_pcfa_header(rsp,
                              get_pool(rsp),
                              _irs_info._ccfs,
@@ -791,18 +795,34 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
           bypass_As.add_var_param(st_code == PJSIP_SC_REQUEST_TIMEOUT ?
                                   "Timed out waiting for response to INVITE request from AS" :
                                   "AS returned 5xx response");
+          bypass_As.add_static_param(_as_chain_link.complete());
           SAS::report_event(bypass_As);
 
-          _as_chain_link = _as_chain_link.next();
-          pjsip_msg* req = get_base_request();
-          _record_routed = false;
-          if (_session_case->is_originating())
+          // Check that we aren't about to iterate through the AS chain if we're
+          // already complete (which would cause "index out of range" crashes).  
+          // This shouldn't happen in normal operation, but there have 
+          // historically been problems when AS timers couldn't be cancelled because
+          // they'd already popped, with the result that we get too many callbacks
+          // changing the state of the AS chain.
+          if (_as_chain_link.complete())
           {
-            apply_originating_services(req);
+            // LCOV_EXCL_START
+            TRC_ERROR("Unexpected response for complete AS Chain. SAS TrailID: %lu", trail());
+            // LCOV_EXCL_STOP
           }
           else
           {
-            apply_terminating_services(req);
+            _as_chain_link = _as_chain_link.next();
+            pjsip_msg* req = get_base_request();
+            _record_routed = false;
+            if (_session_case->is_originating())
+            {
+              apply_originating_services(req);
+            }
+            else
+            {
+              apply_terminating_services(req);
+            }
           }
 
           // Free off the response as we no longer need it.
@@ -858,7 +878,15 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
       ((st_code == PJSIP_SC_RINGING) ||
        PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
   {
-    _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+    uint64_t setup_time = _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+    if (setup_time > 2000000)
+    {
+      pjsip_cid_hdr* cid = PJSIP_MSG_CID_HDR(rsp);
+      TRC_VERBOSE("Call setup time exceeded 2 seconds for Call-ID %.*s (was %lu us)",
+                  cid->id.slen,
+                  cid->id.ptr,
+                  setup_time);
+    }
     _record_session_setup_time = false;
   }
 }
@@ -1115,6 +1143,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
           {
             // Send a SIP 504 response if we got a 500/503 HTTP response.
+            TRC_VERBOSE("AS retargeting failed to lookup IFCs for served user");
             status_code = PJSIP_SC_SERVER_TIMEOUT;
           }
           else
@@ -1206,7 +1235,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
                                                                  _scscf->_scscf_cluster_uri);
       pjsip_sip_uri* routing_uri = get_routing_uri(req);
-      if (routing_uri != NULL)
+
+      // If the URI that routed to this Sproutlet isn't reflexive, just ignore it
+      // and use the configured scscf uri
+      if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
       {
         SCSCFUtils::get_scscf_uri(get_pool(req),
                                   get_local_hostname(routing_uri),
@@ -1228,7 +1260,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       }
       else
       {
-        TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
+        TRC_VERBOSE("Failed to retrieve ServiceProfile for %s", served_user.c_str());
 
         if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
         {
@@ -1427,28 +1459,17 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       _scscf->translate_request_uri(req, get_pool(req), trail());
 
       URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri, true, true);
-      std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
-      TRC_INFO("New URI string is %s", new_uri_str.c_str());
-
       if ((uri_class == LOCAL_PHONE_NUMBER) ||
           (uri_class == GLOBAL_PHONE_NUMBER) ||
           (uri_class == NP_DATA) ||
           (uri_class == FINAL_NP_DATA))
       {
-        TRC_DEBUG("Routing to BGCF");
-        SAS::Event event(trail(), SASEvent::PHONE_ROUTING_TO_BGCF, 0);
-        event.add_var_param(new_uri_str);
-        SAS::report_event(event);
-        route_to_bgcf(req);
+        route_to_bgcf(req, SASEvent::PHONE_ROUTING_TO_BGCF);
       }
       else if (uri_class == OFFNET_SIP_URI)
       {
         // Destination is off-net, so route to the BGCF.
-        TRC_DEBUG("Routing to BGCF");
-        SAS::Event event(trail(), SASEvent::OFFNET_ROUTING_TO_BGCF, 0);
-        event.add_var_param(new_uri_str);
-        SAS::report_event(event);
-        route_to_bgcf(req);
+        route_to_bgcf(req, SASEvent::OFFNET_ROUTING_TO_BGCF);
       }
       else if (uri_class != UNKNOWN)
       {
@@ -1458,17 +1479,23 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       else
       {
         // Non-sip: or -tel: URI is invalid at this point, so just reject the request
-        reject_invalid_uri(req, new_uri_str);
+        reject_invalid_uri(req);
       }
     }
     else
     {
       // ENUM is not configured so we have no way to tell if this request is
-      // on-net or off-net. If it's to a valid sip: or tel: URI, route it to the
+      // on-net or off-net, unless it's already a offnet SIP URI.
+      // Othwerise if it's a valid sip: or tel: URI, route it to the
       // I-CSCF, which should be able to look it up in the HSS.
       URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri, true, false);
 
-      if (uri_class != UNKNOWN)
+      if (uri_class == OFFNET_SIP_URI)
+      {
+        // Destination is definitely off-net, so route to the BGCF.
+        route_to_bgcf(req, SASEvent::OFFNET_ROUTING_TO_BGCF);
+      }
+      else if (uri_class != UNKNOWN)
       {
         TRC_DEBUG("No ENUM lookup available - routing to I-CSCF");
         route_to_icscf(req);
@@ -1476,8 +1503,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       else
       {
         // Invalid URI, so just reject the request
-        std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
-        reject_invalid_uri(req, uri_str);
+        reject_invalid_uri(req);
       }
     }
   }
@@ -1707,11 +1733,19 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
 
 
 // Route the request to the BGCF.
-void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
+void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req, int reason)
 {
-  TRC_INFO("Routing to BGCF %s",
+  std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+
+  TRC_INFO("Routing to BGCF %s - with uri of %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  _scscf->bgcf_uri()).c_str());
+                                  _scscf->bgcf_uri()).c_str(),
+           new_uri_str.c_str());
+
+  SAS::Event event(trail(), reason, 0);
+  event.add_var_param(new_uri_str);
+  SAS::report_event(event);
+
   PJUtils::add_route_header(req,
                             (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
                                                             _scscf->bgcf_uri()),
@@ -2162,18 +2196,34 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
       TRC_DEBUG("Trigger default_handling=CONTINUED processing");
       SAS::Event bypass_as(trail(), SASEvent::BYPASS_AS, 0);
       bypass_as.add_var_param("AS liveness timer expired");
+      bypass_as.add_static_param(_as_chain_link.complete());
       SAS::report_event(bypass_as);
 
-      _as_chain_link = _as_chain_link.next();
-      pjsip_msg* req = get_base_request();
-      _record_routed = false;
-      if (_session_case->is_originating())
+      // Check that we aren't about to iterate through the AS chain if we're
+      // already complete (which would cause "index out of range" crashes).  
+      // If this happens, it means there's a bug elsewhere, but there have 
+      // historically been problems when AS timers couldn't be cancelled because
+      // they'd already popped, with the result that we get too many callbacks
+      // changing the state of the AS chain.
+      if (_as_chain_link.complete())
       {
-        apply_originating_services(req);
+        // LCOV_EXCL_START
+        TRC_ERROR("Unexpected timeout for complete AS Chain. SAS TrailID: %lu", trail());
+        // LCOV_EXCL_STOP
       }
       else
       {
-        apply_terminating_services(req);
+        _as_chain_link = _as_chain_link.next();
+        pjsip_msg* req = get_base_request();
+        _record_routed = false;
+        if (_session_case->is_originating())
+        {
+          apply_originating_services(req);
+        }
+        else
+        {
+          apply_terminating_services(req);
+        }
       }
     }
     else
@@ -2369,11 +2419,17 @@ pjsip_msg* SCSCFSproutletTsx::get_base_request()
   }
 }
 
-void SCSCFSproutletTsx::reject_invalid_uri(pjsip_msg* req, const std::string& uri_str)
+void SCSCFSproutletTsx::reject_invalid_uri(pjsip_msg* req)
 {
-  TRC_DEBUG("Rejecting request to invalid URI %s", uri_str.c_str());
+  std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+  reject_invalid_uri(req, uri_str);
+}
+
+void SCSCFSproutletTsx::reject_invalid_uri(pjsip_msg* req, const std::string& invalid_uri)
+{
+  TRC_DEBUG("Rejecting request to invalid URI %s", invalid_uri.c_str());
   SAS::Event event(trail(), SASEvent::SCSCF_INVALID_URI, 0);
-  event.add_var_param(uri_str);
+  event.add_var_param(invalid_uri);
   SAS::report_event(event);
   pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
   send_response(rsp);

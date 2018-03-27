@@ -59,6 +59,7 @@ public:
   int _unique; //< unique to this dialog; inserted into Call-ID
   string _cid;
   string _supported;
+  bool _use_registrar_service;
 
   Message() :
     _method("REGISTER"),
@@ -75,7 +76,8 @@ public:
     _scheme("sip"),
     _route("sprout.homedomain"),
     _gruu_support(true),
-    _supported("outbound, path")
+    _supported("outbound, path"),
+    _use_registrar_service(true)
   {
     static int unique = 1042;
     _unique = unique;
@@ -111,7 +113,8 @@ string Message::get()
   }
 
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) + _cseq : _branch;
-  std::string route = _route.empty() ? "" : "Route: <sip:" + _route + ";transport=tcp;lr;service=registrar>\r\n";
+  std::string route = _route.empty() ? "" : "Route: <sip:" + _route + ";transport=tcp;lr" +
+                                            (_use_registrar_service ? ";service=registrar" : "") + ">\r\n";
 
   n = snprintf(buf, sizeof(buf),
                "%1$s sip:%3$s SIP/2.0\r\n"
@@ -1488,4 +1491,67 @@ TEST_F(RegistrarTest, NoOBParameter)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
 
   free_txdata();
+}
+
+// Tests that if we receive a REGISTER with a Route header that is only matched
+// on the port, we use the configured S-CSCF URI in the IRS query
+TEST_F(RegistrarTest, PortMatchedRouteHeaderUsesConfiguredServerName)
+{
+  // Create a REGISTER message with a Route header that only matches on the port
+  // (i.e. doesn't include the service=registrar parameter and uses only the
+  // domain "homedomain")
+  Message msg;
+  msg._route = "homedomain";
+  msg._use_registrar_service = false;
+
+  // Catch the irs_query and then return NOT_FOUND to end processing after the
+  // call to get_subscriber_state
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SaveArg<0>(&irs_query),
+                    Return(HTTP_NOT_FOUND)));
+
+  inject_msg(msg.get());
+
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(403, out->line.status.code);
+  EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
+
+  // Check that the query was made for the correct subscriber
+  EXPECT_EQ("sip:6505550231@homedomain",irs_query._public_id);
+  EXPECT_EQ("reg", irs_query._req_type);
+
+  // Check that the S-CSCF URI used was the Root URI of this sproutlet
+  EXPECT_EQ("sip:scscf.sprout.homedomain:5058;transport=TCP", irs_query._server_name);
+
+  free_txdata();
+}
+
+// Tests that Route header params are preserved when the RegistrarSproutlet
+// passes on a request
+TEST_F(RegistrarTest, GetTsxParamsPreservedOnNextHopPortMatch)
+{
+  // Create an INVITE with a Route header specifying the "orig" param (which
+  // therefore only matches on the port)
+  Message msg;
+  msg._method = "INVITE";
+  msg._route = "madeupdomain:5058;transport=TCP;orig";
+  pjsip_msg* pj_msg = parse_msg(msg.get());
+
+  // Offer it to the RegistrarSproutlet
+  pjsip_sip_uri* next_hop = nullptr;
+  SproutletHelper* helper = (SproutletHelper*)_registrar_proxy;
+  SproutletTsx* tsx = _registrar_sproutlet->get_tsx(helper,
+                                                    "",
+                                                    pj_msg,
+                                                    next_hop,
+                                                    stack_data.pool,
+                                                    0L);
+
+  // Expect that the RegistrarSproutlet was not interested in the message
+  EXPECT_EQ(nullptr, tsx);
+
+  // Check that the next_hop URI contains the "orig" parameter
+  bool has_param = (pjsip_param_find(&next_hop->other_param, &STR_ORIG) != nullptr);
+  EXPECT_TRUE(has_param);
 }

@@ -763,11 +763,12 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
     // Copy the SAS trail across from the request.
     set_trail(*p_tdata, get_trail(rdata));
 
-    // Some headers should always be copied onto responses, like
-    // charging headers.
-    PJUtils::clone_header(&STR_P_C_V, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
-    PJUtils::clone_header(&STR_P_C_F_A, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
-
+    // Charging headers should be copied onto all non-100 responses (see RFC7976 section 3)
+    if (st_code != PJSIP_SC_TRYING)
+    {
+      PJUtils::clone_header(&STR_P_C_V, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
+      PJUtils::clone_header(&STR_P_C_F_A, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
+    }
   }
   return status;
 }
@@ -864,9 +865,12 @@ pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
   // Copy CSeq header. */
   pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_CSEQ_HDR(req_msg)));
 
-  // Some headers should always be copied onto responses, like charging headers.
-  PJUtils::clone_header(&STR_P_C_V, req_msg, msg, tdata->pool);
-  PJUtils::clone_header(&STR_P_C_F_A, req_msg, msg, tdata->pool);
+  // Charging headers should be copied onto all non-100 responses (see RFC7976 section 3)
+  if (st_code != PJSIP_SC_TRYING)
+  {
+    PJUtils::clone_header(&STR_P_C_V, req_msg, msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_C_F_A, req_msg, msg, tdata->pool);
+  }
 
   *p_tdata = tdata;
 
@@ -2288,6 +2292,35 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
   }
 }
 
+// Determine whether a parameter whose BNF describes it as a
+// "gen-value" needs quoting (i.e. is not a valid "token" or "host")
+bool PJUtils::needs_quoting(const char *inbuf,
+                            size_t length)
+{
+  // Check whether we need to quote the value.  We'll need to do this if
+  // - its not already quoted
+  // - it contains characters other than those allowed for a host or
+  //   token (see RFC 3455, section 5.5)
+  // Note that we assume for simplicity that if the value starts with '[',
+  // its an ipv6 address (int_parse_host in sip_parser.c makes the same
+  // assumption and the pjsip_HOST_SPEC doesn't cover IPv6 parsing).
+  bool needs_quoting = false;
+
+  // Check whether the value already quoted, or an IPv6 address
+  if ((inbuf[0] != '"') && (inbuf[0] != '['))
+  {
+    const pjsip_parser_const_t *pc = pjsip_parser_const();
+    for (size_t index = 0; index < length; index++)
+    {
+      needs_quoting = needs_quoting ||
+                       (!pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) &&
+                        !pj_cis_match(&pc->pjsip_HOST_SPEC, inbuf[index]));
+    }
+  }
+
+  return needs_quoting;
+}
+
 // Add Changing Function param to the list for a PCFA header
 void PJUtils::add_pcfa_param(pj_list_type *cf_list,
                              pj_pool_t* pool,
@@ -2297,27 +2330,8 @@ void PJUtils::add_pcfa_param(pj_list_type *cf_list,
   pjsip_param* new_param =
             (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
   new_param->name = name;
-
-  // Check whether we need to quote the value.  We'll need to do this if
-  // - its not already quoted
-  // - it contains characters other than those allowed for a host or
-  //   token (see RFC 3455, section 5.5)
-  // Note that we assume for simplicity that if the value starts with '[',
-  // its an ipv6 address (int_parse_host in sip_parser.c makes the same
-  // assumption and the pjsip_HOST_SPEC doesn't cover IPv6 parsing).
   const char *inbuf = value.c_str();
-  bool quote = false;
-
-  // Check whether the value already quoted, or an IPv6 address
-  if ((inbuf[0] != '"') && (inbuf[0] != '['))
-  {
-    const pjsip_parser_const_t *pc = pjsip_parser_const();
-    for (size_t index = 0; index < value.length(); index++)
-    {
-      quote = quote || (!pj_cis_match(&pc->pjsip_TOKEN_SPEC, inbuf[index]) &&
-                        !pj_cis_match(&pc->pjsip_HOST_SPEC, inbuf[index]));
-    }
-  }
+  bool quote = needs_quoting(inbuf, value.length());
 
   std::string final_value;
   if (quote)

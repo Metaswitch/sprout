@@ -262,13 +262,21 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     SAS::report_event(event);
   }
 
+  if (emergency_registration)
+  {
+    SAS::Event event(trail(), SASEvent::REGISTER_EMERGENCY, 0);
+    SAS::report_event(event);
+  }
+
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri =
            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
   pjsip_sip_uri* routing_uri = get_routing_uri(req);
 
-  if (routing_uri != NULL)
+  // If the URI that routed to this Sproutlet isn't reflexive, just ignore it
+  // and use the configured scscf uri
+  if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
   {
     SCSCFUtils::get_scscf_uri(get_pool(req),
                               get_local_hostname(routing_uri),
@@ -1143,7 +1151,9 @@ void RegistrarSproutletTsx::add_service_route_header(pjsip_msg* rsp,
   pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)sr_hdr->name_addr.uri;
   pjsip_sip_uri* routing_uri = get_routing_uri(req);
 
-  if (routing_uri != NULL)
+  // If the URI that routed to this Sproutlet isn't reflexive, just ignore it
+  // and use the configured scscf uri
+  if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
   {
     SCSCFUtils::get_scscf_uri(get_pool(rsp),
                               get_local_hostname(routing_uri),

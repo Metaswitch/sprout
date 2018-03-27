@@ -260,7 +260,7 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   event.add_static_param(pjsip_transport_get_type_from_flag(rdata->tp_info.transport->flag));
   event.add_static_param(rdata->pkt_info.src_port);
   event.add_var_param(rdata->pkt_info.src_name);
-  event.add_compressed_param(rdata->msg_info.len, rdata->msg_info.msg_buf, &SASEvent::PROFILE_SIP);
+  event.add_var_param(rdata->msg_info.len, rdata->msg_info.msg_buf);
   SAS::report_event(event);
 }
 
@@ -277,12 +277,29 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   }
   else if (trail != 0)
   {
-    // Raise SAS markers on initial requests only - responses in the same
-    // transaction will have the same trail ID so don't need additional markers
+    // Raise SAS Call-ID, branch ID, To and From markers on initial requests
+    // only - responses in the same transaction will have the same trail ID so
+    // don't need additional markers.
     if (tdata->msg->type == PJSIP_REQUEST_MSG)
     {
       PJUtils::report_sas_to_from_markers(trail, tdata->msg);
       PJUtils::mark_sas_call_branch_ids(trail, tdata->msg);
+    }
+
+    // Log a SIP protocol error marker for 4xx, 5xx or 6xx responses, so we can
+    // search by error code.
+    if (tdata->msg->type == PJSIP_RESPONSE_MSG &&
+        (tdata->msg->line.status.code >= PJSIP_SC_BAD_REQUEST))
+    {
+      SAS::Marker error_marker(trail, MARKER_ID_PROTOCOL_ERROR, 1u);
+      error_marker.add_static_param(5); // SIP protocol
+      error_marker.add_static_param(tdata->msg->line.status.code);
+      // The protocol error marker is defined as taking two static parameters
+      // (protocol and protocol-specific error code) and a variable parameter
+      // (error string), but we can't give a very specific error string at this
+      // point in the code, so leave it empty.
+      error_marker.add_var_param("");
+      SAS::report_marker(error_marker);
     }
 
     // Log the message event.
@@ -290,9 +307,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
     event.add_static_param(pjsip_transport_get_type_from_flag(tdata->tp_info.transport->flag));
     event.add_static_param(tdata->tp_info.dst_port);
     event.add_var_param(tdata->tp_info.dst_name);
-    event.add_compressed_param((int)(tdata->buf.cur - tdata->buf.start),
-                               tdata->buf.start,
-                               &SASEvent::PROFILE_SIP);
+    event.add_var_param((int)(tdata->buf.cur - tdata->buf.start), tdata->buf.start);
     SAS::report_event(event);
   }
   else

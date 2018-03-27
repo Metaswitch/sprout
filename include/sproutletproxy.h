@@ -79,6 +79,9 @@ public:
                               const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
 
+  /// Handles responses that are received outside a transaction.
+  pj_bool_t on_rx_response(pjsip_rx_data *rdata) override;
+
   enum SPROUTLET_SELECTION_TYPES
   {
     SERVICE_NAME=0,
@@ -217,11 +220,24 @@ protected:
   ///             matched a local alias, REMOTE, indicating a remote match, or
   ///             NO_MATCH, indicating that the hostname matched neither local nor
   ///             remote aliases.
-  AliasMatchLocality get_uri_locality(const pjsip_uri* uri);
+  AliasMatchLocality get_uri_locality(const pjsip_uri* uri) const;
 
   pjsip_sip_uri* get_routing_uri(const pjsip_msg* req,
-                                 const Sproutlet* sproutlet) const;
-  std::string get_local_hostname(const pjsip_sip_uri* uri) const;
+                                 const Sproutlet* sproutlet) const override;
+
+  /// @brief      Gets the local hostname part of a SIP URI.
+  ///
+  /// If the passed in URI does not match a sproutlet, then either returns the
+  /// hostname of the URI anyway (assuming it's local), or returns the hostname
+  /// of the _root_uri, depending on the value of `default_to_root`.
+  ///
+  /// @param[in]  uri             The SIP URI
+  /// @param[in]  default_to_root Whether to return the _root_uri's hostname if
+  ///                             the passed in URI does not match a sproutlet.
+  ///
+  /// @return     The local hostname part of the URI.
+  std::string get_local_hostname(const pjsip_sip_uri* uri,
+                                 bool default_to_root=false) const;
 
   /// @brief      Compares the given hostname to the alias lists and returns the
   ///             match locality.
@@ -302,7 +318,11 @@ protected:
     virtual void on_tsx_state(pjsip_event* event);
 
     // A count of the number of pending Callbacks that are queued for this
-    // UASTsx. A non-zero count prevents the UASTsx from being destroyed
+    // UASTsx plus the number of outstanding timer callbacks, where this
+    // includes timer callbacks outstanding in PJSIP, and timer callbacks
+    // which have been popped by PJSIP, but whose callback is awaiting 
+    // scheduling on a worker thread.
+    // A non-zero count prevents the UASTsx from being destroyed
     int _pending_callbacks = 0;
 
   private:
@@ -544,7 +564,8 @@ public:
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
-  std::string get_local_hostname(const pjsip_sip_uri* uri) const;
+  pj_bool_t on_rx_response(pjsip_rx_data *rdata);
+  std::string get_local_hostname(const pjsip_sip_uri* uri, bool default_to_root=false) const;
   bool is_network_func_boundary() const;
   bool is_internal_network_func_boundary() const;
   int get_depth() const { return _depth; };

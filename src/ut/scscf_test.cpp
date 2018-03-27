@@ -23,7 +23,7 @@
 #include "analyticslogger.h"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
-#include "fakexdmconnection.hpp"
+#include "mock_xdm_connection.h"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
 #include "scscfsproutlet.h"
@@ -95,7 +95,7 @@ public:
     _local_aor_store = new AstaireAoRStore(_local_data_store);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
-    _xdm_connection = new FakeXDMConnection();
+    _xdm_connection = new MockXDMConnection();
     _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
     _sess_cont_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
 
@@ -261,7 +261,7 @@ protected:
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static MockHSSConnection* _hss_connection_observer;
-  static FakeXDMConnection* _xdm_connection;
+  static MockXDMConnection* _xdm_connection;
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
@@ -362,7 +362,7 @@ MockSubscriberManager* SCSCFTestBase::_sm;
 AnalyticsLogger* SCSCFTestBase::_analytics;
 FakeHSSConnection* SCSCFTestBase::_hss_connection;
 MockHSSConnection* SCSCFTestBase::_hss_connection_observer;
-FakeXDMConnection* SCSCFTestBase::_xdm_connection;
+MockXDMConnection* SCSCFTestBase::_xdm_connection;
 BgcfService* SCSCFTestBase::_bgcf_service;
 EnumService* SCSCFTestBase::_enum_service;
 ACRFactory* SCSCFTestBase::_acr_factory;
@@ -371,7 +371,7 @@ SCSCFSelector* SCSCFTestBase::_scscf_selector;
 MockAsCommunicationTracker* SCSCFTestBase::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTestBase::_sess_cont_comm_tracker;
 
-// Default test setup, with ICSCF and without remote SDM
+// Default test setup, with ICSCF
 class SCSCFTest : public SCSCFTestBase
 {
 public:
@@ -726,6 +726,7 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   // Extra fields to insert in all requests and responses.
   string pani = "P-Access-Network-Info: ietf-carrier-pigeon;rfc=1149";
   string pvni = "P-Visited-Network-Id: other.net, \"Other Network\"";
+  string pcfa = "P-Charging-Function-Addresses: ccf=\"CCF TEST\";ecf=\"ECF TEST 1\";ecf=\"ECF TEST 2\"";
   string pvani = pani + "\r\n" + pvni;
 
   if (!msg._extra.empty())
@@ -757,6 +758,10 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
     RespMatcher(100).matches(out);
     tpA->expect_target(current_txdata(), true);  // Requests always come back on same transport
     msg.convert_routeset(out);
+
+    // 100 responses should never contain the PCFA and PCV headers
+    EXPECT_EQ("", get_headers(out, "P-Charging-Function-Addresses"));
+    EXPECT_EQ("", get_headers(out, "P-Charging-Vector"));
 
     // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id,
     // because they never get inserted into such messages.
@@ -802,11 +807,12 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   msg.convert_routeset(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info and P-Visited-Network-Id
+  // Check P-Access-Network-Info, P-Visited-Network-Id and P-Charging-Function-Addresses
   EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "183 Session Progress";
   EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "183 Session Progress";
+  EXPECT_EQ(pcfa, get_headers(out, "P-Charging-Function-Addresses")) << "183 Session Progress";
 
   free_txdata();
 
@@ -863,11 +869,12 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   msg.convert_routeset(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  // Check P-Access-Network-Info, P-Visited-Network-Id and P-Charging-Function-Addresses.
   EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE)";
   EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE)";
+  EXPECT_EQ(pcfa, get_headers(out, "P-Charging-Function-Addresses")) << "200 OK (INVITE)";
 
   free_txdata();
 
@@ -1011,11 +1018,12 @@ void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   msg.convert_routeset(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  // Check P-Access-Network-Info and P-Visited-Network-Id and P-Charging-Function-Addresses.
   EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "404 Not Found (INVITE #2)";
   EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "404 Not Found (INVITE #2)";
+  EXPECT_EQ(pcfa, get_headers(out, "P-Charging-Function-Addresses")) << "404 Not Found (INVITE #2)";
 
   free_txdata();
 
@@ -2233,7 +2241,7 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
 // We can run with no ENUM service - in this case we expect the Request-URI to
 // be unchanged (as there's no lookup which can change it) and for it to just
 // be routed normally to the I-CSCF.
-TEST_F(SCSCFTest, TestWithoutEnum)
+TEST_F(SCSCFTest, TestWithoutEnumUserPhone)
 {
   SCOPED_TRACE("");
 
@@ -2263,13 +2271,39 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:sprout.homedomain;orig>";
-  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
 
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@10.114.61.213:5061;transport=tcp;.*"), hdrs);
+}
+
+TEST_F(SCSCFTest, TestWithoutEnumOffnet)
+{
+  SCOPED_TRACE("");
+
+  // Disable ENUM.
+  _scscf_sproutlet->_enum_service = NULL;
+
+  SCSCFMessage msg;
+  msg._to = "+15108580271";
+  msg._todomain = "ut.cw-ngv.com";
+
+  // IFCs for originating call
+  HSSConnection::irs_info irs_info_1;
+  setup_irs_info(irs_info_1, "+16505551000", "homedomain");
+  expect_get_subscriber_state(irs_info_1, "sip:+16505551000@homedomain");
+
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+
+  // Check that we didn't send an LIR
+  ASSERT_EQ(_hss_connection->request_count(), 0);
 }
 
 /// Test a forked flow - setup phase.
@@ -2910,6 +2944,121 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
 
   // Check that 200 OK hasn't resulted in any more session setup stats being
   // accumulated.
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
+// Test a 180 being overtaken by a 200
+// request.
+TEST_F(SCSCFTest, Overtaken180)
+{
+  // Set up info about the caller.
+  HSSConnection::irs_info irs_info_1;
+  setup_irs_info(irs_info_1, "6505551000", "homedomain");
+  irs_info_1._regstate = "UNREGISTERED";
+  set_ifc(irs_info_1, "sip:6505551000@homedomain", 1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  expect_get_subscriber_state(irs_info_1, "sip:6505551000@homedomain");
+
+  // Setup info about callee.
+  HSSConnection::irs_info irs_info_2;
+  Bindings bindings;
+  setup_callee_info(irs_info_2, bindings);
+  expect_get_callee_info(irs_info_2, bindings);
+
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
+  // Only expect one call into the AS communication tracker despite receiving
+  // multiple responses to the same request.
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCalleeBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.6.6.200", 5060);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig;service=scscf>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=unreg"));
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
+
+  // INVITE passed to final destination (to bono set up in callee's bindings)
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+  tpCalleeBono.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
+  EXPECT_EQ(BONO_ROUTE_HEADER, get_headers(out, "Route"));
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send the 200 OK through before the 180 to simulate the messages overtaking.
+  // Confirm stats are set correctly
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+
+  inject_msg(respond_to_txdata(txdata, 180));
+  out = current_txdata()->msg;
+  RespMatcher(180).matches(out);
+
+  // Check that the there hasn't been any extra incrementing of the stats.
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 
@@ -6319,8 +6468,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   expect_get_subscriber_state(irs_info_2, "sip:6505555678@homedomain");
   expect_get_bindings(bindings, "sip:6505555678@homedomain");
 
-  _xdm_connection->put("sip:6505551234@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
+  std::string simservs = R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
                             <originating-identity-presentation active="false" />
                             <originating-identity-presentation-restriction active="false">
@@ -6337,7 +6485,14 @@ TEST_F(SCSCFTest, MmtelCdiv)
                               </communication-diversion>
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+                          </simservs>)";
+
+  // Expect a call to get MMTEL conf for the callee, which returns simservs
+  // including call diversion to a new callee
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs),
+                    Return(true)));
+
 
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6457,45 +6612,55 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   setup_binding(bindings, "sip:6505559012@homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   expect_get_callee_info(irs_info_3, bindings, "sip:6505559012@homedomain");
 
-  _xdm_connection->put("sip:6505551234@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
-                          <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
-                            <originating-identity-presentation active="false" />
-                            <originating-identity-presentation-restriction active="false">
-                              <default-behaviour>presentation-restricted</default-behaviour>
-                            </originating-identity-presentation-restriction>
-                            <communication-diversion active="true">
-                              <NoReplyTimer>19</NoReplyTimer>"
-                                <cp:ruleset>
-                                  <cp:rule id="rule1">
-                                    <cp:conditions/>
-                                    <cp:actions><forward-to><target>sip:6505555678@homedomain</target></forward-to></cp:actions>
-                                  </cp:rule>
-                                </cp:ruleset>
-                              </communication-diversion>
-                            <incoming-communication-barring active="false"/>
-                            <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+  std::string simservs1 = R"(<?xml version="1.0" encoding="UTF-8"?>
+                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
+                             <originating-identity-presentation active="false" />
+                             <originating-identity-presentation-restriction active="false">
+                               <default-behaviour>presentation-restricted</default-behaviour>
+                             </originating-identity-presentation-restriction>
+                             <communication-diversion active="true">
+                               <NoReplyTimer>19</NoReplyTimer>"
+                                 <cp:ruleset>
+                                   <cp:rule id="rule1">
+                                     <cp:conditions/>
+                                     <cp:actions><forward-to><target>sip:6505555678@homedomain</target></forward-to></cp:actions>
+                                   </cp:rule>
+                                 </cp:ruleset>
+                               </communication-diversion>
+                             <incoming-communication-barring active="false"/>
+                             <outgoing-communication-barring active="false"/>
+                           </simservs>)";
 
-  _xdm_connection->put("sip:6505555678@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
-                          <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
-                            <originating-identity-presentation active="false" />
-                            <originating-identity-presentation-restriction active="false">
-                              <default-behaviour>presentation-restricted</default-behaviour>
-                            </originating-identity-presentation-restriction>
-                            <communication-diversion active="true">
-                              <NoReplyTimer>19</NoReplyTimer>"
-                                <cp:ruleset>
-                                  <cp:rule id="rule1">
-                                    <cp:conditions/>
-                                    <cp:actions><forward-to><target>sip:6505559012@homedomain</target></forward-to></cp:actions>
-                                  </cp:rule>
-                                </cp:ruleset>
-                              </communication-diversion>
-                            <incoming-communication-barring active="false"/>
-                            <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+  // Expect a call to get MMTEL conf for the callee, returning simservs that
+  // include call diversion to the forwarded callee
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs1),
+                    Return(true)));
+
+  std::string simservs2 = R"(<?xml version="1.0" encoding="UTF-8"?>
+                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
+                             <originating-identity-presentation active="false" />
+                             <originating-identity-presentation-restriction active="false">
+                               <default-behaviour>presentation-restricted</default-behaviour>
+                             </originating-identity-presentation-restriction>
+                             <communication-diversion active="true">
+                               <NoReplyTimer>19</NoReplyTimer>"
+                                 <cp:ruleset>
+                                   <cp:rule id="rule1">
+                                     <cp:conditions/>
+                                     <cp:actions><forward-to><target>sip:6505559012@homedomain</target></forward-to></cp:actions>
+                                   </cp:rule>
+                                 </cp:ruleset>
+                               </communication-diversion>
+                             <incoming-communication-barring active="false"/>
+                             <outgoing-communication-barring active="false"/>
+                           </simservs>)";
+
+  // Expect a call to get MMTEL conf for the forwarded callee, returning
+  // simservs that include call diversion to another forwarding number
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505555678@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs2),
+                    Return(true)));
 
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6620,8 +6785,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   set_ifc(irs_info_2, "sip:6505551234@homedomain", 0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 2);
 
-  _xdm_connection->put("sip:6505551000@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
+  std::string simservs = R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
                             <originating-identity-presentation active="true" />
                             <originating-identity-presentation-restriction active="true">
@@ -6630,7 +6794,13 @@ TEST_F(SCSCFTest, MmtelFlow)
                             <communication-diversion active="false"/>
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+                          </simservs>)";
+
+  // Expect a call to get MMTEL conf for the caller, returning a basic set of
+  // simservs, including identity presentation restriction
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs),
+                    Return(true)));
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6742,8 +6912,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   set_ifcs_from_service_profile(irs_info_2, service_profile_2, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 3);
 
-  _xdm_connection->put("sip:6505551000@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
+  std::string simservs = R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
                             <originating-identity-presentation active="true" />
                             <originating-identity-presentation-restriction active="true">
@@ -6752,19 +6921,16 @@ TEST_F(SCSCFTest, MmtelThenExternal)
                             <communication-diversion active="false"/>
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
-                       </simservs>)");  // "
+                          </simservs>)";
 
-  _xdm_connection->put("sip:6505551234@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
-                          <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
-                            <originating-identity-presentation active="true" />
-                            <originating-identity-presentation-restriction active="true">
-                              <default-behaviour>presentation-restricted</default-behaviour>
-                            </originating-identity-presentation-restriction>
-                            <communication-diversion active="false"/>
-                            <incoming-communication-barring active="false"/>
-                            <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+  // Expect that we get calls to the XDMS to get simservs(MMTEL config) for
+  // the caller and callee, and return the basic set of service config above.
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs),
+                    Return(true)));
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
+    .WillOnce(DoAll(SetArgReferee<1>(simservs),
+                    Return(true)));
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6907,8 +7073,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   set_ifcs_from_service_profile(irs_info_2, service_profile_2, "sip:6505551234@homedomain");
   expect_get_callee_info(irs_info_2, bindings, "sip:6505551234@homedomain", 4);
 
-  _xdm_connection->put("sip:6505551000@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
+  std::string simservs = R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
                             <originating-identity-presentation active="true" />
                             <originating-identity-presentation-restriction active="true">
@@ -6917,19 +7082,16 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
                             <communication-diversion active="false"/>
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+                          </simservs>)";
 
-  _xdm_connection->put("sip:6505551234@homedomain",
-                       R"(<?xml version="1.0" encoding="UTF-8"?>
-                          <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
-                            <originating-identity-presentation active="true" />
-                            <originating-identity-presentation-restriction active="true">
-                              <default-behaviour>presentation-restricted</default-behaviour>
-                            </originating-identity-presentation-restriction>
-                            <communication-diversion active="false"/>
-                            <incoming-communication-barring active="false"/>
-                            <outgoing-communication-barring active="false"/>
-                          </simservs>)");  // "
+  // Expect two sets of calls to get the MMTEL config for caller and callee
+  // as we are testing multiple MMTEL flows here.
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551000@homedomain",_,_,_))
+    .Times(2).WillRepeatedly(DoAll(SetArgReferee<1>(simservs),
+                                   Return(true)));
+  EXPECT_CALL(*_xdm_connection, get_simservs("sip:6505551234@homedomain",_,_,_))
+    .Times(2).WillRepeatedly(DoAll(SetArgReferee<1>(simservs),
+                                   Return(true)));
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -10177,6 +10339,30 @@ TEST_F(SCSCFTest, SCSCFHandlesInvalidUriTerm)
   free_txdata();
 }
 
+// Tests that, if we have a request whose Route header matches only on the port,
+// the IRS query uses the configured S-CSCF URI as the server name
+TEST_F(SCSCFTest, PortMatchedRouteHeaderUsesConfiguredServerName)
+{
+  // Create an INVITE with a Route header that matches only on the port
+  SCSCFMessage msg;
+  msg._route = "Route: <sip:homedomain:5058>";
+
+  // Save the IRS query and return NOT_FOUND to prevent further processing
+  HSSConnection::irs_query irs_query;
+  EXPECT_CALL(*_sm, get_subscriber_state(_, _, _))
+    .WillOnce(DoAll(SaveArg<0>(&irs_query),
+                    Return(HTTP_NOT_FOUND)));
+
+  // The call will fail
+  doSlowFailureFlow(msg, 404);
+
+  // Check that the query was made for the correct subscriber
+  EXPECT_EQ("sip:6505551234@homedomain",irs_query._public_id);
+  EXPECT_EQ("call", irs_query._req_type);
+
+  // Check that the server name used was the configured S-CSCF URI
+  EXPECT_EQ("sip:scscf.sprout.homedomain:5058;transport=TCP", irs_query._server_name);
+}
 
 class SCSCFTestWithoutICSCF : public SCSCFTestBase
 {
@@ -10294,21 +10480,18 @@ TEST_F(SCSCFTestWithoutICSCF, TestRouteWithoutICSCF)
   doSlowFailureFlow(msg, 404);
 }
 
-
 class SCSCFTestWithRalf : public SCSCFTestBase
 {
   static void SetUpTestCase()
   {
     SCSCFTestBase::SetUpTestCase();
-    _ralf_connection = new NiceMock<MockHttpConnection>();
-    _ralf_processor = new NiceMock<MockRalfProcessor>(_ralf_connection);
+    _ralf_processor = new MockRalfProcessor();
     _ralf_acr_factory = new RalfACRFactory(_ralf_processor, ACR::SCSCF);
   }
   static void TearDownTestCase()
   {
     delete _ralf_acr_factory; _ralf_acr_factory = NULL;
     delete _ralf_processor; _ralf_processor = NULL;
-    delete _ralf_connection; _ralf_connection = NULL;
     SCSCFTestBase::TearDownTestCase();
   }
 
@@ -10390,12 +10573,10 @@ class SCSCFTestWithRalf : public SCSCFTestBase
   {
   }
 protected:
-  static MockHttpConnection* _ralf_connection;
   static MockRalfProcessor* _ralf_processor;
   static RalfACRFactory* _ralf_acr_factory;
 
 };
-MockHttpConnection* SCSCFTestWithRalf::_ralf_connection;
 MockRalfProcessor* SCSCFTestWithRalf::_ralf_processor;
 RalfACRFactory* SCSCFTestWithRalf::_ralf_acr_factory;
 

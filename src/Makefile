@@ -1,4 +1,4 @@
-TARGETS := sprout call-diversion-as.so gemini-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so
+TARGETS := sprout call-diversion-as.so gemini-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so sprout_io_trap.so
 
 TEST_TARGETS := sprout_test
 
@@ -9,6 +9,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          stack.cpp \
                          dnsparser.cpp \
                          dnscachedresolver.cpp \
+                         static_dns_cache.cpp \
                          baseresolver.cpp \
                          sipresolver.cpp \
                          bono.cpp \
@@ -18,7 +19,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          flowtable.cpp \
                          http_connection_pool.cpp \
                          httpclient.cpp \
-                         httpconnection.cpp \
+                         http_request.cpp \
                          a_record_resolver.cpp \
                          hssconnection.cpp \
                          websockets.cpp \
@@ -104,7 +105,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          s4.cpp \
                          s4_handlers.cpp \
                          s4_chronoshandlers.cpp \
-                         registration_sender.cpp
+                         registration_sender.cpp \
+                         sasservice.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -130,8 +132,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mmtel.cpp \
                        test_main.cpp \
                        fakecurl.cpp \
-                       fakehttpconnection.cpp \
-                       fakexdmconnection.cpp \
                        fakehssconnection.cpp \
                        fakelogger.cpp \
                        faketransport_udp.cpp \
@@ -181,7 +181,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        fakezmq.cpp \
                        uriclassifier_test.cpp \
                        ralf_processor_test.cpp \
-                       mockhttpconnection.cpp \
+                       mock_httpclient.cpp \
+                       mock_http_request.cpp \
                        mockhttpstack.cpp \
                        mocktsxhelper.cpp \
                        mock_hss_connection.cpp \
@@ -212,6 +213,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_notify_sender.cpp \
                        registration_sender_test.cpp \
                        mock_registration_sender.cpp \
+                       mock_xdm_connection.cpp \
                        sprout_fv_test.cpp
 
 COVERAGE_ROOT := ..
@@ -311,6 +313,10 @@ sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
 mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
 mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
+
+sprout_io_trap.so_SOURCES := io_trap.cpp
+sprout_io_trap.so_CPPFLAGS := -fPIC -I../modules/cpp-common/include
+sprout_io_trap.so_LDFLAGS := -shared
 
 VPATH = ../modules/cpp-common/src ../modules/clearwater-s4/src ../modules/clearwater-s4/src/ut ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut mangelwurzel mangelwurzel/ut ut
 

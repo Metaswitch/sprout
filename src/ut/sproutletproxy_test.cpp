@@ -719,7 +719,7 @@ public:
 
   void on_rx_initial_request(pjsip_msg* req)
   {
-    // Regardless of what we receive, forward the request on using a Route 
+    // Regardless of what we receive, forward the request on using a Route
     // header to route the message to the specified (external) URI.  This is
     // used to test Tel URIs, which are not themselves routable.
     string forwarding_uri = "sip:bob@proxy1.awaydomain:5060;transport=TCP";
@@ -3885,4 +3885,26 @@ TEST_F(SproutletProxyTest, ServeRemoteAliasWithinNfUninterested)
   ASSERT_EQ(0, txdata_count());
 
   delete tp;
+}
+
+// Tests that get_local_hostname will by default return the hostname from a URI
+// if it doesn't match any sproutlets
+TEST_F(SproutletProxyTest, GetLocalHostnameDefault)
+{
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string("sip:nomathcingsproutlet.homedomain",
+                                                                stack_data.pool,
+                                                                false);
+  std::string local_hostname = _proxy->get_local_hostname(uri);
+  EXPECT_EQ("nomathcingsproutlet.homedomain", local_hostname);
+}
+
+// Tests that get_local_hostname will use the _root_uri's hostname if the
+// provided URI doesn't match any sproutlets and we tell it to use the root URI.
+TEST_F(SproutletProxyTest, GetLocalHostnameDefaultRoot)
+{
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string("sip:nomathcingsproutlet.homedomain",
+                                                                stack_data.pool,
+                                                                false);
+  std::string local_hostname = _proxy->get_local_hostname(uri, true);
+  EXPECT_EQ("proxy1.homedomain", local_hostname);
 }

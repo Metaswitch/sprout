@@ -137,34 +137,8 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
 {
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    // Authentication isn't required for emergency registrations. An emergency
-    // registration is one where each Contact header contains 'sos' as the SIP
-    // URI parameter.
-    //
-    // Note that a REGISTER with NO contact headers does not count as an
-    // emergency registration.
-    pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-      pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
-
-    if (contact_hdr != NULL)
-    {
-      bool all_bindings_emergency = true;
-
-      while ((contact_hdr != NULL) && (all_bindings_emergency))
-      {
-        all_bindings_emergency = PJUtils::is_emergency_registration(contact_hdr);
-        contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(req,
-                                                              PJSIP_H_CONTACT,
-                                                              contact_hdr->next);
-      }
-
-      if (all_bindings_emergency)
-      {
-        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
-        SAS::report_event(event);
-        return PJ_FALSE;
-      }
-    }
+    // Emergency registrations are challenged according to the same rules as for
+    // normal registrations, so there's no special case for them here.
 
     // Check to see if the request has already been integrity protected?
     pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
@@ -870,7 +844,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // We've failed to store the nonce in memcached, so we have no hope of
       // successfully authenticating any repsonse to a 401 Unauthorized.  Send
       // a 500 Server Internal Error instead.
-      TRC_DEBUG("Failed to store nonce in memcached");
+      TRC_DEBUG("Failed to store nonce in memcached, for impi %s", impi.c_str());
       rsp->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
       rsp->line.status.reason = *pjsip_get_status_text(PJSIP_SC_INTERNAL_SERVER_ERROR);
 
@@ -934,7 +908,10 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
   pjsip_sip_uri* routing_uri = get_routing_uri(req);
-  if (routing_uri != NULL)
+
+  // If the URI that routed to this Sproutlet isn't reflexive, just ignore it
+  // and use the configured scscf uri
+  if ((routing_uri != nullptr) && is_uri_reflexive((pjsip_uri*)routing_uri))
   {
     SCSCFUtils::get_scscf_uri(get_pool(req),
                               get_local_hostname(routing_uri),

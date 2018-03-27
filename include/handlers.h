@@ -213,7 +213,7 @@ private:
 
 /// Task for receiving user data sent by Homestead when it receives a PPR.
 /// It will send NOTIFYs if the associated URIs have changed (by calling
-/// into the SDM).
+/// into the SM).
 class PushProfileTask : public HttpStackUtils::Task
 {
 public:

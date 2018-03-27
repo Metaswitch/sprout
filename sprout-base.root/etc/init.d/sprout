@@ -72,7 +72,6 @@ setup_environment()
 get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
-        sas_server=0.0.0.0
         sprout_rr_level="pcscf"
 
         # These Sproutlets are enabled by default. They listen on different
@@ -190,6 +189,7 @@ get_daemon_args()
         [ -z "$sprout_request_on_queue_timeout" ] || request_on_queue_timeout_arg="--request-on-queue-timeout=$sprout_request_on_queue_timeout"
         [ -z "$alias_list" ] || deprecated_alias_list_arg="--alias=$alias_list"
         [ "$always_serve_remote_aliases" != "Y" ] || always_serve_remote_aliases_arg="--always-serve-remote-aliases"
+        [ "$ram_record_everything" != "Y" ] || ram_recording_arg="--ram-record-everything"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -209,7 +209,7 @@ get_daemon_args()
                      $enum_suffix_arg
                      $enum_file_arg
                      $default_tel_uri_translation_arg
-                     --sas=$sas_server,$NAME@$public_hostname
+                     --sas=$NAME@$public_hostname
                      --dns-server=$signaling_dns_server
                      --worker-threads=$num_worker_threads
                      --http-threads=$num_http_threads
@@ -243,6 +243,7 @@ get_daemon_args()
                      --local-alias-list=$public_ip,$public_hostname,$local_alias_list
                      --remote-alias-list=$remote_alias_list
                      $always_serve_remote_aliases_arg
+                     $ram_recording_arg
                      --homestead-timeout=$sprout_homestead_timeout_ms"
 
         if [ -n "$reg_max_expires" ]
