@@ -553,8 +553,8 @@ HTTPCode SubscriberManager::modify_subscriptions(
   }
   else
   {
-    // At this point modifying the subscription has been successful - we'll return
-    // OK to the client.
+    // At this point modifying the subscription has been successful - we'll
+    // return OK to the client.
 
     // Write an analytics log for the modified subscription.
     std::string subscription_id = (remove_subscriptions.empty()) ?
@@ -1219,8 +1219,7 @@ void SubscriberManager::build_patch(PatchObject& po,
                                     const std::vector<std::string>& remove_subscriptions,
                                     const AssociatedURIs& associated_uris)
 {
-  Subscriptions tmp = SubscriberDataUtils::copy_subscriptions(update_subscriptions);
-  po.set_update_subscriptions(tmp);
+  po.set_update_subscriptions(update_subscriptions);
   po.set_remove_subscriptions(remove_subscriptions);
   po.set_associated_uris(associated_uris);
   po.set_increment_cseq(true);

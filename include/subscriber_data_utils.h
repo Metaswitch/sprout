@@ -135,12 +135,6 @@ Bindings copy_active_bindings(const Bindings& bindings,
                               int now,
                               SAS::TrailId trail);
 
-// Helper functions to copy subscriptions.
-Subscriptions copy_subscriptions(const Subscriptions& subscriptions);
-Subscriptions copy_active_subscriptions(const Subscriptions& subscriptions,
-                                        int now,
-                                        SAS::TrailId trail);
-
 /// Helper functions to delete bindings.
 void delete_bindings(std::vector<SubscriberDataUtils::ClassifiedBinding*>&
                                                            classified_bindings);

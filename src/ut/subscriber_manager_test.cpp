@@ -1087,8 +1087,8 @@ TEST_F(SubscriberManagerTest, TestAddSubscription)
               *(updated_subscriptions.begin()->second));
   EXPECT_TRUE(patch_object._increment_cseq);
 
-  // Tidy up. The get/patch AoRs have been deleted by SM already.
-  delete subscription; subscription = NULL;
+  // Nothing to tidy up. The get/patch AoRs have been deleted by SM already, and
+  // the subscriptions object is automatically cleaned up.
 }
 
 // Test removing a subscription. Other tests have covered detailed checking of
@@ -1262,7 +1262,9 @@ TEST_F(SubscriberManagerTest, TestUpdateSubscriptionS4WriteFail)
                                                           irs_info_out,
                                                           DUMMY_TRAIL_ID);
   EXPECT_EQ(rc, HTTP_SERVER_ERROR);
-  delete subscription; subscription = NULL;
+
+  // The subscriptions object is automatically deleted, so no need to delete it
+  // here.
 }
 
 // Test that removing a subscription fails if the write request to S4 fails.
@@ -1512,6 +1514,9 @@ TEST_F(SubscriberManagerTest, TestGetSubscriptions)
   // Check that there is one subscription with the correct IDs.
   EXPECT_EQ(all_subscriptions.size(), 1);
   EXPECT_TRUE(all_subscriptions.find(AoRTestUtils::SUBSCRIPTION_ID) != all_subscriptions.end());
+
+  // The subscriptions object is automatically cleaned up, so does not need to
+  // be deleted here.
 }
 
 // Tests that expired subscriptions are not returned.

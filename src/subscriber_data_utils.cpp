@@ -339,43 +339,6 @@ Bindings SubscriberDataUtils::copy_active_bindings(const Bindings& bindings,
   return copy_bindings;
 }
 
-Subscriptions SubscriberDataUtils::copy_subscriptions(const Subscriptions& subscriptions)
-{
-  Subscriptions copy_subscriptions;
-  for (Subscriptions::Element s :subscriptions)
-  {
-    Subscription* copy_s = new Subscription(*(s.second));
-    copy_subscriptions.insert(std::make_pair(s.first, copy_s));
-  }
-
-  return copy_subscriptions;
-}
-
-Subscriptions SubscriberDataUtils::copy_active_subscriptions(const Subscriptions& subscriptions,
-                                                             int now,
-                                                             SAS::TrailId trail)
-{
-  Subscriptions copy_subscriptions;
-  for (Subscriptions::Element s :subscriptions)
-  {
-    if (s.second->_expires - now > 0)
-    {
-      Subscription* copy_s = new Subscription(*(s.second));
-      copy_subscriptions.insert(std::make_pair(s.first, copy_s));
-    }
-    else
-    {
-      SAS::Event event(trail, SASEvent::SUBSCRIPTION_EXPIRED, 0);
-      event.add_var_param(s.second->_from_uri);
-      event.add_static_param(s.second->_expires);
-      event.add_static_param(now);
-      SAS::report_event(event);
-    }
-  }
-
-  return copy_subscriptions;
-}
-
 void SubscriberDataUtils::delete_bindings(ClassifiedBindings& classified_bindings)
 {
   for (ClassifiedBinding* binding : classified_bindings)
