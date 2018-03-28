@@ -34,6 +34,16 @@
             "priority" : 1,
             "weight" : 100,
             "capabilities" : [654, 567, 876]
+        },
+        {   "server" : "cw-scscf7.cw-ngv.com",
+            "priority" : 1,
+            "weight" : 30,
+            "capabilities" : [654, 987]
+        },
+        {   "server" : "cw-scscf8.cw-ngv.com",
+            "priority" : 1,
+            "weight" : 70,
+            "capabilities" : [654, 987]
         }
     ]
 }

@@ -168,7 +168,8 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   // for documentation.
   boost::shared_lock<boost::shared_mutex> read_lock(_scscfs_rw_lock);
 
-  // There's at least one S-CSCF, so check if any match the capabilities requested
+  // There's at least one S-CSCF, so check if any match the capabilities
+  // requested.
   std::string reject_str;
   for (std::vector<std::string>::const_iterator ii = rejects.begin(); ii != rejects.end(); ++ii)
   {
@@ -195,9 +196,10 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
     optional_str = optional_str + std::to_string(*ii) + ";";
   }
 
-  // Find all S-CSCFs that have all the mandatory capabilities, the highest possible number
-  // of optional capabilities, and the highest priority (closest to 0).
-  // Also sum up the weights of the valid S-CSCFs as part of the iteration
+  // Find all S-CSCFs that have all the mandatory capabilities, the highest
+  // possible number of optional capabilities, and the highest priority (closest
+  // to 0).
+  // Also sum up the weights of the valid S-CSCFs as part of the iteration.
   std::vector<scscf> matches;
   u_int max_size = 0;
   int priority = 0;
@@ -205,8 +207,8 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
 
   for (std::vector<scscf>::iterator it=_scscfs.begin(); it!=_scscfs.end(); ++it)
   {
-    // Only include the S-CSCF if its name isn't in the list of S-CSCFs to reject and it has all of
-    // the mandatory capabilities
+    // Only include the S-CSCF if its name isn't in the list of S-CSCFs to
+    // reject and it has all of the mandatory capabilities
     if ((std::find(rejects.begin(), rejects.end(), it->server) == rejects.end()) &&
         (std::includes(it->capabilities.begin(), it->capabilities.end(), mandatory_cap.begin(), mandatory_cap.end())))
     {
@@ -242,8 +244,8 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
     }
   }
 
-  // If there are no matches, return an empty string (there will only be no matches
-  // if no S-CSCFs had all the requested mandatory capabilities).
+  // If there are no matches, return an empty string (there will only be no
+  // matches if no S-CSCFs had all the requested mandatory capabilities).
   // If there's only one match, then return its name.
   if (matches.empty())
   {
@@ -276,8 +278,9 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
     return matches[0].server.c_str();
   }
 
-  // There are multiple S-CSCFs that match on all mandatory capabilities, the highest number of optional
-  // capabilities, and the highest priority. Select one using a weighted random choice.
+  // There are multiple S-CSCFs that match on all mandatory capabilities, the
+  // highest number of optional capabilities, and the highest priority. Select
+  // one using a weighted random choice.
   srand(time(NULL));
   int random = (sum != 0) ? rand() % sum : 0;
 
