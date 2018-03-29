@@ -19,6 +19,7 @@
 #include "scscfselector.h"
 #include "fakelogger.h"
 #include "test_utils.hpp"
+#include "test_interposer.hpp"
 
 using namespace std;
 
@@ -89,7 +90,8 @@ TEST_F(SCSCFSelectorTest, SelectOptionalCapabilities)
   // Parse a valid file.
   SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
-  // Test with two S-CSCFs with the mandatory capabilities, and one has more optional capabilites
+  // Test with two S-CSCFs with the mandatory capabilities, and one has more
+  // optional capabilites.
   ST({123, 432}, {654}, {}, "cw-scscf2.cw-ngv.com").test(scscf_);
 }
 
@@ -98,20 +100,52 @@ TEST_F(SCSCFSelectorTest, SelectPriorities)
   // Parse a valid file.
   SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
-  // Test with S-CSCFs with the same mandatory and optional capabilities, but different priorities
+  // Test with S-CSCFs with the same mandatory and optional capabilities, but
+  // different priorities.
   ST({}, {654, 567}, {}, "cw-scscf4.cw-ngv.com").test(scscf_);
 }
 
-TEST_F(SCSCFSelectorTest, SelectWeights)
+// Check that an S-CSCF with a weighting of zero is never selected.
+TEST_F(SCSCFSelectorTest, SelectWeightsBasic)
 {
   // Parse a valid file.
   SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
-  // Test with two S-CSCFs with the same capabilities and priorites, but different weights.
-  // One of the weights is 0 - this is for code coverage reasons to ensure that the first S-CSCF
-  // considered is never chosen. The S-CSCFs with different weights have the same name, so that
+  // Test with three S-CSCFs with the same capabilities and priorites, but
+  // different weights. One of the weights is 0 - this is for code coverage
+  // reasons to ensure that the first S-CSCF considered is never chosen. The
+  // remaining two S-CSCFs with different weights have the same name, so that
   // the test can pick either randomly and still pass.
   ST({654}, {876}, {}, "cw-scscf6.cw-ngv.com").test(scscf_);
+}
+
+// Check that two S-CSCFs with the same properties but different weightings can
+// both be chosen, depending on the random number used to select them.
+TEST_F(SCSCFSelectorTest, SelectWeightsAdvanced)
+{
+  // Set time to epoch. Since the random number generator is seeded with the
+  // time, setting it to a specific time allows the "random" output to be
+  // controlled.
+  cwtest_completely_control_time(true);
+
+  // Parse a valid file.
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
+
+  // Test with two S-CSCFs with the same properties, but different weights.
+  // Check the expected S-CSCF is chosen.
+  ST({654}, {987}, {}, "cw-scscf8.cw-ngv.com").test(scscf_);
+
+  // Advance time to control the next "random" output. Check the other S-CSCF
+  // is chosen.
+  cwtest_advance_time_ms(4444);
+  ST({654}, {987}, {}, "cw-scscf7.cw-ngv.com").test(scscf_);
+
+  // Advance time to control the next "random" output. Check the first S-CSCF
+  // is chosen again.
+  cwtest_advance_time_ms(1111);
+  ST({654}, {987}, {}, "cw-scscf8.cw-ngv.com").test(scscf_);
+
+  cwtest_reset_time();
 }
 
 TEST_F(SCSCFSelectorTest, RejectSCSCFs)
@@ -119,12 +153,13 @@ TEST_F(SCSCFSelectorTest, RejectSCSCFs)
   // Parse a valid file.
   SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
-  // Test when there's only one S-CSCF with all the mandatory capabilities, but it's on the
-  // reject list
+  // Test when there's only one S-CSCF with all the mandatory capabilities, but
+  // it's on the reject list.
   ST({123, 432, 345}, {}, {"cw-scscf1.cw-ngv.com"}, "").test(scscf_);
 
-  // Test with two S-CSCFs with the mandatory capabilities, and one has more optional capabilites. The
-  // one with more optional capabilities is on the reject list, so the other one should be chosen.
+  // Test with two S-CSCFs with the mandatory capabilities, and one has more
+  // optional capabilites. The one with more optional capabilities is on the
+  // reject list, so the other one should be chosen.
   ST({123, 432}, {654}, {"cw-scscf2.cw-ngv.com"}, "cw-scscf1.cw-ngv.com").test(scscf_);
 }
 
@@ -144,8 +179,8 @@ TEST_F(SCSCFSelectorTest, MissingParts)
   SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf_missing_parts.json"));
   EXPECT_TRUE(log.contains("Badly formed S-CSCF entry"));
 
-  // Check that only one S-CSCF returned (with low priority), as the others couldn't
-  // be parsed
+  // Check that only one S-CSCF returned (with low priority), as the others
+  // couldn't be parsed.
   ST({123, 432}, {123, 432}, {}, "cw-scscf1.cw-ngv.com").test(scscf_);
 }
 
