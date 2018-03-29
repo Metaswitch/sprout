@@ -423,8 +423,6 @@ void GetSubscriptionsTask::run()
 
   send_http_reply(rc);
 
-  SubscriberDataUtils::delete_subscriptions(subscriptions);
-
   SAS::Marker end_marker(trail(), MARKER_ID_END, 3u);
   SAS::report_marker(end_marker);
 
@@ -443,7 +441,7 @@ std::string GetSubscriptionsTask::serialize_data(
     writer.String(JSON_SUBSCRIPTIONS);
     writer.StartObject();
     {
-      for (SubscriptionPair s : subscriptions)
+      for (Subscriptions::Element s : subscriptions)
       {
         writer.String(s.first.c_str());
         s.second->to_json(writer);

@@ -553,13 +553,13 @@ HTTPCode SubscriberManager::modify_subscriptions(
   }
   else
   {
-    // At this point modifying the subscription has been successful - we'll return
-    // OK to the client.
+    // At this point modifying the subscription has been successful - we'll
+    // return OK to the client.
 
     // Write an analytics log for the modified subscription.
     std::string subscription_id = (remove_subscriptions.empty()) ?
-                                    update_subscriptions.begin()->first :
-                                    remove_subscriptions[0];
+                                     update_subscriptions.begin()->first :
+                                     remove_subscriptions[0];
     log_subscriptions(aor_id,
                       *orig_aor,
                       *updated_aor,
@@ -738,9 +738,8 @@ HTTPCode SubscriberManager::get_subscriptions(const std::string& aor_id,
   }
 
   // Set the subscriptions to return to the caller.
-  subscriptions = SubscriberDataUtils::copy_active_subscriptions(aor->subscriptions(),
-                                                                 time(NULL),
-                                                                 trail);
+  subscriptions = aor->subscriptions();
+  aor->_subscriptions.clear();
 
   delete aor; aor = NULL;
   return HTTP_OK;
@@ -869,7 +868,7 @@ void SubscriberManager::handle_timer_pop_internal(const std::string& aor_id,
 
   // Find any expired subscriptions in the original AoR.
   std::vector<std::string> subscription_ids_to_remove;
-  for (SubscriptionPair sp : orig_aor->subscriptions())
+  for (Subscriptions::Element sp : orig_aor->subscriptions())
   {
     if (sp.second->_expires <= now)
     {
@@ -1048,7 +1047,7 @@ std::vector<std::string> SubscriberManager::subscriptions_to_remove(const Bindin
 
   // Loop over the subscriptions. If any have the same contact as one of the
   // missing URIs, the subscription should be removed.
-  for (SubscriptionPair sp : orig_subscriptions)
+  for (Subscriptions::Element sp : orig_subscriptions)
   {
     if (missing_uris.find(sp.second->_req_uri) != missing_uris.end())
     {
@@ -1165,7 +1164,7 @@ void SubscriberManager::log_subscriptions(std::string default_impu,
   {
     for (std::string subscription_id : subscription_ids)
     {
-      Subscriptions::const_iterator subscription =
+      std::map<std::string, Subscription*>::const_iterator subscription =
                                 updated_aor._subscriptions.find(subscription_id);
 
       // We need to find the subscription in the AoR in order to pull out
@@ -1179,7 +1178,7 @@ void SubscriberManager::log_subscriptions(std::string default_impu,
       }
       else
       {
-        Subscriptions::const_iterator subscription =
+        std::map<std::string, Subscription*>::const_iterator subscription =
                                    orig_aor._subscriptions.find(subscription_id);
 
         if (subscription != orig_aor._subscriptions.end())
@@ -1220,7 +1219,7 @@ void SubscriberManager::build_patch(PatchObject& po,
                                     const std::vector<std::string>& remove_subscriptions,
                                     const AssociatedURIs& associated_uris)
 {
-  po.set_update_subscriptions(SubscriberDataUtils::copy_subscriptions(update_subscriptions));
+  po.set_update_subscriptions(update_subscriptions);
   po.set_remove_subscriptions(remove_subscriptions);
   po.set_associated_uris(associated_uris);
   po.set_increment_cseq(true);
