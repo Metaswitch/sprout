@@ -1,4 +1,4 @@
-TARGETS := sprout call-diversion-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so # sprout_io_trap.so - disabled as it breaks static analysis
+TARGETS := sprout call-diversion-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so sprout_io_trap.so #- disabled as it breaks static analysis
 
 TEST_TARGETS := sprout_test
 
@@ -121,7 +121,6 @@ sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   main.cpp
 
 sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
-                       mangelwurzel.cpp \
                        scscfsproutlet.cpp \
                        icscfsproutlet.cpp \
                        bgcfsproutlet.cpp \
@@ -173,7 +172,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        scscf_test.cpp \
                        sproutletproxy_test.cpp \
                        gruu_test.cpp \
-                       mangelwurzel_test.cpp \
                        common_sip_processing_test.cpp \
                        fakesnmp.cpp \
                        fakezmq.cpp \
@@ -215,7 +213,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        sprout_fv_test.cpp
 
 COVERAGE_ROOT := ..
-sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/clearwater-s4/src/ut|^modules/app-servers/include/|modules/app-servers/test/
+sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^modules/clearwater-s4/src/ut|^modules/app-servers/include/|modules/app-servers/test/
 
 SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
                           -I../include \
@@ -231,7 +229,6 @@ sprout_test_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS} \
                         -I../modules/clearwater-s4/src/ut \
                         -I../modules/sipp \
                         -I../modules/app-servers/test \
-                        -I../include/mangelwurzel \
                         -Iut \
                         -DGTEST_USE_OWN_TR1_TUPLE=0
 
@@ -303,15 +300,11 @@ sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp su
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
-mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
-mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
-
 sprout_io_trap.so_SOURCES := io_trap.cpp
 sprout_io_trap.so_CPPFLAGS := -fPIC -I../modules/cpp-common/include
 sprout_io_trap.so_LDFLAGS := -shared
 
-VPATH = ../modules/cpp-common/src ../modules/clearwater-s4/src ../modules/clearwater-s4/src/ut ../modules/cpp-common/test_utils ../modules/app-servers/test mangelwurzel mangelwurzel/ut ut
+VPATH = ../modules/cpp-common/src ../modules/clearwater-s4/src ../modules/clearwater-s4/src/ut ../modules/cpp-common/test_utils ../modules/app-servers/test ut
 
 # Use valgrind suppression file for UT
 sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp

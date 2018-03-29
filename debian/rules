@@ -42,6 +42,5 @@ override_dh_strip:
 	dh_strip -psprout-bgcf --dbg-package=sprout-bgcf-dbg
 	dh_strip -psprout-mmtel-as --dbg-package=sprout-mmtel-as-dbg
 	dh_strip -pcall-diversion-as --dbg-package=call-diversion-as-dbg
-	dh_strip -pmangelwurzel-as --dbg-package=mangelwurzel-as-dbg
 	dh_strip -pbono --dbg-package=bono-dbg
 	dh_strip -pclearwater-sipp --dbg-package=clearwater-sipp-dbg

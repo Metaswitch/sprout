@@ -134,20 +134,6 @@ Depends: call-diversion-as (= ${binary:Version})
 Recommends: sprout-base-dbg
 Description: Debugging symbols for the Call Diversion Application Server plug-in
 
-Package: mangelwurzel-as
-Architecture: any
-Depends: sprout-base
-Suggests: mangelwurzel-as-dbg
-Description: mangelwurzel, the B2BUA and SCC-AS emulator
-
-Package: mangelwurzel-as-dbg
-Architecture: any
-Section: debug
-Priority: extra
-Depends: mangelwurzel-as (= ${binary:Version})
-Recommends: sprout-base-dbg
-Description: Debugging symbols for mangelwurzel, the B2BUA and SCC-AS emulator
-
 Package: bono-node
 Architecture: any
 Depends: bono (= ${binary:Version})

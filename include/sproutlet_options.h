@@ -20,7 +20,6 @@
 #define SPROUTLET_MACRO(FUNCTION_NAME)                                         \
   FUNCTION_NAME(SCSCF, scscf, "scscf")                                         \
   FUNCTION_NAME(ICSCF, icscf, "icscf")                                         \
-  FUNCTION_NAME(MANGELWURZEL, mangelwurzel, "mangelwurzel")                    \
   FUNCTION_NAME(CDIV, cdiv, "cdiv")                                            \
   FUNCTION_NAME(MMTEL, mmtel, "mmtel")                                         \
   FUNCTION_NAME(BGCF, bgcf, "bgcf")
