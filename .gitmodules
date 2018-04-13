@@ -49,9 +49,6 @@
 [submodule "modules/app-servers"]
 	path = modules/app-servers
 	url = git@github.com:Metaswitch/clearwater-app-servers.git
-[submodule "modules/gemini"]
-	path = modules/gemini
-	url = git@github.com:Metaswitch/gemini.git
 [submodule "clearwater-etcd-plugins"]
 	path = modules/clearwater-etcd-plugins
 	url = git@github.com:Metaswitch/clearwater-etcd-plugins.git
