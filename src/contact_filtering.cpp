@@ -543,6 +543,12 @@ struct NumericRange
     {
       maximum = minimum;
     }
+    // RCC.07 v9.0 section Chatbot Feature Tags, Chatbot Application Version, Section 3.6.2.2
+    // Add support for an = as part of the version designation.
+    else if (sscanf(str.c_str(), "#=%f", &minimum) == 1)
+    {
+      maximum = minimum;
+    }
     else
     {
       // Invalid format for numeric.
