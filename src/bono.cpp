@@ -106,9 +106,7 @@ static ACRFactory* cscf_acr_factory;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
-static SIPConnectionPool* upstream_conn_pool = NULL;
 
-static SNMP::IPCountTable* sprout_ip_tbl = NULL;
 static SNMP::U32Scalar* flow_count = NULL;
 
 static FlowTable* flow_table;
@@ -975,18 +973,6 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
       pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
       pj_strdup2(tdata->pool, &orig_param->value, "");
       pj_list_insert_after(&upstream_uri->other_param, orig_param);
-    }
-
-    // Select a transport for the request.
-    if (upstream_conn_pool != NULL)
-    {
-      target_p->transport = upstream_conn_pool->get_connection();
-      if (target_p->transport != NULL)
-      {
-        pj_memcpy(&target_p->remote_addr,
-                  &target_p->transport->key.rem_addr,
-                  sizeof(pj_sockaddr));
-      }
     }
   }
 
@@ -3173,24 +3159,6 @@ pj_status_t init_stateful_proxy(pj_bool_t enable_edge_proxy,
   // Create a dialog tracker to count dialogs on each flow
   dialog_tracker = new DialogTracker(flow_table);
 
-  // Create a connection pool to the upstream proxy.
-  if (upstream_proxy_connections > 0)
-  {
-    pjsip_host_port pool_target;
-    pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
-    pool_target.port = upstream_proxy_port;
-    sprout_ip_tbl = SNMP::IPCountTable::create("bono_connected_sprouts",
-                                               ".1.2.826.0.1.1578918.9.2.3.1");
-    upstream_conn_pool = new SIPConnectionPool(&pool_target,
-        upstream_proxy_connections,
-        upstream_proxy_recycle,
-        stack_data.pool,
-        stack_data.endpt,
-        stack_data.pcscf_trusted_tcp_factory,
-        sprout_ip_tbl);
-    upstream_conn_pool->init();
-  }
-
   ibcf = enable_ibcf;
   if (ibcf)
   {
@@ -3271,10 +3239,6 @@ pj_status_t init_stateful_proxy(pj_bool_t enable_edge_proxy,
 void destroy_stateful_proxy()
 {
   assert(edge_proxy);
-  // Destroy the upstream connection pool.  This will quiesce all the TCP
-  // connections.
-  delete upstream_conn_pool; upstream_conn_pool = NULL;
-  delete sprout_ip_tbl; sprout_ip_tbl = NULL;
 
   // Destroy the flow table.
   delete flow_count;
